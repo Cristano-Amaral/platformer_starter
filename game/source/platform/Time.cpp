@@ -8,4 +8,9 @@ float DeltaSeconds()
 {
     return GetFrameTime();
 }
+
+int FramesPerSecond()
+{
+    return GetFPS();
+}
 }

@@ -162,4 +162,34 @@ const core::Vec3& Player::Size() const
 {
     return size;
 }
+
+float Player::HorizontalVelocity() const
+{
+    return horizontalVelocity;
+}
+
+float Player::VerticalVelocity() const
+{
+    return verticalVelocity;
+}
+
+bool Player::IsGrounded() const
+{
+    return grounded;
+}
+
+float Player::TimeSinceGrounded() const
+{
+    return timeSinceGrounded;
+}
+
+bool Player::IsCoyoteAvailable() const
+{
+    return coyoteAvailable;
+}
+
+float Player::JumpBufferRemaining() const
+{
+    return jumpBufferRemaining;
+}
 }

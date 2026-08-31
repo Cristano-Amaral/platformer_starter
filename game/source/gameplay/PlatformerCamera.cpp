@@ -59,4 +59,9 @@ core::Vec3 PlatformerCamera::Target() const
 {
     return smoothedTarget;
 }
+
+core::Vec3 PlatformerCamera::DesiredTarget() const
+{
+    return desiredTarget;
+}
 }

@@ -14,6 +14,12 @@ public:
 
     const core::Vec3& Position() const;
     const core::Vec3& Size() const;
+    float HorizontalVelocity() const;
+    float VerticalVelocity() const;
+    bool IsGrounded() const;
+    float TimeSinceGrounded() const;
+    bool IsCoyoteAvailable() const;
+    float JumpBufferRemaining() const;
 
     static constexpr float kMaxMoveSpeed = 6.0f;
     static constexpr float kAcceleration = 40.0f;

@@ -20,6 +20,7 @@ public:
     void Update(core::Vec3 playerPosition, float deltaSeconds);
 
     core::Vec3 Target() const;
+    core::Vec3 DesiredTarget() const;
 
 private:
     void UpdateDesiredTarget(core::Vec3 playerPosition);

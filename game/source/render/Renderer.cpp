@@ -46,11 +46,14 @@ Camera3D MakeCamera(const gameplay::PlatformerCamera& camera)
 }
 }
 
-void Renderer::Draw(const gameplay::Player& player, const gameplay::PlatformerCamera& camera)
+void Renderer::BeginFrame()
 {
     BeginDrawing();
     ClearBackground(kBackgroundColor);
+}
 
+void Renderer::DrawWorld(const gameplay::Player& player, const gameplay::PlatformerCamera& camera)
+{
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
 
@@ -67,6 +70,10 @@ void Renderer::Draw(const gameplay::Player& player, const gameplay::PlatformerCa
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
 
     EndMode3D();
+}
+
+void Renderer::EndFrame()
+{
     EndDrawing();
 }
 }

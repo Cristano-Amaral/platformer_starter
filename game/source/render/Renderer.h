@@ -11,6 +11,8 @@ namespace render
 class Renderer
 {
 public:
-    void Draw(const gameplay::Player& player, const gameplay::PlatformerCamera& camera);
+    void BeginFrame();
+    void DrawWorld(const gameplay::Player& player, const gameplay::PlatformerCamera& camera);
+    void EndFrame();
 };
 }

@@ -27,6 +27,9 @@ __pycache__/
 /game/assets/cooked/*
 !/game/assets/cooked/.gitkeep
 
+# Dear ImGui layout (disabled in-app; ignore if a run still writes one)
+imgui.ini
+
 # OS
 .DS_Store
 Thumbs.db

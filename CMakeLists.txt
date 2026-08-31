@@ -33,6 +33,7 @@ else()
 endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Raylib.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/DebugUi.cmake")
 
 add_executable(Platformer3D
     game/source/Main.cpp
@@ -52,13 +53,26 @@ add_executable(Platformer3D
     game/source/platform/Window.h
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
+    game/source/ui/debug/DebugMetrics.cpp
+    game/source/ui/debug/DebugMetrics.h
+    game/source/ui/debug/DebugUi.cpp
+    game/source/ui/debug/DebugUi.h
+    game/source/ui/debug/DebugUiBackend.cpp
+    game/source/ui/debug/DebugUiBackend.h
     game/source/world/Collision.cpp
     game/source/world/Collision.h
     game/source/world/GreyboxWorld.h
 )
 
-target_include_directories(Platformer3D PRIVATE game/source)
+target_include_directories(Platformer3D PRIVATE
+    game/source
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:${imgui_SOURCE_DIR}>
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:${rlimgui_SOURCE_DIR}>
+)
 target_link_libraries(Platformer3D PRIVATE raylib)
+target_link_libraries(Platformer3D PRIVATE
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:rlimgui>
+)
 
 if(MSVC)
     target_compile_options(Platformer3D PRIVATE /W4 /permissive-)
@@ -69,8 +83,8 @@ endif()
 # Config-specific macros. Optimization/symbols for Development come from
 # CMAKE_<LANG>_FLAGS_DEVELOPMENT; MSVC /DEBUG comes from CMAKE_EXE_LINKER_FLAGS_DEVELOPMENT.
 target_compile_definitions(Platformer3D PRIVATE
-    $<$<CONFIG:Debug>:GAME_DEBUG=1;GAME_DEVELOPMENT_TOOLS=1>
-    $<$<CONFIG:Development>:GAME_DEVELOPMENT=1;GAME_DEVELOPMENT_TOOLS=1>
+    $<$<CONFIG:Debug>:GAME_DEBUG=1;GAME_DEVELOPMENT_TOOLS=1;PLATFORMER_ENABLE_DEBUG_UI=1>
+    $<$<CONFIG:Development>:GAME_DEVELOPMENT=1;GAME_DEVELOPMENT_TOOLS=1;PLATFORMER_ENABLE_DEBUG_UI=1>
     $<$<CONFIG:Release>:GAME_RELEASE=1>
 )
 
