@@ -39,6 +39,7 @@ add_executable(Platformer3D
     game/source/core/Application.cpp
     game/source/core/Application.h
     game/source/core/Vec3.h
+    game/source/gameplay/PlatformerCamera.cpp
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
     game/source/gameplay/Player.h

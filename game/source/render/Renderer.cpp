@@ -33,9 +33,9 @@ void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
 }
 
-Camera3D MakeCamera(const gameplay::Player& player, const gameplay::PlatformerCamera& camera)
+Camera3D MakeCamera(const gameplay::PlatformerCamera& camera)
 {
-    const core::Vec3 target = player.Position();
+    const core::Vec3 target = camera.Target();
     Camera3D view{};
     view.position = ToRaylib(target + camera.offset);
     view.target = ToRaylib(target);
@@ -51,7 +51,7 @@ void Renderer::Draw(const gameplay::Player& player, const gameplay::PlatformerCa
     BeginDrawing();
     ClearBackground(kBackgroundColor);
 
-    const Camera3D view = MakeCamera(player, camera);
+    const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
 
     DrawGrid(kGridSlices, kGridSpacing);

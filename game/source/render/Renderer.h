@@ -3,7 +3,7 @@
 namespace gameplay
 {
 class Player;
-struct PlatformerCamera;
+class PlatformerCamera;
 }
 
 namespace render

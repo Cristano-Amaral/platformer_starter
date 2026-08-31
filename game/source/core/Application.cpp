@@ -18,6 +18,7 @@ int Application::Run()
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
         player.Update(inputState, deltaSeconds);
+        camera.Update(player.Position(), deltaSeconds);
         renderer.Draw(player, camera);
     }
 
@@ -28,6 +29,10 @@ int Application::Run()
 void Application::Initialize()
 {
     initialized = window.Initialize();
+    if (initialized)
+    {
+        camera.Initialize(player.Position());
+    }
 }
 
 void Application::Shutdown()

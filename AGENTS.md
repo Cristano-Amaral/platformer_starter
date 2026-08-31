@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 07 — Player Movement Feel.
+Milestone 08 — Platformer Camera Follow.
 See `docs/MILESTONES.md`.
