@@ -42,6 +42,10 @@ struct DebugMetricsSnapshot
     bool characterVirtualInitialized = false;
     const char* playerGroundSupport = "InAir";
     int playerContactCount = 0;
+    int staticBodyCount = 0;
+    bool dynamicTestBodyValid = false;
+    bool playerPositionFinite = true;
+    bool playerVelocityFinite = true;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

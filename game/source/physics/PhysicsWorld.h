@@ -10,6 +10,7 @@ struct DynamicTestBox
 {
     core::Vec3 position{};
     core::Vec3 size{1.0f, 1.0f, 1.0f};
+    bool valid = false;
     bool active = false;
 };
 
@@ -56,6 +57,8 @@ public:
     void Shutdown();
 
     bool IsInitialized() const;
+    int StaticBodyCount() const;
+    bool IsDynamicTestBodyValid() const;
     DynamicTestBox GetDynamicTestBox() const;
     PlayerPhysicsState GetPlayerPhysicsState() const;
 

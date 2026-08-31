@@ -240,7 +240,7 @@ struct PhysicsWorld::Impl
     bool typesRegistered = false;
     bool initialized = false;
 
-    bool AddStaticBox(const world::Box& box)
+    bool AddStaticBox(const world::Box& box, const char* name)
     {
         JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
         JPH::BodyCreationSettings settings(
@@ -253,10 +253,43 @@ struct PhysicsWorld::Impl
             bodyInterface.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
         if (id.IsInvalid())
         {
+            std::fprintf(
+                stderr,
+                "PhysicsWorld: failed to create static body '%s' "
+                "center=(%.3f, %.3f, %.3f) size=(%.3f, %.3f, %.3f)\n",
+                name,
+                box.center.x,
+                box.center.y,
+                box.center.z,
+                box.size.x,
+                box.size.y,
+                box.size.z);
             return false;
         }
 
         staticBodyIds.push_back(id);
+        return true;
+    }
+
+    bool AddGreyboxStaticBodies()
+    {
+        if (!AddStaticBox(world::kGround, "ground"))
+        {
+            return false;
+        }
+
+        int index = 0;
+        for (const world::Box& platform : world::kElevatedPlatforms)
+        {
+            char name[64];
+            std::snprintf(name, sizeof(name), "elevated platform %d", index);
+            if (!AddStaticBox(platform, name))
+            {
+                return false;
+            }
+            ++index;
+        }
+
         return true;
     }
 
@@ -360,21 +393,10 @@ bool PhysicsWorld::Initialize()
         impl->objectVsBroadPhaseLayerFilter,
         impl->objectLayerPairFilter);
 
-    if (!impl->AddStaticBox(world::kGround))
+    if (!impl->AddGreyboxStaticBodies())
     {
-        ReportError("failed to create static ground body.");
         Shutdown();
         return false;
-    }
-
-    for (const world::Box& platform : world::kElevatedPlatforms)
-    {
-        if (!impl->AddStaticBox(platform))
-        {
-            ReportError("failed to create static platform body.");
-            Shutdown();
-            return false;
-        }
     }
 
     JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
@@ -549,11 +571,22 @@ bool PhysicsWorld::IsInitialized() const
     return impl->initialized;
 }
 
+int PhysicsWorld::StaticBodyCount() const
+{
+    return static_cast<int>(impl->staticBodyIds.size());
+}
+
+bool PhysicsWorld::IsDynamicTestBodyValid() const
+{
+    return impl->initialized && !impl->dynamicBodyId.IsInvalid();
+}
+
 DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
 {
     DynamicTestBox box;
     box.size = kDynamicBoxSize;
-    if (!impl->initialized || impl->dynamicBodyId.IsInvalid())
+    box.valid = IsDynamicTestBodyValid();
+    if (!box.valid)
     {
         return box;
     }

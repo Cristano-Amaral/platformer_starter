@@ -99,6 +99,8 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
     if (ImGui::CollapsingHeader("Physics", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Jolt initialized: %s", BoolText(snapshot.physicsInitialized));
+        ImGui::Text("static greybox bodies: %d", snapshot.staticBodyCount);
+        ImGui::Text("dynamic test body valid: %s", BoolText(snapshot.dynamicTestBodyValid));
         ImGui::Text("dynamic test box X: %.4f", snapshot.physicsTestBoxPosition.x);
         ImGui::Text("dynamic test box Y: %.4f", snapshot.physicsTestBoxPosition.y);
         ImGui::Text("dynamic test box Z: %.4f", snapshot.physicsTestBoxPosition.z);
@@ -107,7 +109,7 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
             BoolText(snapshot.physicsTestBoxActive));
         ImGui::Text(
             "dynamic test box sleeping: %s",
-            BoolText(snapshot.physicsInitialized && !snapshot.physicsTestBoxActive));
+            BoolText(snapshot.dynamicTestBodyValid && !snapshot.physicsTestBoxActive));
     }
 
     if (ImGui::CollapsingHeader("Player Physics / Character", ImGuiTreeNodeFlags_DefaultOpen))
@@ -123,6 +125,8 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("supported/grounded: %s", BoolText(snapshot.grounded));
         ImGui::Text("ground support: %s", snapshot.playerGroundSupport);
         ImGui::Text("active contacts: %d", snapshot.playerContactCount);
+        ImGui::Text("position finite: %s", BoolText(snapshot.playerPositionFinite));
+        ImGui::Text("velocity finite: %s", BoolText(snapshot.playerVelocityFinite));
     }
 
     ImGui::End();

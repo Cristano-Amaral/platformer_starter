@@ -62,8 +62,6 @@ add_executable(Platformer3D
     game/source/ui/debug/DebugUi.h
     game/source/ui/debug/DebugUiBackend.cpp
     game/source/ui/debug/DebugUiBackend.h
-    game/source/world/Collision.cpp
-    game/source/world/Collision.h
     game/source/world/GreyboxWorld.h
 )
 

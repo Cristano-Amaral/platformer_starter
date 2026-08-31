@@ -3,6 +3,8 @@
 #include "input/Input.h"
 #include "platform/Time.h"
 
+#include <cmath>
+
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "ui/debug/DebugMetrics.h"
 #endif
@@ -12,6 +14,11 @@ namespace core
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 namespace
 {
+bool IsFiniteVec3(core::Vec3 value)
+{
+    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
+
 const char* GroundSupportName(physics::PlayerGroundSupport state)
 {
     switch (state)
@@ -71,10 +78,15 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.physicsInitialized = physicsWorld.IsInitialized();
     snapshot.physicsTestBoxPosition = testBox.position;
     snapshot.physicsTestBoxActive = testBox.active;
+    snapshot.staticBodyCount = physicsWorld.StaticBodyCount();
+    snapshot.dynamicTestBodyValid = testBox.valid;
 
     snapshot.characterVirtualInitialized = player.CharacterVirtualInitialized();
     snapshot.playerGroundSupport = GroundSupportName(player.GroundSupport());
     snapshot.playerContactCount = player.PhysicsContactCount();
+    snapshot.playerPositionFinite = IsFiniteVec3(player.Position());
+    snapshot.playerVelocityFinite =
+        std::isfinite(player.HorizontalVelocity()) && std::isfinite(player.VerticalVelocity());
     return snapshot;
 }
 #endif

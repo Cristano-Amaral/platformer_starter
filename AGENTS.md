@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 11 — Player CharacterVirtual.
+Milestone 12 — Physics Cleanup and Consolidation.
 See `docs/MILESTONES.md`.

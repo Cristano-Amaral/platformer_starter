@@ -1,5 +1,8 @@
 #pragma once
 
+// Project-owned greybox geometry. Renderer and PhysicsWorld both derive from
+// these boxes so visual solids and Jolt static collision stay in sync.
+
 #include "core/Vec3.h"
 
 namespace world

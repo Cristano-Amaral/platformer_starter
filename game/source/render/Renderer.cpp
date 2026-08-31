@@ -64,14 +64,18 @@ void Renderer::DrawWorld(
 
     DrawGrid(kGridSlices, kGridSpacing);
     DrawGreyboxBox(world::kGround.center, world::kGround.size, kGroundColor);
-    DrawGreyboxBox(
-        world::kElevatedPlatforms[0].center,
-        world::kElevatedPlatforms[0].size,
-        kPlatformColor);
-    DrawGreyboxBox(
-        world::kElevatedPlatforms[1].center,
-        world::kElevatedPlatforms[1].size,
-        kPlatformAccentColor);
+
+    const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
+    int platformIndex = 0;
+    for (const world::Box& platform : world::kElevatedPlatforms)
+    {
+        DrawGreyboxBox(
+            platform.center,
+            platform.size,
+            platformColors[platformIndex % 2]);
+        ++platformIndex;
+    }
+
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
 

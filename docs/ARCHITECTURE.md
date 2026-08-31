@@ -7,10 +7,35 @@ The game is a 3D platformer with a side/platform-style presentation. The player 
 `gameplay -> core abstractions`
 `ui -> core/gameplay public state`
 `render backend -> raylib initially`
-`physics backend -> Jolt when introduced`
+`physics backend -> Jolt CharacterVirtual / Jolt world`
 `platform backend -> OS/raylib platform services`
 
 Gameplay must not depend on backend implementation headers.
+
+## Runtime path
+```
+semantic input
+    ->
+Player gameplay movement policy
+    ->
+PhysicsWorld project-owned API
+    ->
+Jolt CharacterVirtual / Jolt world
+    ->
+project-owned Player state
+    ->
+Renderer / PlatformerCamera / DebugMetrics
+```
+
+Jolt CharacterVirtual is the authoritative Player collision and physical-position backend. There is no second custom Player AABB collision path.
+
+Player owns gameplay policy: semantic movement intent, horizontal acceleration/deceleration, vertical gameplay velocity, jump, coyote time, and jump buffer. PhysicsWorld owns Jolt runtime state, CharacterVirtual, static greybox bodies, and the dynamic test box.
+
+## Shared greybox geometry
+`world::GreyboxWorld` is the project-owned source of truth for current static level boxes (ground and elevated platforms). Renderer and PhysicsWorld both derive from those definitions. Ground and platform coordinates are not duplicated inside PhysicsWorld.
+
+## Physics boundary
+Jolt types stay inside `PhysicsWorld.cpp`. Public physics headers expose only project-owned types (`PlayerMoveCommand`, `PlayerPhysicsState`, `PlayerGroundSupport`, `DynamicTestBox`). The project has one physics backend: Jolt v5.6.0. There is no abstract `IPhysicsEngine`.
 
 ## Early abstraction points
 Only abstract boundaries that are known to vary by target:
