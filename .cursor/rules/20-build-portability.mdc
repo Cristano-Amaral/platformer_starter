@@ -1,0 +1,12 @@
+---
+description: Build-system and cross-platform rules for CMake, Windows, Linux/Raspberry Pi, Android, and future iOS work.
+globs: "**/CMakeLists.txt,**/*.cmake,cmake/**"
+alwaysApply: false
+---
+- CMake is canonical. Generated IDE projects are never committed as authored source.
+- Keep platform selection explicit with target-based CMake logic.
+- Do not add global compiler flags when target-scoped options are possible.
+- Do not hard-code local absolute paths.
+- Dependencies must be pinned to known versions/tags before a milestone is considered stable.
+- Windows-specific linker/compiler options belong behind `if(MSVC)` or equivalent target checks.
+- Keep room for cross-compilation toolchain files under `cmake/toolchains/`.

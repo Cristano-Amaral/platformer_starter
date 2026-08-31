@@ -1,0 +1,12 @@
+---
+description: Core project behavior and architecture constraints for all work in this repository.
+globs:
+alwaysApply: true
+---
+- Read `AGENTS.md` before making architectural changes.
+- Follow the active milestone in `docs/MILESTONES.md`.
+- Keep every change buildable and testable.
+- CMake is the source of truth for builds; do not hand-author `.sln` or `.vcxproj` files.
+- Gameplay must stay independent from OS APIs and direct backend-specific calls.
+- Do not silently expand scope into later milestones.
+- When a requirement conflicts with portability, explain the conflict and implement the smallest clean platform boundary.

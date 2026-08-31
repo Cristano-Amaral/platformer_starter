@@ -1,0 +1,18 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-vs2022",
+      "displayName": "Windows - Visual Studio 2022",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/windows-vs2022",
+      "architecture": "x64"
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-debug", "configurePreset": "windows-vs2022", "configuration": "Debug" },
+    { "name": "windows-development", "configurePreset": "windows-vs2022", "configuration": "Development" },
+    { "name": "windows-release", "configurePreset": "windows-vs2022", "configuration": "Release" }
+  ]
+}

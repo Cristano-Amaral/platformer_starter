@@ -1,0 +1,32 @@
+# Build output
+/build/
+/out/
+
+# CMake
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.VC.db
+*.VC.VC.opendb
+
+# Cursor local state (keep rules/skills tracked)
+.cursor/index/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Generated assets
+/game/assets/cooked/*
+!/game/assets/cooked/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

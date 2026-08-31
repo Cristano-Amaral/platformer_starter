@@ -1,0 +1,15 @@
+---
+description: C++ conventions, ownership, portability, and implementation practices.
+globs: "**/*.h,**/*.hpp,**/*.cpp,**/*.cc"
+alwaysApply: false
+---
+- Target C++20 for game code.
+- Prefer RAII and deterministic lifetime.
+- Prefer stack/value semantics. Use `std::unique_ptr` for dynamic ownership; avoid `std::shared_ptr` without a concrete ownership requirement.
+- Use `std::filesystem` for paths.
+- Treat asset path casing as case-sensitive on every platform.
+- No OS-specific headers in gameplay files.
+- No direct raylib calls from `game/source/gameplay/**`.
+- Avoid per-frame heap allocation in hot paths.
+- Keep public APIs small and explicit.
+- Add assertions for programmer errors in Debug/Development where useful.

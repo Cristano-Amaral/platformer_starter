@@ -1,0 +1,11 @@
+---
+description: Asset source/cooked separation and Python tooling rules.
+globs: "tools/**,game/assets/**"
+alwaysApply: false
+---
+- `game/assets/source/` contains editable/source assets.
+- `game/assets/cooked/` is generated and must not be treated as source of truth.
+- Asset processing must be deterministic and eventually incremental.
+- Runtime code should consume cooked assets once the cooker milestone is active.
+- Python tools must expose actionable errors and return non-zero exit status on failure.
+- Do not couple cooker output to absolute machine paths.
