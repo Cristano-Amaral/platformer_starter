@@ -87,6 +87,17 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.playerPositionFinite = IsFiniteVec3(player.Position());
     snapshot.playerVelocityFinite =
         std::isfinite(player.HorizontalVelocity()) && std::isfinite(player.VerticalVelocity());
+    snapshot.groundVelocity = player.GroundVelocity();
+    snapshot.supportingGroundMoving = player.IsSupportingGroundMoving();
+
+    const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
+    snapshot.movingPlatformValid = movingPlatform.valid;
+    snapshot.movingPlatformPosition = movingPlatform.position;
+    snapshot.movingPlatformVelocity = movingPlatform.velocity;
+    snapshot.movingPlatformDirection = movingPlatform.direction;
+    snapshot.movingPlatformPathMinX = movingPlatform.pathMinX;
+    snapshot.movingPlatformPathMaxX = movingPlatform.pathMaxX;
+    snapshot.movingPlatformSpeed = movingPlatform.speed;
     return snapshot;
 }
 #endif
@@ -103,13 +114,21 @@ int Application::Run()
     {
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
+        physicsWorld.UpdateMovingPlatform(deltaSeconds);
         player.Update(inputState, deltaSeconds, physicsWorld);
         physicsWorld.Update(deltaSeconds);
         camera.Update(player.Position(), deltaSeconds);
 
         const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
+        const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         renderer.BeginFrame();
-        renderer.DrawWorld(player, camera, testBox.position, testBox.size);
+        renderer.DrawWorld(
+            player,
+            camera,
+            testBox.position,
+            testBox.size,
+            movingPlatform.position,
+            movingPlatform.size);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
             MakeDebugMetricsSnapshot(player, camera, physicsWorld, inputState, deltaSeconds));

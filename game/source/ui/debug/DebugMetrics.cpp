@@ -127,6 +127,27 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("active contacts: %d", snapshot.playerContactCount);
         ImGui::Text("position finite: %s", BoolText(snapshot.playerPositionFinite));
         ImGui::Text("velocity finite: %s", BoolText(snapshot.playerVelocityFinite));
+        ImGui::Text(
+            "ground velocity: %.4f, %.4f, %.4f",
+            snapshot.groundVelocity.x,
+            snapshot.groundVelocity.y,
+            snapshot.groundVelocity.z);
+        ImGui::Text("supporting ground moving: %s", BoolText(snapshot.supportingGroundMoving));
+    }
+
+    if (ImGui::CollapsingHeader("Moving Platform", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("initialized/valid: %s", BoolText(snapshot.movingPlatformValid));
+        ImGui::Text("position X: %.4f", snapshot.movingPlatformPosition.x);
+        ImGui::Text("position Y: %.4f", snapshot.movingPlatformPosition.y);
+        ImGui::Text("position Z: %.4f", snapshot.movingPlatformPosition.z);
+        ImGui::Text("velocity X: %.4f", snapshot.movingPlatformVelocity.x);
+        ImGui::Text("velocity Y: %.4f", snapshot.movingPlatformVelocity.y);
+        ImGui::Text("velocity Z: %.4f", snapshot.movingPlatformVelocity.z);
+        ImGui::Text("direction: %.0f", snapshot.movingPlatformDirection);
+        ImGui::Text("path min X: %.4f", snapshot.movingPlatformPathMinX);
+        ImGui::Text("path max X: %.4f", snapshot.movingPlatformPathMaxX);
+        ImGui::Text("configured speed: %.4f", snapshot.movingPlatformSpeed);
     }
 
     ImGui::End();

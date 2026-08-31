@@ -88,11 +88,14 @@ void Player::Update(
 void Player::ApplyPhysicsState(const physics::PlayerPhysicsState& state)
 {
     position = state.visualCenter;
-    horizontalVelocity = state.horizontalVelocity;
+    // World X from CharacterVirtual includes moving-ground velocity. Keep
+    // gameplay horizontalVelocity as Player-relative accel/decel state.
     verticalVelocity = state.verticalVelocity;
     groundSupport = state.groundSupport;
     physicsContactCount = state.contactCount;
     characterVirtualInitialized = state.characterInitialized;
+    groundVelocity = state.groundVelocity;
+    supportingGroundMoving = state.supportingGroundMoving;
     // Residual OnGround during jump takeoff must not cancel a positive launch.
     // Only downward/non-positive vertical speed is cleared on valid support.
     if (state.supported && verticalVelocity <= 0.0f)
@@ -206,5 +209,15 @@ int Player::PhysicsContactCount() const
 bool Player::CharacterVirtualInitialized() const
 {
     return characterVirtualInitialized;
+}
+
+core::Vec3 Player::GroundVelocity() const
+{
+    return groundVelocity;
+}
+
+bool Player::IsSupportingGroundMoving() const
+{
+    return supportingGroundMoving;
 }
 }

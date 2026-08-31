@@ -1,6 +1,7 @@
 #include "physics/PhysicsWorld.h"
 
 #include "world/GreyboxWorld.h"
+#include "world/MovingPlatform.h"
 
 #include <Jolt/Jolt.h>
 
@@ -18,6 +19,7 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <memory>
@@ -234,9 +236,12 @@ struct PhysicsWorld::Impl
     std::unique_ptr<JPH::PhysicsSystem> physicsSystem;
     std::vector<JPH::BodyID> staticBodyIds;
     JPH::BodyID dynamicBodyId;
+    JPH::BodyID movingPlatformId;
     JPH::Ref<JPH::CharacterVirtual> character;
     core::Vec3 playerVisualSize{0.8f, 1.6f, 0.8f};
     float gameplayZ = 0.0f;
+    float movingPlatformDirection = 1.0f;
+    float carriedGroundVelocityX = 0.0f;
     bool typesRegistered = false;
     bool initialized = false;
 
@@ -291,6 +296,58 @@ struct PhysicsWorld::Impl
         }
 
         return true;
+    }
+
+    bool CreateMovingPlatform()
+    {
+        const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        JPH::BodyCreationSettings settings(
+            new JPH::BoxShape(ToHalfExtent(spec.size)),
+            JPH::RVec3(spec.startX, spec.centerY, spec.centerZ),
+            JPH::Quat::sIdentity(),
+            JPH::EMotionType::Kinematic,
+            ObjectLayers::Moving);
+        settings.mAllowSleeping = false;
+        movingPlatformId = bodyInterface.CreateAndAddBody(settings, JPH::EActivation::Activate);
+        if (movingPlatformId.IsInvalid())
+        {
+            ReportError("failed to create kinematic moving platform.");
+            return false;
+        }
+
+        movingPlatformDirection = 1.0f;
+        return true;
+    }
+
+    void StepMovingPlatform(float deltaSeconds)
+    {
+        if (movingPlatformId.IsInvalid())
+        {
+            return;
+        }
+
+        const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        const JPH::RVec3 current = bodyInterface.GetPosition(movingPlatformId);
+        float x = static_cast<float>(current.GetX());
+        x += movingPlatformDirection * spec.speed * deltaSeconds;
+        if (x >= spec.pathMaxX)
+        {
+            x = spec.pathMaxX;
+            movingPlatformDirection = -1.0f;
+        }
+        else if (x <= spec.pathMinX)
+        {
+            x = spec.pathMinX;
+            movingPlatformDirection = 1.0f;
+        }
+
+        bodyInterface.MoveKinematic(
+            movingPlatformId,
+            JPH::RVec3(x, spec.centerY, spec.centerZ),
+            JPH::Quat::sIdentity(),
+            deltaSeconds);
     }
 
     void EnforceFixedZ()
@@ -414,6 +471,12 @@ bool PhysicsWorld::Initialize()
         return false;
     }
 
+    if (!impl->CreateMovingPlatform())
+    {
+        Shutdown();
+        return false;
+    }
+
     impl->physicsSystem->OptimizeBroadPhase();
     impl->initialized = true;
     return true;
@@ -477,6 +540,22 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
     return true;
 }
 
+void PhysicsWorld::UpdateMovingPlatform(float deltaSeconds)
+{
+    if (!impl->initialized)
+    {
+        return;
+    }
+
+    const float stepSeconds = ClampDeltaSeconds(deltaSeconds);
+    if (stepSeconds <= 0.0f)
+    {
+        return;
+    }
+
+    impl->StepMovingPlatform(stepSeconds);
+}
+
 void PhysicsWorld::MovePlayer(const PlayerMoveCommand& command, float deltaSeconds)
 {
     if (impl->character == nullptr)
@@ -490,8 +569,26 @@ void PhysicsWorld::MovePlayer(const PlayerMoveCommand& command, float deltaSecon
         return;
     }
 
+    // MoveKinematic already updated the supporting body's velocity this frame.
+    // Refresh the cached ground velocity without another collision query.
+    impl->character->UpdateGroundVelocity();
+
+    float groundVelocityX = 0.0f;
+    if (impl->character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround)
+    {
+        groundVelocityX = impl->character->GetGroundVelocity().GetX();
+        impl->carriedGroundVelocityX = groundVelocityX;
+    }
+    else
+    {
+        groundVelocityX = impl->carriedGroundVelocityX;
+    }
+
+    // command.horizontalVelocity is Player-relative. World X includes moving ground
+    // so standing still rides the platform and takeoff keeps platform momentum.
+    const float worldHorizontalVelocity = command.horizontalVelocity + groundVelocityX;
     impl->character->SetLinearVelocity(
-        JPH::Vec3(command.horizontalVelocity, command.verticalVelocity, 0.0f));
+        JPH::Vec3(worldHorizontalVelocity, command.verticalVelocity, 0.0f));
     impl->character->Update(
         stepSeconds,
         JPH::Vec3(0.0f, kCharacterGravityY, 0.0f),
@@ -529,6 +626,8 @@ void PhysicsWorld::Update(float deltaSeconds)
 void PhysicsWorld::Shutdown()
 {
     impl->character = nullptr;
+    impl->carriedGroundVelocityX = 0.0f;
+    impl->movingPlatformDirection = 1.0f;
 
     if (impl->physicsSystem)
     {
@@ -538,6 +637,12 @@ void PhysicsWorld::Shutdown()
             bodyInterface.RemoveBody(impl->dynamicBodyId);
             bodyInterface.DestroyBody(impl->dynamicBodyId);
             impl->dynamicBodyId = {};
+        }
+        if (!impl->movingPlatformId.IsInvalid())
+        {
+            bodyInterface.RemoveBody(impl->movingPlatformId);
+            bodyInterface.DestroyBody(impl->movingPlatformId);
+            impl->movingPlatformId = {};
         }
         for (const JPH::BodyID id : impl->staticBodyIds)
         {
@@ -597,6 +702,29 @@ DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
     return box;
 }
 
+MovingPlatformState PhysicsWorld::GetMovingPlatform() const
+{
+    MovingPlatformState state;
+    const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+    state.size = spec.size;
+    state.pathMinX = spec.pathMinX;
+    state.pathMaxX = spec.pathMaxX;
+    state.speed = spec.speed;
+    state.direction = impl->movingPlatformDirection;
+    state.valid = impl->initialized && !impl->movingPlatformId.IsInvalid();
+    if (!state.valid)
+    {
+        state.position = {spec.startX, spec.centerY, spec.centerZ};
+        return state;
+    }
+
+    const JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
+    state.position = ToVec3(bodyInterface.GetPosition(impl->movingPlatformId));
+    const JPH::Vec3 velocity = bodyInterface.GetLinearVelocity(impl->movingPlatformId);
+    state.velocity = {velocity.GetX(), velocity.GetY(), velocity.GetZ()};
+    return state;
+}
+
 PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
 {
     PlayerPhysicsState state;
@@ -608,6 +736,7 @@ PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
 
     const JPH::RVec3 feet = impl->character->GetPosition();
     const JPH::Vec3 velocity = impl->character->GetLinearVelocity();
+    const JPH::Vec3 groundVelocity = impl->character->GetGroundVelocity();
     state.visualCenter = {
         static_cast<float>(feet.GetX()),
         static_cast<float>(feet.GetY()) + impl->playerVisualSize.y * 0.5f,
@@ -617,6 +746,8 @@ PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
     state.groundSupport = ToGroundSupport(impl->character->GetGroundState());
     state.supported = state.groundSupport == PlayerGroundSupport::OnGround;
     state.contactCount = impl->CountContacts();
+    state.groundVelocity = {groundVelocity.GetX(), groundVelocity.GetY(), groundVelocity.GetZ()};
+    state.supportingGroundMoving = state.supported && std::fabs(groundVelocity.GetX()) > 0.01f;
     return state;
 }
 }

@@ -37,6 +37,20 @@ struct PlayerPhysicsState
     PlayerGroundSupport groundSupport = PlayerGroundSupport::InAir;
     int contactCount = 0;
     bool characterInitialized = false;
+    core::Vec3 groundVelocity{};
+    bool supportingGroundMoving = false;
+};
+
+struct MovingPlatformState
+{
+    core::Vec3 position{};
+    core::Vec3 size{};
+    core::Vec3 velocity{};
+    float direction = 1.0f;
+    float pathMinX = 0.0f;
+    float pathMaxX = 0.0f;
+    float speed = 0.0f;
+    bool valid = false;
 };
 
 class PhysicsWorld
@@ -52,6 +66,7 @@ public:
 
     bool Initialize();
     bool InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSize);
+    void UpdateMovingPlatform(float deltaSeconds);
     void MovePlayer(const PlayerMoveCommand& command, float deltaSeconds);
     void Update(float deltaSeconds);
     void Shutdown();
@@ -60,6 +75,7 @@ public:
     int StaticBodyCount() const;
     bool IsDynamicTestBodyValid() const;
     DynamicTestBox GetDynamicTestBox() const;
+    MovingPlatformState GetMovingPlatform() const;
     PlayerPhysicsState GetPlayerPhysicsState() const;
 
 private:

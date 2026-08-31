@@ -28,6 +28,8 @@ public:
     physics::PlayerGroundSupport GroundSupport() const;
     int PhysicsContactCount() const;
     bool CharacterVirtualInitialized() const;
+    core::Vec3 GroundVelocity() const;
+    bool IsSupportingGroundMoving() const;
 
     static constexpr float kMaxMoveSpeed = 6.0f;
     static constexpr float kAcceleration = 40.0f;
@@ -54,5 +56,7 @@ private:
     physics::PlayerGroundSupport groundSupport = physics::PlayerGroundSupport::OnGround;
     int physicsContactCount = 0;
     bool characterVirtualInitialized = false;
+    core::Vec3 groundVelocity{};
+    bool supportingGroundMoving = false;
 };
 }

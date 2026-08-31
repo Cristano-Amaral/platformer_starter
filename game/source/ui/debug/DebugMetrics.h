@@ -46,6 +46,17 @@ struct DebugMetricsSnapshot
     bool dynamicTestBodyValid = false;
     bool playerPositionFinite = true;
     bool playerVelocityFinite = true;
+
+    core::Vec3 groundVelocity{};
+    bool supportingGroundMoving = false;
+
+    bool movingPlatformValid = false;
+    core::Vec3 movingPlatformPosition{};
+    core::Vec3 movingPlatformVelocity{};
+    float movingPlatformDirection = 1.0f;
+    float movingPlatformPathMinX = 0.0f;
+    float movingPlatformPathMaxX = 0.0f;
+    float movingPlatformSpeed = 0.0f;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

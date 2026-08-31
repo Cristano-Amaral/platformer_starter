@@ -18,7 +18,9 @@ public:
         const gameplay::Player& player,
         const gameplay::PlatformerCamera& camera,
         core::Vec3 physicsTestBoxPosition,
-        core::Vec3 physicsTestBoxSize);
+        core::Vec3 physicsTestBoxSize,
+        core::Vec3 movingPlatformPosition,
+        core::Vec3 movingPlatformSize);
     void EndFrame();
 };
 }
