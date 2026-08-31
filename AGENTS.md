@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 02 — 3D Greybox and Platformer Camera.
+Milestone 03 — Semantic Input and Player Movement.
 See `docs/MILESTONES.md`.

@@ -42,6 +42,11 @@ add_executable(Platformer3D
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
     game/source/gameplay/Player.h
+    game/source/input/Input.cpp
+    game/source/input/Input.h
+    game/source/input/InputState.h
+    game/source/platform/Time.cpp
+    game/source/platform/Time.h
     game/source/platform/Window.cpp
     game/source/platform/Window.h
     game/source/render/Renderer.cpp
