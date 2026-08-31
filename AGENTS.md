@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 05 — Static Platform Collision.
+Milestone 06 — Solid Static AABB Collision.
 See `docs/MILESTONES.md`.

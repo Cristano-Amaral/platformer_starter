@@ -12,9 +12,9 @@ Player::Player(core::Vec3 position, core::Vec3 size)
 
 void Player::Update(const input::InputState& input, float deltaSeconds)
 {
-    const core::Vec3 previousPosition = position;
-
+    const core::Vec3 positionBeforeX = position;
     position.x += input.moveX * kMoveSpeed * deltaSeconds;
+    position.x = world::ResolveHorizontalPosition(positionBeforeX, position, size);
 
     if (input.jumpPressed && grounded)
     {
@@ -23,13 +23,26 @@ void Player::Update(const input::InputState& input, float deltaSeconds)
     }
 
     verticalVelocity -= kGravity * deltaSeconds;
+
+    const core::Vec3 positionBeforeY = position;
     position.y += verticalVelocity * deltaSeconds;
 
-    const world::SupportContact contact =
-        world::ResolveGroundContact(previousPosition, position, size, verticalVelocity);
-    position.y = contact.positionY;
-    verticalVelocity = contact.verticalVelocity;
-    grounded = contact.grounded;
+    if (verticalVelocity > 0.0f)
+    {
+        const world::CeilingContact contact =
+            world::ResolveCeilingContact(positionBeforeY, position, size, verticalVelocity);
+        position.y = contact.positionY;
+        verticalVelocity = contact.verticalVelocity;
+        grounded = false;
+    }
+    else
+    {
+        const world::SupportContact contact =
+            world::ResolveGroundContact(positionBeforeY, position, size, verticalVelocity);
+        position.y = contact.positionY;
+        verticalVelocity = contact.verticalVelocity;
+        grounded = contact.grounded;
+    }
 }
 
 const core::Vec3& Player::Position() const
