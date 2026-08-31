@@ -1,7 +1,7 @@
-#include "core/App.h"
+#include "core/Application.h"
 
 int main()
 {
-    core::App app;
-    return app.Run();
+    core::Application application;
+    return application.Run();
 }

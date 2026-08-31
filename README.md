@@ -25,8 +25,7 @@ Run:
 .\build\windows-vs2022\bin\Development\Platformer3D.exe
 ```
 
+The Development executable opens a resizable 1280x720 window titled `Platformer3D`. Close the window or press ESC to exit.
+
 ## Cursor
 Open the repository root in Cursor. The agent will pick up `AGENTS.md`, `.cursor/rules/*.mdc`, and `.cursor/skills/*/SKILL.md`.
-
-Start with:
-> Read AGENTS.md and docs/MILESTONES.md. Execute Milestone 00 only. Inspect the repository, configure and build the Development preset, fix only foundation/build issues, and report whether all acceptance criteria are satisfied. Do not start Milestone 01.

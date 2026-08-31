@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 00 — Repository/Foundation Setup.
+Milestone 01 — Window and Game Loop.
 See `docs/MILESTONES.md`.
