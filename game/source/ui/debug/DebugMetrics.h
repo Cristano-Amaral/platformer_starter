@@ -34,6 +34,10 @@ struct DebugMetricsSnapshot
     float horizontalDeadZone = 0.0f;
     float verticalDeadZone = 0.0f;
     float followSharpness = 0.0f;
+
+    bool physicsInitialized = false;
+    core::Vec3 physicsTestBoxPosition{};
+    bool physicsTestBoxActive = false;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

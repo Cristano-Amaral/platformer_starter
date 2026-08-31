@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 09 — Debug/Development Metrics.
+Milestone 10 — Experimental Jolt Physics Integration.
 See `docs/MILESTONES.md`.

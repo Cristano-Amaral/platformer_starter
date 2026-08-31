@@ -13,6 +13,7 @@ namespace core
 ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::Player& player,
     const gameplay::PlatformerCamera& camera,
+    const physics::PhysicsWorld& physicsWorld,
     const input::InputState& inputState,
     float deltaSeconds)
 {
@@ -45,6 +46,11 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.horizontalDeadZone = gameplay::PlatformerCamera::kHorizontalDeadZone;
     snapshot.verticalDeadZone = gameplay::PlatformerCamera::kVerticalDeadZone;
     snapshot.followSharpness = gameplay::PlatformerCamera::kFollowSharpness;
+
+    const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
+    snapshot.physicsInitialized = physicsWorld.IsInitialized();
+    snapshot.physicsTestBoxPosition = testBox.position;
+    snapshot.physicsTestBoxActive = testBox.active;
     return snapshot;
 }
 #endif
@@ -62,12 +68,15 @@ int Application::Run()
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
         player.Update(inputState, deltaSeconds);
+        physicsWorld.Update(deltaSeconds);
         camera.Update(player.Position(), deltaSeconds);
 
+        const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
         renderer.BeginFrame();
-        renderer.DrawWorld(player, camera);
+        renderer.DrawWorld(player, camera, testBox.position, testBox.size);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
-        debugUi.Draw(MakeDebugMetricsSnapshot(player, camera, inputState, deltaSeconds));
+        debugUi.Draw(
+            MakeDebugMetricsSnapshot(player, camera, physicsWorld, inputState, deltaSeconds));
 #endif
         renderer.EndFrame();
     }
@@ -78,9 +87,16 @@ int Application::Run()
 
 void Application::Initialize()
 {
-    initialized = window.Initialize();
-    if (!initialized)
+    if (!window.Initialize())
     {
+        initialized = false;
+        return;
+    }
+
+    if (!physicsWorld.Initialize())
+    {
+        window.Shutdown();
+        initialized = false;
         return;
     }
 
@@ -88,6 +104,7 @@ void Application::Initialize()
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();
 #endif
+    initialized = true;
 }
 
 void Application::Shutdown()
@@ -95,6 +112,7 @@ void Application::Shutdown()
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Shutdown();
 #endif
+    physicsWorld.Shutdown();
     window.Shutdown();
     initialized = false;
 }

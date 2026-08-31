@@ -96,6 +96,20 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("follow sharpness: %.4f", snapshot.followSharpness);
     }
 
+    if (ImGui::CollapsingHeader("Physics", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Jolt initialized: %s", BoolText(snapshot.physicsInitialized));
+        ImGui::Text("dynamic test box X: %.4f", snapshot.physicsTestBoxPosition.x);
+        ImGui::Text("dynamic test box Y: %.4f", snapshot.physicsTestBoxPosition.y);
+        ImGui::Text("dynamic test box Z: %.4f", snapshot.physicsTestBoxPosition.z);
+        ImGui::Text(
+            "dynamic test box active: %s",
+            BoolText(snapshot.physicsTestBoxActive));
+        ImGui::Text(
+            "dynamic test box sleeping: %s",
+            BoolText(snapshot.physicsInitialized && !snapshot.physicsTestBoxActive));
+    }
+
     ImGui::End();
 }
 }

@@ -34,6 +34,7 @@ endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Raylib.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/DebugUi.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Jolt.cmake")
 
 add_executable(Platformer3D
     game/source/Main.cpp
@@ -47,6 +48,8 @@ add_executable(Platformer3D
     game/source/input/Input.cpp
     game/source/input/Input.h
     game/source/input/InputState.h
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
     game/source/platform/Time.cpp
     game/source/platform/Time.h
     game/source/platform/Window.cpp
@@ -69,7 +72,7 @@ target_include_directories(Platformer3D PRIVATE
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:${imgui_SOURCE_DIR}>
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:${rlimgui_SOURCE_DIR}>
 )
-target_link_libraries(Platformer3D PRIVATE raylib)
+target_link_libraries(Platformer3D PRIVATE raylib Jolt)
 target_link_libraries(Platformer3D PRIVATE
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:rlimgui>
 )

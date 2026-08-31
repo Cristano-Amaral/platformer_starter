@@ -16,6 +16,7 @@ constexpr Color kGroundColor{78, 84, 96, 255};
 constexpr Color kPlatformColor{110, 118, 132, 255};
 constexpr Color kPlatformAccentColor{96, 104, 118, 255};
 constexpr Color kPlayerColor{216, 96, 72, 255};
+constexpr Color kPhysicsTestBoxColor{64, 176, 196, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 
 constexpr int kGridSlices = 20;
@@ -52,7 +53,11 @@ void Renderer::BeginFrame()
     ClearBackground(kBackgroundColor);
 }
 
-void Renderer::DrawWorld(const gameplay::Player& player, const gameplay::PlatformerCamera& camera)
+void Renderer::DrawWorld(
+    const gameplay::Player& player,
+    const gameplay::PlatformerCamera& camera,
+    core::Vec3 physicsTestBoxPosition,
+    core::Vec3 physicsTestBoxSize)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -68,6 +73,7 @@ void Renderer::DrawWorld(const gameplay::Player& player, const gameplay::Platfor
         world::kElevatedPlatforms[1].size,
         kPlatformAccentColor);
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
+    DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
 
     EndMode3D();
 }
