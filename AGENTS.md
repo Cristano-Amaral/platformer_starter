@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 03 — Semantic Input and Player Movement.
+Milestone 04 — Vertical Motion Foundation.
 See `docs/MILESTONES.md`.

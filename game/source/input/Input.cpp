@@ -19,6 +19,7 @@ InputState Poll()
         state.moveX += 1.0f;
     }
 
+    state.jumpPressed = IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_UP);
     return state;
 }
 }

@@ -1,6 +1,7 @@
 #include "render/Renderer.h"
 
 #include "core/Vec3.h"
+#include "gameplay/Greybox.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
 
@@ -16,9 +17,6 @@ constexpr Color kPlatformColor{110, 118, 132, 255};
 constexpr Color kPlatformAccentColor{96, 104, 118, 255};
 constexpr Color kPlayerColor{216, 96, 72, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
-
-constexpr core::Vec3 kGroundCenter{0.0f, -0.25f, 0.0f};
-constexpr core::Vec3 kGroundSize{24.0f, 0.5f, 8.0f};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -57,7 +55,7 @@ void Renderer::Draw(const gameplay::Player& player, const gameplay::PlatformerCa
     BeginMode3D(view);
 
     DrawGrid(kGridSlices, kGridSpacing);
-    DrawGreyboxBox(kGroundCenter, kGroundSize, kGroundColor);
+    DrawGreyboxBox(gameplay::kGround.center, gameplay::kGround.size, kGroundColor);
     DrawGreyboxBox(core::Vec3{5.0f, 0.75f, 0.0f}, core::Vec3{4.0f, 0.5f, 3.0f}, kPlatformColor);
     DrawGreyboxBox(core::Vec3{-4.5f, 1.5f, 0.0f}, core::Vec3{3.0f, 0.5f, 2.5f}, kPlatformAccentColor);
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
