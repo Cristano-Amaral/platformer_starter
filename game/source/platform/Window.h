@@ -16,9 +16,6 @@ public:
     bool Initialize();
     void Shutdown();
     bool ShouldClose() const;
-    void BeginFrame();
-    void EndFrame();
-    void ClearSolidBackground();
 
 private:
     bool initialized = false;

@@ -38,8 +38,14 @@ add_executable(Platformer3D
     game/source/Main.cpp
     game/source/core/Application.cpp
     game/source/core/Application.h
+    game/source/core/Vec3.h
+    game/source/gameplay/PlatformerCamera.h
+    game/source/gameplay/Player.cpp
+    game/source/gameplay/Player.h
     game/source/platform/Window.cpp
     game/source/platform/Window.h
+    game/source/render/Renderer.cpp
+    game/source/render/Renderer.h
 )
 
 target_include_directories(Platformer3D PRIVATE game/source)

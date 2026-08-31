@@ -12,9 +12,7 @@ int Application::Run()
 
     while (!window.ShouldClose())
     {
-        window.BeginFrame();
-        window.ClearSolidBackground();
-        window.EndFrame();
+        renderer.Draw(player, camera);
     }
 
     Shutdown();

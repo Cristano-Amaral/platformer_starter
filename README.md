@@ -25,7 +25,7 @@ Run:
 .\build\windows-vs2022\bin\Development\Platformer3D.exe
 ```
 
-The Development executable opens a resizable 1280x720 window titled `Platformer3D`. Close the window or press ESC to exit.
+The Development executable opens a resizable 1280x720 window titled `Platformer3D` with a 3D greybox scene and a stationary player placeholder. Close the window or press ESC to exit.
 
 ## Cursor
 Open the repository root in Cursor. The agent will pick up `AGENTS.md`, `.cursor/rules/*.mdc`, and `.cursor/skills/*/SKILL.md`.

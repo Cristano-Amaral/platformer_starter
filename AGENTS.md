@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 01 — Window and Game Loop.
+Milestone 02 — 3D Greybox and Platformer Camera.
 See `docs/MILESTONES.md`.
