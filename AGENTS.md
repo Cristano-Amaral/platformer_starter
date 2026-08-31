@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 04 — Vertical Motion Foundation.
+Milestone 05 — Static Platform Collision.
 See `docs/MILESTONES.md`.

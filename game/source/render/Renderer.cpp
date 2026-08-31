@@ -1,9 +1,9 @@
 #include "render/Renderer.h"
 
 #include "core/Vec3.h"
-#include "gameplay/Greybox.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
+#include "world/GreyboxWorld.h"
 
 #include "raylib.h"
 
@@ -55,9 +55,15 @@ void Renderer::Draw(const gameplay::Player& player, const gameplay::PlatformerCa
     BeginMode3D(view);
 
     DrawGrid(kGridSlices, kGridSpacing);
-    DrawGreyboxBox(gameplay::kGround.center, gameplay::kGround.size, kGroundColor);
-    DrawGreyboxBox(core::Vec3{5.0f, 0.75f, 0.0f}, core::Vec3{4.0f, 0.5f, 3.0f}, kPlatformColor);
-    DrawGreyboxBox(core::Vec3{-4.5f, 1.5f, 0.0f}, core::Vec3{3.0f, 0.5f, 2.5f}, kPlatformAccentColor);
+    DrawGreyboxBox(world::kGround.center, world::kGround.size, kGroundColor);
+    DrawGreyboxBox(
+        world::kElevatedPlatforms[0].center,
+        world::kElevatedPlatforms[0].size,
+        kPlatformColor);
+    DrawGreyboxBox(
+        world::kElevatedPlatforms[1].center,
+        world::kElevatedPlatforms[1].size,
+        kPlatformAccentColor);
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
 
     EndMode3D();
