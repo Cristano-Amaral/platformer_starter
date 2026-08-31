@@ -38,6 +38,10 @@ struct DebugMetricsSnapshot
     bool physicsInitialized = false;
     core::Vec3 physicsTestBoxPosition{};
     bool physicsTestBoxActive = false;
+
+    bool characterVirtualInitialized = false;
+    const char* playerGroundSupport = "InAir";
+    int playerContactCount = 0;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

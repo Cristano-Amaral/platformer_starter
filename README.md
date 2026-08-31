@@ -25,7 +25,7 @@ Run:
 .\build\windows-vs2022\bin\Development\Platformer3D.exe
 ```
 
-The Development executable opens a resizable 1280x720 window titled `Platformer3D` with a 3D greybox scene. Use A/Left or D/Right to move along X, and Space or Up Arrow to jump. The camera follows with dead zones and smoothing. A cyan Jolt test box falls onto the ground independently of the Player. Debug and Development builds show a read-only `Platformer3D Metrics` panel (F1 toggles it). Close the window or press ESC to exit.
+The Development executable opens a resizable 1280x720 window titled `Platformer3D` with a 3D greybox scene. Use A/Left or D/Right to move along X, and Space or Up Arrow to jump. The camera follows with dead zones and smoothing. Player collision uses Jolt CharacterVirtual against the greybox world and the cyan dynamic test box. Debug and Development builds show a read-only `Platformer3D Metrics` panel (F1 toggles it). Close the window or press ESC to exit.
 
 Release builds omit the metrics panel.
 

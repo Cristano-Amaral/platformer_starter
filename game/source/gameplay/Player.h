@@ -2,6 +2,7 @@
 
 #include "core/Vec3.h"
 #include "input/InputState.h"
+#include "physics/PhysicsWorld.h"
 
 namespace gameplay
 {
@@ -10,7 +11,11 @@ class Player
 public:
     Player(core::Vec3 position, core::Vec3 size);
 
-    void Update(const input::InputState& input, float deltaSeconds);
+    void Update(
+        const input::InputState& input,
+        float deltaSeconds,
+        physics::PhysicsWorld& physicsWorld);
+    void ApplyPhysicsState(const physics::PlayerPhysicsState& state);
 
     const core::Vec3& Position() const;
     const core::Vec3& Size() const;
@@ -20,6 +25,9 @@ public:
     float TimeSinceGrounded() const;
     bool IsCoyoteAvailable() const;
     float JumpBufferRemaining() const;
+    physics::PlayerGroundSupport GroundSupport() const;
+    int PhysicsContactCount() const;
+    bool CharacterVirtualInitialized() const;
 
     static constexpr float kMaxMoveSpeed = 6.0f;
     static constexpr float kAcceleration = 40.0f;
@@ -43,5 +51,8 @@ private:
     bool coyoteAvailable = true;
     float timeSinceGrounded = 0.0f;
     float jumpBufferRemaining = 0.0f;
+    physics::PlayerGroundSupport groundSupport = physics::PlayerGroundSupport::OnGround;
+    int physicsContactCount = 0;
+    bool characterVirtualInitialized = false;
 };
 }

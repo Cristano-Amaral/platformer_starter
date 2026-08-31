@@ -2,6 +2,8 @@
 
 #include "world/GreyboxWorld.h"
 
+// Legacy AABB helpers. Player movement no longer calls these after Milestone 11.
+
 namespace world
 {
 namespace

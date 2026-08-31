@@ -1,19 +1,27 @@
 #include "physics/PhysicsWorld.h"
 
+#include "world/GreyboxWorld.h"
+
 #include <Jolt/Jolt.h>
 
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/ShapeFilter.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <cstdarg>
 #include <cstdio>
 #include <memory>
+#include <vector>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -22,18 +30,35 @@ namespace physics
 namespace
 {
 constexpr float kMaxPhysicsDeltaSeconds = 1.0f / 60.0f;
-constexpr unsigned int kMaxBodies = 16;
+constexpr unsigned int kMaxBodies = 32;
 constexpr unsigned int kNumBodyMutexes = 0;
-constexpr unsigned int kMaxBodyPairs = 16;
-constexpr unsigned int kMaxContactConstraints = 16;
+constexpr unsigned int kMaxBodyPairs = 64;
+constexpr unsigned int kMaxContactConstraints = 64;
 constexpr unsigned int kTempAllocatorBytes = 1 * 1024 * 1024;
 constexpr unsigned int kMaxPhysicsJobs = 256;
 
-// Intentionally duplicates greybox ground for this isolated Jolt experiment.
-constexpr core::Vec3 kFloorCenter{0.0f, -0.25f, 0.0f};
-constexpr core::Vec3 kFloorSize{24.0f, 0.5f, 8.0f};
 constexpr core::Vec3 kDynamicBoxCenter{0.0f, 5.0f, 0.0f};
 constexpr core::Vec3 kDynamicBoxSize{1.0f, 1.0f, 1.0f};
+
+// Capsule matching the 0.8 x 1.6 x 0.8 visual cube:
+// radius 0.4, cylinder height 0.8 => total height 1.6, diameter 0.8.
+constexpr float kCapsuleRadius = 0.4f;
+constexpr float kCapsuleCylinderHeight = 0.8f;
+constexpr float kCapsuleHalfCylinder = 0.4f;
+constexpr float kCapsuleTotalHeight = kCapsuleCylinderHeight + 2.0f * kCapsuleRadius;
+static_assert(kCapsuleTotalHeight == 1.6f, "Capsule total height must match visual Player height");
+
+// Must match gameplay::Player::kGravity. Applied as CharacterVirtual::Update gravity
+// (downward force onto supporting bodies), not as Jolt world default 9.81.
+constexpr float kCharacterGravityY = -20.0f;
+
+constexpr float kMaxSlopeAngleRadians = JPH::DegreesToRadians(50.0f);
+constexpr float kCharacterPadding = 0.02f;
+constexpr float kCollisionTolerance = 1.0e-3f;
+constexpr float kPredictiveContactDistance = 0.1f;
+constexpr float kPenetrationRecoverySpeed = 1.0f;
+constexpr float kCharacterMass = 70.0f;
+constexpr float kMaxStrength = 100.0f;
 
 namespace ObjectLayers
 {
@@ -167,6 +192,36 @@ void ReportError(const char* message)
 {
     std::fprintf(stderr, "PhysicsWorld: %s\n", message);
 }
+
+PlayerGroundSupport ToGroundSupport(JPH::CharacterBase::EGroundState state)
+{
+    switch (state)
+    {
+    case JPH::CharacterBase::EGroundState::OnGround:
+        return PlayerGroundSupport::OnGround;
+    case JPH::CharacterBase::EGroundState::OnSteepGround:
+        return PlayerGroundSupport::OnSteepGround;
+    case JPH::CharacterBase::EGroundState::NotSupported:
+        return PlayerGroundSupport::NotSupported;
+    case JPH::CharacterBase::EGroundState::InAir:
+        return PlayerGroundSupport::InAir;
+    default:
+        return PlayerGroundSupport::InAir;
+    }
+}
+
+float ClampDeltaSeconds(float deltaSeconds)
+{
+    if (deltaSeconds <= 0.0f)
+    {
+        return 0.0f;
+    }
+    if (deltaSeconds > kMaxPhysicsDeltaSeconds)
+    {
+        return kMaxPhysicsDeltaSeconds;
+    }
+    return deltaSeconds;
+}
 }
 
 struct PhysicsWorld::Impl
@@ -177,10 +232,91 @@ struct PhysicsWorld::Impl
     std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator;
     std::unique_ptr<JPH::JobSystemSingleThreaded> jobSystem;
     std::unique_ptr<JPH::PhysicsSystem> physicsSystem;
-    JPH::BodyID floorBodyId;
+    std::vector<JPH::BodyID> staticBodyIds;
     JPH::BodyID dynamicBodyId;
+    JPH::Ref<JPH::CharacterVirtual> character;
+    core::Vec3 playerVisualSize{0.8f, 1.6f, 0.8f};
+    float gameplayZ = 0.0f;
     bool typesRegistered = false;
     bool initialized = false;
+
+    bool AddStaticBox(const world::Box& box)
+    {
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        JPH::BodyCreationSettings settings(
+            new JPH::BoxShape(ToHalfExtent(box.size)),
+            ToRVec3(box.center),
+            JPH::Quat::sIdentity(),
+            JPH::EMotionType::Static,
+            ObjectLayers::NonMoving);
+        const JPH::BodyID id =
+            bodyInterface.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+        if (id.IsInvalid())
+        {
+            return false;
+        }
+
+        staticBodyIds.push_back(id);
+        return true;
+    }
+
+    void EnforceFixedZ()
+    {
+        if (character == nullptr)
+        {
+            return;
+        }
+
+        JPH::RVec3 position = character->GetPosition();
+        position.SetZ(gameplayZ);
+        character->SetPosition(position);
+
+        JPH::Vec3 velocity = character->GetLinearVelocity();
+        velocity.SetZ(0.0f);
+        character->SetLinearVelocity(velocity);
+    }
+
+    // CharacterVirtual::Update slides the shape but does not write the
+    // collision-resolved velocity back to mLinearVelocity. Clear downward
+    // speed when standing so it cannot accumulate; keep positive Y so a
+    // residual OnGround frame cannot cancel jump takeoff.
+    void CancelSupportedDownwardVelocity()
+    {
+        if (character == nullptr)
+        {
+            return;
+        }
+
+        if (character->GetGroundState() != JPH::CharacterBase::EGroundState::OnGround)
+        {
+            return;
+        }
+
+        JPH::Vec3 velocity = character->GetLinearVelocity();
+        if (velocity.GetY() <= 0.0f)
+        {
+            velocity.SetY(0.0f);
+            character->SetLinearVelocity(velocity);
+        }
+    }
+
+    int CountContacts() const
+    {
+        if (character == nullptr)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        for (const JPH::CharacterContact& contact : character->GetActiveContacts())
+        {
+            if (contact.mHadCollision)
+            {
+                ++count;
+            }
+        }
+        return count;
+    }
 };
 
 PhysicsWorld::PhysicsWorld()
@@ -224,35 +360,24 @@ bool PhysicsWorld::Initialize()
         impl->objectVsBroadPhaseLayerFilter,
         impl->objectLayerPairFilter);
 
+    if (!impl->AddStaticBox(world::kGround))
+    {
+        ReportError("failed to create static ground body.");
+        Shutdown();
+        return false;
+    }
+
+    for (const world::Box& platform : world::kElevatedPlatforms)
+    {
+        if (!impl->AddStaticBox(platform))
+        {
+            ReportError("failed to create static platform body.");
+            Shutdown();
+            return false;
+        }
+    }
+
     JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
-
-    JPH::BoxShapeSettings floorShapeSettings(ToHalfExtent(kFloorSize));
-    floorShapeSettings.SetEmbedded();
-    const JPH::ShapeSettings::ShapeResult floorShapeResult = floorShapeSettings.Create();
-    if (floorShapeResult.HasError())
-    {
-        ReportError(floorShapeResult.GetError().c_str());
-        Shutdown();
-        return false;
-    }
-
-    JPH::BodyCreationSettings floorSettings(
-        floorShapeResult.Get(),
-        ToRVec3(kFloorCenter),
-        JPH::Quat::sIdentity(),
-        JPH::EMotionType::Static,
-        ObjectLayers::NonMoving);
-    JPH::Body* floorBody = bodyInterface.CreateBody(floorSettings);
-    if (floorBody == nullptr)
-    {
-        ReportError("failed to create static floor body.");
-        Shutdown();
-        return false;
-    }
-
-    impl->floorBodyId = floorBody->GetID();
-    bodyInterface.AddBody(impl->floorBodyId, JPH::EActivation::DontActivate);
-
     JPH::BodyCreationSettings boxSettings(
         new JPH::BoxShape(ToHalfExtent(kDynamicBoxSize)),
         ToRVec3(kDynamicBoxCenter),
@@ -272,6 +397,91 @@ bool PhysicsWorld::Initialize()
     return true;
 }
 
+bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSize)
+{
+    if (!impl->initialized)
+    {
+        ReportError("cannot initialize player character before PhysicsWorld.");
+        return false;
+    }
+    if (impl->character != nullptr)
+    {
+        return true;
+    }
+
+    impl->playerVisualSize = visualSize;
+    impl->gameplayZ = visualCenter.z;
+
+    const JPH::RefConst<JPH::Shape> capsule =
+        JPH::RotatedTranslatedShapeSettings(
+            JPH::Vec3(0.0f, kCapsuleHalfCylinder + kCapsuleRadius, 0.0f),
+            JPH::Quat::sIdentity(),
+            new JPH::CapsuleShape(kCapsuleHalfCylinder, kCapsuleRadius))
+            .Create()
+            .Get();
+    if (capsule == nullptr)
+    {
+        ReportError("failed to create CharacterVirtual capsule shape.");
+        return false;
+    }
+
+    JPH::Ref<JPH::CharacterVirtualSettings> settings = new JPH::CharacterVirtualSettings();
+    settings->mShape = capsule;
+    settings->mUp = JPH::Vec3::sAxisY();
+    settings->mMaxSlopeAngle = kMaxSlopeAngleRadians;
+    settings->mCharacterPadding = kCharacterPadding;
+    settings->mCollisionTolerance = kCollisionTolerance;
+    settings->mPredictiveContactDistance = kPredictiveContactDistance;
+    settings->mPenetrationRecoverySpeed = kPenetrationRecoverySpeed;
+    settings->mMass = kCharacterMass;
+    settings->mMaxStrength = kMaxStrength;
+    settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -kCapsuleRadius);
+
+    const float feetY = visualCenter.y - visualSize.y * 0.5f;
+    const JPH::RVec3 feetPosition(visualCenter.x, feetY, impl->gameplayZ);
+    impl->character = new JPH::CharacterVirtual(
+        settings,
+        feetPosition,
+        JPH::Quat::sIdentity(),
+        impl->physicsSystem.get());
+
+    impl->character->RefreshContacts(
+        impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
+        impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
+        {},
+        {},
+        *impl->tempAllocator);
+    impl->EnforceFixedZ();
+    return true;
+}
+
+void PhysicsWorld::MovePlayer(const PlayerMoveCommand& command, float deltaSeconds)
+{
+    if (impl->character == nullptr)
+    {
+        return;
+    }
+
+    const float stepSeconds = ClampDeltaSeconds(deltaSeconds);
+    if (stepSeconds <= 0.0f)
+    {
+        return;
+    }
+
+    impl->character->SetLinearVelocity(
+        JPH::Vec3(command.horizontalVelocity, command.verticalVelocity, 0.0f));
+    impl->character->Update(
+        stepSeconds,
+        JPH::Vec3(0.0f, kCharacterGravityY, 0.0f),
+        impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
+        impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
+        {},
+        {},
+        *impl->tempAllocator);
+    impl->EnforceFixedZ();
+    impl->CancelSupportedDownwardVelocity();
+}
+
 void PhysicsWorld::Update(float deltaSeconds)
 {
     if (!impl->initialized)
@@ -279,14 +489,10 @@ void PhysicsWorld::Update(float deltaSeconds)
         return;
     }
 
-    float stepSeconds = deltaSeconds;
+    const float stepSeconds = ClampDeltaSeconds(deltaSeconds);
     if (stepSeconds <= 0.0f)
     {
         return;
-    }
-    if (stepSeconds > kMaxPhysicsDeltaSeconds)
-    {
-        stepSeconds = kMaxPhysicsDeltaSeconds;
     }
 
     impl->physicsSystem->Update(
@@ -294,10 +500,14 @@ void PhysicsWorld::Update(float deltaSeconds)
         1,
         impl->tempAllocator.get(),
         impl->jobSystem.get());
+
+    impl->EnforceFixedZ();
 }
 
 void PhysicsWorld::Shutdown()
 {
+    impl->character = nullptr;
+
     if (impl->physicsSystem)
     {
         JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
@@ -307,12 +517,15 @@ void PhysicsWorld::Shutdown()
             bodyInterface.DestroyBody(impl->dynamicBodyId);
             impl->dynamicBodyId = {};
         }
-        if (!impl->floorBodyId.IsInvalid())
+        for (const JPH::BodyID id : impl->staticBodyIds)
         {
-            bodyInterface.RemoveBody(impl->floorBodyId);
-            bodyInterface.DestroyBody(impl->floorBodyId);
-            impl->floorBodyId = {};
+            if (!id.IsInvalid())
+            {
+                bodyInterface.RemoveBody(id);
+                bodyInterface.DestroyBody(id);
+            }
         }
+        impl->staticBodyIds.clear();
     }
 
     impl->physicsSystem.reset();
@@ -340,7 +553,7 @@ DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
 {
     DynamicTestBox box;
     box.size = kDynamicBoxSize;
-    if (!impl->initialized)
+    if (!impl->initialized || impl->dynamicBodyId.IsInvalid())
     {
         return box;
     }
@@ -349,5 +562,28 @@ DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
     box.position = ToVec3(bodyInterface.GetPosition(impl->dynamicBodyId));
     box.active = bodyInterface.IsActive(impl->dynamicBodyId);
     return box;
+}
+
+PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
+{
+    PlayerPhysicsState state;
+    state.characterInitialized = impl->character != nullptr;
+    if (impl->character == nullptr)
+    {
+        return state;
+    }
+
+    const JPH::RVec3 feet = impl->character->GetPosition();
+    const JPH::Vec3 velocity = impl->character->GetLinearVelocity();
+    state.visualCenter = {
+        static_cast<float>(feet.GetX()),
+        static_cast<float>(feet.GetY()) + impl->playerVisualSize.y * 0.5f,
+        impl->gameplayZ};
+    state.horizontalVelocity = velocity.GetX();
+    state.verticalVelocity = velocity.GetY();
+    state.groundSupport = ToGroundSupport(impl->character->GetGroundState());
+    state.supported = state.groundSupport == PlayerGroundSupport::OnGround;
+    state.contactCount = impl->CountContacts();
+    return state;
 }
 }

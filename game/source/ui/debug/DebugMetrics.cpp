@@ -110,6 +110,21 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
             BoolText(snapshot.physicsInitialized && !snapshot.physicsTestBoxActive));
     }
 
+    if (ImGui::CollapsingHeader("Player Physics / Character", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text(
+            "CharacterVirtual initialized: %s",
+            BoolText(snapshot.characterVirtualInitialized));
+        ImGui::Text("physical Player X: %.4f", snapshot.playerPosition.x);
+        ImGui::Text("physical Player Y: %.4f", snapshot.playerPosition.y);
+        ImGui::Text("physical Player Z: %.4f", snapshot.playerPosition.z);
+        ImGui::Text("horizontal velocity: %.4f", snapshot.horizontalVelocity);
+        ImGui::Text("vertical velocity: %.4f", snapshot.verticalVelocity);
+        ImGui::Text("supported/grounded: %s", BoolText(snapshot.grounded));
+        ImGui::Text("ground support: %s", snapshot.playerGroundSupport);
+        ImGui::Text("active contacts: %d", snapshot.playerContactCount);
+    }
+
     ImGui::End();
 }
 }

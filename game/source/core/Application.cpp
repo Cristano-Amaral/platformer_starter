@@ -10,6 +10,26 @@
 namespace core
 {
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+namespace
+{
+const char* GroundSupportName(physics::PlayerGroundSupport state)
+{
+    switch (state)
+    {
+    case physics::PlayerGroundSupport::OnGround:
+        return "OnGround";
+    case physics::PlayerGroundSupport::OnSteepGround:
+        return "OnSteepGround";
+    case physics::PlayerGroundSupport::NotSupported:
+        return "NotSupported";
+    case physics::PlayerGroundSupport::InAir:
+        return "InAir";
+    default:
+        return "Unknown";
+    }
+}
+}
+
 ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::Player& player,
     const gameplay::PlatformerCamera& camera,
@@ -51,6 +71,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.physicsInitialized = physicsWorld.IsInitialized();
     snapshot.physicsTestBoxPosition = testBox.position;
     snapshot.physicsTestBoxActive = testBox.active;
+
+    snapshot.characterVirtualInitialized = player.CharacterVirtualInitialized();
+    snapshot.playerGroundSupport = GroundSupportName(player.GroundSupport());
+    snapshot.playerContactCount = player.PhysicsContactCount();
     return snapshot;
 }
 #endif
@@ -67,7 +91,7 @@ int Application::Run()
     {
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
-        player.Update(inputState, deltaSeconds);
+        player.Update(inputState, deltaSeconds, physicsWorld);
         physicsWorld.Update(deltaSeconds);
         camera.Update(player.Position(), deltaSeconds);
 
@@ -100,6 +124,15 @@ void Application::Initialize()
         return;
     }
 
+    if (!physicsWorld.InitializePlayer(player.Position(), player.Size()))
+    {
+        physicsWorld.Shutdown();
+        window.Shutdown();
+        initialized = false;
+        return;
+    }
+
+    player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     camera.Initialize(player.Position());
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();

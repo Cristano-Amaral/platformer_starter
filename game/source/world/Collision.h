@@ -1,5 +1,9 @@
 #pragma once
 
+// Legacy custom AABB collision. After Milestone 11 this is no longer
+// authoritative for Player movement; CharacterVirtual owns physical collision.
+// Kept in the repository for comparison. Do not call from Player.
+
 #include "core/Vec3.h"
 
 namespace world

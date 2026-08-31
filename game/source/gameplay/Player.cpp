@@ -1,7 +1,5 @@
 #include "gameplay/Player.h"
 
-#include "world/Collision.h"
-
 namespace gameplay
 {
 namespace
@@ -40,7 +38,10 @@ Player::Player(core::Vec3 position, core::Vec3 size)
 {
 }
 
-void Player::Update(const input::InputState& input, float deltaSeconds)
+void Player::Update(
+    const input::InputState& input,
+    float deltaSeconds,
+    physics::PhysicsWorld& physicsWorld)
 {
     if (input.jumpPressed)
     {
@@ -49,47 +50,29 @@ void Player::Update(const input::InputState& input, float deltaSeconds)
 
     UpdateHorizontalVelocity(input.moveX, deltaSeconds);
 
-    const core::Vec3 positionBeforeX = position;
-    const float proposedX = position.x + horizontalVelocity * deltaSeconds;
-    position.x = proposedX;
-    position.x = world::ResolveHorizontalPosition(positionBeforeX, position, size);
-    if (horizontalVelocity > 0.0f && position.x < proposedX)
+    // Jump if already eligible (grounded or coyote) so this frame still moves upward.
+    const bool jumped = TryJump();
+
+    // CharacterVirtual::Update does not cancel mLinearVelocity against the floor.
+    // Integrating gravity while supported would accumulate a large downward speed
+    // that is inherited when walking off a ledge.
+    if (!grounded)
     {
-        horizontalVelocity = 0.0f;
-    }
-    else if (horizontalVelocity < 0.0f && position.x > proposedX)
-    {
-        horizontalVelocity = 0.0f;
+        verticalVelocity -= kGravity * deltaSeconds;
     }
 
-    // Jump if already eligible (grounded or coyote) so this frame still integrates upward.
-    TryJump();
+    physicsWorld.MovePlayer({horizontalVelocity, verticalVelocity}, deltaSeconds);
+    ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
 
-    verticalVelocity -= kGravity * deltaSeconds;
-
-    const core::Vec3 positionBeforeY = position;
-    position.y += verticalVelocity * deltaSeconds;
-
-    if (verticalVelocity > 0.0f)
+    if (jumped)
     {
-        const world::CeilingContact contact =
-            world::ResolveCeilingContact(positionBeforeY, position, size, verticalVelocity);
-        position.y = contact.positionY;
-        verticalVelocity = contact.verticalVelocity;
         grounded = false;
-    }
-    else
-    {
-        const world::SupportContact contact =
-            world::ResolveGroundContact(positionBeforeY, position, size, verticalVelocity);
-        position.y = contact.positionY;
-        verticalVelocity = contact.verticalVelocity;
-        grounded = contact.grounded;
+        coyoteAvailable = false;
     }
 
     UpdateCoyoteState(deltaSeconds);
 
-    // Buffered jump after this frame's landing, without a second Y integration.
+    // Buffered jump after this frame's landing, without a second independent Y integrate.
     TryJump();
 
     if (jumpBufferRemaining > 0.0f)
@@ -100,6 +83,23 @@ void Player::Update(const input::InputState& input, float deltaSeconds)
             jumpBufferRemaining = 0.0f;
         }
     }
+}
+
+void Player::ApplyPhysicsState(const physics::PlayerPhysicsState& state)
+{
+    position = state.visualCenter;
+    horizontalVelocity = state.horizontalVelocity;
+    verticalVelocity = state.verticalVelocity;
+    groundSupport = state.groundSupport;
+    physicsContactCount = state.contactCount;
+    characterVirtualInitialized = state.characterInitialized;
+    // Residual OnGround during jump takeoff must not cancel a positive launch.
+    // Only downward/non-positive vertical speed is cleared on valid support.
+    if (state.supported && verticalVelocity <= 0.0f)
+    {
+        verticalVelocity = 0.0f;
+    }
+    grounded = state.supported && verticalVelocity <= 0.0f;
 }
 
 bool Player::CanJump() const
@@ -191,5 +191,20 @@ bool Player::IsCoyoteAvailable() const
 float Player::JumpBufferRemaining() const
 {
     return jumpBufferRemaining;
+}
+
+physics::PlayerGroundSupport Player::GroundSupport() const
+{
+    return groundSupport;
+}
+
+int Player::PhysicsContactCount() const
+{
+    return physicsContactCount;
+}
+
+bool Player::CharacterVirtualInitialized() const
+{
+    return characterVirtualInitialized;
 }
 }
