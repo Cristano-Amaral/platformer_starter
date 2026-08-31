@@ -51,25 +51,13 @@ else()
     target_compile_options(Platformer3D PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Development: symbols + optimization + development tools.
+# Config-specific macros. Optimization/symbols for Development come from
+# CMAKE_<LANG>_FLAGS_DEVELOPMENT; MSVC /DEBUG comes from CMAKE_EXE_LINKER_FLAGS_DEVELOPMENT.
 target_compile_definitions(Platformer3D PRIVATE
     $<$<CONFIG:Debug>:GAME_DEBUG=1;GAME_DEVELOPMENT_TOOLS=1>
     $<$<CONFIG:Development>:GAME_DEVELOPMENT=1;GAME_DEVELOPMENT_TOOLS=1>
     $<$<CONFIG:Release>:GAME_RELEASE=1>
 )
-
-if(MSVC)
-    target_compile_options(Platformer3D PRIVATE
-        $<$<CONFIG:Development>:/O2;/Zi>
-    )
-    target_link_options(Platformer3D PRIVATE
-        $<$<CONFIG:Development>:/DEBUG>
-    )
-else()
-    target_compile_options(Platformer3D PRIVATE
-        $<$<CONFIG:Development>:-O2;-g>
-    )
-endif()
 
 set_target_properties(Platformer3D PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
