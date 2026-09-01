@@ -33,6 +33,7 @@ constexpr Color kMissingTextureFallbackColor{220, 48, 160, 255};
 constexpr Color kTestModelTint{255, 255, 255, 255};
 constexpr Color kMissingModelFallbackColor{235, 115, 46, 255};
 constexpr Color kMissingAuthoredModelFallbackColor{72, 148, 108, 255};
+constexpr Color kMissingTexturedModelFallbackColor{92, 72, 196, 255};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -49,6 +50,31 @@ constexpr float kTestModelScale = 1.0f;
 constexpr core::Vec3 kTestModelFallbackSize{1.1f, 1.2f, 1.1f};
 constexpr core::Vec3 kAuthoredModelPosition{-2.5f, 1.0f, 2.5f};
 constexpr float kAuthoredModelScale = 1.0f;
+constexpr core::Vec3 kTexturedModelPosition{4.0f, 1.0f, 2.5f};
+constexpr float kTexturedModelScale = 1.0f;
+
+bool ModelHasAlbedoTexture(const Model& model)
+{
+    if (model.materialCount <= 0 || model.materials == nullptr)
+    {
+        return false;
+    }
+
+    for (int index = 0; index < model.materialCount; ++index)
+    {
+        const MaterialMap* maps = model.materials[index].maps;
+        if (maps == nullptr)
+        {
+            continue;
+        }
+        if (IsTextureValid(maps[MATERIAL_MAP_ALBEDO].texture))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 Vector3 ToRaylib(core::Vec3 value)
 {
@@ -189,6 +215,7 @@ void Renderer::LoadRuntimeAssets()
     LoadTestCheckerTexture();
     LoadTestStaticModel();
     LoadTestAuthoredModel();
+    LoadTestTexturedModel();
 }
 
 void Renderer::LoadTestCheckerTexture()
@@ -300,6 +327,47 @@ void Renderer::LoadTestAuthoredModel()
     authoredModelFallbackActive = false;
 }
 
+void Renderer::LoadTestTexturedModel()
+{
+    texturedModelMaterialCount = 0;
+    texturedModelHasAlbedoTexture = false;
+
+    std::filesystem::path runtimePath;
+    std::string runtimePathString;
+    if (!TryResolveRuntimeAsset(
+            platform::kTestTexturedModelLogicalId,
+            "model",
+            runtimePath,
+            runtimePathString))
+    {
+        texturedModel.reset();
+        texturedModelLoaded = false;
+        texturedModelFallbackActive = true;
+        return;
+    }
+
+    texturedModel = std::make_unique<GpuModel>();
+    texturedModel->model = LoadModel(runtimePathString.c_str());
+    if (!IsModelValid(texturedModel->model))
+    {
+        TraceLog(
+            LOG_ERROR,
+            "Failed to load cooked model '%s' from runtime path '%s'. "
+            "Using a visual fallback cube. Cook assets with: python tools/cook_assets.py",
+            TexturedModelLogicalId(),
+            runtimePathString.c_str());
+        texturedModel.reset();
+        texturedModelLoaded = false;
+        texturedModelFallbackActive = true;
+        return;
+    }
+
+    texturedModelLoaded = true;
+    texturedModelFallbackActive = false;
+    texturedModelMaterialCount = texturedModel->model.materialCount;
+    texturedModelHasAlbedoTexture = ModelHasAlbedoTexture(texturedModel->model);
+}
+
 void Renderer::UnloadRuntimeAssets()
 {
     if (testTexture != nullptr && testTextureLoaded)
@@ -325,6 +393,16 @@ void Renderer::UnloadRuntimeAssets()
     authoredModel.reset();
     authoredModelLoaded = false;
     authoredModelFallbackActive = false;
+
+    if (texturedModel != nullptr && texturedModelLoaded)
+    {
+        UnloadModel(texturedModel->model);
+    }
+    texturedModel.reset();
+    texturedModelLoaded = false;
+    texturedModelFallbackActive = false;
+    texturedModelMaterialCount = 0;
+    texturedModelHasAlbedoTexture = false;
 }
 
 bool Renderer::IsTestTextureLoaded() const
@@ -375,6 +453,31 @@ bool Renderer::IsAuthoredModelFallbackActive() const
 const char* Renderer::AuthoredModelLogicalId() const
 {
     return platform::kTestAuthoredModelLogicalId.data();
+}
+
+bool Renderer::IsTexturedModelLoaded() const
+{
+    return texturedModelLoaded;
+}
+
+bool Renderer::IsTexturedModelFallbackActive() const
+{
+    return texturedModelFallbackActive;
+}
+
+const char* Renderer::TexturedModelLogicalId() const
+{
+    return platform::kTestTexturedModelLogicalId.data();
+}
+
+int Renderer::TexturedModelMaterialCount() const
+{
+    return texturedModelMaterialCount;
+}
+
+bool Renderer::TexturedModelHasAlbedoTexture() const
+{
+    return texturedModelHasAlbedoTexture;
 }
 
 void Renderer::BeginFrame()
@@ -443,6 +546,19 @@ void Renderer::DrawWorld(
     else
     {
         DrawMissingModelFallback(kAuthoredModelPosition, kMissingAuthoredModelFallbackColor);
+    }
+
+    if (texturedModelLoaded && texturedModel != nullptr)
+    {
+        DrawModel(
+            texturedModel->model,
+            ToRaylib(kTexturedModelPosition),
+            kTexturedModelScale,
+            kTestModelTint);
+    }
+    else
+    {
+        DrawMissingModelFallback(kTexturedModelPosition, kMissingTexturedModelFallbackColor);
     }
 
     EndMode3D();

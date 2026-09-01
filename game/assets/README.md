@@ -29,3 +29,12 @@ Milestone 17 authored model:
 - cooker copies the GLB unchanged; `.blend` is not a cooker input
 - visual-only; model collision is not supported
 - see `docs/BLENDER_WORKFLOW.md`
+
+Milestone 18 textured model:
+- authored: `game/assets/source/blender/test_textured.blend`
+- authoring Base Color: `game/assets/source/textures/test_textured_basecolor.png` (not cooked, not staged, not loaded by the game)
+- runtime source: `game/assets/source/models/test_textured.glb` (texture must be embedded in the GLB)
+- logical id: `models/test_textured.glb`
+- cooked/staged: `<cooked or exe>/assets/models/test_textured.glb` only
+- visual-only; model collision is not supported
+- see `docs/BLENDER_WORKFLOW.md`

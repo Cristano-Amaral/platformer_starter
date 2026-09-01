@@ -35,6 +35,11 @@ KNOWN_ASSETS = (
         "cooked": "models/test_static.glb",
     },
     {
+        "id": "models/test_textured.glb",
+        "source": "models/test_textured.glb",
+        "cooked": "models/test_textured.glb",
+    },
+    {
         "id": "textures/test_checker.png",
         "source": "textures/test_checker.png",
         "cooked": "textures/test_checker.png",

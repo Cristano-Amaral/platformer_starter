@@ -107,12 +107,15 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/textures/test_checker.png
 #   <exe dir>/assets/models/test_static.glb
 #   <exe dir>/assets/models/test_authored.glb
+#   <exe dir>/assets/models/test_textured.glb
+# Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
 set(PLATFORMER_COOKED_DIR "${CMAKE_SOURCE_DIR}/game/assets/cooked")
 set(PLATFORMER_RUNTIME_ASSETS
     textures/test_checker.png
     models/test_static.glb
     models/test_authored.glb
+    models/test_textured.glb
 )
 
 set(PLATFORMER_MISSING_COOKED_ASSETS)

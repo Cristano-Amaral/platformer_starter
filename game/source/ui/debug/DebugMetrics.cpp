@@ -174,6 +174,13 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("loaded: %s", BoolText(snapshot.authoredModelLoaded));
         ImGui::Text("fallback: %s", BoolText(snapshot.authoredModelFallbackActive));
         ImGui::Text("id: %s", snapshot.authoredModelLogicalId);
+        ImGui::Separator();
+        ImGui::Text("Textured GLB Model");
+        ImGui::Text("loaded: %s", BoolText(snapshot.texturedModelLoaded));
+        ImGui::Text("fallback: %s", BoolText(snapshot.texturedModelFallbackActive));
+        ImGui::Text("id: %s", snapshot.texturedModelLogicalId);
+        ImGui::Text("material count: %d", snapshot.texturedModelMaterialCount);
+        ImGui::Text("albedo texture: %s", BoolText(snapshot.texturedModelHasAlbedoTexture));
     }
 
     ImGui::End();

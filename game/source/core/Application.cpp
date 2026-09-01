@@ -129,6 +129,12 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.authoredModelLoaded = renderer.IsAuthoredModelLoaded();
     snapshot.authoredModelFallbackActive = renderer.IsAuthoredModelFallbackActive();
     snapshot.authoredModelLogicalId = renderer.AuthoredModelLogicalId();
+
+    snapshot.texturedModelLoaded = renderer.IsTexturedModelLoaded();
+    snapshot.texturedModelFallbackActive = renderer.IsTexturedModelFallbackActive();
+    snapshot.texturedModelLogicalId = renderer.TexturedModelLogicalId();
+    snapshot.texturedModelMaterialCount = renderer.TexturedModelMaterialCount();
+    snapshot.texturedModelHasAlbedoTexture = renderer.TexturedModelHasAlbedoTexture();
     return snapshot;
 }
 #endif

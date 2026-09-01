@@ -23,12 +23,15 @@ The game loads only staged cooked files, never `.blend`, never `source/`, never 
 ```text
 game/assets/source/
 ├─ blender/
-│  └─ test_authored.blend
+│  ├─ test_authored.blend
+│  └─ test_textured.blend
 ├─ models/
 │  ├─ test_static.glb
-│  └─ test_authored.glb
+│  ├─ test_authored.glb
+│  └─ test_textured.glb              (texture must be embedded)
 └─ textures/
-   └─ test_checker.png
+   ├─ test_checker.png
+   └─ test_textured_basecolor.png    (authoring input; not cooked)
 ```
 
 Logical identity (cooker / runtime):
@@ -162,7 +165,78 @@ No `.blend` entries in the manifest.
 Out of scope for Milestone 17. No `blender --background`, no Blender Python
 export, no CMake/cooker Blender invocation.
 
-## Runtime notes
+## Runtime notes (Milestone 17)
 
 The authored model is drawn at approximately `(-2.5, 1.0, 2.5)`. It is visual
 only: no GreyboxWorld entry, no Jolt body, no mesh collision.
+
+---
+
+## Milestone 18 — embedded Base Color texture
+
+Milestone 18 proves one Blender-authored GLB whose **Base Color image is
+embedded in the GLB**. The game must not load a sidecar PNG for that model.
+
+### File contract
+
+| Role | Path |
+|---|---|
+| Authored `.blend` | `game/assets/source/blender/test_textured.blend` |
+| Authoring Base Color PNG | `game/assets/source/textures/test_textured_basecolor.png` |
+| Exported runtime-source GLB | `game/assets/source/models/test_textured.glb` |
+| Logical id | `models/test_textured.glb` |
+| Cooked | `game/assets/cooked/models/test_textured.glb` |
+| Runtime staged | `<exe>/assets/models/test_textured.glb` |
+
+- `.blend` = editable authoring source. Never cooked. Never loaded at runtime.
+- `test_textured_basecolor.png` = authored Base Color source used by Blender.
+  Version it. It is **not** a cooker input, **not** staged, and **not** loaded
+  by the game.
+- Exported `test_textured.glb` = runtime-source model. The Base Color image
+  must be embedded inside this file (no sidecar PNG, no external URI).
+- Cooker consumes **only** the GLB for this model.
+- Runtime consumes **only** the staged GLB via
+  `RuntimeAssetPath("models/test_textured.glb")` → `LoadModel`.
+- No runtime path lookup for `textures/test_textured_basecolor.png`.
+- Blender remains authoring-only. CMake and the cooker do not invoke Blender.
+
+The model is drawn at approximately `(4.0, 1.0, 2.5)`. Visual only: no
+GreyboxWorld entry, no Jolt body, no mesh collision.
+
+### Established export settings (Blender 5.2.1)
+
+- Format: glTF Binary (.glb)
+- Selected Objects: ON
+- +Y Up: ON
+- Apply Modifiers: ON
+- UVs: ON
+- Normals: ON
+- Tangents: OFF
+- Animations: OFF
+- Images: **must be included/embedded** (do not export Images = None)
+
+No external sidecar texture is required next to the GLB or the executable.
+
+### Manual re-export
+
+1. Open `game/assets/source/blender/test_textured.blend` in Blender 5.2.1.
+2. Confirm the Image Texture node still uses
+   `game/assets/source/textures/test_textured_basecolor.png`.
+3. Confirm the mesh shows the image in the viewport.
+4. **File → Export → glTF 2.0** as GLB to
+   `game/assets/source/models/test_textured.glb` (overwrite).
+5. Keep the settings above, including embedded images.
+6. From the repository root: `python tools/cook_assets.py`
+7. Rebuild so CMake restages `<exe>/assets/models/test_textured.glb`.
+
+Do not copy the PNG next to the executable. If the viewport is textured but
+the GLB JSON has no `images`/`textures`, the exporter omitted the image —
+re-export with Images included.
+
+### Source texture guidance
+
+- Small technical PNG: **128×128** or **256×256**.
+- Asymmetric pattern so UV orientation is obvious.
+- Do not resize/compress/mipmap in the cooker. No DDS/KTX.
+
+The cooker still does not invoke Blender. CMake still does not invoke Blender.

@@ -74,6 +74,7 @@ CMake does not cook. After configure, a POST_BUILD step stages cooked files next
     <executable directory>/assets/textures/test_checker.png
     <executable directory>/assets/models/test_static.glb
     <executable directory>/assets/models/test_authored.glb
+    <executable directory>/assets/models/test_textured.glb
 
 Runtime lookup uses `platform::RuntimeAssetPath`, which joins `<executable directory>/assets/` with the logical relative path. The executable directory is queried from the OS in the platform layer (`GetModuleFileNameW` on Windows, `/proc/self/exe` on Linux). The process current working directory is never used, and non-absolute results are rejected so raylib file loads cannot silently resolve against CWD. The renderer does not hard-code `game/assets/cooked`.
 
@@ -81,11 +82,14 @@ Logical identities:
 - Milestone 15 test texture: `textures/test_checker.png`
 - Milestone 16 test model: `models/test_static.glb`
 - Milestone 17 authored model: `models/test_authored.glb`
+- Milestone 18 textured model: `models/test_textured.glb`
+
+The M18 Base Color PNG `game/assets/source/textures/test_textured_basecolor.png` is Blender authoring input only. It is not cooked or staged. The exported GLB must embed the image. See `docs/BLENDER_WORKFLOW.md`.
 
 Editable Blender files live in `game/assets/source/blender/`. They are not cooked and are not runtime assets. See `docs/BLENDER_WORKFLOW.md`. The cooker copies exported GLBs unchanged. Blender is not a build or runtime dependency.
 
-The checker appears on a dedicated visual quad at `(0, 1.5, 2.5)`. The Milestone 16 test GLB is drawn at `(2.5, 1.0, 2.5)`. The Blender-authored GLB is drawn at `(-2.5, 1.0, 2.5)`. None of these are greybox geometry and none have collision.
+The checker appears on a dedicated visual quad at `(0, 1.5, 2.5)`. The Milestone 16 test GLB is drawn at `(2.5, 1.0, 2.5)`. The Blender-authored GLB is drawn at `(-2.5, 1.0, 2.5)`. The Milestone 18 textured GLB is drawn at `(4.0, 1.0, 2.5)`. None of these are greybox geometry and none have collision.
 
-The checker, Milestone 16 pyramid, and Blender-authored model are visual-only technical tests: no GreyboxWorld entries, no Jolt bodies, no mesh collision.
+The checker, Milestone 16 pyramid, Blender-authored model, and textured model are visual-only technical tests: no GreyboxWorld entries, no Jolt bodies, no mesh collision.
 
 If a required cooked file is missing at CMake configure time, configure fails and tells the developer to run the cooker. If a staged runtime file is missing at load time, the renderer logs the logical id and draws a simple visual fallback. Texture and models are each loaded once after the window/graphics context exists and unloaded before window shutdown.

@@ -39,6 +39,12 @@ public:
     bool IsAuthoredModelFallbackActive() const;
     const char* AuthoredModelLogicalId() const;
 
+    bool IsTexturedModelLoaded() const;
+    bool IsTexturedModelFallbackActive() const;
+    const char* TexturedModelLogicalId() const;
+    int TexturedModelMaterialCount() const;
+    bool TexturedModelHasAlbedoTexture() const;
+
     void BeginFrame();
     void DrawWorld(
         const gameplay::Player& player,
@@ -53,6 +59,7 @@ private:
     void LoadTestCheckerTexture();
     void LoadTestStaticModel();
     void LoadTestAuthoredModel();
+    void LoadTestTexturedModel();
 
     struct GpuTexture;
     std::unique_ptr<GpuTexture> testTexture;
@@ -67,5 +74,11 @@ private:
     std::unique_ptr<GpuModel> authoredModel;
     bool authoredModelLoaded = false;
     bool authoredModelFallbackActive = false;
+
+    std::unique_ptr<GpuModel> texturedModel;
+    bool texturedModelLoaded = false;
+    bool texturedModelFallbackActive = false;
+    int texturedModelMaterialCount = 0;
+    bool texturedModelHasAlbedoTexture = false;
 };
 }

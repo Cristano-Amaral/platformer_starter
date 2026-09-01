@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 17 — Blender Authored Asset Workflow.
+Milestone 18 — Material + Embedded Texture Asset Workflow (Phase C).
 See `docs/MILESTONES.md` and `docs/BLENDER_WORKFLOW.md`.

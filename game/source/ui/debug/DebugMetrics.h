@@ -74,6 +74,12 @@ struct DebugMetricsSnapshot
     bool authoredModelLoaded = false;
     bool authoredModelFallbackActive = false;
     const char* authoredModelLogicalId = "";
+
+    bool texturedModelLoaded = false;
+    bool texturedModelFallbackActive = false;
+    const char* texturedModelLogicalId = "";
+    int texturedModelMaterialCount = 0;
+    bool texturedModelHasAlbedoTexture = false;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);
