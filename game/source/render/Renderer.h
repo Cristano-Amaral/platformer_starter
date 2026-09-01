@@ -2,6 +2,8 @@
 
 #include "core/Vec3.h"
 
+#include <memory>
+
 namespace gameplay
 {
 class Player;
@@ -13,6 +15,22 @@ namespace render
 class Renderer
 {
 public:
+    Renderer();
+    ~Renderer();
+
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+    Renderer(Renderer&&) = delete;
+    Renderer& operator=(Renderer&&) = delete;
+
+    void LoadRuntimeAssets();
+    void UnloadRuntimeAssets();
+
+    bool IsTestTextureLoaded() const;
+    bool IsTestTextureFallbackActive() const;
+    const char* TestTextureLogicalId() const;
+    const char* TestTextureRuntimeRelativePath() const;
+
     void BeginFrame();
     void DrawWorld(
         const gameplay::Player& player,
@@ -22,5 +40,11 @@ public:
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize);
     void EndFrame();
+
+private:
+    struct GpuTexture;
+    std::unique_ptr<GpuTexture> testTexture;
+    bool testTextureLoaded = false;
+    bool testTextureFallbackActive = false;
 };
 }

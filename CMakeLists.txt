@@ -50,6 +50,8 @@ add_executable(Platformer3D
     game/source/input/InputState.h
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
     game/source/platform/Time.cpp
     game/source/platform/Time.h
     game/source/platform/Window.cpp
@@ -66,6 +68,12 @@ add_executable(Platformer3D
     game/source/world/MovingPlatform.h
     game/source/world/Slope.h
 )
+
+if(WIN32)
+    target_sources(Platformer3D PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(Platformer3D PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
 
 target_include_directories(Platformer3D PRIVATE
     game/source
@@ -93,4 +101,27 @@ target_compile_definitions(Platformer3D PRIVATE
 
 set_target_properties(Platformer3D PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Cooker owns source -> cooked. CMake only stages cooked files next to the exe:
+#   <exe dir>/assets/textures/test_checker.png
+# Runtime lookup uses the executable directory, not the process CWD.
+set(PLATFORMER_COOKED_DIR "${CMAKE_SOURCE_DIR}/game/assets/cooked")
+set(PLATFORMER_COOKED_TEST_TEXTURE "${PLATFORMER_COOKED_DIR}/textures/test_checker.png")
+if(NOT EXISTS "${PLATFORMER_COOKED_TEST_TEXTURE}")
+    message(FATAL_ERROR
+        "Required cooked runtime asset is missing:\n"
+        "  ${PLATFORMER_COOKED_TEST_TEXTURE}\n"
+        "The game never loads assets from game/assets/source.\n"
+        "From the repository root, run:\n"
+        "  python tools/cook_assets.py")
+endif()
+
+add_custom_command(TARGET Platformer3D POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "$<TARGET_FILE_DIR:Platformer3D>/assets/textures"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${PLATFORMER_COOKED_TEST_TEXTURE}"
+        "$<TARGET_FILE_DIR:Platformer3D>/assets/textures/test_checker.png"
+    COMMENT "Staging cooked runtime assets next to the executable"
 )

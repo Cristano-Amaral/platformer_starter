@@ -59,3 +59,24 @@ Only abstract boundaries that are known to vary by target:
 - asset location/loading.
 
 Do not build a general-purpose engine before the game needs it.
+
+## Asset pipeline
+Authored files live in `game/assets/source/`. The Python cooker writes runtime-ready copies to `game/assets/cooked/`. The game never loads from `source/`.
+
+Cook from the repository root:
+
+    python tools/cook_assets.py
+
+The cooker uses only the Python standard library. It copies the known PNG unchanged, identifies content with SHA-256, skips rewriting an identical cooked file, and writes `game/assets/cooked/manifest.json` with portable relative paths (no absolute paths, timestamps, or machine names).
+
+CMake does not cook. After configure, a POST_BUILD step stages cooked files next to the executable:
+
+    <executable directory>/assets/textures/test_checker.png
+
+Runtime lookup uses `platform::RuntimeAssetPath`, which joins `<executable directory>/assets/` with the logical relative path. The executable directory is queried from the OS in the platform layer (`GetModuleFileNameW` on Windows, `/proc/self/exe` on Linux). The process current working directory is never used, and non-absolute results are rejected so `LoadTexture` cannot silently resolve against CWD. The renderer does not hard-code `game/assets/cooked`.
+
+Logical identity of the Milestone 15 test texture: `textures/test_checker.png`.
+
+If that cooked file is missing at CMake configure time, configure fails and tells the developer to run the cooker. If the staged runtime file is missing at load time, the renderer logs the logical id and draws a magenta fallback quad. The texture is loaded once after the window/graphics context exists and unloaded before window shutdown.
+
+The checker appears on a dedicated visual quad at `(0, 1.5, 2.5)`, size 2x2, facing +Z. That quad is not greybox geometry and has no collision.

@@ -158,6 +158,14 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("configured speed: %.4f", snapshot.movingPlatformSpeed);
     }
 
+    if (ImGui::CollapsingHeader("Assets", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("test texture loaded: %s", BoolText(snapshot.testTextureLoaded));
+        ImGui::Text("logical id: %s", snapshot.testTextureLogicalId);
+        ImGui::Text("runtime path: %s", snapshot.testTextureRuntimeRelativePath);
+        ImGui::Text("fallback active: %s", BoolText(snapshot.testTextureFallbackActive));
+    }
+
     ImGui::End();
 }
 }

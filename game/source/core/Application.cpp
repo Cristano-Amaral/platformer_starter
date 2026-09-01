@@ -55,6 +55,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::PlatformerCamera& camera,
     const physics::PhysicsWorld& physicsWorld,
     const input::InputState& inputState,
+    const render::Renderer& renderer,
     float deltaSeconds)
 {
     ui::DebugMetricsSnapshot snapshot;
@@ -115,6 +116,11 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.movingPlatformPathMinX = movingPlatform.pathMinX;
     snapshot.movingPlatformPathMaxX = movingPlatform.pathMaxX;
     snapshot.movingPlatformSpeed = movingPlatform.speed;
+
+    snapshot.testTextureLoaded = renderer.IsTestTextureLoaded();
+    snapshot.testTextureFallbackActive = renderer.IsTestTextureFallbackActive();
+    snapshot.testTextureLogicalId = renderer.TestTextureLogicalId();
+    snapshot.testTextureRuntimeRelativePath = renderer.TestTextureRuntimeRelativePath();
     return snapshot;
 }
 #endif
@@ -148,7 +154,8 @@ int Application::Run()
             movingPlatform.size);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
-            MakeDebugMetricsSnapshot(player, camera, physicsWorld, inputState, deltaSeconds));
+            MakeDebugMetricsSnapshot(
+                player, camera, physicsWorld, inputState, renderer, deltaSeconds));
 #endif
         renderer.EndFrame();
     }
@@ -165,8 +172,11 @@ void Application::Initialize()
         return;
     }
 
+    renderer.LoadRuntimeAssets();
+
     if (!physicsWorld.Initialize())
     {
+        renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
         return;
@@ -175,6 +185,7 @@ void Application::Initialize()
     if (!physicsWorld.InitializePlayer(player.Position(), player.Size()))
     {
         physicsWorld.Shutdown();
+        renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
         return;
@@ -194,6 +205,7 @@ void Application::Shutdown()
     debugUi.Shutdown();
 #endif
     physicsWorld.Shutdown();
+    renderer.UnloadRuntimeAssets();
     window.Shutdown();
     initialized = false;
 }

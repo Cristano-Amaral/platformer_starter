@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 14 — Slopes and CharacterVirtual Ground Handling.
+Milestone 15 — Asset Pipeline Foundation.
 See `docs/MILESTONES.md`.

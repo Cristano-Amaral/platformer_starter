@@ -61,6 +61,11 @@ struct DebugMetricsSnapshot
     float movingPlatformPathMinX = 0.0f;
     float movingPlatformPathMaxX = 0.0f;
     float movingPlatformSpeed = 0.0f;
+
+    bool testTextureLoaded = false;
+    bool testTextureFallbackActive = false;
+    const char* testTextureLogicalId = "";
+    const char* testTextureRuntimeRelativePath = "";
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);
