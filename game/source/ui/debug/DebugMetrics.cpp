@@ -133,6 +133,14 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
             snapshot.groundVelocity.y,
             snapshot.groundVelocity.z);
         ImGui::Text("supporting ground moving: %s", BoolText(snapshot.supportingGroundMoving));
+        ImGui::Text(
+            "ground normal: %.4f, %.4f, %.4f",
+            snapshot.groundNormal.x,
+            snapshot.groundNormal.y,
+            snapshot.groundNormal.z);
+        ImGui::Text("ground slope angle deg: %.2f", snapshot.groundSlopeAngleDegrees);
+        ImGui::Text("current support walkable: %s", BoolText(snapshot.currentSupportWalkable));
+        ImGui::Text("support classification: %s", snapshot.supportClassification);
     }
 
     if (ImGui::CollapsingHeader("Moving Platform", ImGuiTreeNodeFlags_DefaultOpen))

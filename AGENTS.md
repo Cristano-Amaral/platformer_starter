@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 13 — Jolt Moving Platform.
+Milestone 14 — Slopes and CharacterVirtual Ground Handling.
 See `docs/MILESTONES.md`.

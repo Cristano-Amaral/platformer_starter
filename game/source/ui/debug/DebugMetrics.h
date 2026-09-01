@@ -49,6 +49,10 @@ struct DebugMetricsSnapshot
 
     core::Vec3 groundVelocity{};
     bool supportingGroundMoving = false;
+    core::Vec3 groundNormal{};
+    float groundSlopeAngleDegrees = 0.0f;
+    bool currentSupportWalkable = false;
+    const char* supportClassification = "Unsupported";
 
     bool movingPlatformValid = false;
     core::Vec3 movingPlatformPosition{};

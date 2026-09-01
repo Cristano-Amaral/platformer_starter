@@ -39,6 +39,9 @@ struct PlayerPhysicsState
     bool characterInitialized = false;
     core::Vec3 groundVelocity{};
     bool supportingGroundMoving = false;
+    core::Vec3 groundNormal{};
+    float groundSlopeAngleDegrees = 0.0f;
+    bool currentSupportWalkable = false;
 };
 
 struct MovingPlatformState

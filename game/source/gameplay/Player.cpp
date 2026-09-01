@@ -96,6 +96,9 @@ void Player::ApplyPhysicsState(const physics::PlayerPhysicsState& state)
     characterVirtualInitialized = state.characterInitialized;
     groundVelocity = state.groundVelocity;
     supportingGroundMoving = state.supportingGroundMoving;
+    groundNormal = state.groundNormal;
+    groundSlopeAngleDegrees = state.groundSlopeAngleDegrees;
+    currentSupportWalkable = state.currentSupportWalkable;
     // Residual OnGround during jump takeoff must not cancel a positive launch.
     // Only downward/non-positive vertical speed is cleared on valid support.
     if (state.supported && verticalVelocity <= 0.0f)
@@ -219,5 +222,20 @@ core::Vec3 Player::GroundVelocity() const
 bool Player::IsSupportingGroundMoving() const
 {
     return supportingGroundMoving;
+}
+
+core::Vec3 Player::GroundNormal() const
+{
+    return groundNormal;
+}
+
+float Player::GroundSlopeAngleDegrees() const
+{
+    return groundSlopeAngleDegrees;
+}
+
+bool Player::IsCurrentSupportWalkable() const
+{
+    return currentSupportWalkable;
 }
 }

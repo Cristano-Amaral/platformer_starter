@@ -30,6 +30,9 @@ public:
     bool CharacterVirtualInitialized() const;
     core::Vec3 GroundVelocity() const;
     bool IsSupportingGroundMoving() const;
+    core::Vec3 GroundNormal() const;
+    float GroundSlopeAngleDegrees() const;
+    bool IsCurrentSupportWalkable() const;
 
     static constexpr float kMaxMoveSpeed = 6.0f;
     static constexpr float kAcceleration = 40.0f;
@@ -58,5 +61,8 @@ private:
     bool characterVirtualInitialized = false;
     core::Vec3 groundVelocity{};
     bool supportingGroundMoving = false;
+    core::Vec3 groundNormal{};
+    float groundSlopeAngleDegrees = 0.0f;
+    bool currentSupportWalkable = false;
 };
 }

@@ -2,6 +2,7 @@
 
 #include "world/GreyboxWorld.h"
 #include "world/MovingPlatform.h"
+#include "world/Slope.h"
 
 #include <Jolt/Jolt.h>
 
@@ -190,6 +191,32 @@ core::Vec3 ToVec3(JPH::RVec3Arg value)
         static_cast<float>(value.GetZ())};
 }
 
+float ClampUnit(float value)
+{
+    if (value < -1.0f)
+    {
+        return -1.0f;
+    }
+    if (value > 1.0f)
+    {
+        return 1.0f;
+    }
+    return value;
+}
+
+// Diagnostic only. CharacterVirtual classification remains authoritative.
+float GroundSlopeAngleDegrees(JPH::Vec3Arg normal)
+{
+    const float lengthSq = normal.LengthSq();
+    if (lengthSq <= 1.0e-8f)
+    {
+        return 0.0f;
+    }
+
+    const float upDot = ClampUnit(normal.GetY() / std::sqrt(lengthSq));
+    return std::acos(upDot) * 180.0f / 3.14159265358979323846f;
+}
+
 void ReportError(const char* message)
 {
     std::fprintf(stderr, "PhysicsWorld: %s\n", message);
@@ -276,6 +303,37 @@ struct PhysicsWorld::Impl
         return true;
     }
 
+    bool AddStaticSlope(const world::SlopeSpec& slope, const char* name)
+    {
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        const JPH::Quat rotation =
+            JPH::Quat::sRotation(JPH::Vec3::sAxisZ(), JPH::DegreesToRadians(slope.rotationZDegrees));
+        JPH::BodyCreationSettings settings(
+            new JPH::BoxShape(ToHalfExtent(slope.size)),
+            ToRVec3(slope.center),
+            rotation,
+            JPH::EMotionType::Static,
+            ObjectLayers::NonMoving);
+        const JPH::BodyID id =
+            bodyInterface.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+        if (id.IsInvalid())
+        {
+            std::fprintf(
+                stderr,
+                "PhysicsWorld: failed to create static slope '%s' "
+                "center=(%.3f, %.3f, %.3f) angleZ=%.1f\n",
+                name,
+                slope.center.x,
+                slope.center.y,
+                slope.center.z,
+                slope.rotationZDegrees);
+            return false;
+        }
+
+        staticBodyIds.push_back(id);
+        return true;
+    }
+
     bool AddGreyboxStaticBodies()
     {
         if (!AddStaticBox(world::kGround, "ground"))
@@ -293,6 +351,15 @@ struct PhysicsWorld::Impl
                 return false;
             }
             ++index;
+        }
+
+        if (!AddStaticSlope(world::kWalkableSlope, "walkable slope"))
+        {
+            return false;
+        }
+        if (!AddStaticSlope(world::kSteepSlope, "steep slope"))
+        {
+            return false;
         }
 
         return true;
@@ -748,6 +815,13 @@ PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
     state.contactCount = impl->CountContacts();
     state.groundVelocity = {groundVelocity.GetX(), groundVelocity.GetY(), groundVelocity.GetZ()};
     state.supportingGroundMoving = state.supported && std::fabs(groundVelocity.GetX()) > 0.01f;
+    const JPH::Vec3 groundNormal = impl->character->GetGroundNormal();
+    state.groundNormal = {
+        groundNormal.GetX(),
+        groundNormal.GetY(),
+        groundNormal.GetZ()};
+    state.groundSlopeAngleDegrees = GroundSlopeAngleDegrees(groundNormal);
+    state.currentSupportWalkable = state.supported;
     return state;
 }
 }

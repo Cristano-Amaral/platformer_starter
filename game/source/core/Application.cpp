@@ -19,6 +19,19 @@ bool IsFiniteVec3(core::Vec3 value)
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
 
+const char* SupportClassificationName(physics::PlayerGroundSupport state)
+{
+    switch (state)
+    {
+    case physics::PlayerGroundSupport::OnGround:
+        return "Walkable";
+    case physics::PlayerGroundSupport::OnSteepGround:
+        return "Steep";
+    default:
+        return "Unsupported";
+    }
+}
+
 const char* GroundSupportName(physics::PlayerGroundSupport state)
 {
     switch (state)
@@ -89,6 +102,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
         std::isfinite(player.HorizontalVelocity()) && std::isfinite(player.VerticalVelocity());
     snapshot.groundVelocity = player.GroundVelocity();
     snapshot.supportingGroundMoving = player.IsSupportingGroundMoving();
+    snapshot.groundNormal = player.GroundNormal();
+    snapshot.groundSlopeAngleDegrees = player.GroundSlopeAngleDegrees();
+    snapshot.currentSupportWalkable = player.IsCurrentSupportWalkable();
+    snapshot.supportClassification = SupportClassificationName(player.GroundSupport());
 
     const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
     snapshot.movingPlatformValid = movingPlatform.valid;

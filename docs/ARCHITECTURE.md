@@ -40,6 +40,8 @@ Player owns gameplay policy: semantic movement intent, horizontal acceleration/d
 
 The test kinematic platform is specified by `world::kTestMovingPlatform` in `MovingPlatform.h`. Renderer and PhysicsWorld both derive from that spec. Path and size are not duplicated in PhysicsWorld.
 
+Static test slopes are specified by `world::kWalkableSlope` (30 degrees) and `world::kSteepSlope` (60 degrees) in `Slope.h`. Renderer and PhysicsWorld both derive from those specs. CharacterVirtual max slope remains 50 degrees. Walkable `OnGround` is valid gameplay support; `OnSteepGround` is not.
+
 ## Moving ground
 The Player rides kinematic ground through CharacterVirtual: `UpdateGroundVelocity` then `GetGroundVelocity`, added to Player-relative horizontal speed. The Player is not parented to the platform and does not receive a manual position delta.
 
