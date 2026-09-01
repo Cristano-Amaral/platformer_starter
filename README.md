@@ -8,10 +8,11 @@ Requirements:
 - Visual Studio 2022 with Desktop development with C++
 - CMake 3.25+
 - Git
-- Python 3 (standard library only; no pip packages)
+- Python 3 (cooker uses the standard library plus cooker-only Pillow; see `tools/requirements.txt`)
 
 Cook runtime assets from the repository root (required before configure/build):
 ```powershell
+python -m pip install -r tools/requirements.txt
 python tools/cook_assets.py
 ```
 
@@ -41,7 +42,7 @@ Release builds omit the metrics panel. Runtime assets still load from `assets/` 
 - Logical test models: `models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb` (copied unchanged; no collision).
 - Milestone 18: `models/test_textured.glb` embeds (or must embed) its Base Color; `test_textured_basecolor.png` is authoring-only and is not a runtime asset. See `docs/BLENDER_WORKFLOW.md`.
 - Blender authoring: `docs/BLENDER_WORKFLOW.md`. `.blend` files are not cooked or loaded at runtime.
-- Cooker: `python tools/cook_assets.py` (SHA-256 incremental copy + `cooked/manifest.json`).
+- Cooker: `python tools/cook_assets.py`. Standalone runtime PNGs (`runtime_png`) use recipe `runtime_png.max512.lanczos.v1` (max 512 px, LANCZOS, no upscale). Pillow `12.3.0` is cooker-only (`python -m pip install -r tools/requirements.txt`). Blender authoring PNGs are not cooker inputs. GLBs are opaque copies.
 - Runtime: CMake stages cooked files to `<exe dir>/assets/...`. The game never loads from `source/`.
 
 If CMake configure reports a missing cooked asset, run the cooker command above.

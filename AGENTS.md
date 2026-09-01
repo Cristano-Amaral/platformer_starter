@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 18 — Material + Embedded Texture Asset Workflow (Phase C).
-See `docs/MILESTONES.md` and `docs/BLENDER_WORKFLOW.md`.
+Milestone 19 — Asset Cooker Texture Optimization Foundation (complete).
+See `docs/MILESTONES.md` and `tools/README.md`. Do not start Milestone 20.

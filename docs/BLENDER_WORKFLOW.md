@@ -237,6 +237,9 @@ re-export with Images included.
 
 - Small technical PNG: **128×128** or **256×256**.
 - Asymmetric pattern so UV orientation is obvious.
-- Do not resize/compress/mipmap in the cooker. No DDS/KTX.
+- This authoring PNG is **not** a standalone runtime texture and is **not** a
+  Milestone 19 resize target. The cooker does not process it.
+- Milestone 19 does **not** extract or resize images embedded in the exported
+  GLB. Embedded-texture size policy needs a later dedicated design.
 
 The cooker still does not invoke Blender. CMake still does not invoke Blender.

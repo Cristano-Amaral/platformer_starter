@@ -6,11 +6,14 @@
 
 The game loads cooked/runtime-staged files only. It never loads test assets from `source/`.
 
-Milestone 15 test texture:
+Milestone 15 test texture (standalone **runtime** PNG):
 - logical id: `textures/test_checker.png`
 - source: `game/assets/source/textures/test_checker.png`
 - cooked: `game/assets/cooked/textures/test_checker.png`
 - runtime (after CMake staging): `<executable directory>/assets/textures/test_checker.png`
+- cooker kind: `runtime_png` (recipe `runtime_png.max512.lanczos.v1`; 16×16 is copied unchanged)
+- not every PNG under `source/textures/` is a runtime asset
+- cooker test fixture `tools/fixtures/textures/test_large_checker.png` is test-only; not cooked, not staged
 
 Milestone 16 test model:
 - logical id: `models/test_static.glb`
@@ -32,9 +35,10 @@ Milestone 17 authored model:
 
 Milestone 18 textured model:
 - authored: `game/assets/source/blender/test_textured.blend`
-- authoring Base Color: `game/assets/source/textures/test_textured_basecolor.png` (not cooked, not staged, not loaded by the game)
+- authoring Base Color: `game/assets/source/textures/test_textured_basecolor.png` (**Blender authoring texture**; not cooked, not staged, not loaded by the game, not a Milestone 19 resize target)
 - runtime source: `game/assets/source/models/test_textured.glb` (texture must be embedded in the GLB)
 - logical id: `models/test_textured.glb`
 - cooked/staged: `<cooked or exe>/assets/models/test_textured.glb` only
+- cooker kind: `copy` (opaque GLB; embedded images are not resized in Milestone 19)
 - visual-only; model collision is not supported
 - see `docs/BLENDER_WORKFLOW.md`
