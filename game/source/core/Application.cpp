@@ -121,6 +121,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.testTextureFallbackActive = renderer.IsTestTextureFallbackActive();
     snapshot.testTextureLogicalId = renderer.TestTextureLogicalId();
     snapshot.testTextureRuntimeRelativePath = renderer.TestTextureRuntimeRelativePath();
+
+    snapshot.testModelLoaded = renderer.IsTestModelLoaded();
+    snapshot.testModelFallbackActive = renderer.IsTestModelFallbackActive();
+    snapshot.testModelLogicalId = renderer.TestModelLogicalId();
     return snapshot;
 }
 #endif

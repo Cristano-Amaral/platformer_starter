@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 15 — Asset Pipeline Foundation.
+Milestone 16 — First Static 3D Model Asset Pipeline.
 See `docs/MILESTONES.md`.

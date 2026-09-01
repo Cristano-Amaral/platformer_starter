@@ -164,6 +164,11 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("logical id: %s", snapshot.testTextureLogicalId);
         ImGui::Text("runtime path: %s", snapshot.testTextureRuntimeRelativePath);
         ImGui::Text("fallback active: %s", BoolText(snapshot.testTextureFallbackActive));
+        ImGui::Separator();
+        ImGui::Text("Static Model");
+        ImGui::Text("loaded: %s", BoolText(snapshot.testModelLoaded));
+        ImGui::Text("logical id: %s", snapshot.testModelLogicalId);
+        ImGui::Text("fallback: %s", BoolText(snapshot.testModelFallbackActive));
     }
 
     ImGui::End();

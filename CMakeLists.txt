@@ -105,23 +105,43 @@ set_target_properties(Platformer3D PROPERTIES
 
 # Cooker owns source -> cooked. CMake only stages cooked files next to the exe:
 #   <exe dir>/assets/textures/test_checker.png
+#   <exe dir>/assets/models/test_static.glb
 # Runtime lookup uses the executable directory, not the process CWD.
 set(PLATFORMER_COOKED_DIR "${CMAKE_SOURCE_DIR}/game/assets/cooked")
-set(PLATFORMER_COOKED_TEST_TEXTURE "${PLATFORMER_COOKED_DIR}/textures/test_checker.png")
-if(NOT EXISTS "${PLATFORMER_COOKED_TEST_TEXTURE}")
+set(PLATFORMER_RUNTIME_ASSETS
+    textures/test_checker.png
+    models/test_static.glb
+)
+
+set(PLATFORMER_MISSING_COOKED_ASSETS)
+foreach(relative IN LISTS PLATFORMER_RUNTIME_ASSETS)
+    if(NOT EXISTS "${PLATFORMER_COOKED_DIR}/${relative}")
+        list(APPEND PLATFORMER_MISSING_COOKED_ASSETS "  ${PLATFORMER_COOKED_DIR}/${relative}")
+    endif()
+endforeach()
+if(PLATFORMER_MISSING_COOKED_ASSETS)
+    list(JOIN PLATFORMER_MISSING_COOKED_ASSETS "\n" PLATFORMER_MISSING_COOKED_ASSETS_TEXT)
     message(FATAL_ERROR
         "Required cooked runtime asset is missing:\n"
-        "  ${PLATFORMER_COOKED_TEST_TEXTURE}\n"
+        "${PLATFORMER_MISSING_COOKED_ASSETS_TEXT}\n"
         "The game never loads assets from game/assets/source.\n"
         "From the repository root, run:\n"
         "  python tools/cook_assets.py")
 endif()
 
+set(PLATFORMER_STAGE_ASSET_COMMANDS)
+foreach(relative IN LISTS PLATFORMER_RUNTIME_ASSETS)
+    cmake_path(GET relative PARENT_PATH relative_dir)
+    list(APPEND PLATFORMER_STAGE_ASSET_COMMANDS
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "$<TARGET_FILE_DIR:Platformer3D>/assets/${relative_dir}"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${PLATFORMER_COOKED_DIR}/${relative}"
+            "$<TARGET_FILE_DIR:Platformer3D>/assets/${relative}"
+    )
+endforeach()
+
 add_custom_command(TARGET Platformer3D POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory
-        "$<TARGET_FILE_DIR:Platformer3D>/assets/textures"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${PLATFORMER_COOKED_TEST_TEXTURE}"
-        "$<TARGET_FILE_DIR:Platformer3D>/assets/textures/test_checker.png"
+    ${PLATFORMER_STAGE_ASSET_COMMANDS}
     COMMENT "Staging cooked runtime assets next to the executable"
 )

@@ -24,6 +24,11 @@ MANIFEST_NAME = "manifest.json"
 # Logical identities are portable relative paths. Never use absolute paths or UUIDs.
 KNOWN_ASSETS = (
     {
+        "id": "models/test_static.glb",
+        "source": "models/test_static.glb",
+        "cooked": "models/test_static.glb",
+    },
+    {
         "id": "textures/test_checker.png",
         "source": "textures/test_checker.png",
         "cooked": "textures/test_checker.png",

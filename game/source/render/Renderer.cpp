@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace render
 {
@@ -29,6 +30,8 @@ constexpr Color kSteepSlopeColor{148, 92, 84, 255};
 constexpr Color kPhysicsTestBoxColor{64, 176, 196, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kMissingTextureFallbackColor{220, 48, 160, 255};
+constexpr Color kTestModelTint{255, 255, 255, 255};
+constexpr Color kMissingModelFallbackColor{235, 115, 46, 255};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -38,6 +41,11 @@ constexpr core::Vec3 kTestTextureQuadCenter{0.0f, 1.5f, 2.5f};
 constexpr float kTestTextureQuadWidth = 2.0f;
 constexpr float kTestTextureQuadHeight = 2.0f;
 constexpr const char* kTestTextureRuntimeRelativePath = "assets/textures/test_checker.png";
+
+// Visual-only cooked GLB probe. Not in GreyboxWorld and not a physics body.
+constexpr core::Vec3 kTestModelPosition{2.5f, 1.0f, 2.5f};
+constexpr float kTestModelScale = 1.0f;
+constexpr core::Vec3 kTestModelFallbackSize{1.1f, 1.2f, 1.1f};
 
 Vector3 ToRaylib(core::Vec3 value)
 {
@@ -106,11 +114,66 @@ void DrawMissingTextureFallback()
         0.05f,
         kMissingTextureFallbackColor);
 }
+
+void DrawMissingModelFallback()
+{
+    DrawCube(
+        ToRaylib(kTestModelPosition),
+        kTestModelFallbackSize.x,
+        kTestModelFallbackSize.y,
+        kTestModelFallbackSize.z,
+        kMissingModelFallbackColor);
+    DrawCubeWires(
+        ToRaylib(kTestModelPosition),
+        kTestModelFallbackSize.x,
+        kTestModelFallbackSize.y,
+        kTestModelFallbackSize.z,
+        kWireColor);
+}
+
+bool TryResolveRuntimeAsset(
+    std::string_view logicalId,
+    const char* kind,
+    std::filesystem::path& runtimePath,
+    std::string& runtimePathString)
+{
+    runtimePath = platform::RuntimeAssetPath(logicalId);
+    runtimePathString = runtimePath.lexically_normal().make_preferred().string();
+    if (runtimePath.empty() || !runtimePath.is_absolute())
+    {
+        TraceLog(
+            LOG_ERROR,
+            "Refusing to load cooked %s '%s': runtime path is not absolute. "
+            "Asset lookup uses the executable directory, never the process CWD.",
+            kind,
+            std::string(logicalId).c_str());
+        return false;
+    }
+
+    if (!std::filesystem::exists(runtimePath) || !std::filesystem::is_regular_file(runtimePath))
+    {
+        TraceLog(
+            LOG_ERROR,
+            "Failed to load cooked %s '%s' from runtime path '%s' (file not found). "
+            "Using a visual fallback. Cook assets with: python tools/cook_assets.py",
+            kind,
+            std::string(logicalId).c_str(),
+            runtimePathString.c_str());
+        return false;
+    }
+
+    return true;
+}
 }
 
 struct Renderer::GpuTexture
 {
     Texture2D texture{};
+};
+
+struct Renderer::GpuModel
+{
+    Model model{};
 };
 
 Renderer::Renderer() = default;
@@ -120,32 +183,20 @@ Renderer::~Renderer() = default;
 void Renderer::LoadRuntimeAssets()
 {
     UnloadRuntimeAssets();
+    LoadTestCheckerTexture();
+    LoadTestStaticModel();
+}
 
-    const std::filesystem::path runtimePath =
-        platform::RuntimeAssetPath(platform::kTestCheckerLogicalId);
-    const std::string runtimePathString = runtimePath.lexically_normal().make_preferred().string();
-
-    if (runtimePath.empty() || !runtimePath.is_absolute())
+void Renderer::LoadTestCheckerTexture()
+{
+    std::filesystem::path runtimePath;
+    std::string runtimePathString;
+    if (!TryResolveRuntimeAsset(
+            platform::kTestCheckerLogicalId,
+            "texture",
+            runtimePath,
+            runtimePathString))
     {
-        TraceLog(
-            LOG_ERROR,
-            "Refusing to load cooked texture '%s': runtime path is not absolute. "
-            "Asset lookup uses the executable directory, never the process CWD.",
-            TestTextureLogicalId());
-        testTexture.reset();
-        testTextureLoaded = false;
-        testTextureFallbackActive = true;
-        return;
-    }
-
-    if (!std::filesystem::exists(runtimePath) || !std::filesystem::is_regular_file(runtimePath))
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Failed to load cooked texture '%s' from runtime path '%s' (file not found). "
-            "Using a magenta fallback quad. Cook assets with: python tools/cook_assets.py",
-            TestTextureLogicalId(),
-            runtimePathString.c_str());
         testTexture.reset();
         testTextureLoaded = false;
         testTextureFallbackActive = true;
@@ -173,6 +224,42 @@ void Renderer::LoadRuntimeAssets()
     testTextureFallbackActive = false;
 }
 
+void Renderer::LoadTestStaticModel()
+{
+    std::filesystem::path runtimePath;
+    std::string runtimePathString;
+    if (!TryResolveRuntimeAsset(
+            platform::kTestStaticModelLogicalId,
+            "model",
+            runtimePath,
+            runtimePathString))
+    {
+        testModel.reset();
+        testModelLoaded = false;
+        testModelFallbackActive = true;
+        return;
+    }
+
+    testModel = std::make_unique<GpuModel>();
+    testModel->model = LoadModel(runtimePathString.c_str());
+    if (!IsModelValid(testModel->model))
+    {
+        TraceLog(
+            LOG_ERROR,
+            "Failed to load cooked model '%s' from runtime path '%s'. "
+            "Using an orange fallback cube. Cook assets with: python tools/cook_assets.py",
+            TestModelLogicalId(),
+            runtimePathString.c_str());
+        testModel.reset();
+        testModelLoaded = false;
+        testModelFallbackActive = true;
+        return;
+    }
+
+    testModelLoaded = true;
+    testModelFallbackActive = false;
+}
+
 void Renderer::UnloadRuntimeAssets()
 {
     if (testTexture != nullptr && testTextureLoaded)
@@ -182,6 +269,14 @@ void Renderer::UnloadRuntimeAssets()
     testTexture.reset();
     testTextureLoaded = false;
     testTextureFallbackActive = false;
+
+    if (testModel != nullptr && testModelLoaded)
+    {
+        UnloadModel(testModel->model);
+    }
+    testModel.reset();
+    testModelLoaded = false;
+    testModelFallbackActive = false;
 }
 
 bool Renderer::IsTestTextureLoaded() const
@@ -202,6 +297,21 @@ const char* Renderer::TestTextureLogicalId() const
 const char* Renderer::TestTextureRuntimeRelativePath() const
 {
     return kTestTextureRuntimeRelativePath;
+}
+
+bool Renderer::IsTestModelLoaded() const
+{
+    return testModelLoaded;
+}
+
+bool Renderer::IsTestModelFallbackActive() const
+{
+    return testModelFallbackActive;
+}
+
+const char* Renderer::TestModelLogicalId() const
+{
+    return platform::kTestStaticModelLogicalId.data();
 }
 
 void Renderer::BeginFrame()
@@ -248,6 +358,15 @@ void Renderer::DrawWorld(
     else
     {
         DrawMissingTextureFallback();
+    }
+
+    if (testModelLoaded && testModel != nullptr)
+    {
+        DrawModel(testModel->model, ToRaylib(kTestModelPosition), kTestModelScale, kTestModelTint);
+    }
+    else
+    {
+        DrawMissingModelFallback();
     }
 
     EndMode3D();

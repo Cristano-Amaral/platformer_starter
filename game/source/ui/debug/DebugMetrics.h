@@ -66,6 +66,10 @@ struct DebugMetricsSnapshot
     bool testTextureFallbackActive = false;
     const char* testTextureLogicalId = "";
     const char* testTextureRuntimeRelativePath = "";
+
+    bool testModelLoaded = false;
+    bool testModelFallbackActive = false;
+    const char* testModelLogicalId = "";
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

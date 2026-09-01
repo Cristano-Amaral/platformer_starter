@@ -31,6 +31,10 @@ public:
     const char* TestTextureLogicalId() const;
     const char* TestTextureRuntimeRelativePath() const;
 
+    bool IsTestModelLoaded() const;
+    bool IsTestModelFallbackActive() const;
+    const char* TestModelLogicalId() const;
+
     void BeginFrame();
     void DrawWorld(
         const gameplay::Player& player,
@@ -42,9 +46,17 @@ public:
     void EndFrame();
 
 private:
+    void LoadTestCheckerTexture();
+    void LoadTestStaticModel();
+
     struct GpuTexture;
     std::unique_ptr<GpuTexture> testTexture;
     bool testTextureLoaded = false;
     bool testTextureFallbackActive = false;
+
+    struct GpuModel;
+    std::unique_ptr<GpuModel> testModel;
+    bool testModelLoaded = false;
+    bool testModelFallbackActive = false;
 };
 }
