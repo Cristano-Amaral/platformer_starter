@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 16 — First Static 3D Model Asset Pipeline.
-See `docs/MILESTONES.md`.
+Milestone 17 — Blender Authored Asset Workflow.
+See `docs/MILESTONES.md` and `docs/BLENDER_WORKFLOW.md`.

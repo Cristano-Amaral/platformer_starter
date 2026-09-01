@@ -125,6 +125,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.testModelLoaded = renderer.IsTestModelLoaded();
     snapshot.testModelFallbackActive = renderer.IsTestModelFallbackActive();
     snapshot.testModelLogicalId = renderer.TestModelLogicalId();
+
+    snapshot.authoredModelLoaded = renderer.IsAuthoredModelLoaded();
+    snapshot.authoredModelFallbackActive = renderer.IsAuthoredModelFallbackActive();
+    snapshot.authoredModelLogicalId = renderer.AuthoredModelLogicalId();
     return snapshot;
 }
 #endif

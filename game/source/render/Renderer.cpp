@@ -32,6 +32,7 @@ constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kMissingTextureFallbackColor{220, 48, 160, 255};
 constexpr Color kTestModelTint{255, 255, 255, 255};
 constexpr Color kMissingModelFallbackColor{235, 115, 46, 255};
+constexpr Color kMissingAuthoredModelFallbackColor{72, 148, 108, 255};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -42,10 +43,12 @@ constexpr float kTestTextureQuadWidth = 2.0f;
 constexpr float kTestTextureQuadHeight = 2.0f;
 constexpr const char* kTestTextureRuntimeRelativePath = "assets/textures/test_checker.png";
 
-// Visual-only cooked GLB probe. Not in GreyboxWorld and not a physics body.
+// Visual-only cooked GLB probes. Not in GreyboxWorld and not physics bodies.
 constexpr core::Vec3 kTestModelPosition{2.5f, 1.0f, 2.5f};
 constexpr float kTestModelScale = 1.0f;
 constexpr core::Vec3 kTestModelFallbackSize{1.1f, 1.2f, 1.1f};
+constexpr core::Vec3 kAuthoredModelPosition{-2.5f, 1.0f, 2.5f};
+constexpr float kAuthoredModelScale = 1.0f;
 
 Vector3 ToRaylib(core::Vec3 value)
 {
@@ -115,16 +118,16 @@ void DrawMissingTextureFallback()
         kMissingTextureFallbackColor);
 }
 
-void DrawMissingModelFallback()
+void DrawMissingModelFallback(core::Vec3 center, Color fill)
 {
     DrawCube(
-        ToRaylib(kTestModelPosition),
+        ToRaylib(center),
         kTestModelFallbackSize.x,
         kTestModelFallbackSize.y,
         kTestModelFallbackSize.z,
-        kMissingModelFallbackColor);
+        fill);
     DrawCubeWires(
-        ToRaylib(kTestModelPosition),
+        ToRaylib(center),
         kTestModelFallbackSize.x,
         kTestModelFallbackSize.y,
         kTestModelFallbackSize.z,
@@ -185,6 +188,7 @@ void Renderer::LoadRuntimeAssets()
     UnloadRuntimeAssets();
     LoadTestCheckerTexture();
     LoadTestStaticModel();
+    LoadTestAuthoredModel();
 }
 
 void Renderer::LoadTestCheckerTexture()
@@ -260,6 +264,42 @@ void Renderer::LoadTestStaticModel()
     testModelFallbackActive = false;
 }
 
+void Renderer::LoadTestAuthoredModel()
+{
+    std::filesystem::path runtimePath;
+    std::string runtimePathString;
+    if (!TryResolveRuntimeAsset(
+            platform::kTestAuthoredModelLogicalId,
+            "model",
+            runtimePath,
+            runtimePathString))
+    {
+        authoredModel.reset();
+        authoredModelLoaded = false;
+        authoredModelFallbackActive = true;
+        return;
+    }
+
+    authoredModel = std::make_unique<GpuModel>();
+    authoredModel->model = LoadModel(runtimePathString.c_str());
+    if (!IsModelValid(authoredModel->model))
+    {
+        TraceLog(
+            LOG_ERROR,
+            "Failed to load cooked model '%s' from runtime path '%s'. "
+            "Using a visual fallback cube. Cook assets with: python tools/cook_assets.py",
+            AuthoredModelLogicalId(),
+            runtimePathString.c_str());
+        authoredModel.reset();
+        authoredModelLoaded = false;
+        authoredModelFallbackActive = true;
+        return;
+    }
+
+    authoredModelLoaded = true;
+    authoredModelFallbackActive = false;
+}
+
 void Renderer::UnloadRuntimeAssets()
 {
     if (testTexture != nullptr && testTextureLoaded)
@@ -277,6 +317,14 @@ void Renderer::UnloadRuntimeAssets()
     testModel.reset();
     testModelLoaded = false;
     testModelFallbackActive = false;
+
+    if (authoredModel != nullptr && authoredModelLoaded)
+    {
+        UnloadModel(authoredModel->model);
+    }
+    authoredModel.reset();
+    authoredModelLoaded = false;
+    authoredModelFallbackActive = false;
 }
 
 bool Renderer::IsTestTextureLoaded() const
@@ -312,6 +360,21 @@ bool Renderer::IsTestModelFallbackActive() const
 const char* Renderer::TestModelLogicalId() const
 {
     return platform::kTestStaticModelLogicalId.data();
+}
+
+bool Renderer::IsAuthoredModelLoaded() const
+{
+    return authoredModelLoaded;
+}
+
+bool Renderer::IsAuthoredModelFallbackActive() const
+{
+    return authoredModelFallbackActive;
+}
+
+const char* Renderer::AuthoredModelLogicalId() const
+{
+    return platform::kTestAuthoredModelLogicalId.data();
 }
 
 void Renderer::BeginFrame()
@@ -366,7 +429,20 @@ void Renderer::DrawWorld(
     }
     else
     {
-        DrawMissingModelFallback();
+        DrawMissingModelFallback(kTestModelPosition, kMissingModelFallbackColor);
+    }
+
+    if (authoredModelLoaded && authoredModel != nullptr)
+    {
+        DrawModel(
+            authoredModel->model,
+            ToRaylib(kAuthoredModelPosition),
+            kAuthoredModelScale,
+            kTestModelTint);
+    }
+    else
+    {
+        DrawMissingModelFallback(kAuthoredModelPosition, kMissingAuthoredModelFallbackColor);
     }
 
     EndMode3D();

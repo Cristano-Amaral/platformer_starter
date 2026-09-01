@@ -169,6 +169,11 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("loaded: %s", BoolText(snapshot.testModelLoaded));
         ImGui::Text("logical id: %s", snapshot.testModelLogicalId);
         ImGui::Text("fallback: %s", BoolText(snapshot.testModelFallbackActive));
+        ImGui::Separator();
+        ImGui::Text("Blender Authored Model");
+        ImGui::Text("loaded: %s", BoolText(snapshot.authoredModelLoaded));
+        ImGui::Text("fallback: %s", BoolText(snapshot.authoredModelFallbackActive));
+        ImGui::Text("id: %s", snapshot.authoredModelLogicalId);
     }
 
     ImGui::End();

@@ -22,7 +22,13 @@ SCHEMA_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 
 # Logical identities are portable relative paths. Never use absolute paths or UUIDs.
+# .blend files are authoring-only and must never appear here.
 KNOWN_ASSETS = (
+    {
+        "id": "models/test_authored.glb",
+        "source": "models/test_authored.glb",
+        "cooked": "models/test_authored.glb",
+    },
     {
         "id": "models/test_static.glb",
         "source": "models/test_static.glb",

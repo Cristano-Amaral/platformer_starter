@@ -70,6 +70,10 @@ struct DebugMetricsSnapshot
     bool testModelLoaded = false;
     bool testModelFallbackActive = false;
     const char* testModelLogicalId = "";
+
+    bool authoredModelLoaded = false;
+    bool authoredModelFallbackActive = false;
+    const char* authoredModelLogicalId = "";
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

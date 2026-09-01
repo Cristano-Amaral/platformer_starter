@@ -27,6 +27,10 @@ __pycache__/
 /game/assets/cooked/*
 !/game/assets/cooked/.gitkeep
 
+# Blender autosave backups (authored .blend files are versioned)
+*.blend1
+*.blend2
+
 # Dear ImGui layout (disabled in-app; ignore if a run still writes one)
 imgui.ini
 

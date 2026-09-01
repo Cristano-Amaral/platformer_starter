@@ -67,21 +67,25 @@ Cook from the repository root:
 
     python tools/cook_assets.py
 
-The cooker uses only the Python standard library. It copies known authored assets unchanged (PNG texture and GLB model), identifies content with SHA-256, skips rewriting an identical cooked file, and writes `game/assets/cooked/manifest.json` with portable relative paths (no absolute paths, timestamps, or machine names).
+The cooker uses only the Python standard library. It copies known authored assets unchanged (PNG and GLBs), identifies content with SHA-256, skips rewriting an identical cooked file, and writes `game/assets/cooked/manifest.json` with portable relative paths (no absolute paths, timestamps, or machine names).
 
 CMake does not cook. After configure, a POST_BUILD step stages cooked files next to the executable:
 
     <executable directory>/assets/textures/test_checker.png
     <executable directory>/assets/models/test_static.glb
+    <executable directory>/assets/models/test_authored.glb
 
 Runtime lookup uses `platform::RuntimeAssetPath`, which joins `<executable directory>/assets/` with the logical relative path. The executable directory is queried from the OS in the platform layer (`GetModuleFileNameW` on Windows, `/proc/self/exe` on Linux). The process current working directory is never used, and non-absolute results are rejected so raylib file loads cannot silently resolve against CWD. The renderer does not hard-code `game/assets/cooked`.
 
 Logical identities:
 - Milestone 15 test texture: `textures/test_checker.png`
 - Milestone 16 test model: `models/test_static.glb`
+- Milestone 17 authored model: `models/test_authored.glb`
 
-The GLB is a locally authored technical test pyramid, copied unchanged by the cooker. It is visual only: no GreyboxWorld entry, no Jolt body, no mesh collision.
+Editable Blender files live in `game/assets/source/blender/`. They are not cooked and are not runtime assets. See `docs/BLENDER_WORKFLOW.md`. The cooker copies exported GLBs unchanged. Blender is not a build or runtime dependency.
 
-If a required cooked file is missing at CMake configure time, configure fails and tells the developer to run the cooker. If a staged runtime file is missing at load time, the renderer logs the logical id and draws a simple visual fallback. Texture and model are each loaded once after the window/graphics context exists and unloaded before window shutdown.
+The checker appears on a dedicated visual quad at `(0, 1.5, 2.5)`. The Milestone 16 test GLB is drawn at `(2.5, 1.0, 2.5)`. The Blender-authored GLB is drawn at `(-2.5, 1.0, 2.5)`. None of these are greybox geometry and none have collision.
 
-The checker appears on a dedicated visual quad at `(0, 1.5, 2.5)`, size 2x2, facing +Z. The test GLB is drawn at `(2.5, 1.0, 2.5)`. Neither is greybox geometry and neither has collision.
+The checker, Milestone 16 pyramid, and Blender-authored model are visual-only technical tests: no GreyboxWorld entries, no Jolt bodies, no mesh collision.
+
+If a required cooked file is missing at CMake configure time, configure fails and tells the developer to run the cooker. If a staged runtime file is missing at load time, the renderer logs the logical id and draws a simple visual fallback. Texture and models are each loaded once after the window/graphics context exists and unloaded before window shutdown.

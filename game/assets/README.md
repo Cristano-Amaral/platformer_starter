@@ -1,6 +1,7 @@
 # Assets
 
 - `source/`: authored inputs. Tracked according to licensing/project policy.
+- `source/blender/`: editable Blender files (`.blend`). Authoring only; never cooked; never loaded at runtime.
 - `cooked/`: generated runtime-ready output from `python tools/cook_assets.py`. Not source of truth. Normally ignored by Git except `.gitkeep`.
 
 The game loads cooked/runtime-staged files only. It never loads test assets from `source/`.
@@ -18,3 +19,13 @@ Milestone 16 test model:
 - runtime (after CMake staging): `<executable directory>/assets/models/test_static.glb`
 - cooker copies the GLB unchanged
 - visual-only technical test asset; model collision is not supported
+
+Milestone 17 authored model:
+- authored: `game/assets/source/blender/test_authored.blend`
+- runtime source: `game/assets/source/models/test_authored.glb`
+- logical id: `models/test_authored.glb`
+- cooked: `game/assets/cooked/models/test_authored.glb`
+- runtime (after CMake staging): `<executable directory>/assets/models/test_authored.glb`
+- cooker copies the GLB unchanged; `.blend` is not a cooker input
+- visual-only; model collision is not supported
+- see `docs/BLENDER_WORKFLOW.md`

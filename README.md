@@ -30,7 +30,7 @@ Run:
 .\build\windows-vs2022\bin\Development\Platformer3D.exe
 ```
 
-The Development executable opens a resizable 1280x720 window titled `Platformer3D` with a 3D greybox scene. Use A/Left or D/Right to move along X, and Space or Up Arrow to jump. The camera follows with dead zones and smoothing. Player collision and physical position come from Jolt CharacterVirtual. Greybox geometry in `GreyboxWorld` feeds both rendering and Jolt static bodies. A 30-degree static slope on the right is walkable; a 60-degree static slope on the left is steep/non-walkable. One Jolt kinematic platform moves back and forth on X; standing on it carries the Player. The cyan box is a Jolt dynamic integration test. There is no custom Player AABB collision backend. A magenta/dark checker quad in front of the spawn (`textures/test_checker.png`) and an orange test pyramid to its right (`models/test_static.glb`) validate the cooked asset pipeline; both are visual only and have no collision. Debug and Development builds show a read-only `Platformer3D Metrics` panel (F1 toggles it). Close the window or press ESC to exit.
+The Development executable opens a resizable 1280x720 window titled `Platformer3D` with a 3D greybox scene. Use A/Left or D/Right to move along X, and Space or Up Arrow to jump. The camera follows with dead zones and smoothing. Player collision and physical position come from Jolt CharacterVirtual. Greybox geometry in `GreyboxWorld` feeds both rendering and Jolt static bodies. A 30-degree static slope on the right is walkable; a 60-degree static slope on the left is steep/non-walkable. One Jolt kinematic platform moves back and forth on X; standing on it carries the Player. The cyan box is a Jolt dynamic integration test. There is no custom Player AABB collision backend. A magenta/dark checker quad in front of the spawn (`textures/test_checker.png`), an orange test pyramid to its right (`models/test_static.glb`), and a Blender-authored static model to its left (`models/test_authored.glb`) validate the cooked asset pipeline; all three are visual only and have no collision. Debug and Development builds show a read-only `Platformer3D Metrics` panel (F1 toggles it). Close the window or press ESC to exit.
 
 Release builds omit the metrics panel. Runtime assets still load from `assets/` next to the executable.
 
@@ -38,7 +38,8 @@ Release builds omit the metrics panel. Runtime assets still load from `assets/` 
 - `game/assets/source/`: authored inputs (tracked).
 - `game/assets/cooked/`: cooker output (generated; gitignored except `.gitkeep`).
 - Logical test texture: `textures/test_checker.png`.
-- Logical test model: `models/test_static.glb` (copied unchanged; no collision).
+- Logical test models: `models/test_static.glb`, `models/test_authored.glb` (copied unchanged; no collision).
+- Blender authoring: `docs/BLENDER_WORKFLOW.md`. `.blend` files are not cooked or loaded at runtime.
 - Cooker: `python tools/cook_assets.py` (SHA-256 incremental copy + `cooked/manifest.json`).
 - Runtime: CMake stages cooked files to `<exe dir>/assets/...`. The game never loads from `source/`.
 
