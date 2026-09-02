@@ -9583,13 +9583,11 @@ main clean
 Do not commit, push, or merge before manual Phase C approval.
 
 
-# Milestone 25 — Static Hazards + Hazard Respawn [ACTIVE]
+# Milestone 25 — Static Hazards + Hazard Respawn
 
 ## Status
 
-**Phase C — final validation (current)**
-
-Implementation complete. Static review and builds are part of this phase. User-confirmed so far: hazard death +1; respawn at initial spawn / CP1 / CP2; Enter after LEVEL COMPLETE starts a fresh run with deathCount 0. Remaining Phase C cases still need user confirmation. Do not mark M25 complete. Do not start Milestone 26.
+**Complete (manually approved).** Milestone 26 is now the active milestone.
 
 ## Branch
 
@@ -10009,33 +10007,9 @@ Build all configurations and stop for review. Do not mark M25 complete. Do not s
 
 Complete. Live detection, Fall > Hazard > Manual priority, primitive visuals, and Debug/Development hazard metrics.
 
-### Phase C — Manual validation (current)
+### Phase C — Manual validation
 
-Static review: exactly two `HazardSpec` volumes, visual-center AABB detection, one `PerformRespawn` owner for death increment, `RestartRun` gated by `!respawnedThisFrame`. No Jolt hazard body/sensor. No health/trigger framework. Coordinates unchanged.
-
-User-confirmed:
-
-- Hazard death increments deathCount by +1.
-- Hazard death returns to the latest checkpoint.
-- Before any checkpoint: initial spawn `{0, 0.8, 0}`.
-- After CP1: `{16.5, 1.8, 0}`.
-- After CP2: `{-15.5, 2.8, 0}`.
-- After LEVEL COMPLETE, Enter starts a fresh run.
-- Enter restart resets deathCount to 0.
-
-Still requiring user confirmation:
-
-- Hazard 1 jump both directions (comfort/readability).
-- Successful CP2 → Goal jump over Hazard 2.
-- Hazard + R same-frame (static: Hazard wins).
-- Ordinary Fall + Manual R away from hazards after M25.
-- Hazard after LEVEL COMPLETE (completion persists).
-- Hazard + Enter same-frame (static: Hazard wins).
-- Second-run identical hazard behavior.
-- Moving platform / cyan box / slopes / camera regressions.
-- Release: hazards visible, one hazard death, no ImGui.
-
-Do not mark M25 complete. Do not start Milestone 26.
+**Phase C:** Complete and manually approved. Hazard death +1, latest-checkpoint respawn (spawn / CP1 / CP2), and Enter restart deathCount 0 are accepted. Milestone 26 is now the active milestone.
 
 ---
 
@@ -10119,10 +10093,184 @@ M25 is complete when:
 - Milestone 26 has not started prematurely.
 
 
-## Milestone 26 — Another Commit
-- Python environment and cooker skeleton.
-- Source/cooked asset separation.
-- Incremental cooking foundation.
+# Milestone 26 — Collectibles + Run Counter [ACTIVE]
+
+## Status
+
+**Phase B — implementation complete / awaiting Phase C manual validation (current)**
+
+Exactly three live optional collectibles. Ordinary respawns preserve collection. Enter restores 0 / 3. Do not mark M26 complete. Do not start Milestone 27.
+
+## Goal
+Add the first non-lethal collectible gameplay loop to the existing platformer level while preserving all M00–M25 behavior.
+
+The level will contain exactly **3 fixed collectibles**. Collecting one removes it for the current run and increments an Application-owned run counter. Collectibles are restored only by the existing full **Enter restart** after level completion; ordinary Manual/Fall/Hazard respawns do not restore them.
+
+This milestone intentionally remains a small hardcoded gameplay feature. It does **not** introduce score, inventory, save/load, generic item systems, ECS, level serialization, audio, particles, or new assets.
+
+## Player-facing loop
+
+```text
+Traverse level
+    ↓
+Touch collectible
+    ↓
+Collectible disappears
+    ↓
+Collected: N / 3
+    ↓
+Respawn from R / Fall / Hazard
+    ↓
+Already collected items remain collected
+    ↓
+Complete level
+    ↓
+Enter restart
+    ↓
+Fresh run: 0 / 3 and all collectibles restored
+```
+
+## Architectural intent
+
+- `world` owns immutable fixed collectible specifications.
+- `Application` owns per-run collected state and detection semantics.
+- `Renderer` draws only collectibles that are still available.
+- `Player` remains movement-only.
+- `PhysicsWorld` remains physics-only.
+- Collectibles use project-owned point-vs-AABB gameplay detection, not Jolt sensors.
+- Exactly 3 collectibles; use a fixed-size representation such as `std::array` / bitset-like value state.
+- No `CollectibleManager`, `ItemManager`, generic trigger abstraction, event bus, or ECS.
+
+## Phase A — Inventory, placement design, and scaffolding
+
+Phase A must inspect the final M25 world before choosing live coordinates.
+
+Deliverables:
+
+1. Confirm final M25 geometry, checkpoints, hazards, goal, moving-platform sweep, slopes, Player dimensions, camera behavior, and update order.
+2. Propose a minimal `CollectibleSpec` and exactly 3 compile-time collectible specs.
+3. Choose exact positions only after proving they are reachable, readable, and do not overlap respawn/checkpoint/goal/hazard volumes.
+4. At least one collectible should reward the right-side/CP1 portion of the route.
+5. At least one collectible should reward the moving-platform/central traversal.
+6. At least one collectible should reward the left-side/CP2-to-goal portion of the route.
+7. Collection must be optional: the goal remains completable even if the player has collected 0/3.
+8. Design Application-owned run state, preferably fixed-size booleans/bitset plus a derived or maintained count.
+9. Define same-frame semantics for collectible + Fall/Hazard/Manual/checkpoint/goal/Enter.
+10. No live collection behavior in Phase A unless tiny scaffolding is required for compilation.
+
+### Phase A design record
+
+Exactly three static hop collectibles (`kCollectibleSize = {1.0, 1.2, 1.0}`). Hover = support top + 1.5 so standing center stays ~0.1 below the AABB.
+
+- Collectible 1: `{5.0, 2.5, 0}` on the right platform (optional vs ground → CP1).
+- Collectible 2: `{-4.5, 4.0, 0}` on the left landing (reached via moving platform; hop optional).
+- Collectible 3: `{-10.0, 3.75, 0}` on the middle-left step (intended route; hop optional).
+
+`CollectibleRunState.collected` is the source of truth; `CollectedCount` is derived. Proposed Phase B: collect in the no-respawn branch after checkpoint/goal, skip collection when `restartAvailableAtFrameStart && Enter`, then existing RestartRun. Fall/Hazard/Manual still win over collection. One uncollected match per frame.
+
+Scaffolding: `world/CollectibleWorld.h`, `gameplay/CollectibleRunState.h`. Do not mark M26 complete. Do not start Milestone 27.
+
+## Approved semantic direction to validate in Phase A
+
+Collection should be evaluated only on a frame in which no respawn occurred. Therefore:
+
+```text
+Fall / Hazard / Manual respawn
+    > collectible collection
+```
+
+Within a normal non-respawn frame, collectible collection should occur before or alongside checkpoint/goal evaluation with deterministic semantics. Enter restart must clear all collected state and restore all collectibles.
+
+A collectible can be collected at most once per run. Multiple collectibles touched in one frame may each be collected if the geometry genuinely permits it, but the final design should spatially separate them so this is not a normal gameplay case.
+
+## Phase B — Implementation (current)
+
+Live:
+
+- `FindAvailableCollectibleIndexContaining(Player::Position(), collectibleRunState)`;
+- collection in the no-respawn branch after checkpoint/goal;
+- skip collection when `restartAvailableAtFrameStart && Enter`;
+- `RestartRun` clears `collectibleRunState`;
+- Renderer gold 0.45 cubes for available items;
+- `COLLECTED N / 3` upper-right in all configurations;
+- Debug/Development Collectibles metrics.
+
+Stop for Phase C manual validation. Do not mark M26 complete. Do not start Milestone 27.
+
+## Phase C — Manual validation
+
+Final validation must cover at least:
+
+- Collect each of the 3 individually.
+- Counter progresses 0/3 → 1/3 → 2/3 → 3/3.
+- Collected item disappears and cannot increment twice.
+- R after collection preserves it.
+- Fall after collection preserves it.
+- Hazard death after collection preserves it.
+- CP1/CP2 progression remains correct.
+- Goal can complete with fewer than 3 collectibles.
+- Goal can complete with 3/3.
+- Completion UI and collectible counter coexist correctly.
+- Enter after completion restores all 3 and resets counter to 0/3.
+- Second run can collect all 3 again.
+- Moving platform, cyan dynamic box, slopes, hazards, camera, and Release behavior regressions pass.
+
+## Completion criteria
+
+M26 is complete only when:
+
+- Exactly 3 fixed collectibles exist.
+- All 3 are reachable through normal validated movement.
+- Collection is non-lethal and one-time per run.
+- Counter is correct and Release-visible.
+- Ordinary respawns preserve collection progress.
+- Enter fresh-run restart resets collection progress and restores visuals.
+- Goal completion does not require collectibles.
+- No new dependency or asset is introduced.
+- No generic item/trigger/level system is introduced.
+- Debug, Development, and Release build successfully.
+- User manually approves Phase C.
+
+## Explicitly out of scope
+
+- Milestone 27
+- score/points
+- lives/game over
+- health/damage changes
+- inventory
+- currency/economy
+- collectible effects/power-ups
+- required collectible gate for goal
+- save/load/persistence
+- achievements
+- audio
+- particles
+- animation system
+- new textures/models
+- moving collectibles
+- procedural placement
+- generic collectible/item manager
+- generic trigger framework
+- ECS/event bus
+- JSON level data
+- camera redesign
+- Player tuning
+- physics redesign
+- asset cooker changes
+- new dependencies
+
+## Git branch
+
+`milestone/26-collectibles`
+
+## Recommended Cursor model
+
+Grok 4.6 High — Fast OFF for Phase A architecture/placement analysis.
+
+
+## Milestone 27
+
+Not started. Do not implement during Milestone 26.
 
 ## Later milestones
 Animation, enemies, collectibles, level editor, audio, save system, profiling/optimization, Raspberry Pi validation, Android port, iOS feasibility/backend work.

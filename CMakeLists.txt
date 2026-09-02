@@ -45,6 +45,7 @@ add_executable(Platformer3D
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
     game/source/gameplay/Player.h
+    game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/RespawnState.h
     game/source/input/Input.cpp
@@ -67,6 +68,7 @@ add_executable(Platformer3D
     game/source/ui/debug/DebugUiBackend.cpp
     game/source/ui/debug/DebugUiBackend.h
     game/source/world/GreyboxWorld.h
+    game/source/world/CollectibleWorld.h
     game/source/world/HazardWorld.h
     game/source/world/LevelGoal.h
     game/source/world/MovingPlatform.h

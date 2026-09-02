@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gameplay/CollectibleRunState.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
@@ -32,6 +33,7 @@ private:
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
     gameplay::LevelCompletionState levelCompletionState;
+    gameplay::CollectibleRunState collectibleRunState;
     physics::PhysicsWorld physicsWorld;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     ui::DebugUi debugUi;

@@ -177,4 +177,18 @@ Fall > Hazard > Manual R > checkpoint / goal > Enter (M22 restartAvailableAtFram
 
 User-confirmed Phase C evidence: hazard death +1; respawn at initial spawn before any checkpoint, CP1 after CP1, CP2 after CP2; Enter after LEVEL COMPLETE starts a fresh run and resets deathCount to 0.
 
-Status: implementation complete / Phase C validation. Do not mark M25 complete until remaining manual cases are approved. Do not implement Milestone 26.
+Status: complete (manually approved). Do not implement Milestone 26 in this section.
+
+## Collectibles / run counter (Milestone 26)
+
+M26 adds the first non-lethal collectible loop: **exactly three** compile-time `CollectibleSpec` AABBs in `world/CollectibleWorld.h`. Identity is the array index. Per-run flags live in `gameplay::CollectibleRunState` (`std::array<bool, 3>`); count is derived. Collection is optional and must not gate the goal.
+
+- Collectible 1 (index 0): right-platform hop `{5.0, 2.5, 0}` size `{1.0, 1.2, 1.0}`
+- Collectible 2 (index 1): left-landing hop `{-4.5, 4.0, 0}` size `{1.0, 1.2, 1.0}`
+- Collectible 3 (index 2): middle-left-step hop `{-10.0, 3.75, 0}` size `{1.0, 1.2, 1.0}`
+
+Standing on the support does not collect (AABB sits just above standing center). A normal hop does. No Jolt sensor. Ordinary R/Fall/Hazard preserve flags; only Enter `RestartRun` clears them. Collection runs in the no-respawn branch after checkpoint/goal and is skipped when `restartAvailableAtFrameStart && Enter`.
+
+Renderer receives collected flags plus derived count, draws a gold 0.45 cube for available items only, and always draws `COLLECTED N / 3` in the upper-right after `EndMode3D`. Debug/Development metrics show Available/Collected, Inside, and Collected this frame.
+
+Status: implementation complete / awaiting Phase C manual validation. Do not mark M26 complete. Do not implement Milestone 27.

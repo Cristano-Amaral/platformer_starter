@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 25 — Static Hazards + Hazard Respawn (implementation complete / Phase C validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Exactly two static hazards. Fall > Hazard > Manual. Do not mark M25 complete until user approval. Do not implement Milestone 26.
+Milestone 26 — Collectibles + Run Counter (implementation complete / awaiting Phase C manual validation).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Exactly three optional collectibles. Ordinary respawns preserve collection. Do not implement Milestone 27.

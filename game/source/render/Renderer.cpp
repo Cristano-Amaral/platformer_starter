@@ -4,6 +4,7 @@
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
+#include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
@@ -51,10 +52,15 @@ constexpr Color kGoalCompletedPost{212, 168, 48, 255};
 constexpr Color kGoalCompletedBar{244, 212, 84, 255};
 constexpr Color kHazardBarColor{196, 48, 36, 255};
 constexpr Color kHazardToothColor{232, 96, 40, 255};
+constexpr Color kCollectibleFill{255, 212, 64, 255};
+constexpr Color kCollectibleHudText{255, 212, 64, 255};
 constexpr Color kLevelCompleteText{244, 212, 84, 255};
 constexpr int kLevelCompleteFontSize = 42;
 constexpr int kRestartHintFontSize = 22;
 constexpr int kRestartHintGap = 16;
+constexpr int kCollectedHudFontSize = 22;
+constexpr int kCollectedHudMargin = 20;
+constexpr float kCollectibleVisualSize = 0.45f;
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -130,6 +136,23 @@ void DrawHazard(const world::HazardSpec& spec)
             toothSize,
             kHazardToothColor);
     }
+}
+
+void DrawCollectible(const world::CollectibleSpec& spec)
+{
+    const core::Vec3 visualSize{
+        kCollectibleVisualSize,
+        kCollectibleVisualSize,
+        kCollectibleVisualSize};
+    DrawGreyboxBox(spec.center, visualSize, kCollectibleFill);
+}
+
+void DrawCollectedCounter(int collectedCount)
+{
+    const char* text = TextFormat("COLLECTED %d / 3", collectedCount);
+    const int width = MeasureText(text, kCollectedHudFontSize);
+    const int x = GetScreenWidth() - width - kCollectedHudMargin;
+    DrawText(text, x, kCollectedHudMargin, kCollectedHudFontSize, kCollectibleHudText);
 }
 
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
@@ -629,7 +652,9 @@ void Renderer::DrawWorld(
     core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
-        bool levelCompleted)
+        bool levelCompleted,
+        const std::array<bool, world::kCollectibleCount>& collectibleCollected,
+        int collectedCount)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -654,6 +679,13 @@ void Renderer::DrawWorld(
     for (const world::HazardSpec& hazard : world::kHazards)
     {
         DrawHazard(hazard);
+    }
+    for (int collectibleIndex = 0; collectibleIndex < world::kCollectibleCount; ++collectibleIndex)
+    {
+        if (!collectibleCollected[static_cast<std::size_t>(collectibleIndex)])
+        {
+            DrawCollectible(world::kCollectibles[static_cast<std::size_t>(collectibleIndex)]);
+        }
     }
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
@@ -711,6 +743,7 @@ void Renderer::DrawWorld(
 
     EndMode3D();
 
+    DrawCollectedCounter(collectedCount);
     if (levelCompleted)
     {
         DrawLevelCompleteMessage();

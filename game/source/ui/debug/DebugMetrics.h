@@ -1,6 +1,9 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "world/CollectibleWorld.h"
+
+#include <array>
 
 namespace ui
 {
@@ -101,6 +104,11 @@ struct DebugMetricsSnapshot
     const char* checkpoint2VisualState = "Future";
     const char* insideHazardLabel = "None";
     bool hazardContactThisFrame = false;
+
+    int collectedCount = 0;
+    std::array<bool, world::kCollectibleCount> collectibleCollected{};
+    std::array<bool, world::kCollectibleCount> collectibleInside{};
+    const char* collectedThisFrameLabel = "None";
 
     bool levelCompleted = false;
     core::Vec3 goalCenter{};

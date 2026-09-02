@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/Vec3.h"
-#include "world/RespawnWorld.h"
+#include "world/CollectibleWorld.h"
 
 #include <array>
 #include <memory>
@@ -56,7 +56,9 @@ public:
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
-        bool levelCompleted);
+        bool levelCompleted,
+        const std::array<bool, world::kCollectibleCount>& collectibleCollected,
+        int collectedCount);
     void EndFrame();
 
 private:

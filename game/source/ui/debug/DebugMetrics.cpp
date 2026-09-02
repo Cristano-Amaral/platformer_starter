@@ -231,6 +231,26 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
             BoolText(snapshot.hazardContactThisFrame));
     }
 
+    if (ImGui::CollapsingHeader("Collectibles", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Collectibles: %d / %d", snapshot.collectedCount, world::kCollectibleCount);
+        for (int index = 0; index < world::kCollectibleCount; ++index)
+        {
+            ImGui::Separator();
+            ImGui::Text("Collectible %d", index + 1);
+            ImGui::Text(
+                "State: %s",
+                snapshot.collectibleCollected[static_cast<std::size_t>(index)]
+                    ? "Collected"
+                    : "Available");
+            ImGui::Text(
+                "Inside: %s",
+                BoolText(snapshot.collectibleInside[static_cast<std::size_t>(index)]));
+        }
+        ImGui::Separator();
+        ImGui::Text("Collected this frame: %s", snapshot.collectedThisFrameLabel);
+    }
+
     if (ImGui::CollapsingHeader("Level Goal", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Level completed: %s", BoolText(snapshot.levelCompleted));

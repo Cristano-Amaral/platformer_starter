@@ -1,7 +1,9 @@
 #include "core/Application.h"
 
+#include "gameplay/CollectibleRunState.h"
 #include "input/Input.h"
 #include "platform/Time.h"
+#include "world/CollectibleWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
 
@@ -10,6 +12,8 @@
 #include <cstddef>
 
 static_assert(world::kHazardCount == 2);
+static_assert(world::kCollectibleCount == 3);
+static_assert(gameplay::CollectedCount(gameplay::CollectibleRunState{}) == 0);
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "ui/debug/DebugMetrics.h"
@@ -120,6 +124,21 @@ const char* HazardIndexLabel(int hazardIndex)
         return "None";
     }
 }
+
+const char* CollectibleIndexLabel(int collectibleIndex)
+{
+    switch (collectibleIndex)
+    {
+    case 0:
+        return "1";
+    case 1:
+        return "2";
+    case 2:
+        return "3";
+    default:
+        return "None";
+    }
+}
 }
 
 ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
@@ -130,8 +149,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const render::Renderer& renderer,
     const gameplay::RespawnState& respawnState,
     const gameplay::LevelCompletionState& levelCompletionState,
+    const gameplay::CollectibleRunState& collectibleRunState,
     bool restartedThisFrame,
     bool hazardContactThisFrame,
+    int collectedThisFrameIndex,
     float deltaSeconds)
 {
     ui::DebugMetricsSnapshot snapshot;
@@ -239,6 +260,18 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
         world::FindHazardIndexContaining(player.Position()));
     snapshot.hazardContactThisFrame = hazardContactThisFrame;
 
+    snapshot.collectedCount = gameplay::CollectedCount(collectibleRunState);
+    snapshot.collectedThisFrameLabel = CollectibleIndexLabel(collectedThisFrameIndex);
+    for (int index = 0; index < world::kCollectibleCount; ++index)
+    {
+        snapshot.collectibleCollected[static_cast<std::size_t>(index)] =
+            collectibleRunState.collected[static_cast<std::size_t>(index)];
+        snapshot.collectibleInside[static_cast<std::size_t>(index)] =
+            world::PointInsideCollectible(
+                world::kCollectibles[static_cast<std::size_t>(index)],
+                player.Position());
+    }
+
     snapshot.levelCompleted = levelCompletionState.completed;
     snapshot.goalCenter = world::kLevelGoal.center;
     snapshot.goalSize = world::kLevelGoal.size;
@@ -269,6 +302,7 @@ int Application::Run()
         const bool hazardContactThisFrame =
             world::FindHazardIndexContaining(player.Position()) != world::kNoHazardIndex;
 
+        int collectedThisFrameIndex = world::kNoCollectibleIndex;
         bool respawnedThisFrame = false;
         if (player.Position().y < world::kKillPlaneY)
         {
@@ -304,6 +338,20 @@ int Application::Run()
             {
                 levelCompletionState.completed = true;
             }
+
+            if (!(restartAvailableAtFrameStart && inputState.restartPressed))
+            {
+                const int collectibleIndex =
+                    gameplay::FindAvailableCollectibleIndexContaining(
+                        player.Position(),
+                        collectibleRunState);
+                if (collectibleIndex != world::kNoCollectibleIndex)
+                {
+                    collectibleRunState.collected[static_cast<std::size_t>(collectibleIndex)] =
+                        true;
+                    collectedThisFrameIndex = collectibleIndex;
+                }
+            }
         }
 
         bool restartedThisFrame = false;
@@ -330,7 +378,9 @@ int Application::Run()
             movingPlatform.position,
             movingPlatform.size,
             MakeCheckpointVisuals(respawnState.activeCheckpointIndex),
-            levelCompletionState.completed);
+            levelCompletionState.completed,
+            collectibleRunState.collected,
+            gameplay::CollectedCount(collectibleRunState));
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
             MakeDebugMetricsSnapshot(
@@ -341,8 +391,10 @@ int Application::Run()
                 renderer,
                 respawnState,
                 levelCompletionState,
+                collectibleRunState,
                 restartedThisFrame,
                 hazardContactThisFrame,
+                collectedThisFrameIndex,
                 deltaSeconds));
 #endif
         renderer.EndFrame();
@@ -412,6 +464,7 @@ void Application::RestartRun()
 
     respawnState = gameplay::RespawnState{};
     levelCompletionState.completed = false;
+    collectibleRunState = gameplay::CollectibleRunState{};
     camera.SnapToTarget(player.Position());
 }
 
