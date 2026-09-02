@@ -4,7 +4,9 @@
 #include "platform/Time.h"
 #include "world/LevelGoal.h"
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "ui/debug/DebugMetrics.h"
@@ -12,6 +14,18 @@
 
 namespace core
 {
+namespace
+{
+std::array<world::CheckpointVisualState, world::kCheckpointCount> MakeCheckpointVisuals(
+    int activeCheckpointIndex)
+{
+    return {
+        world::CheckpointVisualStateForIndex(0, activeCheckpointIndex),
+        world::CheckpointVisualStateForIndex(1, activeCheckpointIndex),
+    };
+}
+}
+
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 namespace
 {
@@ -60,6 +74,32 @@ const char* RespawnReasonName(gameplay::RespawnReason reason)
         return "Manual";
     default:
         return "None";
+    }
+}
+
+const char* ActiveCheckpointLabel(int activeCheckpointIndex)
+{
+    switch (activeCheckpointIndex)
+    {
+    case 0:
+        return "1";
+    case 1:
+        return "2";
+    default:
+        return "None";
+    }
+}
+
+const char* CheckpointVisualStateName(world::CheckpointVisualState state)
+{
+    switch (state)
+    {
+    case world::CheckpointVisualState::Current:
+        return "Current";
+    case world::CheckpointVisualState::PreviouslyActivated:
+        return "PreviouslyActivated";
+    default:
+        return "Future";
     }
 }
 }
@@ -162,11 +202,19 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.texturedModelMaterialCount = renderer.TexturedModelMaterialCount();
     snapshot.texturedModelHasAlbedoTexture = renderer.TexturedModelHasAlbedoTexture();
 
-    snapshot.checkpointActive = respawnState.checkpointActive;
     snapshot.respawnPosition = respawnState.respawnPosition;
     snapshot.killPlaneY = world::kKillPlaneY;
     snapshot.deathCount = respawnState.deathCount;
     snapshot.lastRespawnReason = RespawnReasonName(respawnState.lastRespawnReason);
+    snapshot.activeCheckpointLabel = ActiveCheckpointLabel(respawnState.activeCheckpointIndex);
+    snapshot.checkpoint1Inside =
+        world::PointInsideCheckpoint(world::kCheckpoints[0], player.Position());
+    snapshot.checkpoint1VisualState = CheckpointVisualStateName(
+        world::CheckpointVisualStateForIndex(0, respawnState.activeCheckpointIndex));
+    snapshot.checkpoint2Inside =
+        world::PointInsideCheckpoint(world::kCheckpoints[1], player.Position());
+    snapshot.checkpoint2VisualState = CheckpointVisualStateName(
+        world::CheckpointVisualStateForIndex(1, respawnState.activeCheckpointIndex));
 
     snapshot.levelCompleted = levelCompletionState.completed;
     snapshot.goalCenter = world::kLevelGoal.center;
@@ -208,11 +256,16 @@ int Application::Run()
         }
         else
         {
-            if (!respawnState.checkpointActive
-                && world::PointInsideCheckpoint(world::kCheckpoint, player.Position()))
+            const int expectedIndex =
+                world::NextExpectedCheckpointIndex(respawnState.activeCheckpointIndex);
+            if (world::IsValidCheckpointIndex(expectedIndex)
+                && world::PointInsideCheckpoint(
+                       world::kCheckpoints[static_cast<std::size_t>(expectedIndex)],
+                       player.Position()))
             {
-                respawnState.checkpointActive = true;
-                respawnState.respawnPosition = world::kCheckpoint.respawnPosition;
+                respawnState.activeCheckpointIndex = expectedIndex;
+                respawnState.respawnPosition =
+                    world::kCheckpoints[static_cast<std::size_t>(expectedIndex)].respawnPosition;
             }
 
             if (!levelCompletionState.completed
@@ -245,7 +298,7 @@ int Application::Run()
             testBox.size,
             movingPlatform.position,
             movingPlatform.size,
-            respawnState.checkpointActive,
+            MakeCheckpointVisuals(respawnState.activeCheckpointIndex),
             levelCompletionState.completed);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(

@@ -203,7 +203,7 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
 
     if (ImGui::CollapsingHeader("Respawn / Checkpoint", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::Text("Checkpoint active: %s", BoolText(snapshot.checkpointActive));
+        ImGui::Text("Active checkpoint: %s", snapshot.activeCheckpointLabel);
         ImGui::Text(
             "Respawn position: %.4f, %.4f, %.4f",
             snapshot.respawnPosition.x,
@@ -213,11 +213,20 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Kill plane Y: %.4f", snapshot.killPlaneY);
         ImGui::Text("Death count: %d", snapshot.deathCount);
         ImGui::Text("Last respawn reason: %s", snapshot.lastRespawnReason);
+        ImGui::Separator();
+        ImGui::Text("Checkpoint 1");
+        ImGui::Text("Inside: %s", BoolText(snapshot.checkpoint1Inside));
+        ImGui::Text("State: %s", snapshot.checkpoint1VisualState);
+        ImGui::Separator();
+        ImGui::Text("Checkpoint 2");
+        ImGui::Text("Inside: %s", BoolText(snapshot.checkpoint2Inside));
+        ImGui::Text("State: %s", snapshot.checkpoint2VisualState);
     }
 
     if (ImGui::CollapsingHeader("Level Goal", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Level completed: %s", BoolText(snapshot.levelCompleted));
+        ImGui::Text("Goal marker: two-post gate (not a checkpoint)");
         ImGui::Text(
             "Goal center: %.4f, %.4f, %.4f",
             snapshot.goalCenter.x,

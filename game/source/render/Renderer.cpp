@@ -12,6 +12,8 @@
 #include "raylib.h"
 #include "rlgl.h"
 
+#include <array>
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -36,10 +38,12 @@ constexpr Color kTestModelTint{255, 255, 255, 255};
 constexpr Color kMissingModelFallbackColor{235, 115, 46, 255};
 constexpr Color kMissingAuthoredModelFallbackColor{72, 148, 108, 255};
 constexpr Color kMissingTexturedModelFallbackColor{92, 72, 196, 255};
-constexpr Color kCheckpointInactivePost{86, 94, 112, 255};
-constexpr Color kCheckpointInactiveBeacon{140, 148, 168, 255};
-constexpr Color kCheckpointActivePost{48, 140, 88, 255};
-constexpr Color kCheckpointActiveBeacon{88, 220, 124, 255};
+constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
+constexpr Color kCheckpointFutureBeacon{140, 148, 168, 255};
+constexpr Color kCheckpointCurrentPost{48, 140, 88, 255};
+constexpr Color kCheckpointCurrentBeacon{88, 220, 124, 255};
+constexpr Color kCheckpointPreviousPost{36, 88, 56, 255};
+constexpr Color kCheckpointPreviousBeacon{64, 148, 88, 255};
 constexpr Color kGoalIncompletePost{156, 116, 52, 255};
 constexpr Color kGoalIncompleteBar{188, 148, 64, 255};
 constexpr Color kGoalCompletedPost{212, 168, 48, 255};
@@ -158,17 +162,36 @@ void DrawMissingTextureFallback()
         kMissingTextureFallbackColor);
 }
 
-void DrawCheckpointMarker(bool checkpointActive)
+void DrawCheckpointMarker(
+    const world::CheckpointSpec& spec,
+    world::CheckpointVisualState visualState)
 {
     constexpr float postWidth = 0.18f;
     constexpr float postHeight = 1.6f;
     constexpr float beaconSize = 0.36f;
     constexpr float zOffset = -0.95f;
 
+    Color postColor = kCheckpointFuturePost;
+    Color beaconColor = kCheckpointFutureBeacon;
+    switch (visualState)
+    {
+    case world::CheckpointVisualState::Current:
+        postColor = kCheckpointCurrentPost;
+        beaconColor = kCheckpointCurrentBeacon;
+        break;
+    case world::CheckpointVisualState::PreviouslyActivated:
+        postColor = kCheckpointPreviousPost;
+        beaconColor = kCheckpointPreviousBeacon;
+        break;
+    default:
+        break;
+    }
+
+    const float supportTopY = spec.respawnPosition.y - world::kPlayerVisualSize.y * 0.5f;
     const core::Vec3 postCenter{
-        world::kCheckpoint.center.x,
-        world::TopY(world::kElevatedPlatforms[0]) + postHeight * 0.5f,
-        world::kCheckpoint.center.z + zOffset};
+        spec.center.x,
+        supportTopY + postHeight * 0.5f,
+        spec.center.z + zOffset};
     const core::Vec3 postSize{postWidth, postHeight, postWidth};
     const core::Vec3 beaconCenter{
         postCenter.x,
@@ -176,14 +199,8 @@ void DrawCheckpointMarker(bool checkpointActive)
         postCenter.z};
     const core::Vec3 beaconSizeVec{beaconSize, beaconSize, beaconSize};
 
-    DrawGreyboxBox(
-        postCenter,
-        postSize,
-        checkpointActive ? kCheckpointActivePost : kCheckpointInactivePost);
-    DrawGreyboxBox(
-        beaconCenter,
-        beaconSizeVec,
-        checkpointActive ? kCheckpointActiveBeacon : kCheckpointInactiveBeacon);
+    DrawGreyboxBox(postCenter, postSize, postColor);
+    DrawGreyboxBox(beaconCenter, beaconSizeVec, beaconColor);
 }
 
 void DrawLevelGoalMarker(bool levelCompleted)
@@ -195,7 +212,8 @@ void DrawLevelGoalMarker(bool levelCompleted)
     constexpr float postSpread = 0.70f;
     constexpr float zOffset = -0.90f;
 
-    const float platformTopY = world::TopY(world::kElevatedPlatforms[1]);
+    const float platformTopY =
+        world::kLevelGoal.center.y - world::kPlayerVisualSize.y * 0.5f;
     const float postCenterY = platformTopY + postHeight * 0.5f;
     const float z = world::kLevelGoal.center.z + zOffset;
     const core::Vec3 postSize{postWidth, postHeight, postWidth};
@@ -583,9 +601,9 @@ void Renderer::DrawWorld(
     core::Vec3 physicsTestBoxPosition,
     core::Vec3 physicsTestBoxSize,
     core::Vec3 movingPlatformPosition,
-    core::Vec3 movingPlatformSize,
-    bool checkpointActive,
-    bool levelCompleted)
+        core::Vec3 movingPlatformSize,
+        std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
+        bool levelCompleted)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -609,7 +627,12 @@ void Renderer::DrawWorld(
     DrawOrientedGreyboxBox(world::kSteepSlope, kSteepSlopeColor);
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
-    DrawCheckpointMarker(checkpointActive);
+    for (int checkpointIndex = 0; checkpointIndex < world::kCheckpointCount; ++checkpointIndex)
+    {
+        DrawCheckpointMarker(
+            world::kCheckpoints[static_cast<std::size_t>(checkpointIndex)],
+            checkpointVisuals[static_cast<std::size_t>(checkpointIndex)]);
+    }
     DrawLevelGoalMarker(levelCompleted);
 
     if (testTextureLoaded && testTexture != nullptr)

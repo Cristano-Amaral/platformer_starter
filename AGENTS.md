@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 23 — Dynamic Body Interaction Safety (implementation complete / awaiting final manual stress validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 24.
+Milestone 24 — Extended Traversal + Multiple Checkpoints (implementation complete / manual Phase C in progress).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Exactly two ordered checkpoints. Do not implement Milestone 25.

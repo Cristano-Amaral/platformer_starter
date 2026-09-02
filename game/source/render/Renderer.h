@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "world/RespawnWorld.h"
 
+#include <array>
 #include <memory>
 
 namespace gameplay
@@ -53,7 +55,7 @@ public:
         core::Vec3 physicsTestBoxSize,
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
-        bool checkpointActive,
+        std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
         bool levelCompleted);
     void EndFrame();
 
