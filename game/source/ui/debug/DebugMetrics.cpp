@@ -58,6 +58,10 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
     {
         ImGui::Text("moveX: %.0f", snapshot.moveX);
         ImGui::Text("jumpPressed: %s", BoolText(snapshot.jumpPressed));
+        ImGui::Text("respawnPressed: %s", BoolText(snapshot.respawnPressed));
+        ImGui::Text("restartPressed: %s", BoolText(snapshot.restartPressed));
+        ImGui::Text("Restart available: %s", BoolText(snapshot.restartAvailable));
+        ImGui::Text("Restarted this frame: %s", BoolText(snapshot.restartedThisFrame));
     }
 
     if (ImGui::CollapsingHeader("Milestone 07 state", ImGuiTreeNodeFlags_DefaultOpen))

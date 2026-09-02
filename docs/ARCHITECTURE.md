@@ -53,6 +53,18 @@ World data lives in `world/LevelGoal.h` (one `LevelGoalSpec` on the left elevate
 
 Goal overlap tests `Player::Position()` (visual center) via `PointInsideGoal`. No Jolt sensor. Application sets `completed = true` once on first entry, only on a non-respawn frame after checkpoint evaluation. `PerformRespawn` does not clear completion. Renderer draws the two-post + bar marker from a `levelCompleted` bool and, after `EndMode3D`, draws `LEVEL COMPLETE` with raylib text in all configurations including Release. Dear ImGui Level Goal metrics remain Debug/Development only.
 
+## Level restart (Milestone 22)
+
+`input::InputState::restartPressed` is edge-triggered (`Enter` mapped in the input backend only). Application captures `restartAvailableAtFrameStart` from `levelCompletionState.completed` immediately after poll, before goal evaluation can mutate completion. After Fall/Manual and checkpoint/goal, if there was no respawn this frame and restart was already available at frame start and `restartPressed`, Application calls `RestartRun()`. Same-frame goal entry + Enter completes the level and does not restart.
+
+`RestartRun()` resets physical Player/platform/cyan-box state, M20 `RespawnState` to defaults, M21 completion, and camera snap. On a restart frame `camera.Update` is skipped. Renderer draws `LEVEL COMPLETE` and `PRESS ENTER TO RESTART` after `EndMode3D` while `levelCompleted` is true, in all configurations including Release.
+
+M20 respawn still does not reset the moving platform or cyan box. M22 restart does, via `PhysicsWorld::ResetMovingPlatform` and `ResetDynamicTestBox` (project-owned; no Jolt in public headers). Fall/Manual win over restart. Enter is inert before completion.
+
+On a restart frame, `UpdateMovingPlatform` still runs before `RestartRun` so the physics-sensitive order stays intact. Restart then teleports the platform to the canonical start `{0.0, 1.3, 0.0}` with direction `+1`. The next frame resumes toward +X.
+
+Status: implementation complete / awaiting final manual validation. Do not implement Milestone 23.
+
 ## Shared greybox geometry
 `world::GreyboxWorld` is the project-owned source of truth for current static level boxes (ground and elevated platforms). Renderer and PhysicsWorld both derive from those definitions. Ground and platform coordinates are not duplicated inside PhysicsWorld.
 

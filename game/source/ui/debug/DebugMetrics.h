@@ -16,6 +16,10 @@ struct DebugMetricsSnapshot
 
     float moveX = 0.0f;
     bool jumpPressed = false;
+    bool respawnPressed = false;
+    bool restartPressed = false;
+    bool restartAvailable = false;
+    bool restartedThisFrame = false;
 
     float coyoteElapsed = 0.0f;
     bool coyoteAvailable = false;

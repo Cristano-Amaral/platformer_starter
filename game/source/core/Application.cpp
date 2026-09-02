@@ -72,6 +72,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const render::Renderer& renderer,
     const gameplay::RespawnState& respawnState,
     const gameplay::LevelCompletionState& levelCompletionState,
+    bool restartedThisFrame,
     float deltaSeconds)
 {
     ui::DebugMetricsSnapshot snapshot;
@@ -85,6 +86,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
 
     snapshot.moveX = inputState.moveX;
     snapshot.jumpPressed = inputState.jumpPressed;
+    snapshot.respawnPressed = inputState.respawnPressed;
+    snapshot.restartPressed = inputState.restartPressed;
 
     snapshot.coyoteElapsed = player.TimeSinceGrounded();
     snapshot.coyoteAvailable = player.IsCoyoteAvailable();
@@ -163,6 +166,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.goalSize = world::kLevelGoal.size;
     snapshot.playerInsideGoal =
         world::PointInsideGoal(world::kLevelGoal, player.Position());
+    snapshot.restartAvailable = levelCompletionState.completed;
+    snapshot.restartedThisFrame = restartedThisFrame;
     return snapshot;
 }
 #endif
@@ -179,6 +184,7 @@ int Application::Run()
     {
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
+        const bool restartAvailableAtFrameStart = levelCompletionState.completed;
         physicsWorld.UpdateMovingPlatform(deltaSeconds);
         player.Update(inputState, deltaSeconds, physicsWorld);
 
@@ -209,8 +215,15 @@ int Application::Run()
             }
         }
 
+        bool restartedThisFrame = false;
+        if (!respawnedThisFrame && restartAvailableAtFrameStart && inputState.restartPressed)
+        {
+            RestartRun();
+            restartedThisFrame = true;
+        }
+
         physicsWorld.Update(deltaSeconds);
-        if (!respawnedThisFrame)
+        if (!respawnedThisFrame && !restartedThisFrame)
         {
             camera.Update(player.Position(), deltaSeconds);
         }
@@ -237,6 +250,7 @@ int Application::Run()
                 renderer,
                 respawnState,
                 levelCompletionState,
+                restartedThisFrame,
                 deltaSeconds));
 #endif
         renderer.EndFrame();
@@ -292,6 +306,19 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     physicsWorld.ResetCharacter(respawnState.respawnPosition, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    camera.SnapToTarget(player.Position());
+}
+
+void Application::RestartRun()
+{
+    physicsWorld.ResetMovingPlatform();
+    physicsWorld.ResetDynamicTestBox();
+    physicsWorld.ResetCharacter(world::kInitialSpawnVisualCenter, {});
+    player.ResetMovementState();
+    player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+
+    respawnState = gameplay::RespawnState{};
+    levelCompletionState.completed = false;
     camera.SnapToTarget(player.Position());
 }
 

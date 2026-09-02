@@ -24,6 +24,7 @@ private:
     void Initialize();
     void Shutdown();
     void PerformRespawn(gameplay::RespawnReason reason);
+    void RestartRun();
 
     platform::Window window;
     render::Renderer renderer;

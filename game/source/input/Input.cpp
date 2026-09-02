@@ -21,6 +21,7 @@ InputState Poll()
 
     state.jumpPressed = IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_UP);
     state.respawnPressed = IsKeyPressed(KEY_R);
+    state.restartPressed = IsKeyPressed(KEY_ENTER);
     return state;
 }
 }

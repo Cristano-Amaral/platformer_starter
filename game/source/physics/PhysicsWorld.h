@@ -70,6 +70,8 @@ public:
     bool Initialize();
     bool InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSize);
     void ResetCharacter(const core::Vec3& visualCenter, const core::Vec3& velocity);
+    void ResetMovingPlatform();
+    void ResetDynamicTestBox();
     void UpdateMovingPlatform(float deltaSeconds);
     void MovePlayer(const PlayerMoveCommand& command, float deltaSeconds);
     void Update(float deltaSeconds);

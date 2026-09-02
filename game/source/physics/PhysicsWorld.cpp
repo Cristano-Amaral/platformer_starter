@@ -627,6 +627,42 @@ void PhysicsWorld::ResetCharacter(const core::Vec3& visualCenter, const core::Ve
     impl->EnforceFixedZ();
 }
 
+void PhysicsWorld::ResetMovingPlatform()
+{
+    if (!impl->initialized || impl->movingPlatformId.IsInvalid())
+    {
+        return;
+    }
+
+    const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+    JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
+    bodyInterface.SetPositionAndRotation(
+        impl->movingPlatformId,
+        JPH::RVec3(spec.startX, spec.centerY, spec.centerZ),
+        JPH::Quat::sIdentity(),
+        JPH::EActivation::Activate);
+    bodyInterface.SetLinearVelocity(impl->movingPlatformId, JPH::Vec3::sZero());
+    bodyInterface.SetAngularVelocity(impl->movingPlatformId, JPH::Vec3::sZero());
+    impl->movingPlatformDirection = 1.0f;
+}
+
+void PhysicsWorld::ResetDynamicTestBox()
+{
+    if (!impl->initialized || impl->dynamicBodyId.IsInvalid())
+    {
+        return;
+    }
+
+    JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
+    bodyInterface.SetPositionAndRotation(
+        impl->dynamicBodyId,
+        ToRVec3(kDynamicBoxCenter),
+        JPH::Quat::sIdentity(),
+        JPH::EActivation::Activate);
+    bodyInterface.SetLinearVelocity(impl->dynamicBodyId, JPH::Vec3::sZero());
+    bodyInterface.SetAngularVelocity(impl->dynamicBodyId, JPH::Vec3::sZero());
+}
+
 void PhysicsWorld::UpdateMovingPlatform(float deltaSeconds)
 {
     if (!impl->initialized)

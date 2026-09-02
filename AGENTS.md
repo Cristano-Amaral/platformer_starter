@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 21 — Level Goal + Completion Loop: implementation complete / awaiting final manual validation.
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 22.
+Milestone 22 — Level Restart + Run-State Reset (implementation complete / awaiting final manual validation).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 23.

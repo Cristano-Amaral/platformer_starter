@@ -46,6 +46,8 @@ constexpr Color kGoalCompletedPost{212, 168, 48, 255};
 constexpr Color kGoalCompletedBar{244, 212, 84, 255};
 constexpr Color kLevelCompleteText{244, 212, 84, 255};
 constexpr int kLevelCompleteFontSize = 42;
+constexpr int kRestartHintFontSize = 22;
+constexpr int kRestartHintGap = 16;
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -220,11 +222,17 @@ void DrawLevelGoalMarker(bool levelCompleted)
 
 void DrawLevelCompleteMessage()
 {
-    const char* text = "LEVEL COMPLETE";
-    const int textWidth = MeasureText(text, kLevelCompleteFontSize);
-    const int x = (GetScreenWidth() - textWidth) / 2;
-    const int y = GetScreenHeight() / 10;
-    DrawText(text, x, y, kLevelCompleteFontSize, kLevelCompleteText);
+    const char* completeText = "LEVEL COMPLETE";
+    const int completeWidth = MeasureText(completeText, kLevelCompleteFontSize);
+    const int completeX = (GetScreenWidth() - completeWidth) / 2;
+    const int completeY = GetScreenHeight() / 10;
+    DrawText(completeText, completeX, completeY, kLevelCompleteFontSize, kLevelCompleteText);
+
+    const char* hintText = "PRESS ENTER TO RESTART";
+    const int hintWidth = MeasureText(hintText, kRestartHintFontSize);
+    const int hintX = (GetScreenWidth() - hintWidth) / 2;
+    const int hintY = completeY + kLevelCompleteFontSize + kRestartHintGap;
+    DrawText(hintText, hintX, hintY, kRestartHintFontSize, kLevelCompleteText);
 }
 
 void DrawMissingModelFallback(core::Vec3 center, Color fill)

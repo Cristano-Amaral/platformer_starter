@@ -10,5 +10,7 @@ struct InputState
     bool jumpPressed = false;
     // True only on the frame Respawn was pressed, not while held.
     bool respawnPressed = false;
+    // True only on the frame Restart was pressed, not while held.
+    bool restartPressed = false;
 };
 }
