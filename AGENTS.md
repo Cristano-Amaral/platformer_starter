@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 22 — Level Restart + Run-State Reset (implementation complete / awaiting final manual validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 23.
+Milestone 23 — Dynamic Body Interaction Safety (implementation complete / awaiting final manual stress validation).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 24.

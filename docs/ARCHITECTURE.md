@@ -63,7 +63,17 @@ M20 respawn still does not reset the moving platform or cyan box. M22 restart do
 
 On a restart frame, `UpdateMovingPlatform` still runs before `RestartRun` so the physics-sensitive order stays intact. Restart then teleports the platform to the canonical start `{0.0, 1.3, 0.0}` with direction `+1`. The next frame resumes toward +X.
 
-Status: implementation complete / awaiting final manual validation. Do not implement Milestone 23.
+Status: complete (manually validated). Do not implement Milestone 23 in this section.
+
+## Dynamic body interaction (Milestone 23)
+
+The cyan box is a Jolt `EMotionType::Dynamic` 1 m cube. Mass is overridden to **30 kg** via `EOverrideMassProperties::CalculateInertia` so CharacterVirtual `maxStrength` 100 N can produce a meaningful impulse. Friction/restitution/damping remain Jolt defaults.
+
+CharacterVirtual remains the movement authority (`mMass = 70`, `mMaxStrength = 100`). It now creates a **kinematic inner body** (`CharacterVirtualSettings::mInnerBodyShape`) so `PhysicsSystem::Update` cannot freely integrate the box into the character volume. The inner shape is the same translated capsule as the CharacterVirtual, scaled by **0.9** (Jolt sample `cInnerShapeFraction`), on object layer `Moving`. CharacterVirtual ignores its own inner body through Jolt's `IgnoreSingleBodyFilterChained`. `SetPosition` / `CharacterVirtual::Update` call `UpdateInnerBodyTransform`. No `CharacterContactListener`. Update order is unchanged.
+
+Temporary blocking with no free space is valid. After Phase B, manual observation is that the Player is a physical barrier, can push/drag the 30 kg box, and is no longer permanently trapped. Repeated stress of the original right-side scenario remains the final manual check.
+
+Status: implementation complete / awaiting final manual stress validation. Do not implement Milestone 24. Longer level / multiple checkpoints remain deferred.
 
 ## Shared greybox geometry
 `world::GreyboxWorld` is the project-owned source of truth for current static level boxes (ground and elevated platforms). Renderer and PhysicsWorld both derive from those definitions. Ground and platform coordinates are not duplicated inside PhysicsWorld.

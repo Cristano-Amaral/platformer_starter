@@ -114,6 +114,11 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text(
             "dynamic test box sleeping: %s",
             BoolText(snapshot.dynamicTestBodyValid && !snapshot.physicsTestBoxActive));
+        ImGui::Text(
+            "dynamic test box velocity: %.4f, %.4f, %.4f",
+            snapshot.physicsTestBoxLinearVelocity.x,
+            snapshot.physicsTestBoxLinearVelocity.y,
+            snapshot.physicsTestBoxLinearVelocity.z);
     }
 
     if (ImGui::CollapsingHeader("Player Physics / Character", ImGuiTreeNodeFlags_DefaultOpen))
@@ -121,6 +126,7 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text(
             "CharacterVirtual initialized: %s",
             BoolText(snapshot.characterVirtualInitialized));
+        ImGui::Text("Character inner body active: %s", BoolText(snapshot.characterInnerBodyActive));
         ImGui::Text("physical Player X: %.4f", snapshot.playerPosition.x);
         ImGui::Text("physical Player Y: %.4f", snapshot.playerPosition.y);
         ImGui::Text("physical Player Z: %.4f", snapshot.playerPosition.z);
@@ -129,6 +135,14 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("supported/grounded: %s", BoolText(snapshot.grounded));
         ImGui::Text("ground support: %s", snapshot.playerGroundSupport);
         ImGui::Text("active contacts: %d", snapshot.playerContactCount);
+        ImGui::Text("dynamic contact this frame: %s", BoolText(snapshot.dynamicContact));
+        ImGui::Text("support body kind: %s", snapshot.supportBodyKind);
+        ImGui::Text(
+            "world velocity: %.4f, %.4f, %.4f",
+            snapshot.playerWorldVelocity.x,
+            snapshot.playerWorldVelocity.y,
+            snapshot.playerWorldVelocity.z);
+        ImGui::Text("relative horizontal velocity: %.4f", snapshot.horizontalVelocity);
         ImGui::Text("position finite: %s", BoolText(snapshot.playerPositionFinite));
         ImGui::Text("velocity finite: %s", BoolText(snapshot.playerVelocityFinite));
         ImGui::Text(

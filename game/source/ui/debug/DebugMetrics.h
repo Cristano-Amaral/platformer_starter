@@ -42,6 +42,7 @@ struct DebugMetricsSnapshot
     bool physicsInitialized = false;
     core::Vec3 physicsTestBoxPosition{};
     bool physicsTestBoxActive = false;
+    core::Vec3 physicsTestBoxLinearVelocity{};
 
     bool characterVirtualInitialized = false;
     const char* playerGroundSupport = "InAir";
@@ -57,6 +58,10 @@ struct DebugMetricsSnapshot
     float groundSlopeAngleDegrees = 0.0f;
     bool currentSupportWalkable = false;
     const char* supportClassification = "Unsupported";
+    const char* supportBodyKind = "None";
+    bool dynamicContact = false;
+    core::Vec3 playerWorldVelocity{};
+    bool characterInnerBodyActive = false;
 
     bool movingPlatformValid = false;
     core::Vec3 movingPlatformPosition{};

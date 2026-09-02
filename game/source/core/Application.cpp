@@ -110,6 +110,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
     snapshot.physicsInitialized = physicsWorld.IsInitialized();
     snapshot.physicsTestBoxPosition = testBox.position;
+    snapshot.physicsTestBoxLinearVelocity = testBox.linearVelocity;
     snapshot.physicsTestBoxActive = testBox.active;
     snapshot.staticBodyCount = physicsWorld.StaticBodyCount();
     snapshot.dynamicTestBodyValid = testBox.valid;
@@ -126,6 +127,12 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.groundSlopeAngleDegrees = player.GroundSlopeAngleDegrees();
     snapshot.currentSupportWalkable = player.IsCurrentSupportWalkable();
     snapshot.supportClassification = SupportClassificationName(player.GroundSupport());
+
+    const physics::PlayerPhysicsState playerPhysics = physicsWorld.GetPlayerPhysicsState();
+    snapshot.supportBodyKind = playerPhysics.supportBodyKind;
+    snapshot.dynamicContact = playerPhysics.dynamicContact;
+    snapshot.playerWorldVelocity = playerPhysics.worldVelocity;
+    snapshot.characterInnerBodyActive = playerPhysics.characterInnerBodyActive;
 
     const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
     snapshot.movingPlatformValid = movingPlatform.valid;

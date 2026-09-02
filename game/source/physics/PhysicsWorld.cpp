@@ -12,6 +12,7 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
@@ -42,6 +43,9 @@ constexpr unsigned int kMaxPhysicsJobs = 256;
 
 constexpr core::Vec3 kDynamicBoxCenter{0.0f, 5.0f, 0.0f};
 constexpr core::Vec3 kDynamicBoxSize{1.0f, 1.0f, 1.0f};
+// 1 m cube at Jolt convex default 1000 kg/m^3 is ~1000 kg. Override to a crate-like 30 kg
+// so CharacterVirtual maxStrength (100 N) can produce a meaningful impulse response.
+constexpr float kDynamicBoxMass = 30.0f;
 
 // Capsule matching the 0.8 x 1.6 x 0.8 visual cube:
 // radius 0.4, cylinder height 0.8 => total height 1.6, diameter 0.8.
@@ -62,6 +66,9 @@ constexpr float kPredictiveContactDistance = 0.1f;
 constexpr float kPenetrationRecoverySpeed = 1.0f;
 constexpr float kCharacterMass = 70.0f;
 constexpr float kMaxStrength = 100.0f;
+// Official Jolt CharacterVirtual sample uses 0.9 so the kinematic inner body sits
+// inside the padded CharacterVirtual volume and does not rest on the same surfaces.
+constexpr float kInnerShapeFraction = 0.9f;
 
 namespace ObjectLayers
 {
@@ -236,6 +243,21 @@ PlayerGroundSupport ToGroundSupport(JPH::CharacterBase::EGroundState state)
         return PlayerGroundSupport::InAir;
     default:
         return PlayerGroundSupport::InAir;
+    }
+}
+
+const char* MotionTypeName(JPH::EMotionType motionType)
+{
+    switch (motionType)
+    {
+    case JPH::EMotionType::Static:
+        return "Static";
+    case JPH::EMotionType::Kinematic:
+        return "Kinematic";
+    case JPH::EMotionType::Dynamic:
+        return "Dynamic";
+    default:
+        return "None";
     }
 }
 
@@ -431,6 +453,15 @@ struct PhysicsWorld::Impl
         JPH::Vec3 velocity = character->GetLinearVelocity();
         velocity.SetZ(0.0f);
         character->SetLinearVelocity(velocity);
+
+        const JPH::BodyID innerBodyId = character->GetInnerBodyID();
+        if (!innerBodyId.IsInvalid())
+        {
+            JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+            JPH::Vec3 innerVelocity = bodyInterface.GetLinearVelocity(innerBodyId);
+            innerVelocity.SetZ(0.0f);
+            bodyInterface.SetLinearVelocity(innerBodyId, innerVelocity);
+        }
     }
 
     // CharacterVirtual::Update slides the shape but does not write the
@@ -530,12 +561,33 @@ bool PhysicsWorld::Initialize()
         JPH::Quat::sIdentity(),
         JPH::EMotionType::Dynamic,
         ObjectLayers::Moving);
+    boxSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+    boxSettings.mMassPropertiesOverride.mMass = kDynamicBoxMass;
     impl->dynamicBodyId = bodyInterface.CreateAndAddBody(boxSettings, JPH::EActivation::Activate);
     if (impl->dynamicBodyId.IsInvalid())
     {
         ReportError("failed to create dynamic test box.");
         Shutdown();
         return false;
+    }
+
+    {
+        JPH::BodyLockRead lock(impl->physicsSystem->GetBodyLockInterface(), impl->dynamicBodyId);
+        if (!lock.SucceededAndIsInBroadPhase())
+        {
+            ReportError("failed to inspect dynamic test box mass.");
+            Shutdown();
+            return false;
+        }
+
+        const float inverseMass = lock.GetBody().GetMotionProperties()->GetInverseMass();
+        const float mass = inverseMass > 0.0f ? (1.0f / inverseMass) : 0.0f;
+        if (std::fabs(mass - kDynamicBoxMass) > 0.01f)
+        {
+            std::fprintf(stderr, "PhysicsWorld: dynamic test box mass is %.3f kg, expected %.3f kg.\n", mass, kDynamicBoxMass);
+            Shutdown();
+            return false;
+        }
     }
 
     if (!impl->CreateMovingPlatform())
@@ -564,9 +616,10 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
     impl->playerVisualSize = visualSize;
     impl->gameplayZ = visualCenter.z;
 
+    const JPH::Vec3 capsuleTranslation(0.0f, kCapsuleHalfCylinder + kCapsuleRadius, 0.0f);
     const JPH::RefConst<JPH::Shape> capsule =
         JPH::RotatedTranslatedShapeSettings(
-            JPH::Vec3(0.0f, kCapsuleHalfCylinder + kCapsuleRadius, 0.0f),
+            capsuleTranslation,
             JPH::Quat::sIdentity(),
             new JPH::CapsuleShape(kCapsuleHalfCylinder, kCapsuleRadius))
             .Create()
@@ -577,8 +630,25 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
         return false;
     }
 
+    const JPH::RefConst<JPH::Shape> innerCapsule =
+        JPH::RotatedTranslatedShapeSettings(
+            capsuleTranslation,
+            JPH::Quat::sIdentity(),
+            new JPH::CapsuleShape(
+                kInnerShapeFraction * kCapsuleHalfCylinder,
+                kInnerShapeFraction * kCapsuleRadius))
+            .Create()
+            .Get();
+    if (innerCapsule == nullptr)
+    {
+        ReportError("failed to create CharacterVirtual inner body shape.");
+        return false;
+    }
+
     JPH::Ref<JPH::CharacterVirtualSettings> settings = new JPH::CharacterVirtualSettings();
     settings->mShape = capsule;
+    settings->mInnerBodyShape = innerCapsule;
+    settings->mInnerBodyLayer = ObjectLayers::Moving;
     settings->mUp = JPH::Vec3::sAxisY();
     settings->mMaxSlopeAngle = kMaxSlopeAngleRadians;
     settings->mCharacterPadding = kCharacterPadding;
@@ -596,6 +666,12 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
         feetPosition,
         JPH::Quat::sIdentity(),
         impl->physicsSystem.get());
+    if (impl->character->GetInnerBodyID().IsInvalid())
+    {
+        ReportError("failed to create CharacterVirtual inner body.");
+        impl->character = nullptr;
+        return false;
+    }
 
     impl->character->RefreshContacts(
         impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
@@ -618,6 +694,15 @@ void PhysicsWorld::ResetCharacter(const core::Vec3& visualCenter, const core::Ve
     impl->character->SetPosition(JPH::RVec3(visualCenter.x, feetY, impl->gameplayZ));
     impl->character->SetLinearVelocity(JPH::Vec3(velocity.x, velocity.y, 0.0f));
     impl->carriedGroundVelocityX = 0.0f;
+
+    const JPH::BodyID innerBodyId = impl->character->GetInnerBodyID();
+    if (!innerBodyId.IsInvalid())
+    {
+        JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
+        bodyInterface.SetLinearVelocity(innerBodyId, JPH::Vec3::sZero());
+        bodyInterface.SetAngularVelocity(innerBodyId, JPH::Vec3::sZero());
+    }
+
     impl->character->RefreshContacts(
         impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
         impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
@@ -821,6 +906,8 @@ DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
 
     const JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
     box.position = ToVec3(bodyInterface.GetPosition(impl->dynamicBodyId));
+    const JPH::Vec3 linearVelocity = bodyInterface.GetLinearVelocity(impl->dynamicBodyId);
+    box.linearVelocity = {linearVelocity.GetX(), linearVelocity.GetY(), linearVelocity.GetZ()};
     box.active = bodyInterface.IsActive(impl->dynamicBodyId);
     return box;
 }
@@ -866,6 +953,7 @@ PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
         impl->gameplayZ};
     state.horizontalVelocity = velocity.GetX();
     state.verticalVelocity = velocity.GetY();
+    state.worldVelocity = {velocity.GetX(), velocity.GetY(), velocity.GetZ()};
     state.groundSupport = ToGroundSupport(impl->character->GetGroundState());
     state.supported = state.groundSupport == PlayerGroundSupport::OnGround;
     state.contactCount = impl->CountContacts();
@@ -878,6 +966,34 @@ PlayerPhysicsState PhysicsWorld::GetPlayerPhysicsState() const
         groundNormal.GetZ()};
     state.groundSlopeAngleDegrees = GroundSlopeAngleDegrees(groundNormal);
     state.currentSupportWalkable = state.supported;
+
+    bool dynamicContact = false;
+    for (const JPH::CharacterContact& contact : impl->character->GetActiveContacts())
+    {
+        if (contact.mHadCollision && contact.mMotionTypeB == JPH::EMotionType::Dynamic)
+        {
+            dynamicContact = true;
+            break;
+        }
+    }
+    state.dynamicContact = dynamicContact;
+
+    state.supportBodyKind = "None";
+    const JPH::BodyID groundBodyId = impl->character->GetGroundBodyID();
+    if (!groundBodyId.IsInvalid())
+    {
+        JPH::BodyLockRead lock(impl->physicsSystem->GetBodyLockInterface(), groundBodyId);
+        if (lock.SucceededAndIsInBroadPhase())
+        {
+            state.supportBodyKind = MotionTypeName(lock.GetBody().GetMotionType());
+        }
+    }
+
+    const JPH::BodyID innerBodyId = impl->character->GetInnerBodyID();
+    state.characterInnerBodyActive =
+        !innerBodyId.IsInvalid()
+        && impl->physicsSystem->GetBodyInterface().IsActive(innerBodyId);
+
     return state;
 }
 }

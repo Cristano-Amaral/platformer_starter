@@ -9,6 +9,7 @@ namespace physics
 struct DynamicTestBox
 {
     core::Vec3 position{};
+    core::Vec3 linearVelocity{};
     core::Vec3 size{1.0f, 1.0f, 1.0f};
     bool valid = false;
     bool active = false;
@@ -42,6 +43,10 @@ struct PlayerPhysicsState
     core::Vec3 groundNormal{};
     float groundSlopeAngleDegrees = 0.0f;
     bool currentSupportWalkable = false;
+    core::Vec3 worldVelocity{};
+    const char* supportBodyKind = "None";
+    bool dynamicContact = false;
+    bool characterInnerBodyActive = false;
 };
 
 struct MovingPlatformState
