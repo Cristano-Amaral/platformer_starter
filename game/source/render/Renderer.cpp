@@ -5,6 +5,7 @@
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
 #include "world/GreyboxWorld.h"
+#include "world/LevelGoal.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
 
@@ -39,6 +40,12 @@ constexpr Color kCheckpointInactivePost{86, 94, 112, 255};
 constexpr Color kCheckpointInactiveBeacon{140, 148, 168, 255};
 constexpr Color kCheckpointActivePost{48, 140, 88, 255};
 constexpr Color kCheckpointActiveBeacon{88, 220, 124, 255};
+constexpr Color kGoalIncompletePost{156, 116, 52, 255};
+constexpr Color kGoalIncompleteBar{188, 148, 64, 255};
+constexpr Color kGoalCompletedPost{212, 168, 48, 255};
+constexpr Color kGoalCompletedBar{244, 212, 84, 255};
+constexpr Color kLevelCompleteText{244, 212, 84, 255};
+constexpr int kLevelCompleteFontSize = 42;
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -175,6 +182,49 @@ void DrawCheckpointMarker(bool checkpointActive)
         beaconCenter,
         beaconSizeVec,
         checkpointActive ? kCheckpointActiveBeacon : kCheckpointInactiveBeacon);
+}
+
+void DrawLevelGoalMarker(bool levelCompleted)
+{
+    constexpr float postWidth = 0.16f;
+    constexpr float postHeight = 1.6f;
+    constexpr float barHeight = 0.16f;
+    constexpr float barDepth = 0.16f;
+    constexpr float postSpread = 0.70f;
+    constexpr float zOffset = -0.90f;
+
+    const float platformTopY = world::TopY(world::kElevatedPlatforms[1]);
+    const float postCenterY = platformTopY + postHeight * 0.5f;
+    const float z = world::kLevelGoal.center.z + zOffset;
+    const core::Vec3 postSize{postWidth, postHeight, postWidth};
+    const core::Vec3 leftPost{
+        world::kLevelGoal.center.x - postSpread,
+        postCenterY,
+        z};
+    const core::Vec3 rightPost{
+        world::kLevelGoal.center.x + postSpread,
+        postCenterY,
+        z};
+    const core::Vec3 barCenter{
+        world::kLevelGoal.center.x,
+        platformTopY + postHeight + barHeight * 0.5f,
+        z};
+    const core::Vec3 barSize{postSpread * 2.0f + postWidth, barHeight, barDepth};
+
+    const Color postColor = levelCompleted ? kGoalCompletedPost : kGoalIncompletePost;
+    const Color barColor = levelCompleted ? kGoalCompletedBar : kGoalIncompleteBar;
+    DrawGreyboxBox(leftPost, postSize, postColor);
+    DrawGreyboxBox(rightPost, postSize, postColor);
+    DrawGreyboxBox(barCenter, barSize, barColor);
+}
+
+void DrawLevelCompleteMessage()
+{
+    const char* text = "LEVEL COMPLETE";
+    const int textWidth = MeasureText(text, kLevelCompleteFontSize);
+    const int x = (GetScreenWidth() - textWidth) / 2;
+    const int y = GetScreenHeight() / 10;
+    DrawText(text, x, y, kLevelCompleteFontSize, kLevelCompleteText);
 }
 
 void DrawMissingModelFallback(core::Vec3 center, Color fill)
@@ -526,7 +576,8 @@ void Renderer::DrawWorld(
     core::Vec3 physicsTestBoxSize,
     core::Vec3 movingPlatformPosition,
     core::Vec3 movingPlatformSize,
-    bool checkpointActive)
+    bool checkpointActive,
+    bool levelCompleted)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -551,6 +602,7 @@ void Renderer::DrawWorld(
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
     DrawCheckpointMarker(checkpointActive);
+    DrawLevelGoalMarker(levelCompleted);
 
     if (testTextureLoaded && testTexture != nullptr)
     {
@@ -597,6 +649,11 @@ void Renderer::DrawWorld(
     }
 
     EndMode3D();
+
+    if (levelCompleted)
+    {
+        DrawLevelCompleteMessage();
+    }
 }
 
 void Renderer::EndFrame()

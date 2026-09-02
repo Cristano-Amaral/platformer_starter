@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
 #include "gameplay/RespawnState.h"
@@ -29,6 +30,7 @@ private:
     gameplay::Player player{world::kInitialSpawnVisualCenter, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
+    gameplay::LevelCompletionState levelCompletionState;
     physics::PhysicsWorld physicsWorld;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     ui::DebugUi debugUi;

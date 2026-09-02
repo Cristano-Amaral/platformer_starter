@@ -197,6 +197,22 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Last respawn reason: %s", snapshot.lastRespawnReason);
     }
 
+    if (ImGui::CollapsingHeader("Level Goal", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Level completed: %s", BoolText(snapshot.levelCompleted));
+        ImGui::Text(
+            "Goal center: %.4f, %.4f, %.4f",
+            snapshot.goalCenter.x,
+            snapshot.goalCenter.y,
+            snapshot.goalCenter.z);
+        ImGui::Text(
+            "Goal size: %.4f, %.4f, %.4f",
+            snapshot.goalSize.x,
+            snapshot.goalSize.y,
+            snapshot.goalSize.z);
+        ImGui::Text("Player inside goal: %s", BoolText(snapshot.playerInsideGoal));
+    }
+
     ImGui::End();
 }
 }

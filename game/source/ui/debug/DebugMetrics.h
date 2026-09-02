@@ -86,6 +86,11 @@ struct DebugMetricsSnapshot
     float killPlaneY = 0.0f;
     int deathCount = 0;
     const char* lastRespawnReason = "None";
+
+    bool levelCompleted = false;
+    core::Vec3 goalCenter{};
+    core::Vec3 goalSize{};
+    bool playerInsideGoal = false;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

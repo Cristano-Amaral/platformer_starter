@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 20 — Checkpoint + Fall/Respawn Loop: implementation complete / awaiting final manual validation.
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 21.
+Milestone 21 — Level Goal + Completion Loop: implementation complete / awaiting final manual validation.
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Do not implement Milestone 22.

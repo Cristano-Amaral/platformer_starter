@@ -2,6 +2,7 @@
 
 #include "input/Input.h"
 #include "platform/Time.h"
+#include "world/LevelGoal.h"
 
 #include <cmath>
 
@@ -70,6 +71,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const input::InputState& inputState,
     const render::Renderer& renderer,
     const gameplay::RespawnState& respawnState,
+    const gameplay::LevelCompletionState& levelCompletionState,
     float deltaSeconds)
 {
     ui::DebugMetricsSnapshot snapshot;
@@ -155,6 +157,12 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.killPlaneY = world::kKillPlaneY;
     snapshot.deathCount = respawnState.deathCount;
     snapshot.lastRespawnReason = RespawnReasonName(respawnState.lastRespawnReason);
+
+    snapshot.levelCompleted = levelCompletionState.completed;
+    snapshot.goalCenter = world::kLevelGoal.center;
+    snapshot.goalSize = world::kLevelGoal.size;
+    snapshot.playerInsideGoal =
+        world::PointInsideGoal(world::kLevelGoal, player.Position());
     return snapshot;
 }
 #endif
@@ -185,11 +193,20 @@ int Application::Run()
             PerformRespawn(gameplay::RespawnReason::Manual);
             respawnedThisFrame = true;
         }
-        else if (!respawnState.checkpointActive
-            && world::PointInsideCheckpoint(world::kCheckpoint, player.Position()))
+        else
         {
-            respawnState.checkpointActive = true;
-            respawnState.respawnPosition = world::kCheckpoint.respawnPosition;
+            if (!respawnState.checkpointActive
+                && world::PointInsideCheckpoint(world::kCheckpoint, player.Position()))
+            {
+                respawnState.checkpointActive = true;
+                respawnState.respawnPosition = world::kCheckpoint.respawnPosition;
+            }
+
+            if (!levelCompletionState.completed
+                && world::PointInsideGoal(world::kLevelGoal, player.Position()))
+            {
+                levelCompletionState.completed = true;
+            }
         }
 
         physicsWorld.Update(deltaSeconds);
@@ -208,7 +225,8 @@ int Application::Run()
             testBox.size,
             movingPlatform.position,
             movingPlatform.size,
-            respawnState.checkpointActive);
+            respawnState.checkpointActive,
+            levelCompletionState.completed);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
             MakeDebugMetricsSnapshot(
@@ -218,6 +236,7 @@ int Application::Run()
                 inputState,
                 renderer,
                 respawnState,
+                levelCompletionState,
                 deltaSeconds));
 #endif
         renderer.EndFrame();

@@ -47,6 +47,12 @@ World data lives in `world/RespawnWorld.h` (initial visual-center spawn, `kKillP
 
 Checkpoint overlap tests `Player::Position()` (visual center) against the checkpoint AABB. No Jolt sensor. Renderer draws a post+beacon marker from `checkpointActive`; it does not activate checkpoints or own respawn state.
 
+## Level goal / completion (Milestone 21)
+
+World data lives in `world/LevelGoal.h` (one `LevelGoalSpec` on the left elevated platform). Runtime state lives in `gameplay::LevelCompletionState`, owned by `Application`. PhysicsWorld does not interpret goals. Renderer does not decide completion.
+
+Goal overlap tests `Player::Position()` (visual center) via `PointInsideGoal`. No Jolt sensor. Application sets `completed = true` once on first entry, only on a non-respawn frame after checkpoint evaluation. `PerformRespawn` does not clear completion. Renderer draws the two-post + bar marker from a `levelCompleted` bool and, after `EndMode3D`, draws `LEVEL COMPLETE` with raylib text in all configurations including Release. Dear ImGui Level Goal metrics remain Debug/Development only.
+
 ## Shared greybox geometry
 `world::GreyboxWorld` is the project-owned source of truth for current static level boxes (ground and elevated platforms). Renderer and PhysicsWorld both derive from those definitions. Ground and platform coordinates are not duplicated inside PhysicsWorld.
 
