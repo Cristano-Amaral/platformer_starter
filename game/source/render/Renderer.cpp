@@ -5,6 +5,7 @@
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
 #include "world/GreyboxWorld.h"
+#include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
@@ -48,6 +49,8 @@ constexpr Color kGoalIncompletePost{156, 116, 52, 255};
 constexpr Color kGoalIncompleteBar{188, 148, 64, 255};
 constexpr Color kGoalCompletedPost{212, 168, 48, 255};
 constexpr Color kGoalCompletedBar{244, 212, 84, 255};
+constexpr Color kHazardBarColor{196, 48, 36, 255};
+constexpr Color kHazardToothColor{232, 96, 40, 255};
 constexpr Color kLevelCompleteText{244, 212, 84, 255};
 constexpr int kLevelCompleteFontSize = 42;
 constexpr int kRestartHintFontSize = 22;
@@ -104,6 +107,29 @@ void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
     const Vector3 position = ToRaylib(center);
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
+}
+
+// Visual-only: lethal AABB is the bar. Three teeth sit on the top face, inside
+// the XZ footprint, so the drawn volume is slightly taller than the lethal box.
+void DrawHazard(const world::HazardSpec& spec)
+{
+    DrawGreyboxBox(spec.center, spec.size, kHazardBarColor);
+
+    constexpr int kToothCount = 3;
+    constexpr float kToothHeight = 0.35f;
+    const float toothSizeX = spec.size.x * 0.22f;
+    const float toothSizeZ = spec.size.z * 0.40f;
+    const float toothCenterY = spec.center.y + spec.size.y * 0.5f + kToothHeight * 0.5f;
+    const float xSpan = spec.size.x * 0.32f;
+    const core::Vec3 toothSize{toothSizeX, kToothHeight, toothSizeZ};
+    for (int toothIndex = 0; toothIndex < kToothCount; ++toothIndex)
+    {
+        const float xOffset = -xSpan + static_cast<float>(toothIndex) * xSpan;
+        DrawGreyboxBox(
+            {spec.center.x + xOffset, toothCenterY, spec.center.z},
+            toothSize,
+            kHazardToothColor);
+    }
 }
 
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
@@ -625,6 +651,10 @@ void Renderer::DrawWorld(
     DrawGreyboxBox(movingPlatformPosition, movingPlatformSize, kMovingPlatformColor);
     DrawOrientedGreyboxBox(world::kWalkableSlope, kWalkableSlopeColor);
     DrawOrientedGreyboxBox(world::kSteepSlope, kSteepSlopeColor);
+    for (const world::HazardSpec& hazard : world::kHazards)
+    {
+        DrawHazard(hazard);
+    }
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
     for (int checkpointIndex = 0; checkpointIndex < world::kCheckpointCount; ++checkpointIndex)

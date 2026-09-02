@@ -158,4 +158,23 @@ Intended route: spawn → Checkpoint 1 (open ground; 30° slope is optional and 
 
 Phase B.1: the M14 30° slope at `{10.90, 1.6732, 0}` rose with +X and ended ~3.35 high immediately left of CP1. Players could walk up and drop onto CP1 but could not return: jump rise 1.6 cannot clear the high end, and the underside wedges anyone walking back on the ground. The 30° test was moved past CP1; the 60° test moved just beyond it; ground expanded to X [-28, 28]. Checkpoint order was not a defect (CP2 before CP1 must stay inactive). The user manually approved spawn -> CP1 -> center return.
 
-Status: implementation complete / manual Phase C in progress. Do not mark M24 complete. Do not implement Milestone 25.
+Status: complete (manually validated). Do not implement Milestone 25 in this section.
+
+## Static hazards / hazard respawn (Milestone 25)
+
+M25 adds the first explicit non-fall lethal volumes: **exactly two** compile-time `HazardSpec` AABBs in `world/HazardWorld.h`. Identity is the array index. There is no health, no Jolt sensor, and no generic trigger type.
+
+- Hazard 1 (index 0): corridor spikes `{11.5, 0.5, 0}` size `{1.4, 1.0, 2.0}` AABB X [10.8, 12.2], Y [0, 1.0], Z [-1, 1]
+- Hazard 2 (index 1): goal-gap spikes `{-18.5, 0.5, 0}` size `{1.2, 1.0, 2.0}` AABB X [-19.1, -17.9], Y [0, 1.0], Z [-1, 1]
+
+Application tests `Player::Position()` (visual center) with `FindHazardIndexContaining`. Multiple overlapping volumes still produce **one** Hazard death. Priority:
+
+```
+Fall > Hazard > Manual R > checkpoint / goal > Enter (M22 restartAvailableAtFrameStart)
+```
+
+`PerformRespawn` increments `deathCount` for Fall or Hazard, never Manual. Destination is `respawnState.respawnPosition`. Ordinary Hazard respawn does not reset the moving platform or cyan box. After completion, Hazard death preserves `completed`. Enter restart does not need a hazard reset API (static world specs). Renderer reads `world::kHazards` and draws a red/orange bar matching the AABB plus three cube teeth on the top face; it does not detect contact. Debug/Development metrics show Inside hazard None/1/2 and Hazard contact this frame. Release draws hazards and runs the same death logic without ImGui.
+
+User-confirmed Phase C evidence: hazard death +1; respawn at initial spawn before any checkpoint, CP1 after CP1, CP2 after CP2; Enter after LEVEL COMPLETE starts a fresh run and resets deathCount to 0.
+
+Status: implementation complete / Phase C validation. Do not mark M25 complete until remaining manual cases are approved. Do not implement Milestone 26.

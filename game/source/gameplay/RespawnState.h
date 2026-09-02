@@ -10,6 +10,7 @@ enum class RespawnReason
     None,
     Fall,
     Manual,
+    Hazard,
 };
 
 // Application-owned runtime checkpoint/respawn state. Not owned by

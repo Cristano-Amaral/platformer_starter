@@ -223,6 +223,14 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("State: %s", snapshot.checkpoint2VisualState);
     }
 
+    if (ImGui::CollapsingHeader("Hazards", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Inside hazard: %s", snapshot.insideHazardLabel);
+        ImGui::Text(
+            "Hazard contact this frame: %s",
+            BoolText(snapshot.hazardContactThisFrame));
+    }
+
     if (ImGui::CollapsingHeader("Level Goal", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Level completed: %s", BoolText(snapshot.levelCompleted));

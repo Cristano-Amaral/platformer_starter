@@ -67,6 +67,7 @@ add_executable(Platformer3D
     game/source/ui/debug/DebugUiBackend.cpp
     game/source/ui/debug/DebugUiBackend.h
     game/source/world/GreyboxWorld.h
+    game/source/world/HazardWorld.h
     game/source/world/LevelGoal.h
     game/source/world/MovingPlatform.h
     game/source/world/RespawnWorld.h

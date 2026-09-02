@@ -99,6 +99,8 @@ struct DebugMetricsSnapshot
     const char* checkpoint1VisualState = "Future";
     bool checkpoint2Inside = false;
     const char* checkpoint2VisualState = "Future";
+    const char* insideHazardLabel = "None";
+    bool hazardContactThisFrame = false;
 
     bool levelCompleted = false;
     core::Vec3 goalCenter{};

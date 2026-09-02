@@ -2,11 +2,14 @@
 
 #include "input/Input.h"
 #include "platform/Time.h"
+#include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
 
 #include <array>
 #include <cmath>
 #include <cstddef>
+
+static_assert(world::kHazardCount == 2);
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "ui/debug/DebugMetrics.h"
@@ -72,6 +75,8 @@ const char* RespawnReasonName(gameplay::RespawnReason reason)
         return "Fall";
     case gameplay::RespawnReason::Manual:
         return "Manual";
+    case gameplay::RespawnReason::Hazard:
+        return "Hazard";
     default:
         return "None";
     }
@@ -102,6 +107,19 @@ const char* CheckpointVisualStateName(world::CheckpointVisualState state)
         return "Future";
     }
 }
+
+const char* HazardIndexLabel(int hazardIndex)
+{
+    switch (hazardIndex)
+    {
+    case 0:
+        return "1";
+    case 1:
+        return "2";
+    default:
+        return "None";
+    }
+}
 }
 
 ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
@@ -113,6 +131,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::RespawnState& respawnState,
     const gameplay::LevelCompletionState& levelCompletionState,
     bool restartedThisFrame,
+    bool hazardContactThisFrame,
     float deltaSeconds)
 {
     ui::DebugMetricsSnapshot snapshot;
@@ -216,6 +235,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.checkpoint2VisualState = CheckpointVisualStateName(
         world::CheckpointVisualStateForIndex(1, respawnState.activeCheckpointIndex));
 
+    snapshot.insideHazardLabel = HazardIndexLabel(
+        world::FindHazardIndexContaining(player.Position()));
+    snapshot.hazardContactThisFrame = hazardContactThisFrame;
+
     snapshot.levelCompleted = levelCompletionState.completed;
     snapshot.goalCenter = world::kLevelGoal.center;
     snapshot.goalSize = world::kLevelGoal.size;
@@ -243,10 +266,18 @@ int Application::Run()
         physicsWorld.UpdateMovingPlatform(deltaSeconds);
         player.Update(inputState, deltaSeconds, physicsWorld);
 
+        const bool hazardContactThisFrame =
+            world::FindHazardIndexContaining(player.Position()) != world::kNoHazardIndex;
+
         bool respawnedThisFrame = false;
         if (player.Position().y < world::kKillPlaneY)
         {
             PerformRespawn(gameplay::RespawnReason::Fall);
+            respawnedThisFrame = true;
+        }
+        else if (hazardContactThisFrame)
+        {
+            PerformRespawn(gameplay::RespawnReason::Hazard);
             respawnedThisFrame = true;
         }
         else if (inputState.respawnPressed)
@@ -311,6 +342,7 @@ int Application::Run()
                 respawnState,
                 levelCompletionState,
                 restartedThisFrame,
+                hazardContactThisFrame,
                 deltaSeconds));
 #endif
         renderer.EndFrame();
@@ -357,7 +389,8 @@ void Application::Initialize()
 
 void Application::PerformRespawn(gameplay::RespawnReason reason)
 {
-    if (reason == gameplay::RespawnReason::Fall)
+    if (reason == gameplay::RespawnReason::Fall
+        || reason == gameplay::RespawnReason::Hazard)
     {
         ++respawnState.deathCount;
     }
