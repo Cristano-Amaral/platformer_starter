@@ -20,6 +20,11 @@ float ExpSmooth(float current, float target, float deltaSeconds, float sharpness
 
 void PlatformerCamera::Initialize(core::Vec3 playerPosition)
 {
+    SnapToTarget(playerPosition);
+}
+
+void PlatformerCamera::SnapToTarget(core::Vec3 playerPosition)
+{
     desiredTarget = playerPosition;
     smoothedTarget = playerPosition;
 }

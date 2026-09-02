@@ -20,6 +20,7 @@ InputState Poll()
     }
 
     state.jumpPressed = IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_UP);
+    state.respawnPressed = IsKeyPressed(KEY_R);
     return state;
 }
 }

@@ -35,6 +35,18 @@ Jolt CharacterVirtual is the authoritative Player collision and physical-positio
 
 Player owns gameplay policy: semantic movement intent, horizontal acceleration/deceleration relative to supporting ground, vertical gameplay velocity, jump, coyote time, and jump buffer. PhysicsWorld owns Jolt runtime state, CharacterVirtual, static greybox bodies, the kinematic moving platform, and the dynamic test box.
 
+Project-facing Player position is the **visual AABB center**. CharacterVirtual `GetPosition`/`SetPosition` is the **feet** (`visualCenter.y - visualSize.y * 0.5`). `PhysicsWorld::InitializePlayer` and `ResetCharacter` accept visual-center coordinates.
+
+## Checkpoint / respawn (Milestone 20)
+
+World data lives in `world/RespawnWorld.h` (initial visual-center spawn, `kKillPlaneY`, one `CheckpointSpec`). Runtime state lives in `gameplay::RespawnState`, owned by `Application`. PhysicsWorld does not interpret checkpoints. Renderer does not own activation.
+
+`input::InputState::respawnPressed` is edge-triggered (`R` mapped in the input backend only). Application owns the respawn decision after `Player::Update`: Fall if visual-center Y is below `kKillPlaneY`, else Manual if `respawnPressed`. Fall wins if both occur. At most one respawn per frame. Checkpoint activation runs only when no respawn happened that frame.
+
+`PhysicsWorld::ResetCharacter` teleports CharacterVirtual (feet), zeros linear velocity and airborne platform carry (`carriedGroundVelocityX`), refreshes contacts, and enforces fixed gameplay Z. `Player::ResetMovementState` clears relative horizontal/vertical velocity, coyote, jump buffer, and carry-related Player fields. `PlatformerCamera::SnapToTarget` copies the player visual center into both desired and smoothed targets. On a respawn frame the camera is snapped and `camera.Update` is skipped.
+
+Checkpoint overlap tests `Player::Position()` (visual center) against the checkpoint AABB. No Jolt sensor. Renderer draws a post+beacon marker from `checkpointActive`; it does not activate checkpoints or own respawn state.
+
 ## Shared greybox geometry
 `world::GreyboxWorld` is the project-owned source of truth for current static level boxes (ground and elevated platforms). Renderer and PhysicsWorld both derive from those definitions. Ground and platform coordinates are not duplicated inside PhysicsWorld.
 

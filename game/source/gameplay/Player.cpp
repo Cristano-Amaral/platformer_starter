@@ -108,6 +108,23 @@ void Player::ApplyPhysicsState(const physics::PlayerPhysicsState& state)
     grounded = state.supported && verticalVelocity <= 0.0f;
 }
 
+void Player::ResetMovementState()
+{
+    horizontalVelocity = 0.0f;
+    verticalVelocity = 0.0f;
+    grounded = false;
+    coyoteAvailable = false;
+    timeSinceGrounded = 0.0f;
+    jumpBufferRemaining = 0.0f;
+    groundSupport = physics::PlayerGroundSupport::InAir;
+    physicsContactCount = 0;
+    groundVelocity = {};
+    supportingGroundMoving = false;
+    groundNormal = {};
+    groundSlopeAngleDegrees = 0.0f;
+    currentSupportWalkable = false;
+}
+
 bool Player::CanJump() const
 {
     if (grounded)

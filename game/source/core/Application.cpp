@@ -48,6 +48,19 @@ const char* GroundSupportName(physics::PlayerGroundSupport state)
         return "Unknown";
     }
 }
+
+const char* RespawnReasonName(gameplay::RespawnReason reason)
+{
+    switch (reason)
+    {
+    case gameplay::RespawnReason::Fall:
+        return "Fall";
+    case gameplay::RespawnReason::Manual:
+        return "Manual";
+    default:
+        return "None";
+    }
+}
 }
 
 ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
@@ -56,6 +69,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const physics::PhysicsWorld& physicsWorld,
     const input::InputState& inputState,
     const render::Renderer& renderer,
+    const gameplay::RespawnState& respawnState,
     float deltaSeconds)
 {
     ui::DebugMetricsSnapshot snapshot;
@@ -135,6 +149,12 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.texturedModelLogicalId = renderer.TexturedModelLogicalId();
     snapshot.texturedModelMaterialCount = renderer.TexturedModelMaterialCount();
     snapshot.texturedModelHasAlbedoTexture = renderer.TexturedModelHasAlbedoTexture();
+
+    snapshot.checkpointActive = respawnState.checkpointActive;
+    snapshot.respawnPosition = respawnState.respawnPosition;
+    snapshot.killPlaneY = world::kKillPlaneY;
+    snapshot.deathCount = respawnState.deathCount;
+    snapshot.lastRespawnReason = RespawnReasonName(respawnState.lastRespawnReason);
     return snapshot;
 }
 #endif
@@ -153,8 +173,30 @@ int Application::Run()
         const input::InputState inputState = input::Poll();
         physicsWorld.UpdateMovingPlatform(deltaSeconds);
         player.Update(inputState, deltaSeconds, physicsWorld);
+
+        bool respawnedThisFrame = false;
+        if (player.Position().y < world::kKillPlaneY)
+        {
+            PerformRespawn(gameplay::RespawnReason::Fall);
+            respawnedThisFrame = true;
+        }
+        else if (inputState.respawnPressed)
+        {
+            PerformRespawn(gameplay::RespawnReason::Manual);
+            respawnedThisFrame = true;
+        }
+        else if (!respawnState.checkpointActive
+            && world::PointInsideCheckpoint(world::kCheckpoint, player.Position()))
+        {
+            respawnState.checkpointActive = true;
+            respawnState.respawnPosition = world::kCheckpoint.respawnPosition;
+        }
+
         physicsWorld.Update(deltaSeconds);
-        camera.Update(player.Position(), deltaSeconds);
+        if (!respawnedThisFrame)
+        {
+            camera.Update(player.Position(), deltaSeconds);
+        }
 
         const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
@@ -165,11 +207,18 @@ int Application::Run()
             testBox.position,
             testBox.size,
             movingPlatform.position,
-            movingPlatform.size);
+            movingPlatform.size,
+            respawnState.checkpointActive);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
             MakeDebugMetricsSnapshot(
-                player, camera, physicsWorld, inputState, renderer, deltaSeconds));
+                player,
+                camera,
+                physicsWorld,
+                inputState,
+                renderer,
+                respawnState,
+                deltaSeconds));
 #endif
         renderer.EndFrame();
     }
@@ -211,6 +260,20 @@ void Application::Initialize()
     debugUi.Initialize();
 #endif
     initialized = true;
+}
+
+void Application::PerformRespawn(gameplay::RespawnReason reason)
+{
+    if (reason == gameplay::RespawnReason::Fall)
+    {
+        ++respawnState.deathCount;
+    }
+    respawnState.lastRespawnReason = reason;
+
+    physicsWorld.ResetCharacter(respawnState.respawnPosition, {});
+    player.ResetMovementState();
+    player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    camera.SnapToTarget(player.Position());
 }
 
 void Application::Shutdown()

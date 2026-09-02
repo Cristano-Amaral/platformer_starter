@@ -52,7 +52,8 @@ public:
         core::Vec3 physicsTestBoxPosition,
         core::Vec3 physicsTestBoxSize,
         core::Vec3 movingPlatformPosition,
-        core::Vec3 movingPlatformSize);
+        core::Vec3 movingPlatformSize,
+        bool checkpointActive);
     void EndFrame();
 
 private:

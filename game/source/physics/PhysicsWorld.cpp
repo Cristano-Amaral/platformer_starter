@@ -607,6 +607,26 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
     return true;
 }
 
+void PhysicsWorld::ResetCharacter(const core::Vec3& visualCenter, const core::Vec3& velocity)
+{
+    if (impl->character == nullptr)
+    {
+        return;
+    }
+
+    const float feetY = visualCenter.y - impl->playerVisualSize.y * 0.5f;
+    impl->character->SetPosition(JPH::RVec3(visualCenter.x, feetY, impl->gameplayZ));
+    impl->character->SetLinearVelocity(JPH::Vec3(velocity.x, velocity.y, 0.0f));
+    impl->carriedGroundVelocityX = 0.0f;
+    impl->character->RefreshContacts(
+        impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
+        impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
+        {},
+        {},
+        *impl->tempAllocator);
+    impl->EnforceFixedZ();
+}
+
 void PhysicsWorld::UpdateMovingPlatform(float deltaSeconds)
 {
     if (!impl->initialized)

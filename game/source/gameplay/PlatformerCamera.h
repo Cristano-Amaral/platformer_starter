@@ -17,6 +17,7 @@ public:
     static constexpr float kFollowSharpness = 8.0f;
 
     void Initialize(core::Vec3 playerPosition);
+    void SnapToTarget(core::Vec3 playerPosition);
     void Update(core::Vec3 playerPosition, float deltaSeconds);
 
     core::Vec3 Target() const;

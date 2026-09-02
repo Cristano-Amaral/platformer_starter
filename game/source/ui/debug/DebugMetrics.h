@@ -80,6 +80,12 @@ struct DebugMetricsSnapshot
     const char* texturedModelLogicalId = "";
     int texturedModelMaterialCount = 0;
     bool texturedModelHasAlbedoTexture = false;
+
+    bool checkpointActive = false;
+    core::Vec3 respawnPosition{};
+    float killPlaneY = 0.0f;
+    int deathCount = 0;
+    const char* lastRespawnReason = "None";
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

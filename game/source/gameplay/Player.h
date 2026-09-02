@@ -16,6 +16,7 @@ public:
         float deltaSeconds,
         physics::PhysicsWorld& physicsWorld);
     void ApplyPhysicsState(const physics::PlayerPhysicsState& state);
+    void ResetMovementState();
 
     const core::Vec3& Position() const;
     const core::Vec3& Size() const;

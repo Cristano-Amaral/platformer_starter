@@ -183,6 +183,20 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("albedo texture: %s", BoolText(snapshot.texturedModelHasAlbedoTexture));
     }
 
+    if (ImGui::CollapsingHeader("Respawn / Checkpoint", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Checkpoint active: %s", BoolText(snapshot.checkpointActive));
+        ImGui::Text(
+            "Respawn position: %.4f, %.4f, %.4f",
+            snapshot.respawnPosition.x,
+            snapshot.respawnPosition.y,
+            snapshot.respawnPosition.z);
+        ImGui::Text("Player Y: %.4f", snapshot.playerPosition.y);
+        ImGui::Text("Kill plane Y: %.4f", snapshot.killPlaneY);
+        ImGui::Text("Death count: %d", snapshot.deathCount);
+        ImGui::Text("Last respawn reason: %s", snapshot.lastRespawnReason);
+    }
+
     ImGui::End();
 }
 }

@@ -5,6 +5,7 @@
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
 #include "world/GreyboxWorld.h"
+#include "world/RespawnWorld.h"
 #include "world/Slope.h"
 
 #include "raylib.h"
@@ -34,6 +35,10 @@ constexpr Color kTestModelTint{255, 255, 255, 255};
 constexpr Color kMissingModelFallbackColor{235, 115, 46, 255};
 constexpr Color kMissingAuthoredModelFallbackColor{72, 148, 108, 255};
 constexpr Color kMissingTexturedModelFallbackColor{92, 72, 196, 255};
+constexpr Color kCheckpointInactivePost{86, 94, 112, 255};
+constexpr Color kCheckpointInactiveBeacon{140, 148, 168, 255};
+constexpr Color kCheckpointActivePost{48, 140, 88, 255};
+constexpr Color kCheckpointActiveBeacon{88, 220, 124, 255};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -142,6 +147,34 @@ void DrawMissingTextureFallback()
         kTestTextureQuadHeight,
         0.05f,
         kMissingTextureFallbackColor);
+}
+
+void DrawCheckpointMarker(bool checkpointActive)
+{
+    constexpr float postWidth = 0.18f;
+    constexpr float postHeight = 1.6f;
+    constexpr float beaconSize = 0.36f;
+    constexpr float zOffset = -0.95f;
+
+    const core::Vec3 postCenter{
+        world::kCheckpoint.center.x,
+        world::TopY(world::kElevatedPlatforms[0]) + postHeight * 0.5f,
+        world::kCheckpoint.center.z + zOffset};
+    const core::Vec3 postSize{postWidth, postHeight, postWidth};
+    const core::Vec3 beaconCenter{
+        postCenter.x,
+        postCenter.y + postHeight * 0.5f + beaconSize * 0.5f,
+        postCenter.z};
+    const core::Vec3 beaconSizeVec{beaconSize, beaconSize, beaconSize};
+
+    DrawGreyboxBox(
+        postCenter,
+        postSize,
+        checkpointActive ? kCheckpointActivePost : kCheckpointInactivePost);
+    DrawGreyboxBox(
+        beaconCenter,
+        beaconSizeVec,
+        checkpointActive ? kCheckpointActiveBeacon : kCheckpointInactiveBeacon);
 }
 
 void DrawMissingModelFallback(core::Vec3 center, Color fill)
@@ -492,7 +525,8 @@ void Renderer::DrawWorld(
     core::Vec3 physicsTestBoxPosition,
     core::Vec3 physicsTestBoxSize,
     core::Vec3 movingPlatformPosition,
-    core::Vec3 movingPlatformSize)
+    core::Vec3 movingPlatformSize,
+    bool checkpointActive)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -516,6 +550,7 @@ void Renderer::DrawWorld(
     DrawOrientedGreyboxBox(world::kSteepSlope, kSteepSlopeColor);
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
+    DrawCheckpointMarker(checkpointActive);
 
     if (testTextureLoaded && testTexture != nullptr)
     {
