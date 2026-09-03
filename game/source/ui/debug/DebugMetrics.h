@@ -15,6 +15,9 @@ struct DebugMetricsSnapshot
     bool runTimerFrozen = false;
     bool hasSessionBest = false;
     double sessionBestSeconds = 0.0;
+    const char* bestTimeSavePath = "";
+    const char* bestTimeLoadStatus = "Missing";
+    const char* bestTimeSaveStatus = "NotAttempted";
 
     core::Vec3 playerPosition{};
     float horizontalVelocity = 0.0f;

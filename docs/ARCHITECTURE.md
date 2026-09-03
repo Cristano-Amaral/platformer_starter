@@ -209,4 +209,25 @@ M28 adds a session-only best completion time owned by Application as `gameplay::
 
 Comparison uses the raw frozen `runTimerState.elapsedSeconds` at the existing first-completion branch (`!completed && PointInsideGoal`). Update when `IsBetterSessionCompletion` (`!hasBestTime || elapsedSeconds < bestSeconds`). Ties and slower runs keep the previous record. Store the raw double; format with `core/RunTimeFormat.h` / `FormatSessionBestTime`. No-best HUD is `BEST --:--.---` directly below `TIME` at upper-left (y = 46); `COLLECTED N / 3` stays upper-right; completion stays centered. Renderer receives read-only `hasBestTime` + `bestSeconds` and must not compare or mutate records. `RestartRun` resets the current-run timer and does not reset session BEST. Debug/Development metrics show Has session best, Session best seconds (N/A when none), and formatted BEST.
 
-Status: implementation complete / awaiting Phase C manual validation. Do not mark M28 complete. Do not implement Milestone 29.
+Status: complete (manually approved). Do not implement Milestone 29 in this section.
+
+## Persistent best time (Milestone 29)
+
+M29 persists exactly one gameplay datum: the M28 session BEST. Application still owns whether a completion is better (`IsBetterSessionCompletion`). Persistence only serializes/parses a versioned text file:
+
+```
+PLATFORMER_SAVE 1
+best_seconds <double>
+```
+
+Magic `PLATFORMER_SAVE`, version `1`, `std::numeric_limits<double>::max_digits10`. Load once at Initialize; save only when a new in-memory BEST is established. Missing/invalid/unsupported/IO errors leave no-best (`BEST --:--.---`) without crashing. Save failure keeps the in-memory record.
+
+Writable path: `platform::UserDataDirectory()` (`FOLDERID_LocalAppData` on Windows) / `Platformer3D` / `best_time_v1.txt`. Sibling temp: `best_time_v1.tmp` (never loaded). Not CWD, not exe directory, not `assets/`. POSIX user-data discovery is not implemented in M29.
+
+Final-file promotion is a tiny platform primitive, `platform::ReplaceFileWithTemporary(temporaryPath, finalPath)`. Persistence writes the complete v1 text to the temp sibling, flush/closes it, then asks the platform to promote. There is no standalone `remove(final)` before promotion. Windows (validated for M29): `ReplaceFileW` when the canonical file already exists; `MoveFileExW` with `MOVEFILE_WRITE_THROUGH` for the first-ever save. POSIX: `std::filesystem::rename` for compile compatibility only. Application/gameplay/parser must not include `Windows.h` or call Win32 replacement APIs.
+
+This avoids a delete-then-rename window (old valid save gone, temp not yet promoted). It is not a transactional, journaled, fsync, or power-loss-proof store. Guarantees are: avoid obvious partial final writes; do not delete the old final as a separate step; flush/close the temp before promote. A leftover `.tmp` may remain; load ignores it.
+
+Application zeros `sessionBestTimeState`, then loads once during Initialize. Only `Loaded` populates BEST. Missing/invalid/unsupported/IO leave `BEST --:--.---`. Save runs only inside the existing M28 new-record branch after the in-memory update. Save failure keeps the new in-memory BEST. Load does not create the user-data directory. Directory creation belongs to save only. Enter/R/Fall/Hazard/checkpoints/collectibles do not save. Only BEST persists; current TIME, completion, and other run state do not.
+
+Status: Phase B implementation complete / awaiting Phase C manual validation. Do not mark M29 complete. Do not implement Milestone 30.

@@ -70,6 +70,13 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Formatted session best: %s", formattedBest);
     }
 
+    if (ImGui::CollapsingHeader("Persistence", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Save path: %s", snapshot.bestTimeSavePath);
+        ImGui::Text("Load status: %s", snapshot.bestTimeLoadStatus);
+        ImGui::Text("Save status: %s", snapshot.bestTimeSaveStatus);
+    }
+
     if (ImGui::CollapsingHeader("Player transform", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("position X: %.4f", snapshot.playerPosition.x);

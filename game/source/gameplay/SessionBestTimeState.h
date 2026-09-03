@@ -6,11 +6,13 @@ namespace gameplay
 // PhysicsWorld, or Renderer. PerformRespawn and RestartRun must not clear this.
 //
 // Lifetime is the process/Application session, not one run. Enter starts a
-// fresh run; only executable relaunch returns this to no-best.
+// fresh run and must not clear this. M29 may persist this datum; persistence
+// must not decide whether a run is better.
 //
 // hasBestTime is the no-record flag. bestSeconds is meaningful only when
-// hasBestTime is true; 0.0 with hasBestTime false is not a record. There is
-// no persistence, previous-run list, or manager.
+// hasBestTime is true; 0.0 with hasBestTime false is not a record. M29
+// persists this one datum; Application still owns comparison. Persistence
+// must not decide whether a run is better.
 struct SessionBestTimeState
 {
     bool hasBestTime = false;

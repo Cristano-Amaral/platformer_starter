@@ -1,7 +1,9 @@
+#include "platform/FileReplace.h"
 #include "platform/RuntimePaths.h"
 
 #include <cstddef>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -53,5 +55,33 @@ std::filesystem::path QueryExecutableDirectory()
 #else
     return {};
 #endif
+}
+
+std::filesystem::path QueryUserDataDirectory()
+{
+    // M29 is Windows-first. Future POSIX/XDG/mobile roots belong here without
+    // changing persistence or gameplay APIs.
+    return {};
+}
+}
+
+namespace platform
+{
+bool ReplaceFileWithTemporary(
+    const std::filesystem::path& temporaryPath,
+    const std::filesystem::path& finalPath)
+{
+    if (temporaryPath.empty() || finalPath.empty() || !temporaryPath.is_absolute()
+        || !finalPath.is_absolute())
+    {
+        return false;
+    }
+
+    // POSIX rename typically replaces an existing destination on the same
+    // filesystem. This is compile-compatible scaffolding only. Windows is
+    // the M29-validated platform.
+    std::error_code error;
+    std::filesystem::rename(temporaryPath, finalPath, error);
+    return !error;
 }
 }

@@ -5,6 +5,7 @@
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
+#include "persistence/BestTimeSave.h"
 #include "platform/Time.h"
 #include "world/CollectibleWorld.h"
 #include "world/HazardWorld.h"
@@ -89,6 +90,80 @@ bool RunTimeFormatScaffoldingOk()
     core::FormatSessionBestTime(buffer, sizeof(buffer), true, 60.0);
     return std::strcmp(buffer, "01:00.000") == 0;
 }
+
+bool BestTimeSaveFormatScaffoldingOk()
+{
+    using persistence::LoadBestTimeStatus;
+    using persistence::ParseBestTimeV1;
+    using persistence::SerializeBestTimeV1;
+
+    const double roundTripValues[] = {1.0, 2.5, 40.5, 40.500123456789, 0.001};
+    for (const double original : roundTripValues)
+    {
+        const persistence::LoadBestTimeResult parsed = ParseBestTimeV1(SerializeBestTimeV1(original));
+        if (parsed.status != LoadBestTimeStatus::Loaded || parsed.bestSeconds != original)
+        {
+            return false;
+        }
+    }
+
+    const struct
+    {
+        const char* text;
+        LoadBestTimeStatus status;
+    } invalidCases[] = {
+        {"", LoadBestTimeStatus::Invalid},
+        {"NOT_A_SAVE 1\nbest_seconds 1.0\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE\nbest_seconds 1.0\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 2\nbest_seconds 1.0\n", LoadBestTimeStatus::UnsupportedVersion},
+        {"PLATFORMER_SAVE 1\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nrecord_seconds 1.0\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds 0\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds -1\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds nan\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds inf\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds 1.0 extra\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds abc\n", LoadBestTimeStatus::Invalid},
+        {"PLATFORMER_SAVE 1\nbest_seconds 1.0\nextra\n", LoadBestTimeStatus::Invalid},
+    };
+
+    for (const auto& testCase : invalidCases)
+    {
+        if (ParseBestTimeV1(testCase.text).status != testCase.status)
+        {
+            return false;
+        }
+    }
+
+    const persistence::LoadBestTimeResult loaded = ParseBestTimeV1("PLATFORMER_SAVE 1\nbest_seconds 1.5\n");
+    return loaded.status == LoadBestTimeStatus::Loaded && loaded.bestSeconds == 1.5;
+}
+
+#if defined(GAME_DEVELOPMENT_TOOLS)
+void ReportBestTimeLoadDiagnostic(persistence::LoadBestTimeStatus status)
+{
+    if (status == persistence::LoadBestTimeStatus::Missing
+        || status == persistence::LoadBestTimeStatus::Loaded)
+    {
+        return;
+    }
+
+    std::fprintf(
+        stderr,
+        "Best time save: load status %s.\n",
+        persistence::LoadBestTimeStatusName(status));
+}
+
+void ReportBestTimeSaveDiagnostic(persistence::SaveBestTimeStatus status)
+{
+    if (status != persistence::SaveBestTimeStatus::Error)
+    {
+        return;
+    }
+
+    std::fprintf(stderr, "Best time save: save status Error.\n");
+}
+#endif
 }
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -210,6 +285,9 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::CollectibleRunState& collectibleRunState,
     const gameplay::RunTimerState& runTimerState,
     const gameplay::SessionBestTimeState& sessionBestTimeState,
+    persistence::LoadBestTimeStatus bestTimeLoadStatus,
+    persistence::SaveBestTimeStatus bestTimeSaveStatus,
+    const char* bestTimeSavePath,
     bool restartedThisFrame,
     bool hazardContactThisFrame,
     int collectedThisFrameIndex,
@@ -336,6 +414,9 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.runTimerFrozen = runTimerState.frozen;
     snapshot.hasSessionBest = sessionBestTimeState.hasBestTime;
     snapshot.sessionBestSeconds = sessionBestTimeState.bestSeconds;
+    snapshot.bestTimeSavePath = bestTimeSavePath != nullptr ? bestTimeSavePath : "";
+    snapshot.bestTimeLoadStatus = persistence::LoadBestTimeStatusName(bestTimeLoadStatus);
+    snapshot.bestTimeSaveStatus = persistence::SaveBestTimeStatusName(bestTimeSaveStatus);
 
     snapshot.levelCompleted = levelCompletionState.completed;
     snapshot.goalCenter = world::kLevelGoal.center;
@@ -413,6 +494,11 @@ int Application::Run()
                 {
                     sessionBestTimeState.hasBestTime = true;
                     sessionBestTimeState.bestSeconds = runTimerState.elapsedSeconds;
+                    bestTimeSaveStatus =
+                        persistence::SaveBestTime(sessionBestTimeState.bestSeconds);
+#if defined(GAME_DEVELOPMENT_TOOLS)
+                    ReportBestTimeSaveDiagnostic(bestTimeSaveStatus);
+#endif
                 }
             }
 
@@ -474,6 +560,9 @@ int Application::Run()
                 collectibleRunState,
                 runTimerState,
                 sessionBestTimeState,
+                bestTimeLoadStatus,
+                bestTimeSaveStatus,
+                bestTimeSavePathDisplay.c_str(),
                 restartedThisFrame,
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
@@ -517,6 +606,12 @@ void Application::Initialize()
     camera.Initialize(player.Position());
     runTimerState = gameplay::RunTimerState{};
     sessionBestTimeState = gameplay::SessionBestTimeState{};
+    bestTimeSaveStatus = persistence::SaveBestTimeStatus::NotAttempted;
+    bestTimeSavePathDisplay = persistence::BestTimeSavePath().string();
+    if (bestTimeSavePathDisplay.empty())
+    {
+        bestTimeSavePathDisplay = "(unavailable)";
+    }
     if (!RunTimeFormatScaffoldingOk())
     {
         std::fprintf(stderr, "RunTimeFormat scaffolding check failed.\n");
@@ -526,6 +621,26 @@ void Application::Initialize()
         initialized = false;
         return;
     }
+    if (!BestTimeSaveFormatScaffoldingOk())
+    {
+        std::fprintf(stderr, "BestTimeSave format scaffolding check failed.\n");
+        physicsWorld.Shutdown();
+        renderer.UnloadRuntimeAssets();
+        window.Shutdown();
+        initialized = false;
+        return;
+    }
+
+    const persistence::LoadBestTimeResult loaded = persistence::LoadBestTime();
+    bestTimeLoadStatus = loaded.status;
+    if (loaded.status == persistence::LoadBestTimeStatus::Loaded)
+    {
+        sessionBestTimeState.hasBestTime = true;
+        sessionBestTimeState.bestSeconds = loaded.bestSeconds;
+    }
+#if defined(GAME_DEVELOPMENT_TOOLS)
+    ReportBestTimeLoadDiagnostic(bestTimeLoadStatus);
+#endif
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();
 #endif

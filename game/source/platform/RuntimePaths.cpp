@@ -7,6 +7,7 @@ namespace platform
 namespace detail
 {
 std::filesystem::path QueryExecutableDirectory();
+std::filesystem::path QueryUserDataDirectory();
 }
 
 std::filesystem::path ExecutableDirectory()
@@ -63,5 +64,16 @@ std::filesystem::path RuntimeAssetPath(std::string_view logicalRelative)
     }
 
     return resolved;
+}
+
+std::filesystem::path UserDataDirectory()
+{
+    std::filesystem::path directory = detail::QueryUserDataDirectory().lexically_normal();
+    if (directory.empty() || !directory.is_absolute())
+    {
+        return {};
+    }
+
+    return directory;
 }
 }

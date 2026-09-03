@@ -56,6 +56,9 @@ add_executable(Platformer3D
     game/source/input/InputState.h
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
+    game/source/persistence/BestTimeSave.cpp
+    game/source/persistence/BestTimeSave.h
+    game/source/platform/FileReplace.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/platform/Time.cpp
@@ -91,6 +94,9 @@ target_include_directories(Platformer3D PRIVATE
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:${rlimgui_SOURCE_DIR}>
 )
 target_link_libraries(Platformer3D PRIVATE raylib Jolt)
+if(WIN32)
+    target_link_libraries(Platformer3D PRIVATE ole32 shell32 uuid)
+endif()
 target_link_libraries(Platformer3D PRIVATE
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:rlimgui>
 )
