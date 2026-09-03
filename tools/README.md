@@ -48,6 +48,15 @@ Asset kinds:
   `PLATFORMER_LEVEL 1`, then copies bytes unchanged. Full grammar validation is
   C++ `ParseLevelText` only.
 
+  Milestone 32 Phase B made the Development editor able to save, so the cooker
+  now does see machine-generated source. Nothing changes here: the cooker stays
+  a header check plus byte copy, and the game never invokes the cooker. After
+  the editor writes `game/assets/source/levels/level_01.level`, the developer
+  runs `python tools/cook_assets.py` and rebuilds to propagate it to the cooked
+  and staged copies, then relaunches to load it. Expect the first editor save to
+  canonicalize formatting (`25.60` becomes `25.6`), which changes
+  `sourceSha256` and makes the cooker re-copy the file once.
+
 Not cooker inputs:
 
 - `.blend` files

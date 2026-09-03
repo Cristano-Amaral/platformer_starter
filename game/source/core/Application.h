@@ -16,6 +16,7 @@
 #include "world/RespawnWorld.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/LevelEditor.h"
 #include "ui/debug/DebugUi.h"
 #endif
 
@@ -33,6 +34,14 @@ private:
     void Shutdown();
     void PerformRespawn(gameplay::RespawnReason reason);
     void RestartRun();
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    void SetLevelEditorActive(bool active);
+    // Returns false when a physics rebuild left the process unusable. The
+    // frame loop then exits and Run() reports failure.
+    bool HandleLevelEditorRequest(editor::LevelEditorRequest request);
+    bool ApplyLevelEditorPreview();
+    void SaveLevelEditorSource();
+#endif
 
     world::LevelDefinition levelDefinition{};
     platform::Window window;
@@ -53,7 +62,11 @@ private:
     physics::PhysicsWorld physicsWorld;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     ui::DebugUi debugUi;
+    editor::LevelEditorState levelEditorState;
 #endif
     bool initialized = false;
+    // Set only when an editor physics rebuild fails. Normal gameplay never
+    // touches it, so the M31 frame loop condition is unchanged in practice.
+    bool fatalError = false;
 };
 }

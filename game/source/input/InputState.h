@@ -12,5 +12,8 @@ struct InputState
     bool respawnPressed = false;
     // True only on the frame Restart was pressed, not while held.
     bool restartPressed = false;
+    // True only on the frame the Development level editor toggle was pressed.
+    // Consumers with no editor simply ignore it.
+    bool toggleLevelEditorPressed = false;
 };
 }

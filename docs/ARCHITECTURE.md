@@ -258,4 +258,70 @@ There is no `CreateLevel01Definition()` and no `Level01.cpp`. Missing, invalid, 
 
 Save v1 is unchanged. Camera file fields are offset + FOV only. Player feel and CharacterVirtual policy stay out of the file. No editor, writer, LevelManager, or second playable level.
 
-Status: Phase B implementation complete, awaiting Phase C manual validation. Do not mark M31 complete. Do not implement Milestone 32.
+Status: complete (manually approved and merged).
+
+## Development level editor v1 (Milestone 32, Phase A)
+
+Phase A is architecture, the Level Format v1 writer, and inert scaffolding. Nothing in Phase A lets a running build modify or save the canonical level.
+
+### Writer
+
+`world/LevelWriter.h` is the inverse companion to the M31 parser and lives beside it in `world/`, so one module pair owns the whole v1 contract. `SerializeLevelText` emits the canonical record order documented in `docs/LEVEL_FORMAT_V1.md`, deterministically, using `std::to_chars` shortest round-trip form. `IsWritableLevelDefinition` (`IsValidLevelIdToken` + `LevelDefinitionHasRequiredAuthoredContent`) gates both serialization and saving, so an invalid definition produces no text and reaches no file. `WriteLevelFileStatus` is `Saved`/`Invalid`/`Error` — a focused status, not a generic engine result type.
+
+`SaveLevelFile` requires an absolute path, writes the sibling temp `<target>.tmp`, flush/closes it, then promotes through the M29 boundary `platform::ReplaceFileWithTemporary`. The writer contains no Win32. `ReplaceFileWithTemporary` moved from `RuntimePaths{Windows,Posix}.cpp` into its own `FileReplace{Windows,Posix}.cpp` TU so the parser/writer test target can link the boundary without pulling in `SHGetKnownFolderPath`/ole32/shell32.
+
+### Authoring path boundary
+
+The runtime reads `<exe>/assets/levels/level_01.level` through `platform::RuntimeAssetPath`. The editor must instead write `game/assets/source/levels/level_01.level`. These are intentionally different files and the staged copy is never treated as canonical source.
+
+`editor/AuthoringPaths.h` resolves the source path. The root arrives as the compile definition `PLATFORMER_AUTHORING_SOURCE_ROOT`, injected by CMake from `${CMAKE_SOURCE_DIR}/game/assets/source` for the **Development** configuration only, alongside `PLATFORMER_ENABLE_LEVEL_AUTHORING`. There is no CWD use and no parent-directory searching for `.git`/`CMakeLists.txt`/`game/assets/source`. Release receives neither macro, so the preprocessor removes the path literal entirely and the shipped binary stays relocatable and carries no developer repository path. Authoring paths never enter `LevelDefinition`, gameplay, or the runtime parser, so runtime portability is unaffected.
+
+Configuration policy: Release has no ImGui and no editor. Debug and Development both compile the editor scaffolding (both define `PLATFORMER_ENABLE_DEBUG_UI`), but only Development can author. `PLATFORMER_ENABLE_DEBUG_UI` means "Dear ImGui is present"; `PLATFORMER_ENABLE_LEVEL_AUTHORING` means "this build may write project source". Keeping them separate avoids widening write exposure just because tooling code compiles.
+
+### Editor ownership
+
+`editor/LevelEditor.h` holds `LevelEditorState` (`active`, `dirty`, `selectedPlatformIndex`, `lastSaveStatus`) and the Phase A read-only panel. Application remains the sole owner of the active `LevelDefinition` and of all gameplay state; it holds the editor state next to `DebugUi` under `PLATFORMER_ENABLE_DEBUG_UI` and passes both read-only into `DebugUi::Draw`. There is no EditorManager, LevelManager, SceneManager, EntityManager, ECS, event bus, property/value model, or reflection.
+
+Status: Phase A design and scaffolding complete.
+
+## Development level editor v1 (Milestone 32, Phase B)
+
+Phase B makes the editor live in Development while leaving M31 gameplay and Release untouched.
+
+### Toggle and keyboard capture
+
+`input::InputState::toggleLevelEditorPressed` is the semantic action, mapped to the F2 edge press inside `input/Input.cpp`. Application consumes only the flag and calls no backend input API. `DebugUiBackend::WantsKeyboardCapture()` returns `ImGui::GetIO().WantCaptureKeyboard` (and `false` where ImGui is not compiled in), surfaced through `DebugUi::WantsKeyboardCapture()`. Application ignores the toggle while that is true, so typing a value into an editor field cannot close the editor. ImGui knowledge stays in the debug-UI backend rather than leaking into input or gameplay.
+
+### Simulation pause
+
+One guard in the frame loop. Input polling, the editor toggle, rendering, the debug UI, the editor panel and window-close handling stay outside it; the entire M31 simulation and mutation block — run timer, moving platform, Player, hazard detection, fall/hazard/manual respawn, checkpoint activation, goal completion, BEST comparison and save, collectible pickup, Enter restart, `PhysicsWorld::Update`, and camera follow — sits inside `if (!simulationPaused)`. The block's internal order and content are unchanged from M31, so closing the editor restores exact M31 behaviour. There is no time-scale system and no per-system pause flag.
+
+### Ownership and the working copy
+
+Application still owns the active `world::LevelDefinition` and all gameplay state. `editor::LevelEditorState` owns only authored data: a `workingCopy` the panel edits and a `savedSourceBaseline` recording what was last written to source. `Modified` and `Dirty` are derived every draw from `world::AuthoredLevelDataEqual` rather than from widget return values, so a field that reports "edited" without changing its value does not mark the level modified. That helper was lifted from the writer test into `world/LevelDefinition.h`, so the same comparison the editor trusts is the one the round-trip tests prove. It is an explicit field list, not reflection.
+
+The panel never mutates gameplay. `DrawLevelEditor` returns an `editor::LevelEditorRequest` (`None` / `ApplyPreview` / `RevertWorkingCopy` / `SaveLevelSource`) and Application executes it **after** `renderer.EndFrame()`. That is the commit point: the swap of active definition plus PhysicsWorld happens between frames, so no frame can draw geometry that disagrees with the physics it was drawn from.
+
+### Apply Preview
+
+Validate `world::IsWritableLevelDefinition(workingCopy)` and the `level_01` identity first, while the live world is still intact — an invalid working copy therefore cannot shut physics down, move the camera, or reset gameplay. Then `PhysicsWorld::Shutdown()`, `Initialize(candidate)`, `InitializePlayer(candidate spawn)`, and only afterwards `levelDefinition = candidate`. Committing last means the active definition never describes a world that failed to build.
+
+If `Initialize` or `InitializePlayer` fails after `Shutdown`, M32 does not attempt a rollback transaction: it reports the failure on stderr, sets the editor's Apply status to `Error`, and raises `Application::fatalError`, which exits the frame loop through the normal `Shutdown()` path and makes `Run()` return 1. Running on partial physics is not an option.
+
+A successful Apply starts a fresh editor preview run: Player at the authored spawn with movement state cleared, `RespawnState`, `LevelCompletionState`, `CollectibleRunState` and `RunTimerState` reset, moving platform and cyan box reset through the rebuild, and `camera.ApplyLevelFraming` plus `camera.Initialize` so offset and FOV preview immediately. `SessionBestTimeState`, the persisted BEST, the persistence statuses, the loaded level id and the level-loading diagnostics are deliberately untouched — the editor can never write BEST.
+
+`Revert Working Copy` assigns `workingCopy = levelDefinition` and nothing else: no physics rebuild, no camera change, no effect on Dirty, no file access. There is no `Reload Runtime Level` in M32.
+
+### Saving
+
+`editor::SaveLevelSource` is compiled only under `PLATFORMER_ENABLE_LEVEL_AUTHORING`; Debug and Release link a stub that returns `Error` and contains no path and no write call. It resolves `editor::AuthoringLevel01SourcePath()` and delegates to the Phase A `world::SaveLevelFile`, keeping the safe temp-plus-`ReplaceFileWithTemporary` promotion and the absolute-path requirement.
+
+Save always serializes the **active** definition, and the panel disables the button while `Modified` is true, so the workflow is unambiguous: edit, Apply Preview, Save. A successful save updates `savedSourceBaseline`, which clears `Dirty`; a failure leaves the baseline and `Dirty` alone and the previous source contents intact. Nothing cooks, rebuilds, restarts, or spawns a process.
+
+### Editor session semantics
+
+Activating the editor copies the active definition into the working copy and clears `Modified`; it touches no gameplay state and no file. Closing does not auto-apply or auto-save, and reopening re-seeds the working copy, so unapplied edits are discarded — F2 stays deterministic and M32 needs no unsaved-changes modal. `Dirty` is derived from the active definition, so it survives the toggle for the life of the process.
+
+The dirty baseline is seeded in `Initialize` from the staged level that was just loaded, so `Dirty` starts false and tracks only this session's applied edits. M32 does not reconcile a staged copy that disagrees with the repository source, does not watch the filesystem, and does not detect external edits; the next explicit save overwrites them.
+
+Status: Phase B implementation complete, awaiting Phase C manual validation. M32 is **not** complete. Milestone 33 has not started.

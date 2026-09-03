@@ -109,31 +109,6 @@ bool IsUnsignedIntegerToken(std::string_view token)
     return true;
 }
 
-bool IsLevelIdToken(std::string_view token)
-{
-    if (token.empty())
-    {
-        return false;
-    }
-    const char first = token.front();
-    if (!((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_'))
-    {
-        return false;
-    }
-    for (const char character : token)
-    {
-        const bool ok = (character >= 'A' && character <= 'Z')
-            || (character >= 'a' && character <= 'z')
-            || (character >= '0' && character <= '9')
-            || character == '_';
-        if (!ok)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool ParseFloatToken(std::string_view token, float& value)
 {
     if (token.empty())
@@ -234,6 +209,31 @@ bool RequireSingleton(
 }
 }
 
+bool IsValidLevelIdToken(std::string_view token)
+{
+    if (token.empty())
+    {
+        return false;
+    }
+    const char first = token.front();
+    if (!((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_'))
+    {
+        return false;
+    }
+    for (const char character : token)
+    {
+        const bool ok = (character >= 'A' && character <= 'Z')
+            || (character >= 'a' && character <= 'z')
+            || (character >= '0' && character <= '9')
+            || character == '_';
+        if (!ok)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 ParseLevelFileResult ParseLevelText(std::string_view text)
 {
     if (text.empty())
@@ -317,7 +317,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             {
                 return failure;
             }
-            if (!IsLevelIdToken(tokens[1]))
+            if (!IsValidLevelIdToken(tokens[1]))
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid id");
             }

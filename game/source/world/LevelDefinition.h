@@ -66,4 +66,9 @@ struct LevelDefinition
 };
 
 bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level);
+
+// Exact field-by-field comparison of authored data. Every field is listed
+// explicitly so a new v1 record cannot silently escape writer round-trip proof
+// or editor change detection. Not a reflection/equality framework.
+bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b);
 }

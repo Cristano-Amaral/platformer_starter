@@ -13,7 +13,11 @@ void DebugUi::Shutdown()
     backend.Shutdown();
 }
 
-void DebugUi::Draw(const DebugMetricsSnapshot& snapshot)
+editor::LevelEditorRequest DebugUi::Draw(
+    const DebugMetricsSnapshot& snapshot,
+    editor::LevelEditorState& levelEditorState,
+    const world::LevelDefinition& level,
+    const char* runtimeLevelPath)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -25,6 +29,20 @@ void DebugUi::Draw(const DebugMetricsSnapshot& snapshot)
     {
         DrawDebugMetrics(snapshot);
     }
+
+    // The Level Editor panel is its own window driven by the editor toggle,
+    // independent of the F1 metrics panel.
+    editor::LevelEditorRequest request = editor::LevelEditorRequest::None;
+    if (levelEditorState.active)
+    {
+        request = editor::DrawLevelEditor(levelEditorState, level, runtimeLevelPath);
+    }
     backend.EndFrame();
+    return request;
+}
+
+bool DebugUi::WantsKeyboardCapture() const
+{
+    return backend.WantsKeyboardCapture();
 }
 }

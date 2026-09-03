@@ -51,6 +51,10 @@ inline const char* LoadLevelFileStatusName(LoadLevelFileStatus status)
     return "Error";
 }
 
+// Grammar rule for the `id` record: [A-Za-z_][A-Za-z0-9_]*. Shared so the
+// writer cannot emit an identifier the parser would reject.
+bool IsValidLevelIdToken(std::string_view token);
+
 // Strict in-memory parse. Empty input is Invalid, not Missing.
 ParseLevelFileResult ParseLevelText(std::string_view text);
 

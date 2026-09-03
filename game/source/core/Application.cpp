@@ -29,7 +29,11 @@ static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/LevelEditor.h"
 #include "ui/debug/DebugMetrics.h"
+#include "world/LevelWriter.h"
+
+#include <string>
 #endif
 
 namespace core
@@ -523,100 +527,120 @@ int Application::Run()
         return 1;
     }
 
-    while (!window.ShouldClose())
+    while (!window.ShouldClose() && !fatalError)
     {
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
-        const bool restartAvailableAtFrameStart = levelCompletionState.completed;
-        if (!runTimerState.frozen)
-        {
-            runTimerState.elapsedSeconds += static_cast<double>(deltaSeconds);
-        }
-        physicsWorld.UpdateMovingPlatform(deltaSeconds);
-        player.Update(inputState, deltaSeconds, physicsWorld);
 
-        const bool hazardContactThisFrame =
-            world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
-            != world::kNoHazardIndex;
-
-        int collectedThisFrameIndex = world::kNoCollectibleIndex;
-        bool respawnedThisFrame = false;
-        if (player.Position().y < levelDefinition.killPlaneY)
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        // Ignore the toggle while an ImGui field owns the keyboard so typing a
+        // value cannot close the editor.
+        if (inputState.toggleLevelEditorPressed && !debugUi.WantsKeyboardCapture())
         {
-            PerformRespawn(gameplay::RespawnReason::Fall);
-            respawnedThisFrame = true;
+            SetLevelEditorActive(!levelEditorState.active);
         }
-        else if (hazardContactThisFrame)
-        {
-            PerformRespawn(gameplay::RespawnReason::Hazard);
-            respawnedThisFrame = true;
-        }
-        else if (inputState.respawnPressed)
-        {
-            PerformRespawn(gameplay::RespawnReason::Manual);
-            respawnedThisFrame = true;
-        }
-        else
-        {
-            const int expectedIndex =
-                world::NextExpectedCheckpointIndex(respawnState.activeCheckpointIndex);
-            if (world::IsValidCheckpointIndex(expectedIndex)
-                && world::PointInsideCheckpoint(
-                       levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)],
-                       player.Position()))
-            {
-                respawnState.activeCheckpointIndex = expectedIndex;
-                respawnState.respawnPosition =
-                    levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)]
-                        .respawnPosition;
-            }
-
-            if (!levelCompletionState.completed
-                && world::PointInsideGoal(levelDefinition.goal, player.Position()))
-            {
-                levelCompletionState.completed = true;
-                runTimerState.frozen = true;
-                if (gameplay::IsBetterSessionCompletion(
-                        sessionBestTimeState,
-                        runTimerState.elapsedSeconds))
-                {
-                    sessionBestTimeState.hasBestTime = true;
-                    sessionBestTimeState.bestSeconds = runTimerState.elapsedSeconds;
-                    bestTimeSaveStatus =
-                        persistence::SaveBestTime(sessionBestTimeState.bestSeconds);
-#if defined(GAME_DEVELOPMENT_TOOLS)
-                    ReportBestTimeSaveDiagnostic(bestTimeSaveStatus);
+        const bool simulationPaused = levelEditorState.active;
+#else
+        constexpr bool simulationPaused = false;
 #endif
-                }
-            }
 
-            if (!(restartAvailableAtFrameStart && inputState.restartPressed))
-            {
-                const int collectibleIndex =
-                    gameplay::FindAvailableCollectibleIndexContaining(
-                        player.Position(),
-                        collectibleRunState,
-                        levelDefinition.collectibles);
-                if (collectibleIndex != world::kNoCollectibleIndex)
-                {
-                    collectibleRunState.collected[static_cast<std::size_t>(collectibleIndex)] =
-                        true;
-                    collectedThisFrameIndex = collectibleIndex;
-                }
-            }
-        }
-
+        bool hazardContactThisFrame = false;
+        int collectedThisFrameIndex = world::kNoCollectibleIndex;
         bool restartedThisFrame = false;
-        if (!respawnedThisFrame && restartAvailableAtFrameStart && inputState.restartPressed)
-        {
-            RestartRun();
-            restartedThisFrame = true;
-        }
 
-        physicsWorld.Update(deltaSeconds);
-        if (!respawnedThisFrame && !restartedThisFrame)
+        // Single simulation guard. Everything inside keeps the exact M31 order
+        // and content; the editor pauses it wholesale rather than scaling time.
+        if (!simulationPaused)
         {
-            camera.Update(player.Position(), deltaSeconds);
+            const bool restartAvailableAtFrameStart = levelCompletionState.completed;
+            if (!runTimerState.frozen)
+            {
+                runTimerState.elapsedSeconds += static_cast<double>(deltaSeconds);
+            }
+            physicsWorld.UpdateMovingPlatform(deltaSeconds);
+            player.Update(inputState, deltaSeconds, physicsWorld);
+
+            hazardContactThisFrame =
+                world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
+                != world::kNoHazardIndex;
+
+            bool respawnedThisFrame = false;
+            if (player.Position().y < levelDefinition.killPlaneY)
+            {
+                PerformRespawn(gameplay::RespawnReason::Fall);
+                respawnedThisFrame = true;
+            }
+            else if (hazardContactThisFrame)
+            {
+                PerformRespawn(gameplay::RespawnReason::Hazard);
+                respawnedThisFrame = true;
+            }
+            else if (inputState.respawnPressed)
+            {
+                PerformRespawn(gameplay::RespawnReason::Manual);
+                respawnedThisFrame = true;
+            }
+            else
+            {
+                const int expectedIndex =
+                    world::NextExpectedCheckpointIndex(respawnState.activeCheckpointIndex);
+                if (world::IsValidCheckpointIndex(expectedIndex)
+                    && world::PointInsideCheckpoint(
+                           levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)],
+                           player.Position()))
+                {
+                    respawnState.activeCheckpointIndex = expectedIndex;
+                    respawnState.respawnPosition =
+                        levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)]
+                            .respawnPosition;
+                }
+
+                if (!levelCompletionState.completed
+                    && world::PointInsideGoal(levelDefinition.goal, player.Position()))
+                {
+                    levelCompletionState.completed = true;
+                    runTimerState.frozen = true;
+                    if (gameplay::IsBetterSessionCompletion(
+                            sessionBestTimeState,
+                            runTimerState.elapsedSeconds))
+                    {
+                        sessionBestTimeState.hasBestTime = true;
+                        sessionBestTimeState.bestSeconds = runTimerState.elapsedSeconds;
+                        bestTimeSaveStatus =
+                            persistence::SaveBestTime(sessionBestTimeState.bestSeconds);
+#if defined(GAME_DEVELOPMENT_TOOLS)
+                        ReportBestTimeSaveDiagnostic(bestTimeSaveStatus);
+#endif
+                    }
+                }
+
+                if (!(restartAvailableAtFrameStart && inputState.restartPressed))
+                {
+                    const int collectibleIndex =
+                        gameplay::FindAvailableCollectibleIndexContaining(
+                            player.Position(),
+                            collectibleRunState,
+                            levelDefinition.collectibles);
+                    if (collectibleIndex != world::kNoCollectibleIndex)
+                    {
+                        collectibleRunState.collected[static_cast<std::size_t>(collectibleIndex)] =
+                            true;
+                        collectedThisFrameIndex = collectibleIndex;
+                    }
+                }
+            }
+
+            if (!respawnedThisFrame && restartAvailableAtFrameStart && inputState.restartPressed)
+            {
+                RestartRun();
+                restartedThisFrame = true;
+            }
+
+            physicsWorld.Update(deltaSeconds);
+            if (!respawnedThisFrame && !restartedThisFrame)
+            {
+                camera.Update(player.Position(), deltaSeconds);
+            }
         }
 
         const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
@@ -638,7 +662,7 @@ int Application::Run()
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
-        debugUi.Draw(
+        const editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
                 camera,
@@ -660,13 +684,25 @@ int Application::Run()
                 restartedThisFrame,
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
-                deltaSeconds));
+                deltaSeconds),
+            levelEditorState,
+            levelDefinition,
+            runtimeLevelPathDisplay.c_str());
 #endif
         renderer.EndFrame();
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        // Executed after the frame is presented so a rebuild never lands
+        // between DrawWorld and the physics state it was drawn from.
+        if (!HandleLevelEditorRequest(editorRequest))
+        {
+            fatalError = true;
+        }
+#endif
     }
 
     Shutdown();
-    return 0;
+    return fatalError ? 1 : 0;
 }
 
 void Application::Initialize()
@@ -709,6 +745,14 @@ void Application::Initialize()
     }
 
     levelDefinition = loadedLevel.level;
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    // M32 dirty baseline: the staged file we just loaded. Dirty therefore
+    // starts false and tracks only edits applied during this session. The
+    // staged copy is assumed to match the repository source; M32 does not
+    // reconcile a developer who edited source without cooking.
+    levelEditorState.workingCopy = levelDefinition;
+    levelEditorState.savedSourceBaseline = levelDefinition;
+#endif
 
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
@@ -809,6 +853,133 @@ void Application::RestartRun()
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
 }
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+void Application::SetLevelEditorActive(bool active)
+{
+    if (active && !levelEditorState.active)
+    {
+        // Opening is non-destructive: it reads the active definition and
+        // touches neither gameplay nor any file. Unapplied edits from a
+        // previous session are discarded so the toggle stays deterministic.
+        levelEditorState.workingCopy = levelDefinition;
+        levelEditorState.modified = false;
+        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::NotAttempted;
+        levelEditorState.lastMessage.clear();
+    }
+
+    levelEditorState.active = active;
+}
+
+bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
+{
+    switch (request)
+    {
+    case editor::LevelEditorRequest::None:
+        return true;
+    case editor::LevelEditorRequest::RevertWorkingCopy:
+        levelEditorState.workingCopy = levelDefinition;
+        levelEditorState.modified = false;
+        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::NotAttempted;
+        levelEditorState.lastMessage = "Working copy reverted to the applied level.";
+        return true;
+    case editor::LevelEditorRequest::SaveLevelSource:
+        SaveLevelEditorSource();
+        return true;
+    case editor::LevelEditorRequest::ApplyPreview:
+        break;
+    }
+
+    return ApplyLevelEditorPreview();
+}
+
+bool Application::ApplyLevelEditorPreview()
+{
+    // Validate the candidate while the live world is still intact, so an
+    // invalid working copy cannot shut physics down or move the camera.
+    if (!world::IsWritableLevelDefinition(levelEditorState.workingCopy))
+    {
+        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Invalid;
+        levelEditorState.lastMessage =
+            "Apply rejected: authored validation failed. Active level unchanged.";
+        return true;
+    }
+    if (levelEditorState.workingCopy.id != world::kLevel01Id)
+    {
+        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Invalid;
+        levelEditorState.lastMessage = "Apply rejected: Level ID must remain level_01.";
+        return true;
+    }
+
+    const world::LevelDefinition candidate = levelEditorState.workingCopy;
+
+    // Rebuild before committing: if Jolt cannot build the candidate, the
+    // active definition never describes a world that failed to exist.
+    physicsWorld.Shutdown();
+    if (!physicsWorld.Initialize(candidate))
+    {
+        std::fprintf(
+            stderr,
+            "Level editor: PhysicsWorld::Initialize failed during Apply Preview. "
+            "Physics cannot be restored; shutting down.\n");
+        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Error;
+        levelEditorState.lastMessage = "Physics rebuild failed. Shutting down.";
+        return false;
+    }
+    if (!physicsWorld.InitializePlayer(candidate.initialSpawnVisualCenter, player.Size()))
+    {
+        std::fprintf(
+            stderr,
+            "Level editor: PhysicsWorld::InitializePlayer failed during Apply Preview. "
+            "Physics cannot be restored; shutting down.\n");
+        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Error;
+        levelEditorState.lastMessage = "Player rebuild failed. Shutting down.";
+        return false;
+    }
+
+    levelDefinition = candidate;
+
+    // Editor-only fresh preview run. Deliberately not RestartRun: the whole
+    // level was rebuilt, not just reset.
+    player.ResetMovementState();
+    player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    respawnState = gameplay::RespawnState{};
+    respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
+    levelCompletionState = gameplay::LevelCompletionState{};
+    collectibleRunState = gameplay::CollectibleRunState{};
+    runTimerState = gameplay::RunTimerState{};
+    camera.ApplyLevelFraming(
+        levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
+    camera.Initialize(player.Position());
+
+    // sessionBestTimeState, the persisted BEST, and the level-loading
+    // diagnostics are intentionally untouched.
+    levelEditorState.workingCopy = levelDefinition;
+    levelEditorState.modified = false;
+    levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
+    levelEditorState.lastMessage =
+        "Applied. Rendering and collision were rebuilt from the same authored data.";
+    return true;
+}
+
+void Application::SaveLevelEditorSource()
+{
+    // Always the active/applied definition, never the working copy.
+    const editor::LevelEditorSaveResult result = editor::SaveLevelSource(levelDefinition);
+    levelEditorState.lastSaveStatus = result.status;
+    if (result.status == editor::LevelEditorSaveStatus::Saved)
+    {
+        levelEditorState.savedSourceBaseline = levelDefinition;
+        levelEditorState.lastMessage =
+            "Source saved. Run cooker/build to update cooked/staged runtime files.";
+        return;
+    }
+
+    levelEditorState.lastMessage = result.message.empty()
+        ? std::string("Save failed. Source left unchanged.")
+        : "Save failed: " + result.message + ". Source left unchanged.";
+}
+#endif
 
 void Application::Shutdown()
 {

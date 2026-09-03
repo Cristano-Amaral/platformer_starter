@@ -76,13 +76,33 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 31 — External Level File v1 (Phase B implementation complete, awaiting
-Phase C manual validation).
+Milestone 32 — Development Level Editor v1 (Phase B implementation complete,
+awaiting Phase C manual validation).
 See `docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and `docs/LEVEL_FORMAT_V1.md`.
-One playable level (`level_01`). The sole live authored source is
-`game/assets/source/levels/level_01.level` → cooker → cooked → staged
-`<exe>/assets/levels/level_01.level` → `LoadLevelFile` → `LevelDefinition`.
-Application loads that staged file once in `Initialize`. There is no compiled
-Level 01 fallback. Missing/invalid/unsupported Level 01 is a fatal init error.
-M29 BEST save remains nonfatal. No editor, no LevelManager, no second level.
-Do not mark M31 complete. Do not implement Milestone 32.
+
+Milestone 31 is complete and merged. One playable level (`level_01`). The sole
+live authored source is `game/assets/source/levels/level_01.level` → cooker →
+cooked → staged `<exe>/assets/levels/level_01.level` → `LoadLevelFile` →
+`LevelDefinition`. Application loads that staged file once in `Initialize` and
+owns it. There is no compiled Level 01 fallback. Missing/invalid/unsupported
+Level 01 is a fatal init error. M29 BEST save remains nonfatal.
+
+M32 Phase A added the deterministic `PLATFORMER_LEVEL 1` writer
+(`world/LevelWriter.h`) and the Development-only authoring-path boundary
+(`editor/AuthoringPaths.h`, CMake `PLATFORMER_AUTHORING_SOURCE_ROOT` /
+`PLATFORMER_ENABLE_LEVEL_AUTHORING`).
+
+M32 Phase B made the editor live. `F2` (semantic `toggleLevelEditorPressed`,
+ignored while `DebugUi::WantsKeyboardCapture()`) opens the `Level Editor` panel
+and pauses the whole gameplay simulation behind one guard in the frame loop.
+The editor edits a working-copy `LevelDefinition` only. `Apply Preview`
+validates the candidate, rebuilds PhysicsWorld, commits it as the active
+definition and starts a fresh preview run; `Save Level Source` writes the
+**active** definition to the canonical source and is disabled while unapplied
+edits exist. Editable set: spawn, camera offset/FOV, ground and
+`elevatedPlatforms[0..5]` center/size. Nothing else. Debug compiles the editor
+but cannot author. Release has no editor at all and stays M31-equivalent.
+
+Do not mark M32 complete. Do not implement Milestone 33. Do not create Level
+Format v2, an editor-only format, a LevelManager, or a generic serializer. Do
+not widen the editable set, add gizmos/picking/undo, or auto-cook from the game.

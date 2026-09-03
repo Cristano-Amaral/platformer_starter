@@ -42,6 +42,10 @@ add_executable(Platformer3D
     game/source/core/Application.h
     game/source/core/RunTimeFormat.h
     game/source/core/Vec3.h
+    game/source/editor/AuthoringPaths.cpp
+    game/source/editor/AuthoringPaths.h
+    game/source/editor/LevelEditor.cpp
+    game/source/editor/LevelEditor.h
     game/source/gameplay/PlatformerCamera.cpp
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
@@ -81,15 +85,21 @@ add_executable(Platformer3D
     game/source/world/LevelGoal.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
     game/source/world/MovingPlatform.h
     game/source/world/RespawnWorld.h
     game/source/world/Slope.h
 )
 
 if(WIN32)
-    target_sources(Platformer3D PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+    target_sources(Platformer3D PRIVATE
+        game/source/platform/FileReplaceWindows.cpp
+        game/source/platform/RuntimePathsWindows.cpp)
 else()
-    target_sources(Platformer3D PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+    target_sources(Platformer3D PRIVATE
+        game/source/platform/FileReplacePosix.cpp
+        game/source/platform/RuntimePathsPosix.cpp)
 endif()
 
 target_include_directories(Platformer3D PRIVATE
@@ -117,6 +127,20 @@ target_compile_definitions(Platformer3D PRIVATE
     $<$<CONFIG:Debug>:GAME_DEBUG=1;GAME_DEVELOPMENT_TOOLS=1;PLATFORMER_ENABLE_DEBUG_UI=1>
     $<$<CONFIG:Development>:GAME_DEVELOPMENT=1;GAME_DEVELOPMENT_TOOLS=1;PLATFORMER_ENABLE_DEBUG_UI=1>
     $<$<CONFIG:Release>:GAME_RELEASE=1>
+)
+
+# Milestone 32 authoring boundary. The level editor writes the canonical
+# project source, which the runtime never reads, so the path cannot come from
+# RuntimeAssetPath. It is injected here explicitly: no process CWD, no walking
+# parent directories looking for .git/CMakeLists.txt/game/assets/source.
+#
+# Development only. Debug compiles the editor scaffolding with authoring
+# disabled, and Release receives neither the macro nor the path literal, so the
+# shipped binary carries no developer repository path and stays relocatable.
+file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/game/assets/source" PLATFORMER_AUTHORING_SOURCE_ROOT)
+target_compile_definitions(Platformer3D PRIVATE
+    $<$<CONFIG:Development>:PLATFORMER_ENABLE_LEVEL_AUTHORING=1>
+    "$<$<CONFIG:Development>:PLATFORMER_AUTHORING_SOURCE_ROOT=\"${PLATFORMER_AUTHORING_SOURCE_ROOT}\">"
 )
 
 set_target_properties(Platformer3D PROPERTIES
@@ -174,14 +198,25 @@ add_custom_command(TARGET Platformer3D POST_BUILD
     COMMENT "Staging cooked runtime assets next to the executable"
 )
 
-# Parser-only test binary. Not shipped. Does not link raylib/Jolt/ImGui.
+# Level Format v1 parser/writer test binary. Not shipped. Does not link
+# raylib/Jolt/ImGui. The platform file-replacement TU is the only OS-specific
+# dependency, needed because SaveLevelFile promotes through that boundary
+# instead of duplicating ReplaceFileW/MoveFileExW.
 add_executable(LevelFileTest
+    game/source/platform/FileReplace.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h
     game/source/world/LevelFileTest.cpp
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
 )
+if(WIN32)
+    target_sources(LevelFileTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(LevelFileTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
 target_include_directories(LevelFileTest PRIVATE game/source)
 if(MSVC)
     target_compile_options(LevelFileTest PRIVATE /W4 /permissive-)
@@ -192,5 +227,28 @@ file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/levels/level_01.level"
     PLATFORMER_LEVEL01_SOURCE_PATH)
 target_compile_definitions(LevelFileTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Focused harness for the M32 editor Apply Preview rebuild cycle. Not shipped.
+# Links Jolt because that is exactly what is being validated; no raylib/ImGui.
+# It only reads the canonical level and never writes a file.
+add_executable(PhysicsRebuildTest
+    game/source/physics/PhysicsRebuildTest.cpp
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+)
+target_include_directories(PhysicsRebuildTest PRIVATE game/source)
+target_link_libraries(PhysicsRebuildTest PRIVATE Jolt)
+if(MSVC)
+    target_compile_options(PhysicsRebuildTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(PhysicsRebuildTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(PhysicsRebuildTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )

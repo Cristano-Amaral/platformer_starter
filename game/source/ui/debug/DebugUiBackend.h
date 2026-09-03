@@ -18,6 +18,10 @@ public:
     void BeginFrame();
     void EndFrame();
     bool ConsumeTogglePressed();
+    // True while an ImGui widget owns the keyboard (typing in a field). Kept
+    // here so ImGui knowledge stays in the debug-UI backend rather than
+    // leaking into input or gameplay. False where ImGui is not compiled in.
+    bool WantsKeyboardCapture() const;
 
 private:
     bool initialized = false;

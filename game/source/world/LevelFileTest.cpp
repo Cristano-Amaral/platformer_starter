@@ -1,13 +1,17 @@
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
+#include "world/LevelWriter.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace
 {
@@ -64,7 +68,85 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && level.camera.fieldOfViewY == 40.0f;
 }
 
-std::string ReadAll(const char* path)
+std::string_view FirstToken(std::string_view line)
+{
+    const std::size_t space = line.find(' ');
+    return space == std::string_view::npos ? line : line.substr(0, space);
+}
+
+int CountRecords(std::string_view text, std::string_view keyword)
+{
+    int count = 0;
+    std::size_t cursor = 0;
+    while (cursor <= text.size())
+    {
+        const std::size_t newline = text.find('\n', cursor);
+        const std::size_t end = newline == std::string_view::npos ? text.size() : newline;
+        if (end > cursor && FirstToken(text.substr(cursor, end - cursor)) == keyword)
+        {
+            ++count;
+        }
+        if (newline == std::string_view::npos)
+        {
+            break;
+        }
+        cursor = newline + 1;
+    }
+    return count;
+}
+
+// Whitelist proof: no line may carry a keyword outside the v1 grammar, so no
+// runtime state (active checkpoint, deaths, collected flags, completion, TIME,
+// BEST, platform/box poses, Jolt ids, smoothed camera target) can appear.
+bool OnlyAuthoredKeywords(std::string_view text)
+{
+    static constexpr std::array<std::string_view, 17> allowed{
+        "PLATFORMER_LEVEL",
+        "id",
+        "spawn",
+        "kill_plane",
+        "ground",
+        "platform",
+        "support_index_cp1",
+        "support_index_cp2",
+        "support_index_goal",
+        "slope",
+        "moving_platform",
+        "checkpoint",
+        "hazard",
+        "collectible",
+        "goal",
+        "dynamic_box",
+        "camera"};
+
+    std::size_t cursor = 0;
+    while (cursor <= text.size())
+    {
+        const std::size_t newline = text.find('\n', cursor);
+        const std::size_t end = newline == std::string_view::npos ? text.size() : newline;
+        if (end > cursor)
+        {
+            const std::string_view keyword = FirstToken(text.substr(cursor, end - cursor));
+            bool found = false;
+            for (const std::string_view candidate : allowed)
+            {
+                found = found || keyword == candidate;
+            }
+            if (!found)
+            {
+                return false;
+            }
+        }
+        if (newline == std::string_view::npos)
+        {
+            break;
+        }
+        cursor = newline + 1;
+    }
+    return true;
+}
+
+std::string ReadAll(const std::filesystem::path& path)
 {
     std::ifstream stream(path, std::ios::binary);
     if (!stream)
@@ -247,6 +329,237 @@ int main()
         std::filesystem::remove(invalidPath, ignored);
         std::filesystem::remove(unsupportedPath, ignored);
     }
+
+    // ---- Level Format v1 writer (M32 Phase A) ----------------------------
+    // Everything below works on strings and disposable temporary files. The
+    // canonical source is only ever read.
+
+    const std::string written = world::SerializeLevelText(parsed.level);
+    Expect(!written.empty(), "serialize canonical level");
+    Expect(written.starts_with("PLATFORMER_LEVEL 1\n"), "writer emits exact v1 header");
+    Expect(!written.empty() && written.back() == '\n', "writer terminates last record");
+    Expect(written.find('\r') == std::string::npos, "writer emits LF only");
+    Expect(written == world::SerializeLevelText(parsed.level), "writer output is deterministic");
+
+    Expect(CountRecords(written, "PLATFORMER_LEVEL") == 1, "writer header count");
+    Expect(CountRecords(written, "id") == 1, "writer id count");
+    Expect(CountRecords(written, "spawn") == 1, "writer spawn count");
+    Expect(CountRecords(written, "kill_plane") == 1, "writer kill_plane count");
+    Expect(CountRecords(written, "ground") == 1, "writer ground count");
+    Expect(
+        CountRecords(written, "platform") == world::kLevel01ElevatedPlatformCount,
+        "writer platform count");
+    Expect(CountRecords(written, "support_index_cp1") == 1, "writer support_index_cp1 count");
+    Expect(CountRecords(written, "support_index_cp2") == 1, "writer support_index_cp2 count");
+    Expect(CountRecords(written, "support_index_goal") == 1, "writer support_index_goal count");
+    Expect(CountRecords(written, "slope") == world::kLevel01SlopeCount, "writer slope count");
+    Expect(CountRecords(written, "moving_platform") == 1, "writer moving_platform count");
+    Expect(CountRecords(written, "checkpoint") == world::kCheckpointCount, "writer checkpoint count");
+    Expect(CountRecords(written, "hazard") == world::kHazardCount, "writer hazard count");
+    Expect(
+        CountRecords(written, "collectible") == world::kCollectibleCount,
+        "writer collectible count");
+    Expect(CountRecords(written, "goal") == 1, "writer goal count");
+    Expect(CountRecords(written, "dynamic_box") == 1, "writer dynamic_box count");
+    Expect(CountRecords(written, "camera") == 1, "writer camera count");
+    Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
+
+    const world::ParseLevelFileResult reparsed = world::ParseLevelText(written);
+    if (reparsed.status != world::LoadLevelFileStatus::Loaded)
+    {
+        std::fprintf(
+            stderr,
+            "writer reparse: %s line %d %s\n",
+            world::LoadLevelFileStatusName(reparsed.status),
+            reparsed.errorLine,
+            reparsed.error.c_str());
+    }
+    Expect(reparsed.status == world::LoadLevelFileStatus::Loaded, "writer output reparses Loaded");
+    Expect(reparsed.formatVersion == world::kLevelFileVersion, "writer output is version 1");
+    // world::AuthoredLevelDataEqual is the same comparison the editor uses for
+    // Modified/Dirty, so round-trip coverage also covers editor change
+    // detection.
+    Expect(
+        world::AuthoredLevelDataEqual(parsed.level, reparsed.level),
+        "parse -> serialize -> parse preserves every authored field");
+    Expect(CanonicalLevel01Values(reparsed.level), "round-tripped canonical Level 01 values");
+    Expect(
+        world::SerializeLevelText(reparsed.level) == written,
+        "second generation serializes identically");
+
+    {
+        // The owned std::string id is written verbatim; no interning.
+        world::LevelDefinition renamed = parsed.level;
+        renamed.id = "other_level";
+        const std::string renamedText = world::SerializeLevelText(renamed);
+        Expect(renamedText.find("\nid other_level\n") != std::string::npos, "writer emits owned id");
+        Expect(
+            world::ParseLevelText(renamedText).level.id == "other_level",
+            "written id reparses");
+
+        world::LevelDefinition badId = parsed.level;
+        badId.id = "1_bad id";
+        Expect(!world::IsWritableLevelDefinition(badId), "writer rejects non-grammar id");
+        Expect(world::SerializeLevelText(badId).empty(), "invalid id serializes to nothing");
+    }
+
+    {
+        world::LevelDefinition zeroFov = parsed.level;
+        zeroFov.camera.fieldOfViewY = 0.0f;
+        Expect(world::SerializeLevelText(zeroFov).empty(), "writer rejects FOV 0");
+
+        world::LevelDefinition negativeSize = parsed.level;
+        negativeSize.elevatedPlatforms[3].size.y = -1.0f;
+        Expect(world::SerializeLevelText(negativeSize).empty(), "writer rejects negative size");
+
+        world::LevelDefinition nanCoordinate = parsed.level;
+        nanCoordinate.ground.center.x = std::numeric_limits<float>::quiet_NaN();
+        Expect(world::SerializeLevelText(nanCoordinate).empty(), "writer rejects NaN coordinate");
+
+        world::LevelDefinition infiniteSpawn = parsed.level;
+        infiniteSpawn.initialSpawnVisualCenter.y = std::numeric_limits<float>::infinity();
+        Expect(world::SerializeLevelText(infiniteSpawn).empty(), "writer rejects infinite spawn");
+
+        world::LevelDefinition emptyId = parsed.level;
+        emptyId.id.clear();
+        Expect(world::SerializeLevelText(emptyId).empty(), "writer rejects empty id");
+    }
+
+    {
+        const std::filesystem::path saveDir =
+            std::filesystem::temp_directory_path() / "platformer3d_m32_writer";
+        std::error_code cleanupError;
+        std::filesystem::remove_all(saveDir, cleanupError);
+        std::filesystem::create_directories(saveDir, cleanupError);
+        const std::filesystem::path savePath = saveDir / "level_01.level";
+        const std::filesystem::path tempPath = world::LevelFileTemporaryPath(savePath);
+        Expect(
+            tempPath == savePath.string() + std::string(world::kLevelFileTemporarySuffix),
+            "temporary is a sibling of the target");
+
+        const world::WriteLevelFileResult firstSave =
+            world::SaveLevelFile(savePath, parsed.level);
+        if (firstSave.status != world::WriteLevelFileStatus::Saved)
+        {
+            std::fprintf(stderr, "first save: %s\n", firstSave.error.c_str());
+        }
+        Expect(firstSave.status == world::WriteLevelFileStatus::Saved, "save to new file Saved");
+        Expect(!std::filesystem::exists(tempPath), "no leftover temp after first save");
+        Expect(ReadAll(savePath) == written, "saved bytes match SerializeLevelText");
+        Expect(
+            world::LoadLevelFile(savePath).status == world::LoadLevelFileStatus::Loaded,
+            "saved file reparses through LoadLevelFile");
+
+        const world::WriteLevelFileResult replaceSave =
+            world::SaveLevelFile(savePath, parsed.level);
+        Expect(
+            replaceSave.status == world::WriteLevelFileStatus::Saved,
+            "save over existing file Saved");
+        Expect(!std::filesystem::exists(tempPath), "no leftover temp after replacement save");
+
+        world::LevelDefinition invalidLevel = parsed.level;
+        invalidLevel.camera.fieldOfViewY = 0.0f;
+        const world::WriteLevelFileResult invalidSave =
+            world::SaveLevelFile(savePath, invalidLevel);
+        Expect(invalidSave.status == world::WriteLevelFileStatus::Invalid, "invalid save Invalid");
+        Expect(!std::filesystem::exists(tempPath), "invalid save writes no temp");
+        Expect(ReadAll(savePath) == written, "invalid save leaves existing file untouched");
+
+        // Absolute-only contract: a relative target can never resolve against
+        // whatever directory launched the process.
+        const world::WriteLevelFileResult relativeSave =
+            world::SaveLevelFile(std::filesystem::path("level_01.level"), parsed.level);
+        Expect(
+            relativeSave.status == world::WriteLevelFileStatus::Error,
+            "relative path save Error");
+
+        // Replacement failure: the target name exists but is a directory, so
+        // platform::ReplaceFileWithTemporary refuses to promote onto it.
+        const std::filesystem::path directoryTarget = saveDir / "as_directory.level";
+        std::filesystem::create_directories(directoryTarget, cleanupError);
+        const world::WriteLevelFileResult replaceError =
+            world::SaveLevelFile(directoryTarget, parsed.level);
+        Expect(
+            replaceError.status == world::WriteLevelFileStatus::Error,
+            "replacement failure returns Error");
+        Expect(
+            !std::filesystem::exists(world::LevelFileTemporaryPath(directoryTarget)),
+            "failed replacement removes its temp");
+
+        std::filesystem::remove_all(saveDir, cleanupError);
+    }
+
+    // ---- Authored-data equality (M32 editor Modified/Dirty detection) ----
+    {
+        Expect(
+            world::AuthoredLevelDataEqual(parsed.level, parsed.level),
+            "authored equality is reflexive");
+
+        // One case per editable M32 field, so the editor cannot report
+        // "unmodified" after a supported edit.
+        world::LevelDefinition spawnEdit = parsed.level;
+        spawnEdit.initialSpawnVisualCenter.x += 0.5f;
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, spawnEdit),
+            "authored equality detects spawn edit");
+
+        world::LevelDefinition offsetEdit = parsed.level;
+        offsetEdit.camera.offset.z += 1.0f;
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, offsetEdit),
+            "authored equality detects camera offset edit");
+
+        world::LevelDefinition fovEdit = parsed.level;
+        fovEdit.camera.fieldOfViewY = 45.0f;
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, fovEdit),
+            "authored equality detects camera FOV edit");
+
+        world::LevelDefinition groundCenterEdit = parsed.level;
+        groundCenterEdit.ground.center.y += 0.1f;
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, groundCenterEdit),
+            "authored equality detects ground center edit");
+
+        world::LevelDefinition groundSizeEdit = parsed.level;
+        groundSizeEdit.ground.size.x += 1.0f;
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, groundSizeEdit),
+            "authored equality detects ground size edit");
+
+        for (std::size_t index = 0; index < parsed.level.elevatedPlatforms.size(); ++index)
+        {
+            world::LevelDefinition centerEdit = parsed.level;
+            centerEdit.elevatedPlatforms[index].center.x += 0.5f;
+            Expect(
+                !world::AuthoredLevelDataEqual(parsed.level, centerEdit),
+                "authored equality detects platform center edit");
+
+            world::LevelDefinition sizeEdit = parsed.level;
+            sizeEdit.elevatedPlatforms[index].size.y += 0.25f;
+            Expect(
+                !world::AuthoredLevelDataEqual(parsed.level, sizeEdit),
+                "authored equality detects platform size edit");
+        }
+
+        // Non-editable fields still participate, so an externally changed
+        // level is never mistaken for the saved baseline.
+        world::LevelDefinition slopeEdit = parsed.level;
+        slopeEdit.slopes[1].rotationZDegrees += 1.0f;
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, slopeEdit),
+            "authored equality detects slope rotation change");
+
+        world::LevelDefinition idEdit = parsed.level;
+        idEdit.id = "other_level";
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, idEdit),
+            "authored equality detects id change");
+    }
+
+    Expect(
+        ReadAll(PLATFORMER_LEVEL01_SOURCE_PATH) == canonical,
+        "canonical source level unchanged by writer tests");
 
     if (gFailures != 0)
     {

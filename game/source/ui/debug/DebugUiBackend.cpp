@@ -41,6 +41,19 @@ bool DebugUiBackend::ConsumeTogglePressed()
     return IsKeyPressed(KEY_F1);
 }
 
+bool DebugUiBackend::WantsKeyboardCapture() const
+{
+    if (!initialized)
+    {
+        return false;
+    }
+
+    // Reflects the most recently completed ImGui frame. Application polls
+    // input before this frame's rlImGuiBegin, which is the normal way to ask
+    // whether the UI is currently swallowing keys.
+    return ImGui::GetIO().WantCaptureKeyboard;
+}
+
 void DebugUiBackend::BeginFrame()
 {
     if (!initialized)
@@ -72,6 +85,10 @@ void DebugUiBackend::Shutdown() {}
 void DebugUiBackend::BeginFrame() {}
 void DebugUiBackend::EndFrame() {}
 bool DebugUiBackend::ConsumeTogglePressed()
+{
+    return false;
+}
+bool DebugUiBackend::WantsKeyboardCapture() const
 {
     return false;
 }

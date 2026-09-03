@@ -1,12 +1,21 @@
 # PLATFORMER_LEVEL v1
 
 Human-readable project-owned level format. No JSON/YAML/TOML/XML. No third-party
-serializer. This document is the writer contract for a future Development editor.
+serializer.
 
-**Milestone 31 Phase B:** this file is the live authored source for Level 01.
+**Milestone 31 (complete):** this file is the live authored source for Level 01.
 Application loads the staged cooked copy once at Initialize. There is no
-compiled `CreateLevel01Definition()` / `Level01.cpp` fallback. Phase C manual
-validation is still required before M31 is complete.
+compiled `CreateLevel01Definition()` / `Level01.cpp` fallback.
+
+**Milestone 32 Phase B:** the Development editor writes this format live. `Save
+Level Source` serializes the **active/applied** `LevelDefinition`, never
+unapplied editor edits, and only the source row below. Canonical formatting
+applies on the first editor save, so `25.60` becomes `25.6`; the parsed value is
+identical.
+
+**Milestone 32 Phase A:** v1 is now read *and* written by the game. There is no
+version 2, no editor-only format, no intermediate JSON, and no hidden binary
+file. The writer emits exactly this contract.
 
 ## Identities
 
@@ -17,7 +26,13 @@ validation is still required before M31 is complete.
 | Staged / runtime | `<executable directory>/assets/levels/level_01.level` |
 
 Logical runtime id: `levels/level_01.level` via `platform::RuntimeAssetPath`.
-The executable never reads `assets/source`.
+The runtime never reads `assets/source`.
+
+The Development editor writes only the source row and never the staged runtime
+copy. It resolves that path through `editor::AuthoringLevel01SourcePath`, whose
+root is injected by CMake for the Development configuration only. Saving the
+source does not update the cooked or staged copies; the normal
+`python tools/cook_assets.py` + `cmake --build` steps do that.
 
 ## Header
 
@@ -60,7 +75,8 @@ camera <ox> <oy> <oz> <fovY>
 ```
 
 `id` is `[A-Za-z_][A-Za-z0-9_]*`. The file must contain the authored identity
-(do not infer it from the filename). M31 bootstrap will require `level_01`.
+(do not infer it from the filename). Application requires `level_01`; the
+parser and writer accept any valid identifier.
 
 ### Required repeated records (fixed M30 Level 01 counts)
 
@@ -99,6 +115,9 @@ CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
 
 Camera follow policy: dead zone X/Y, follow sharpness.
 
+`LevelFileTest` asserts this by whitelist: every keyword the writer emits must
+be one of the 17 v1 keywords, so no runtime state can appear in output.
+
 ## Cooker
 
 Kind `level_v1`: UTF-8 + header `PLATFORMER_LEVEL 1`, then **byte-for-byte copy**.
@@ -113,3 +132,71 @@ Statuses: `Loaded`, `Missing`, `Invalid`, `UnsupportedVersion`, `Error`.
 `Invalid`).
 `LevelDefinition.id` is an owning `std::string`; the parsed definition remains
 valid after the source text is destroyed.
+`world::IsValidLevelIdToken` is the shared `id` grammar rule, so the writer
+cannot emit an identifier the parser would reject.
+
+## Writer API
+
+`world/LevelWriter.h` (M32 Phase A):
+
+```
+bool                 world::IsWritableLevelDefinition(const LevelDefinition&);
+std::string          world::SerializeLevelText(const LevelDefinition&);
+WriteLevelFileResult world::SaveLevelFile(const std::filesystem::path&, const LevelDefinition&);
+std::filesystem::path world::LevelFileTemporaryPath(const std::filesystem::path&);
+```
+
+`WriteLevelFileStatus` is `Saved` / `Invalid` / `Error` plus a short error
+string. It is not a generic engine-wide result type.
+
+`IsWritableLevelDefinition` is `IsValidLevelIdToken(level.id)` plus
+`LevelDefinitionHasRequiredAuthoredContent`. `SerializeLevelText` returns an
+empty string when that gate fails, so an invalid definition can never reach a
+file. `SaveLevelFile` requires an **absolute** path: the writer never resolves
+against the process current working directory.
+
+Safe write sequence: validate, serialize, write the sibling temp
+`<target>.tmp`, flush and close, then promote through
+`platform::ReplaceFileWithTemporary` (the M29 boundary). The temp is removed on
+any failure, and the writer itself contains no Win32 calls.
+
+## Canonical writer output order
+
+The parser accepts records in any order; the writer emits exactly one order.
+Serializing the same `LevelDefinition` twice yields byte-identical output.
+Source whitespace, blank lines, and original record order are **not**
+preserved — the editor owns semantic data, not a text AST.
+
+```
+PLATFORMER_LEVEL 1
+id
+spawn
+kill_plane
+ground
+platform            x6, elevatedPlatforms index order
+support_index_cp1
+support_index_cp2
+support_index_goal
+slope               x2, slopes index order
+moving_platform
+checkpoint          x2, checkpoints index order
+hazard              x2, hazards index order
+collectible         x3, collectibles index order
+goal
+dynamic_box
+camera
+```
+
+One record per line, single-space separated, `\n` line endings, trailing
+newline after the last record, no BOM, no comments, no blank lines.
+
+## Writer numeric policy
+
+`std::to_chars` shortest round-trip form for every `float`, and the integer
+overload for the version and `support_index_*`. That is locale-independent by
+construction and `std::from_chars` recovers the exact same `float`, so no
+precision is lost. `std::numeric_limits<float>::max_digits10` (9) would also
+round-trip but emits longer, noisier text.
+
+NaN and Inf are never serialized: validation rejects them before any text is
+produced.
