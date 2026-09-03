@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 26 — Collectibles + Run Counter (implementation complete / awaiting Phase C manual validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Exactly three optional collectibles. Ordinary respawns preserve collection. Do not implement Milestone 27.
+Milestone 27 — Run Timer + Completion Time (implementation complete / awaiting Phase C manual validation).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Application-owned current-run elapsed time using existing gameplay dt. Freeze on first completion. Ordinary respawns preserve time. Enter resets time. Release-visible TIME HUD. No best time, persistence, or TimerManager. Do not mark M27 complete. Do not implement Milestone 28.

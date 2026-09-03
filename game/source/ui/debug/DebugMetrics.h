@@ -11,6 +11,8 @@ struct DebugMetricsSnapshot
 {
     float fps = 0.0f;
     float deltaSeconds = 0.0f;
+    double runTimeSeconds = 0.0;
+    bool runTimerFrozen = false;
 
     core::Vec3 playerPosition{};
     float horizontalVelocity = 0.0f;

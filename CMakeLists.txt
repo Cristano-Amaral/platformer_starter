@@ -40,6 +40,7 @@ add_executable(Platformer3D
     game/source/Main.cpp
     game/source/core/Application.cpp
     game/source/core/Application.h
+    game/source/core/RunTimeFormat.h
     game/source/core/Vec3.h
     game/source/gameplay/PlatformerCamera.cpp
     game/source/gameplay/PlatformerCamera.h
@@ -48,6 +49,7 @@ add_executable(Platformer3D
     game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/RespawnState.h
+    game/source/gameplay/RunTimerState.h
     game/source/input/Input.cpp
     game/source/input/Input.h
     game/source/input/InputState.h

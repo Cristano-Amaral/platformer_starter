@@ -58,7 +58,8 @@ public:
         std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
         bool levelCompleted,
         const std::array<bool, world::kCollectibleCount>& collectibleCollected,
-        int collectedCount);
+        int collectedCount,
+        double elapsedSeconds);
     void EndFrame();
 
 private:

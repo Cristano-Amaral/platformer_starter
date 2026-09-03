@@ -1,6 +1,8 @@
 #include "core/Application.h"
 
+#include "core/RunTimeFormat.h"
 #include "gameplay/CollectibleRunState.h"
+#include "gameplay/RunTimerState.h"
 #include "input/Input.h"
 #include "platform/Time.h"
 #include "world/CollectibleWorld.h"
@@ -10,10 +12,13 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
+#include <cstring>
 
 static_assert(world::kHazardCount == 2);
 static_assert(world::kCollectibleCount == 3);
 static_assert(gameplay::CollectedCount(gameplay::CollectibleRunState{}) == 0);
+static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "ui/debug/DebugMetrics.h"
@@ -30,6 +35,45 @@ std::array<world::CheckpointVisualState, world::kCheckpointCount> MakeCheckpoint
         world::CheckpointVisualStateForIndex(0, activeCheckpointIndex),
         world::CheckpointVisualStateForIndex(1, activeCheckpointIndex),
     };
+}
+
+bool RunTimeFormatScaffoldingOk()
+{
+    char buffer[32]{};
+    const struct
+    {
+        long long totalMilliseconds;
+        const char* expected;
+    } cases[] = {
+        {0, "00:00.000"},
+        {1, "00:00.001"},
+        {5200, "00:05.200"},
+        {59999, "00:59.999"},
+        {60000, "01:00.000"},
+        {65432, "01:05.432"},
+        {754567, "12:34.567"},
+    };
+
+    for (const auto& testCase : cases)
+    {
+        core::FormatRunTimeParts(
+            buffer,
+            sizeof(buffer),
+            core::RunTimePartsFromTotalMilliseconds(testCase.totalMilliseconds));
+        if (std::strcmp(buffer, testCase.expected) != 0)
+        {
+            return false;
+        }
+    }
+
+    core::FormatRunTime(buffer, sizeof(buffer), 0.0);
+    if (std::strcmp(buffer, "00:00.000") != 0)
+    {
+        return false;
+    }
+
+    core::FormatRunTime(buffer, sizeof(buffer), 60.0);
+    return std::strcmp(buffer, "01:00.000") == 0;
 }
 }
 
@@ -150,6 +194,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::RespawnState& respawnState,
     const gameplay::LevelCompletionState& levelCompletionState,
     const gameplay::CollectibleRunState& collectibleRunState,
+    const gameplay::RunTimerState& runTimerState,
     bool restartedThisFrame,
     bool hazardContactThisFrame,
     int collectedThisFrameIndex,
@@ -272,6 +317,9 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
                 player.Position());
     }
 
+    snapshot.runTimeSeconds = runTimerState.elapsedSeconds;
+    snapshot.runTimerFrozen = runTimerState.frozen;
+
     snapshot.levelCompleted = levelCompletionState.completed;
     snapshot.goalCenter = world::kLevelGoal.center;
     snapshot.goalSize = world::kLevelGoal.size;
@@ -296,6 +344,10 @@ int Application::Run()
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
         const bool restartAvailableAtFrameStart = levelCompletionState.completed;
+        if (!runTimerState.frozen)
+        {
+            runTimerState.elapsedSeconds += static_cast<double>(deltaSeconds);
+        }
         physicsWorld.UpdateMovingPlatform(deltaSeconds);
         player.Update(inputState, deltaSeconds, physicsWorld);
 
@@ -337,6 +389,7 @@ int Application::Run()
                 && world::PointInsideGoal(world::kLevelGoal, player.Position()))
             {
                 levelCompletionState.completed = true;
+                runTimerState.frozen = true;
             }
 
             if (!(restartAvailableAtFrameStart && inputState.restartPressed))
@@ -380,7 +433,8 @@ int Application::Run()
             MakeCheckpointVisuals(respawnState.activeCheckpointIndex),
             levelCompletionState.completed,
             collectibleRunState.collected,
-            gameplay::CollectedCount(collectibleRunState));
+            gameplay::CollectedCount(collectibleRunState),
+            runTimerState.elapsedSeconds);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
             MakeDebugMetricsSnapshot(
@@ -392,6 +446,7 @@ int Application::Run()
                 respawnState,
                 levelCompletionState,
                 collectibleRunState,
+                runTimerState,
                 restartedThisFrame,
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
@@ -433,6 +488,16 @@ void Application::Initialize()
 
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     camera.Initialize(player.Position());
+    runTimerState = gameplay::RunTimerState{};
+    if (!RunTimeFormatScaffoldingOk())
+    {
+        std::fprintf(stderr, "RunTimeFormat scaffolding check failed.\n");
+        physicsWorld.Shutdown();
+        renderer.UnloadRuntimeAssets();
+        window.Shutdown();
+        initialized = false;
+        return;
+    }
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();
 #endif
@@ -465,6 +530,7 @@ void Application::RestartRun()
     respawnState = gameplay::RespawnState{};
     levelCompletionState.completed = false;
     collectibleRunState = gameplay::CollectibleRunState{};
+    runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
 }
 

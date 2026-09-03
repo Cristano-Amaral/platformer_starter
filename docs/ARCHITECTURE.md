@@ -191,4 +191,14 @@ Standing on the support does not collect (AABB sits just above standing center).
 
 Renderer receives collected flags plus derived count, draws a gold 0.45 cube for available items only, and always draws `COLLECTED N / 3` in the upper-right after `EndMode3D`. Debug/Development metrics show Available/Collected, Inside, and Collected this frame.
 
-Status: implementation complete / awaiting Phase C manual validation. Do not mark M26 complete. Do not implement Milestone 27.
+Status: complete (manually approved). Do not implement Milestone 27 in this section.
+
+## Run timer / completion time (Milestone 27)
+
+M27 adds a current-run elapsed timer owned by Application as `gameplay::RunTimerState` (`double elapsedSeconds`, `bool frozen`). There is one source of truth: `elapsedSeconds` itself; when frozen it is the completion time. No `bestTime`, previous-run time, persistence, TimerManager, or RunManager.
+
+Accumulation uses the existing once-per-frame gameplay delta from `platform::DeltaSeconds()` (`float` seconds via raylib `GetFrameTime()`), stored as `deltaSeconds` in `Application::Run`. Do not introduce a wall clock or a second timing source. Advance at most once per frame after `restartAvailableAtFrameStart` and before moving-platform/Player update: `if (!frozen) elapsedSeconds += dt`. Freeze on the first `completed` false → true inside the existing goal branch. That frame's dt is included. Ordinary Manual/Fall/Hazard respawns must not clear timer state. Enter `RestartRun` resets `elapsedSeconds = 0` and `frozen = false`.
+
+Display formatting is a pure helper in `core/RunTimeFormat.h` (`MM:SS.mmm`, floor to whole milliseconds). Renderer receives read-only `elapsedSeconds` and draws Release-visible `TIME MM:SS.mmm` in the upper-left (~20 px) after `EndMode3D`. `COLLECTED N / 3` stays upper-right; completion UI stays centered. Renderer must not own or advance time. PhysicsWorld stays unaware of the timer. Debug/Development metrics show run time seconds, Running/Frozen, and the same formatted `MM:SS.mmm`.
+
+Status: implementation complete / awaiting Phase C manual validation. Do not mark M27 complete. Do not implement Milestone 28.

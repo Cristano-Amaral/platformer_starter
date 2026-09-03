@@ -1,5 +1,6 @@
 #include "render/Renderer.h"
 
+#include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
@@ -60,6 +61,9 @@ constexpr int kRestartHintFontSize = 22;
 constexpr int kRestartHintGap = 16;
 constexpr int kCollectedHudFontSize = 22;
 constexpr int kCollectedHudMargin = 20;
+constexpr int kTimerHudFontSize = 22;
+constexpr int kTimerHudMargin = 20;
+constexpr Color kTimerHudText{240, 240, 244, 255};
 constexpr float kCollectibleVisualSize = 0.45f;
 
 constexpr int kGridSlices = 20;
@@ -153,6 +157,14 @@ void DrawCollectedCounter(int collectedCount)
     const int width = MeasureText(text, kCollectedHudFontSize);
     const int x = GetScreenWidth() - width - kCollectedHudMargin;
     DrawText(text, x, kCollectedHudMargin, kCollectedHudFontSize, kCollectibleHudText);
+}
+
+void DrawRunTimer(double elapsedSeconds)
+{
+    char formatted[32]{};
+    core::FormatRunTime(formatted, sizeof(formatted), elapsedSeconds);
+    const char* text = TextFormat("TIME %s", formatted);
+    DrawText(text, kTimerHudMargin, kTimerHudMargin, kTimerHudFontSize, kTimerHudText);
 }
 
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
@@ -654,7 +666,8 @@ void Renderer::DrawWorld(
         std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
         bool levelCompleted,
         const std::array<bool, world::kCollectibleCount>& collectibleCollected,
-        int collectedCount)
+        int collectedCount,
+        double elapsedSeconds)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -743,6 +756,7 @@ void Renderer::DrawWorld(
 
     EndMode3D();
 
+    DrawRunTimer(elapsedSeconds);
     DrawCollectedCounter(collectedCount);
     if (levelCompleted)
     {

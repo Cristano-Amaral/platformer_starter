@@ -2,6 +2,7 @@
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 
+#include "core/RunTimeFormat.h"
 #include "imgui.h"
 
 namespace ui
@@ -38,6 +39,15 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("FPS: %.0f", snapshot.fps);
         ImGui::Text("deltaSeconds: %.6f", snapshot.deltaSeconds);
         ImGui::Text("deltaMilliseconds: %.3f", snapshot.deltaSeconds * 1000.0f);
+    }
+
+    if (ImGui::CollapsingHeader("Run timer", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        char formatted[32]{};
+        core::FormatRunTime(formatted, sizeof(formatted), snapshot.runTimeSeconds);
+        ImGui::Text("Run time seconds: %.6f", snapshot.runTimeSeconds);
+        ImGui::Text("Run timer: %s", snapshot.runTimerFrozen ? "Frozen" : "Running");
+        ImGui::Text("Formatted time: %s", formatted);
     }
 
     if (ImGui::CollapsingHeader("Player transform", ImGuiTreeNodeFlags_DefaultOpen))
