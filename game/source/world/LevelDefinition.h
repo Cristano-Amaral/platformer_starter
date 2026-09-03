@@ -1,7 +1,7 @@
 #pragma once
 
-// Immutable authored level data. Level 01 instances are created by
-// CreateLevel01Definition() in Level01.cpp. Runtime state stays elsewhere.
+// Immutable authored level data populated by the Level File v1 parser.
+// Runtime gameplay state stays outside this struct.
 
 #include "core/Vec3.h"
 #include "world/CollectibleWorld.h"
@@ -13,6 +13,7 @@
 #include "world/Slope.h"
 
 #include <array>
+#include <string>
 #include <string_view>
 
 namespace world
@@ -43,7 +44,7 @@ struct LevelCameraSpec
 
 struct LevelDefinition
 {
-    std::string_view id;
+    std::string id;
 
     core::Vec3 initialSpawnVisualCenter{};
     float killPlaneY = 0.0f;
@@ -64,6 +65,5 @@ struct LevelDefinition
     LevelCameraSpec camera{};
 };
 
-LevelDefinition CreateLevel01Definition();
 bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level);
 }

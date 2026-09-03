@@ -1,8 +1,8 @@
 #pragma once
 
 // Checkpoint types, visual states, and AABB helpers. Authored checkpoint
-// instances live in Level01.cpp. Player visual size is character configuration,
-// not level authoring.
+// instances live in the external level file / LevelDefinition. Player visual
+// size is character configuration, not level authoring.
 
 #include "core/Vec3.h"
 

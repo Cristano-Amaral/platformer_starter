@@ -12,6 +12,7 @@
 #include "platform/Window.h"
 #include "render/Renderer.h"
 #include "world/LevelDefinition.h"
+#include "world/LevelFile.h"
 #include "world/RespawnWorld.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -33,10 +34,10 @@ private:
     void PerformRespawn(gameplay::RespawnReason reason);
     void RestartRun();
 
-    world::LevelDefinition levelDefinition = world::CreateLevel01Definition();
+    world::LevelDefinition levelDefinition{};
     platform::Window window;
     render::Renderer renderer;
-    gameplay::Player player{levelDefinition.initialSpawnVisualCenter, world::kPlayerVisualSize};
+    gameplay::Player player{{}, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
     gameplay::LevelCompletionState levelCompletionState;
@@ -46,6 +47,9 @@ private:
     persistence::LoadBestTimeStatus bestTimeLoadStatus = persistence::LoadBestTimeStatus::Missing;
     persistence::SaveBestTimeStatus bestTimeSaveStatus = persistence::SaveBestTimeStatus::NotAttempted;
     std::string bestTimeSavePathDisplay;
+    std::string runtimeLevelPathDisplay;
+    world::LoadLevelFileStatus levelLoadStatus = world::LoadLevelFileStatus::Error;
+    int levelFormatVersion = 0;
     physics::PhysicsWorld physicsWorld;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     ui::DebugUi debugUi;

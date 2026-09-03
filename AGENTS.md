@@ -76,5 +76,13 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 30 — Level Data v1: Data-Driven Single Level (Phase B implementation complete, awaiting Phase C manual validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. One playable level (`level_01`). Canonical authored data lives in `world/Level01.cpp` via `CreateLevel01Definition()`. Application owns the immutable `LevelDefinition` and passes it to PhysicsWorld/Renderer. No editor, no external level files, no LevelManager. Do not mark M30 complete until Phase C passes. Do not implement Milestone 31.
+Milestone 31 — External Level File v1 (Phase B implementation complete, awaiting
+Phase C manual validation).
+See `docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and `docs/LEVEL_FORMAT_V1.md`.
+One playable level (`level_01`). The sole live authored source is
+`game/assets/source/levels/level_01.level` → cooker → cooked → staged
+`<exe>/assets/levels/level_01.level` → `LoadLevelFile` → `LevelDefinition`.
+Application loads that staged file once in `Initialize`. There is no compiled
+Level 01 fallback. Missing/invalid/unsupported Level 01 is a fatal init error.
+M29 BEST save remains nonfatal. No editor, no LevelManager, no second level.
+Do not mark M31 complete. Do not implement Milestone 32.

@@ -1,7 +1,7 @@
 #pragma once
 
-// Project-owned axis-aligned box. Authored Level 01 instances live in
-// Level01.cpp / LevelDefinition, not here.
+// Project-owned axis-aligned box. Authored Level 01 instances live in the
+// external level file / LevelDefinition, not here.
 
 #include "core/Vec3.h"
 

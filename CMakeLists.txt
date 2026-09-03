@@ -77,8 +77,10 @@ add_executable(Platformer3D
     game/source/world/CollectibleWorld.h
     game/source/world/HazardWorld.h
     game/source/world/LevelDefinition.h
-    game/source/world/Level01.cpp
+    game/source/world/LevelDefinition.cpp
     game/source/world/LevelGoal.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
     game/source/world/MovingPlatform.h
     game/source/world/RespawnWorld.h
     game/source/world/Slope.h
@@ -126,14 +128,17 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/models/test_static.glb
 #   <exe dir>/assets/models/test_authored.glb
 #   <exe dir>/assets/models/test_textured.glb
+#   <exe dir>/assets/levels/level_01.level
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
+# The staged level file is required at runtime; Application loads it once in Initialize.
 set(PLATFORMER_COOKED_DIR "${CMAKE_SOURCE_DIR}/game/assets/cooked")
 set(PLATFORMER_RUNTIME_ASSETS
     textures/test_checker.png
     models/test_static.glb
     models/test_authored.glb
     models/test_textured.glb
+    levels/level_01.level
 )
 
 set(PLATFORMER_MISSING_COOKED_ASSETS)
@@ -167,4 +172,25 @@ endforeach()
 add_custom_command(TARGET Platformer3D POST_BUILD
     ${PLATFORMER_STAGE_ASSET_COMMANDS}
     COMMENT "Staging cooked runtime assets next to the executable"
+)
+
+# Parser-only test binary. Not shipped. Does not link raylib/Jolt/ImGui.
+add_executable(LevelFileTest
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelFileTest.cpp
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(LevelFileTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(LevelFileTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LevelFileTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/levels/level_01.level"
+    PLATFORMER_LEVEL01_SOURCE_PATH)
+target_compile_definitions(LevelFileTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )

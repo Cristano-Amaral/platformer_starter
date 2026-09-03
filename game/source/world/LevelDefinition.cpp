@@ -1,7 +1,6 @@
 #include "world/LevelDefinition.h"
 
 #include <cmath>
-#include <cstddef>
 
 namespace world
 {
@@ -17,52 +16,6 @@ bool PositiveSize(core::Vec3 size)
     return std::isfinite(size.x) && std::isfinite(size.y) && std::isfinite(size.z) && size.x > 0.0f
         && size.y > 0.0f && size.z > 0.0f;
 }
-}
-
-LevelDefinition CreateLevel01Definition()
-{
-    LevelDefinition level{};
-    level.id = kLevel01Id;
-    level.initialSpawnVisualCenter = {0.0f, 0.8f, 0.0f};
-    level.killPlaneY = -8.0f;
-    level.ground = {{0.0f, -0.25f, 0.0f}, {56.0f, 0.5f, 8.0f}};
-    level.elevatedPlatforms = {{
-        {{5.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}},
-        {{-4.5f, 2.25f, 0.0f}, {3.0f, 0.5f, 2.5f}},
-        {{16.5f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}},
-        {{-10.0f, 2.0f, 0.0f}, {3.0f, 0.5f, 2.5f}},
-        {{-15.5f, 1.75f, 0.0f}, {4.0f, 0.5f, 3.0f}},
-        {{-21.0f, 2.75f, 0.0f}, {3.0f, 0.5f, 2.5f}},
-    }};
-    level.checkpoint1PlatformIndex = 2;
-    level.checkpoint2PlatformIndex = 4;
-    level.goalPlatformIndex = 5;
-    level.slopes[static_cast<std::size_t>(kLevel01WalkableSlopeIndex)] = {
-        {21.70f, 1.6732f, 0.0f},
-        {6.0f, 0.4f, 4.0f},
-        30.0f};
-    level.slopes[static_cast<std::size_t>(kLevel01SteepSlopeIndex)] = {
-        {25.60f, 0.9660f, 0.0f},
-        {2.0f, 0.4f, 3.0f},
-        60.0f};
-    level.movingPlatform = {{4.0f, 0.4f, 3.0f}, 1.3f, 0.0f, -6.0f, 6.0f, 2.5f, 0.0f};
-    level.checkpoints = {{
-        {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}},
-        {{-15.5f, 2.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {-15.5f, 2.8f, 0.0f}},
-    }};
-    level.hazards = {{
-        {{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}},
-        {{-18.5f, 0.5f, 0.0f}, {1.2f, 1.0f, 2.0f}},
-    }};
-    level.collectibles = {{
-        {{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}},
-        {{-4.5f, 4.0f, 0.0f}, {1.0f, 1.2f, 1.0f}},
-        {{-10.0f, 3.75f, 0.0f}, {1.0f, 1.2f, 1.0f}},
-    }};
-    level.goal = {{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}};
-    level.dynamicBox = {{0.0f, 5.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f};
-    level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
-    return level;
 }
 
 bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)

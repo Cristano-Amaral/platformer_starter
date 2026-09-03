@@ -123,6 +123,9 @@ struct DebugMetricsSnapshot
     bool playerInsideGoal = false;
 
     char levelId[32]{};
+    char runtimeLevelPath[512]{};
+    const char* levelLoadStatus = "Error";
+    int levelFormatVersion = 0;
     core::Vec3 levelInitialSpawn{};
     float levelKillPlaneY = 0.0f;
     int levelStaticBoxCount = 0;

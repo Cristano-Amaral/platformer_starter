@@ -77,6 +77,14 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Save status: %s", snapshot.bestTimeSaveStatus);
     }
 
+    if (ImGui::CollapsingHeader("Level Loading", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Runtime Level Path: %s", snapshot.runtimeLevelPath);
+        ImGui::Text("Load Status: %s", snapshot.levelLoadStatus);
+        ImGui::Text("Format Version: %d", snapshot.levelFormatVersion);
+        ImGui::Text("Loaded Level ID: %s", snapshot.levelId);
+    }
+
     if (ImGui::CollapsingHeader("Level Data", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Level ID: %s", snapshot.levelId);

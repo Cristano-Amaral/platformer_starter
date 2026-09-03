@@ -5,7 +5,8 @@
 namespace world
 {
 // Static slope box in local size, rotated about +Z. Authored instances live in
-// Level01.cpp. CharacterVirtual max-slope policy is not level data.
+// the external level file / LevelDefinition. CharacterVirtual max-slope policy
+// is not level data.
 struct SlopeSpec
 {
     core::Vec3 center;

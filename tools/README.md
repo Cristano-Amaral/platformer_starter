@@ -29,7 +29,8 @@ No Blender.
 
 The cooker copies known authored files from `game/assets/source/` to
 `game/assets/cooked/` by explicit identity (`textures/test_checker.png`,
-`models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`).
+`models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
+`levels/level_01.level`).
 It does not glob every PNG under `source/textures/`. Skips a rewrite when the
 cooked bytes already match the current cook result, writes
 `game/assets/cooked/manifest.json`, and removes only previously manifested
@@ -43,6 +44,9 @@ Asset kinds:
   downscales with Pillow `Image.Resampling.LANCZOS` when either dimension
   exceeds 512 px, preserving aspect ratio and never upscaling. Sources already
   within 512×512 are copied byte-for-byte (no decode/re-encode).
+- `level_v1`: UTF-8 level text. Cooker checks the first non-blank line is
+  `PLATFORMER_LEVEL 1`, then copies bytes unchanged. Full grammar validation is
+  C++ `ParseLevelText` only.
 
 Not cooker inputs:
 
@@ -63,6 +67,7 @@ Cooker tests (stdlib unittest, not pytest):
 
 ```
 python tools/test_cook_runtime_png.py
+python tools/test_cook_level_v1.py
 ```
 
 The oversized fixture `tools/fixtures/textures/test_large_checker.png` is

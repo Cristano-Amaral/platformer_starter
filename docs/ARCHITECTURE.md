@@ -39,7 +39,7 @@ Project-facing Player position is the **visual AABB center**. CharacterVirtual `
 
 ## Checkpoint / respawn (Milestone 20)
 
-Checkpoint types and AABB helpers live in `world/RespawnWorld.h` (`CheckpointSpec`). Authored spawn, kill-plane Y, and checkpoint instances live in `world/Level01.cpp` inside the immutable `LevelDefinition`. Runtime state lives in `gameplay::RespawnState`, owned by `Application`. PhysicsWorld does not interpret checkpoints. Renderer does not own activation.
+Checkpoint types and AABB helpers live in `world/RespawnWorld.h` (`CheckpointSpec`). Authored spawn, kill-plane Y, and checkpoint instances live in the immutable `LevelDefinition` loaded from the staged Level 01 file. Runtime state lives in `gameplay::RespawnState`, owned by `Application`. PhysicsWorld does not interpret checkpoints. Renderer does not own activation.
 
 `input::InputState::respawnPressed` is edge-triggered (`R` mapped in the input backend only). Application owns the respawn decision after `Player::Update`: Fall if visual-center Y is below the active level's `killPlaneY`, else Hazard, else Manual if `respawnPressed`. Fall wins if both Fall and Hazard occur. At most one respawn per frame. Checkpoint activation runs only when no respawn happened that frame.
 
@@ -49,7 +49,7 @@ Checkpoint overlap tests `Player::Position()` (visual center) against checkpoint
 
 ## Level goal / completion (Milestone 21)
 
-The `LevelGoalSpec` type lives in `world/LevelGoal.h`. The authored Level 01 goal instance lives in `world/Level01.cpp`. Runtime state lives in `gameplay::LevelCompletionState`, owned by `Application`. PhysicsWorld does not interpret goals. Renderer does not decide completion.
+The `LevelGoalSpec` type lives in `world/LevelGoal.h`. The authored Level 01 goal instance lives in the loaded `LevelDefinition`. Runtime state lives in `gameplay::LevelCompletionState`, owned by `Application`. PhysicsWorld does not interpret goals. Renderer does not decide completion.
 
 Goal overlap tests `Player::Position()` (visual center) via `PointInsideGoal` against the active `LevelDefinition` goal. No Jolt sensor. Application sets `completed = true` once on first entry, only on a non-respawn frame after checkpoint evaluation. `PerformRespawn` does not clear completion. Renderer draws the two-post + bar marker from a `levelCompleted` bool and, after `EndMode3D`, draws `LEVEL COMPLETE` with raylib text in all configurations including Release. Dear ImGui Level Goal metrics remain Debug/Development only.
 
@@ -76,7 +76,7 @@ Temporary blocking with no free space is valid. Manual validation: the Player is
 Status: complete (manually validated). Do not implement Milestone 24 in this section.
 
 ## Shared greybox geometry
-`world::Box` in `GreyboxWorld.h` is the project-owned AABB type. Canonical Level 01 ground and elevated platforms live in `world/Level01.cpp` (`CreateLevel01Definition()`). Renderer and PhysicsWorld both derive from the active `LevelDefinition`. Ground and platform coordinates are not duplicated inside those systems.
+`world::Box` in `GreyboxWorld.h` is the project-owned AABB type. Canonical Level 01 ground and elevated platforms live in `game/assets/source/levels/level_01.level` and are loaded into `LevelDefinition`. Renderer and PhysicsWorld both derive from the active `LevelDefinition`. Ground and platform coordinates are not duplicated inside those systems.
 
 The kinematic platform's immutable spec is `LevelDefinition::movingPlatform` (`MovingPlatformSpec`). PhysicsWorld owns runtime pose/direction/BodyID. Renderer draws authored size with the runtime pose.
 
@@ -117,6 +117,7 @@ CMake does not cook. After configure, a POST_BUILD step stages cooked files next
     <executable directory>/assets/models/test_static.glb
     <executable directory>/assets/models/test_authored.glb
     <executable directory>/assets/models/test_textured.glb
+    <executable directory>/assets/levels/level_01.level
 
 Runtime lookup uses `platform::RuntimeAssetPath`, which joins `<executable directory>/assets/` with the logical relative path. The executable directory is queried from the OS in the platform layer (`GetModuleFileNameW` on Windows, `/proc/self/exe` on Linux). The process current working directory is never used, and non-absolute results are rejected so raylib file loads cannot silently resolve against CWD. The renderer does not hard-code `game/assets/cooked`.
 
@@ -125,6 +126,7 @@ Logical identities:
 - Milestone 16 test model: `models/test_static.glb`
 - Milestone 17 authored model: `models/test_authored.glb`
 - Milestone 18 textured model: `models/test_textured.glb`
+- Milestone 31 Level 01: `levels/level_01.level` (required; missing/invalid is fatal)
 
 The M18 Base Color PNG `game/assets/source/textures/test_textured_basecolor.png` is Blender authoring input only. It is not cooked or staged. The exported GLB must embed the image. See `docs/BLENDER_WORKFLOW.md`.
 
@@ -140,7 +142,7 @@ If a required cooked file is missing at CMake configure time, configure fails an
 
 M24 is a longer hardcoded greybox plus **exactly two ordered checkpoints**. It is not a generic level, trigger, or checkpoint framework.
 
-Live world data (canonical instances in `world/Level01.cpp`):
+Live world data (canonical instances in `game/assets/source/levels/level_01.level`, loaded into `LevelDefinition`):
 
 - Ground `{0, -0.25, 0}` size `{56, 0.5, 8}` (X [-28, 28], top Y = 0).
 - Elevated platforms in `LevelDefinition::elevatedPlatforms` (right early, left landing, CP1 support, mid-left step, CP2 support, goal support).
@@ -162,7 +164,7 @@ Status: complete (manually validated). Do not implement Milestone 25 in this sec
 
 ## Static hazards / hazard respawn (Milestone 25)
 
-M25 adds the first explicit non-fall lethal volumes: **exactly two** compile-time `HazardSpec` AABBs authored in `world/Level01.cpp`. Identity is the array index. There is no health, no Jolt sensor, and no generic trigger type.
+M25 adds the first explicit non-fall lethal volumes: **exactly two** `HazardSpec` AABBs authored in the Level 01 file. Identity is the array index. There is no health, no Jolt sensor, and no generic trigger type.
 
 - Hazard 1 (index 0): corridor spikes `{11.5, 0.5, 0}` size `{1.4, 1.0, 2.0}` AABB X [10.8, 12.2], Y [0, 1.0], Z [-1, 1]
 - Hazard 2 (index 1): goal-gap spikes `{-18.5, 0.5, 0}` size `{1.2, 1.0, 2.0}` AABB X [-19.1, -17.9], Y [0, 1.0], Z [-1, 1]
@@ -181,7 +183,7 @@ Status: complete (manually approved). Do not implement Milestone 26 in this sect
 
 ## Collectibles / run counter (Milestone 26)
 
-M26 adds the first non-lethal collectible loop: **exactly three** compile-time `CollectibleSpec` AABBs authored in `world/Level01.cpp`. Identity is the array index. Per-run flags live in `gameplay::CollectibleRunState` (`std::array<bool, world::kCollectibleCount>`); count is derived. Collection is optional and must not gate the goal. The array size remains compile-time coupled to Level 01's three collectibles.
+M26 adds the first non-lethal collectible loop: **exactly three** `CollectibleSpec` AABBs authored in the Level 01 file. Identity is the array index. Per-run flags live in `gameplay::CollectibleRunState` (`std::array<bool, world::kCollectibleCount>`); count is derived. Collection is optional and must not gate the goal. The array size remains compile-time coupled to Level 01's three collectibles.
 
 - Collectible 1 (index 0): right-platform hop `{5.0, 2.5, 0}` size `{1.0, 1.2, 1.0}`
 - Collectible 2 (index 1): left-landing hop `{-4.5, 4.0, 0}` size `{1.0, 1.2, 1.0}`
@@ -234,14 +236,26 @@ Status: complete (manually approved). Save v1 remains compatible with Milestone 
 
 ## Level data v1 (Milestone 30)
 
-M30 introduces a project-owned immutable `world::LevelDefinition` for the current single playable level (`level_01`). Canonical authored values live in `world/Level01.cpp` (`CreateLevel01Definition()`). The factory populates literals directly; it does not copy legacy Level 01 globals.
+M30 introduces a project-owned immutable `world::LevelDefinition` for the current single playable level (`level_01`). At M30 the canonical authored values lived in `world/Level01.cpp` (`CreateLevel01Definition()`). Milestone 31 replaced that compiled factory as the live authored source; `LevelDefinition` remains the runtime data model.
 
-Application constructs the definition once as a member (`levelDefinition = CreateLevel01Definition()`), validates it at Initialize, and passes it read-only to PhysicsWorld (`Initialize(level)`) and Renderer (`DrawWorld(..., level, ...)`). Gameplay meaning (checkpoint activation, hazard death, collectible pickup, goal completion, timer, BEST) stays in Application. Runtime pose for the moving platform and cyan box stays in PhysicsWorld. `collected[]`, `activeCheckpointIndex`, `LevelCompletionState`, timer, and BEST stay outside `LevelDefinition`.
+Application owns one `LevelDefinition` that is empty until Initialize successfully loads the staged Level 01 file, then passes it read-only to PhysicsWorld (`Initialize(level)`) and Renderer (`DrawWorld(..., level, ...)`). Gameplay meaning (checkpoint activation, hazard death, collectible pickup, goal completion, timer, BEST) stays in Application. Runtime pose for the moving platform and cyan box stays in PhysicsWorld. `collected[]`, `activeCheckpointIndex`, `LevelCompletionState`, timer, and BEST stay outside `LevelDefinition`.
 
 Camera offset `{2, 3.5, 12}` and FOV 40 are level framing (`LevelCameraSpec`). Dead zone X/Y `1.5` / `0.75` and follow sharpness `8` remain `PlatformerCamera` controller policy. Player visual size `{0.8, 1.6, 0.8}` remains character/render configuration (`world::kPlayerVisualSize`), not level authoring. CharacterVirtual max slope remains 50° in PhysicsWorld.
 
-Only BEST is persisted (`PLATFORMER_SAVE 1` / `best_seconds`). The save does not store `level_01`. No external level file, editor, LevelManager, or second playable level.
+Only BEST is persisted (`PLATFORMER_SAVE 1` / `best_seconds`). The save does not store `level_01`. No editor, LevelManager, or second playable level.
 
 Phase B: live consumers migrated. World type headers keep reusable specs/helpers and no longer own Level 01 instance arrays. Debug/Development metrics include a read-only Level Data section sourced from the active definition.
 
-Status: Phase B implementation complete, awaiting Phase C manual validation. Do not mark M30 complete. Do not implement Milestone 31.
+Status: complete (manually approved). Live authored coordinates moved to the external Level 01 file in Milestone 31. Do not implement Milestone 32 in this section.
+
+## External level file v1 (Milestone 31)
+
+M31 introduces a project-owned text format `PLATFORMER_LEVEL 1` and parser `world::ParseLevelText` / `LoadLevelFile` (`world/LevelFile.h`). Canonical authored source: `game/assets/source/levels/level_01.level`. Cooker kind `level_v1` copies bytes after a UTF-8/header check. CMake stages `<exe>/assets/levels/level_01.level`. Grammar: `docs/LEVEL_FORMAT_V1.md`. `LevelDefinition.id` is an owning `std::string`.
+
+**Phase B:** the staged runtime file is the **only** live authored source. Application owns `levelDefinition{}` until Initialize. It resolves `platform::RuntimeAssetPath("levels/level_01.level")`, calls `LoadLevelFile` once, requires status `Loaded`, requires `id == "level_01"`, validates authored content, stores the definition, applies camera framing, initializes respawn from the loaded spawn, initializes PhysicsWorld from the definition, then initializes Player at `initialSpawnVisualCenter`. PhysicsWorld and Renderer still consume `const LevelDefinition&` only; they do not open or parse the file. RestartRun and ordinary respawns do not reread the file.
+
+There is no `CreateLevel01Definition()` and no `Level01.cpp`. Missing, invalid, unsupported-version, I/O error, or wrong Level ID is a fatal initialization failure (stderr diagnostics; no compiled fallback; no empty world). BEST save missing/invalid remains nonfatal. Debug/Development expose a Level Loading section (runtime path, load status, format version, loaded ID) plus the M30 Level Data section. Release has no ImGui and follows the same required-level policy.
+
+Save v1 is unchanged. Camera file fields are offset + FOV only. Player feel and CharacterVirtual policy stay out of the file. No editor, writer, LevelManager, or second playable level.
+
+Status: Phase B implementation complete, awaiting Phase C manual validation. Do not mark M31 complete. Do not implement Milestone 32.

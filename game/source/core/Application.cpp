@@ -7,10 +7,12 @@
 #include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
 #include "persistence/BestTimeSave.h"
+#include "platform/RuntimePaths.h"
 #include "platform/Time.h"
 #include "world/CollectibleWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
+#include "world/LevelFile.h"
 #include "world/LevelGoal.h"
 
 #include <array>
@@ -18,6 +20,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 
 static_assert(world::kHazardCount == 2);
 static_assert(world::kCollectibleCount == 3);
@@ -139,6 +142,58 @@ bool BestTimeSaveFormatScaffoldingOk()
 
     const persistence::LoadBestTimeResult loaded = ParseBestTimeV1("PLATFORMER_SAVE 1\nbest_seconds 1.5\n");
     return loaded.status == LoadBestTimeStatus::Loaded && loaded.bestSeconds == 1.5;
+}
+
+void ReportRequiredLevelFailure(
+    const std::filesystem::path& path,
+    const world::ParseLevelFileResult& result,
+    const char* extra)
+{
+    std::fprintf(stderr, "Required Level 01 failed to load.\n");
+    if (path.empty())
+    {
+        std::fprintf(stderr, "  path: (unavailable)\n");
+    }
+    else
+    {
+        std::fprintf(stderr, "  path: %s\n", path.string().c_str());
+    }
+    std::fprintf(stderr, "  status: %s\n", world::LoadLevelFileStatusName(result.status));
+    if (result.formatVersion != 0)
+    {
+        std::fprintf(stderr, "  format version: %d\n", result.formatVersion);
+    }
+    if (result.errorLine > 0)
+    {
+        std::fprintf(stderr, "  line: %d\n", result.errorLine);
+    }
+    if (!result.error.empty())
+    {
+        std::fprintf(stderr, "  error: %s\n", result.error.c_str());
+    }
+    if (!result.level.id.empty())
+    {
+        std::fprintf(stderr, "  loaded id: %s\n", result.level.id.c_str());
+    }
+    if (extra != nullptr)
+    {
+        std::fprintf(stderr, "  %s\n", extra);
+    }
+}
+
+void CopyBounded(char* destination, std::size_t destinationSize, std::string_view source)
+{
+    if (destination == nullptr || destinationSize == 0)
+    {
+        return;
+    }
+    const std::size_t length =
+        source.size() < destinationSize - 1 ? source.size() : destinationSize - 1;
+    if (length > 0 && source.data() != nullptr)
+    {
+        std::memcpy(destination, source.data(), length);
+    }
+    destination[length] = '\0';
 }
 }
 
@@ -291,6 +346,9 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     persistence::LoadBestTimeStatus bestTimeLoadStatus,
     persistence::SaveBestTimeStatus bestTimeSaveStatus,
     const char* bestTimeSavePath,
+    const char* runtimeLevelPath,
+    world::LoadLevelFileStatus levelLoadStatus,
+    int levelFormatVersion,
     bool restartedThisFrame,
     bool hazardContactThisFrame,
     int collectedThisFrameIndex,
@@ -429,14 +487,13 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.restartAvailable = levelCompletionState.completed;
     snapshot.restartedThisFrame = restartedThisFrame;
 
-    const std::size_t idLength =
-        level.id.size() < sizeof(snapshot.levelId) - 1 ? level.id.size()
-                                                       : sizeof(snapshot.levelId) - 1;
-    if (level.id.data() != nullptr && idLength > 0)
-    {
-        std::memcpy(snapshot.levelId, level.id.data(), idLength);
-    }
-    snapshot.levelId[idLength] = '\0';
+    CopyBounded(snapshot.levelId, sizeof(snapshot.levelId), level.id);
+    CopyBounded(
+        snapshot.runtimeLevelPath,
+        sizeof(snapshot.runtimeLevelPath),
+        runtimeLevelPath != nullptr ? runtimeLevelPath : "");
+    snapshot.levelLoadStatus = world::LoadLevelFileStatusName(levelLoadStatus);
+    snapshot.levelFormatVersion = levelFormatVersion;
     snapshot.levelInitialSpawn = level.initialSpawnVisualCenter;
     snapshot.levelKillPlaneY = level.killPlaneY;
     snapshot.levelElevatedPlatformCount = static_cast<int>(level.elevatedPlatforms.size());
@@ -597,6 +654,9 @@ int Application::Run()
                 bestTimeLoadStatus,
                 bestTimeSaveStatus,
                 bestTimeSavePathDisplay.c_str(),
+                runtimeLevelPathDisplay.c_str(),
+                levelLoadStatus,
+                levelFormatVersion,
                 restartedThisFrame,
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
@@ -617,20 +677,44 @@ void Application::Initialize()
         return;
     }
 
-    renderer.LoadRuntimeAssets();
+    const std::filesystem::path levelPath =
+        platform::RuntimeAssetPath(world::kLevel01RuntimeLogicalId);
+    runtimeLevelPathDisplay = levelPath.empty() ? "(unavailable)" : levelPath.string();
+    const world::ParseLevelFileResult loadedLevel = world::LoadLevelFile(levelPath);
+    levelLoadStatus = loadedLevel.status;
+    levelFormatVersion = loadedLevel.formatVersion;
 
-    if (!world::LevelDefinitionHasRequiredAuthoredContent(levelDefinition))
+    if (loadedLevel.status != world::LoadLevelFileStatus::Loaded)
     {
-        std::fprintf(stderr, "Level 01 data validation failed.\n");
-        renderer.UnloadRuntimeAssets();
+        ReportRequiredLevelFailure(levelPath, loadedLevel, nullptr);
+        window.Shutdown();
+        initialized = false;
+        return;
+    }
+    if (loadedLevel.level.id != world::kLevel01Id)
+    {
+        ReportRequiredLevelFailure(
+            levelPath, loadedLevel, "expected Level ID level_01");
+        window.Shutdown();
+        initialized = false;
+        return;
+    }
+    if (!world::LevelDefinitionHasRequiredAuthoredContent(loadedLevel.level))
+    {
+        ReportRequiredLevelFailure(
+            levelPath, loadedLevel, "semantic validation failed");
         window.Shutdown();
         initialized = false;
         return;
     }
 
+    levelDefinition = loadedLevel.level;
+
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
+
+    renderer.LoadRuntimeAssets();
 
     if (!physicsWorld.Initialize(levelDefinition))
     {
@@ -640,7 +724,8 @@ void Application::Initialize()
         return;
     }
 
-    if (!physicsWorld.InitializePlayer(player.Position(), player.Size()))
+    if (!physicsWorld.InitializePlayer(
+            levelDefinition.initialSpawnVisualCenter, player.Size()))
     {
         physicsWorld.Shutdown();
         renderer.UnloadRuntimeAssets();

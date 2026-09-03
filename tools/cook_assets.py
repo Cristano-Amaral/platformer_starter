@@ -10,7 +10,8 @@ the current working directory.
 
 Standalone runtime PNGs (`kind: runtime_png`) are listed explicitly and may be
 downscaled with cooker-only Pillow. Blender authoring PNGs and `.blend` files
-are not cooker inputs. GLBs are opaque copies.
+are not cooker inputs. GLBs are opaque copies. Level v1 files (`kind: level_v1`)
+are UTF-8 text copies after a header check; C++ owns full grammar validation.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ MANIFEST_NAME = "manifest.json"
 #   runtime_png  = standalone runtime PNG (M19 policy applies to these only)
 KIND_COPY = "copy"
 KIND_RUNTIME_PNG = "runtime_png"
+KIND_LEVEL_V1 = "level_v1"
 
 RUNTIME_PNG_MAX_DIMENSION = 512
 RUNTIME_PNG_RECIPE = "runtime_png.max512.lanczos.v1"
@@ -71,6 +73,12 @@ KNOWN_ASSETS = (
         "source": "textures/test_checker.png",
         "cooked": "textures/test_checker.png",
         "kind": KIND_RUNTIME_PNG,
+    },
+    {
+        "id": "levels/level_01.level",
+        "source": "levels/level_01.level",
+        "cooked": "levels/level_01.level",
+        "kind": KIND_LEVEL_V1,
     },
 )
 
@@ -335,6 +343,28 @@ def remove_stale_outputs(
             ) from exc
 
 
+def validate_level_v1_header(data: bytes) -> None:
+    """Cheap header gate only. C++ ParseLevelText is the format authority."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CookError(f"level file is not UTF-8: {exc}") from exc
+    if text.startswith("\ufeff"):
+        raise CookError("level file must not start with a UTF-8 BOM")
+    first = ""
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip(" \t")
+        if stripped:
+            first = stripped
+            break
+    tokens = first.split()
+    if len(tokens) == 2 and tokens[0] == "PLATFORMER_LEVEL" and tokens[1] == "1":
+        return
+    if len(tokens) >= 1 and tokens[0] == "PLATFORMER_LEVEL":
+        raise CookError(f"unsupported level format header: {first}")
+    raise CookError("level file must start with PLATFORMER_LEVEL 1")
+
+
 def cook() -> int:
     root = repo_root()
     sources = source_root(root)
@@ -373,7 +403,7 @@ def cook() -> int:
             return 1
 
         kind = asset.get("kind", KIND_COPY)
-        if kind not in (KIND_COPY, KIND_RUNTIME_PNG):
+        if kind not in (KIND_COPY, KIND_RUNTIME_PNG, KIND_LEVEL_V1):
             print("error: unknown asset kind.", file=sys.stderr)
             print(f"  logical id: {identity}", file=sys.stderr)
             print(f"  kind:       {kind}", file=sys.stderr)
@@ -407,6 +437,8 @@ def cook() -> int:
                     }
                 )
             else:
+                if kind == KIND_LEVEL_V1:
+                    validate_level_v1_header(source_data)
                 cooked_data = source_data
                 wrote = write_bytes_if_changed(cooked_path, cooked_data)
                 manifest_entries.append(
