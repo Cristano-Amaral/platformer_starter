@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 27 — Run Timer + Completion Time (implementation complete / awaiting Phase C manual validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Application-owned current-run elapsed time using existing gameplay dt. Freeze on first completion. Ordinary respawns preserve time. Enter resets time. Release-visible TIME HUD. No best time, persistence, or TimerManager. Do not mark M27 complete. Do not implement Milestone 28.
+Milestone 28 — Session Best Time (implementation complete / awaiting Phase C manual validation).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Application-owned session-best completion time. Raw-double comparison at first completion only. Enter preserves BEST. Process relaunch clears it. Release-visible BEST HUD. No persistence, no BestTimeManager. Do not mark M28 complete. Do not implement Milestone 29.

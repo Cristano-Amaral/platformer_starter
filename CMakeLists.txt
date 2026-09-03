@@ -50,6 +50,7 @@ add_executable(Platformer3D
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/RespawnState.h
     game/source/gameplay/RunTimerState.h
+    game/source/gameplay/SessionBestTimeState.h
     game/source/input/Input.cpp
     game/source/input/Input.h
     game/source/input/InputState.h

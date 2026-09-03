@@ -6,6 +6,7 @@
 #include "gameplay/Player.h"
 #include "gameplay/RespawnState.h"
 #include "gameplay/RunTimerState.h"
+#include "gameplay/SessionBestTimeState.h"
 #include "physics/PhysicsWorld.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
@@ -36,6 +37,7 @@ private:
     gameplay::LevelCompletionState levelCompletionState;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::RunTimerState runTimerState;
+    gameplay::SessionBestTimeState sessionBestTimeState;
     physics::PhysicsWorld physicsWorld;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     ui::DebugUi debugUi;

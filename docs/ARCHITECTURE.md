@@ -201,4 +201,12 @@ Accumulation uses the existing once-per-frame gameplay delta from `platform::Del
 
 Display formatting is a pure helper in `core/RunTimeFormat.h` (`MM:SS.mmm`, floor to whole milliseconds). Renderer receives read-only `elapsedSeconds` and draws Release-visible `TIME MM:SS.mmm` in the upper-left (~20 px) after `EndMode3D`. `COLLECTED N / 3` stays upper-right; completion UI stays centered. Renderer must not own or advance time. PhysicsWorld stays unaware of the timer. Debug/Development metrics show run time seconds, Running/Frozen, and the same formatted `MM:SS.mmm`.
 
-Status: implementation complete / awaiting Phase C manual validation. Do not mark M27 complete. Do not implement Milestone 28.
+Status: complete (manually approved). Do not implement Milestone 28 in this section.
+
+## Session best time (Milestone 28)
+
+M28 adds a session-only best completion time owned by Application as `gameplay::SessionBestTimeState` (`bool hasBestTime`, `double bestSeconds`). Run state (`RunTimerState`) lasts one run and resets on Enter. Session BEST lasts the process and is **not** reset by Enter; only executable relaunch returns to no-best.
+
+Comparison uses the raw frozen `runTimerState.elapsedSeconds` at the existing first-completion branch (`!completed && PointInsideGoal`). Update when `IsBetterSessionCompletion` (`!hasBestTime || elapsedSeconds < bestSeconds`). Ties and slower runs keep the previous record. Store the raw double; format with `core/RunTimeFormat.h` / `FormatSessionBestTime`. No-best HUD is `BEST --:--.---` directly below `TIME` at upper-left (y = 46); `COLLECTED N / 3` stays upper-right; completion stays centered. Renderer receives read-only `hasBestTime` + `bestSeconds` and must not compare or mutate records. `RestartRun` resets the current-run timer and does not reset session BEST. Debug/Development metrics show Has session best, Session best seconds (N/A when none), and formatted BEST.
+
+Status: implementation complete / awaiting Phase C manual validation. Do not mark M28 complete. Do not implement Milestone 29.

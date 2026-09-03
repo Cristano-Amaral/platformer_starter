@@ -50,6 +50,26 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Formatted time: %s", formatted);
     }
 
+    if (ImGui::CollapsingHeader("Session best", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        char formattedBest[32]{};
+        core::FormatSessionBestTime(
+            formattedBest,
+            sizeof(formattedBest),
+            snapshot.hasSessionBest,
+            snapshot.sessionBestSeconds);
+        ImGui::Text("Has session best: %s", BoolText(snapshot.hasSessionBest));
+        if (snapshot.hasSessionBest)
+        {
+            ImGui::Text("Session best seconds: %.6f", snapshot.sessionBestSeconds);
+        }
+        else
+        {
+            ImGui::Text("Session best seconds: N/A");
+        }
+        ImGui::Text("Formatted session best: %s", formattedBest);
+    }
+
     if (ImGui::CollapsingHeader("Player transform", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("position X: %.4f", snapshot.playerPosition.x);

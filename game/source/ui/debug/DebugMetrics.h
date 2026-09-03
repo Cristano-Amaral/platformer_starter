@@ -13,6 +13,8 @@ struct DebugMetricsSnapshot
     float deltaSeconds = 0.0f;
     double runTimeSeconds = 0.0;
     bool runTimerFrozen = false;
+    bool hasSessionBest = false;
+    double sessionBestSeconds = 0.0;
 
     core::Vec3 playerPosition{};
     float horizontalVelocity = 0.0f;

@@ -75,6 +75,30 @@ inline void FormatRunTime(char* buffer, std::size_t bufferSize, double elapsedSe
     FormatRunTimeParts(buffer, bufferSize, RunTimePartsFromSeconds(elapsedSeconds));
 }
 
+// Presentation-only. Does not parse back into session state.
+// No-best HUD/debug text is exactly --:--.---, never 00:00.000.
+inline constexpr const char* kNoSessionBestPlaceholder = "--:--.---";
+
+inline void FormatSessionBestTime(
+    char* buffer,
+    std::size_t bufferSize,
+    bool hasBestTime,
+    double bestSeconds)
+{
+    if (buffer == nullptr || bufferSize == 0)
+    {
+        return;
+    }
+
+    if (!hasBestTime)
+    {
+        std::snprintf(buffer, bufferSize, "%s", kNoSessionBestPlaceholder);
+        return;
+    }
+
+    FormatRunTime(buffer, bufferSize, bestSeconds);
+}
+
 // Integer-millisecond cases avoid brittle binary literals such as 0.001 or 5.2.
 static_assert(RunTimePartsEqual(RunTimePartsFromTotalMilliseconds(0), 0, 0, 0));
 static_assert(RunTimePartsEqual(RunTimePartsFromTotalMilliseconds(1), 0, 0, 1));

@@ -3,6 +3,7 @@
 #include "core/RunTimeFormat.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/RunTimerState.h"
+#include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
 #include "platform/Time.h"
 #include "world/CollectibleWorld.h"
@@ -18,6 +19,7 @@
 static_assert(world::kHazardCount == 2);
 static_assert(world::kCollectibleCount == 3);
 static_assert(gameplay::CollectedCount(gameplay::CollectibleRunState{}) == 0);
+static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -73,6 +75,18 @@ bool RunTimeFormatScaffoldingOk()
     }
 
     core::FormatRunTime(buffer, sizeof(buffer), 60.0);
+    if (std::strcmp(buffer, "01:00.000") != 0)
+    {
+        return false;
+    }
+
+    core::FormatSessionBestTime(buffer, sizeof(buffer), false, 0.0);
+    if (std::strcmp(buffer, core::kNoSessionBestPlaceholder) != 0)
+    {
+        return false;
+    }
+
+    core::FormatSessionBestTime(buffer, sizeof(buffer), true, 60.0);
     return std::strcmp(buffer, "01:00.000") == 0;
 }
 }
@@ -195,6 +209,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::LevelCompletionState& levelCompletionState,
     const gameplay::CollectibleRunState& collectibleRunState,
     const gameplay::RunTimerState& runTimerState,
+    const gameplay::SessionBestTimeState& sessionBestTimeState,
     bool restartedThisFrame,
     bool hazardContactThisFrame,
     int collectedThisFrameIndex,
@@ -319,6 +334,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
 
     snapshot.runTimeSeconds = runTimerState.elapsedSeconds;
     snapshot.runTimerFrozen = runTimerState.frozen;
+    snapshot.hasSessionBest = sessionBestTimeState.hasBestTime;
+    snapshot.sessionBestSeconds = sessionBestTimeState.bestSeconds;
 
     snapshot.levelCompleted = levelCompletionState.completed;
     snapshot.goalCenter = world::kLevelGoal.center;
@@ -390,6 +407,13 @@ int Application::Run()
             {
                 levelCompletionState.completed = true;
                 runTimerState.frozen = true;
+                if (gameplay::IsBetterSessionCompletion(
+                        sessionBestTimeState,
+                        runTimerState.elapsedSeconds))
+                {
+                    sessionBestTimeState.hasBestTime = true;
+                    sessionBestTimeState.bestSeconds = runTimerState.elapsedSeconds;
+                }
             }
 
             if (!(restartAvailableAtFrameStart && inputState.restartPressed))
@@ -434,7 +458,9 @@ int Application::Run()
             levelCompletionState.completed,
             collectibleRunState.collected,
             gameplay::CollectedCount(collectibleRunState),
-            runTimerState.elapsedSeconds);
+            runTimerState.elapsedSeconds,
+            sessionBestTimeState.hasBestTime,
+            sessionBestTimeState.bestSeconds);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         debugUi.Draw(
             MakeDebugMetricsSnapshot(
@@ -447,6 +473,7 @@ int Application::Run()
                 levelCompletionState,
                 collectibleRunState,
                 runTimerState,
+                sessionBestTimeState,
                 restartedThisFrame,
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
@@ -489,6 +516,7 @@ void Application::Initialize()
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     camera.Initialize(player.Position());
     runTimerState = gameplay::RunTimerState{};
+    sessionBestTimeState = gameplay::SessionBestTimeState{};
     if (!RunTimeFormatScaffoldingOk())
     {
         std::fprintf(stderr, "RunTimeFormat scaffolding check failed.\n");

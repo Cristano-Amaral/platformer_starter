@@ -63,6 +63,7 @@ constexpr int kCollectedHudFontSize = 22;
 constexpr int kCollectedHudMargin = 20;
 constexpr int kTimerHudFontSize = 22;
 constexpr int kTimerHudMargin = 20;
+constexpr int kBestHudGap = 4;
 constexpr Color kTimerHudText{240, 240, 244, 255};
 constexpr float kCollectibleVisualSize = 0.45f;
 
@@ -165,6 +166,15 @@ void DrawRunTimer(double elapsedSeconds)
     core::FormatRunTime(formatted, sizeof(formatted), elapsedSeconds);
     const char* text = TextFormat("TIME %s", formatted);
     DrawText(text, kTimerHudMargin, kTimerHudMargin, kTimerHudFontSize, kTimerHudText);
+}
+
+void DrawSessionBest(bool hasBestTime, double bestSeconds)
+{
+    char formatted[32]{};
+    core::FormatSessionBestTime(formatted, sizeof(formatted), hasBestTime, bestSeconds);
+    const char* text = TextFormat("BEST %s", formatted);
+    const int y = kTimerHudMargin + kTimerHudFontSize + kBestHudGap;
+    DrawText(text, kTimerHudMargin, y, kTimerHudFontSize, kTimerHudText);
 }
 
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
@@ -667,7 +677,9 @@ void Renderer::DrawWorld(
         bool levelCompleted,
         const std::array<bool, world::kCollectibleCount>& collectibleCollected,
         int collectedCount,
-        double elapsedSeconds)
+        double elapsedSeconds,
+        bool hasBestTime,
+        double bestSeconds)
 {
     const Camera3D view = MakeCamera(camera);
     BeginMode3D(view);
@@ -757,6 +769,7 @@ void Renderer::DrawWorld(
     EndMode3D();
 
     DrawRunTimer(elapsedSeconds);
+    DrawSessionBest(hasBestTime, bestSeconds);
     DrawCollectedCounter(collectedCount);
     if (levelCompleted)
     {

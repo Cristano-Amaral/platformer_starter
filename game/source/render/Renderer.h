@@ -59,7 +59,9 @@ public:
         bool levelCompleted,
         const std::array<bool, world::kCollectibleCount>& collectibleCollected,
         int collectedCount,
-        double elapsedSeconds);
+        double elapsedSeconds,
+        bool hasBestTime,
+        double bestSeconds);
     void EndFrame();
 
 private:
