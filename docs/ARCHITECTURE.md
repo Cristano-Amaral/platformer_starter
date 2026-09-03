@@ -39,9 +39,9 @@ Project-facing Player position is the **visual AABB center**. CharacterVirtual `
 
 ## Checkpoint / respawn (Milestone 20)
 
-World data lives in `world/RespawnWorld.h` (initial visual-center spawn, `kKillPlaneY`, `CheckpointSpec`). Runtime state lives in `gameplay::RespawnState`, owned by `Application`. PhysicsWorld does not interpret checkpoints. Renderer does not own activation.
+Checkpoint types and AABB helpers live in `world/RespawnWorld.h` (`CheckpointSpec`). Authored spawn, kill-plane Y, and checkpoint instances live in `world/Level01.cpp` inside the immutable `LevelDefinition`. Runtime state lives in `gameplay::RespawnState`, owned by `Application`. PhysicsWorld does not interpret checkpoints. Renderer does not own activation.
 
-`input::InputState::respawnPressed` is edge-triggered (`R` mapped in the input backend only). Application owns the respawn decision after `Player::Update`: Fall if visual-center Y is below `kKillPlaneY`, else Manual if `respawnPressed`. Fall wins if both occur. At most one respawn per frame. Checkpoint activation runs only when no respawn happened that frame.
+`input::InputState::respawnPressed` is edge-triggered (`R` mapped in the input backend only). Application owns the respawn decision after `Player::Update`: Fall if visual-center Y is below the active level's `killPlaneY`, else Hazard, else Manual if `respawnPressed`. Fall wins if both Fall and Hazard occur. At most one respawn per frame. Checkpoint activation runs only when no respawn happened that frame.
 
 `PhysicsWorld::ResetCharacter` teleports CharacterVirtual (feet), zeros linear velocity and airborne platform carry (`carriedGroundVelocityX`), refreshes contacts, and enforces fixed gameplay Z. `Player::ResetMovementState` clears relative horizontal/vertical velocity, coyote, jump buffer, and carry-related Player fields. `PlatformerCamera::SnapToTarget` copies the player visual center into both desired and smoothed targets. On a respawn frame the camera is snapped and `camera.Update` is skipped.
 
@@ -49,9 +49,9 @@ Checkpoint overlap tests `Player::Position()` (visual center) against checkpoint
 
 ## Level goal / completion (Milestone 21)
 
-World data lives in `world/LevelGoal.h` (one `LevelGoalSpec` on the far-left goal platform). Runtime state lives in `gameplay::LevelCompletionState`, owned by `Application`. PhysicsWorld does not interpret goals. Renderer does not decide completion.
+The `LevelGoalSpec` type lives in `world/LevelGoal.h`. The authored Level 01 goal instance lives in `world/Level01.cpp`. Runtime state lives in `gameplay::LevelCompletionState`, owned by `Application`. PhysicsWorld does not interpret goals. Renderer does not decide completion.
 
-Goal overlap tests `Player::Position()` (visual center) via `PointInsideGoal`. No Jolt sensor. Application sets `completed = true` once on first entry, only on a non-respawn frame after checkpoint evaluation. `PerformRespawn` does not clear completion. Renderer draws the two-post + bar marker from a `levelCompleted` bool and, after `EndMode3D`, draws `LEVEL COMPLETE` with raylib text in all configurations including Release. Dear ImGui Level Goal metrics remain Debug/Development only.
+Goal overlap tests `Player::Position()` (visual center) via `PointInsideGoal` against the active `LevelDefinition` goal. No Jolt sensor. Application sets `completed = true` once on first entry, only on a non-respawn frame after checkpoint evaluation. `PerformRespawn` does not clear completion. Renderer draws the two-post + bar marker from a `levelCompleted` bool and, after `EndMode3D`, draws `LEVEL COMPLETE` with raylib text in all configurations including Release. Dear ImGui Level Goal metrics remain Debug/Development only.
 
 ## Level restart (Milestone 22)
 
@@ -61,7 +61,7 @@ Goal overlap tests `Player::Position()` (visual center) via `PointInsideGoal`. N
 
 M20 respawn still does not reset the moving platform or cyan box. M22 restart does, via `PhysicsWorld::ResetMovingPlatform` and `ResetDynamicTestBox` (project-owned; no Jolt in public headers). Fall/Manual win over restart. Enter is inert before completion.
 
-On a restart frame, `UpdateMovingPlatform` still runs before `RestartRun` so the physics-sensitive order stays intact. Restart then teleports the platform to the canonical start `{0.0, 1.3, 0.0}` with direction `+1`. The next frame resumes toward +X.
+On a restart frame, `UpdateMovingPlatform` still runs before `RestartRun` so the physics-sensitive order stays intact. Restart then teleports the platform to the active `LevelDefinition` moving-platform start (`startX` / `centerY` / `centerZ`) with direction `+1`. The next frame resumes toward +X.
 
 Status: complete (manually validated). Do not implement Milestone 23 in this section.
 
@@ -76,11 +76,11 @@ Temporary blocking with no free space is valid. Manual validation: the Player is
 Status: complete (manually validated). Do not implement Milestone 24 in this section.
 
 ## Shared greybox geometry
-`world::GreyboxWorld` is the project-owned source of truth for current static level boxes (ground and elevated platforms). Renderer and PhysicsWorld both derive from those definitions. Ground and platform coordinates are not duplicated inside PhysicsWorld.
+`world::Box` in `GreyboxWorld.h` is the project-owned AABB type. Canonical Level 01 ground and elevated platforms live in `world/Level01.cpp` (`CreateLevel01Definition()`). Renderer and PhysicsWorld both derive from the active `LevelDefinition`. Ground and platform coordinates are not duplicated inside those systems.
 
-The test kinematic platform is specified by `world::kTestMovingPlatform` in `MovingPlatform.h`. Renderer and PhysicsWorld both derive from that spec. Path and size are not duplicated in PhysicsWorld.
+The kinematic platform's immutable spec is `LevelDefinition::movingPlatform` (`MovingPlatformSpec`). PhysicsWorld owns runtime pose/direction/BodyID. Renderer draws authored size with the runtime pose.
 
-Static test slopes are specified by `world::kWalkableSlope` (30 degrees) and `world::kSteepSlope` (60 degrees) in `Slope.h`. Renderer and PhysicsWorld both derive from those specs. CharacterVirtual max slope remains 50 degrees. Walkable `OnGround` is valid gameplay support; `OnSteepGround` is not.
+Static test slopes are `LevelDefinition::slopes` (`SlopeSpec`: 30° walkable, 60° steep). CharacterVirtual max slope remains 50 degrees in PhysicsWorld, not level authoring. Walkable `OnGround` is valid gameplay support; `OnSteepGround` is not.
 
 ## Moving ground
 The Player rides kinematic ground through CharacterVirtual: `UpdateGroundVelocity` then `GetGroundVelocity`, added to Player-relative horizontal speed. The Player is not parented to the platform and does not receive a manual position delta.
@@ -140,17 +140,17 @@ If a required cooked file is missing at CMake configure time, configure fails an
 
 M24 is a longer hardcoded greybox plus **exactly two ordered checkpoints**. It is not a generic level, trigger, or checkpoint framework.
 
-Live world data:
+Live world data (canonical instances in `world/Level01.cpp`):
 
 - Ground `{0, -0.25, 0}` size `{56, 0.5, 8}` (X [-28, 28], top Y = 0).
-- Elevated platforms in `world::kElevatedPlatforms` (right early, left landing, CP1 support, mid-left step, CP2 support, goal support).
+- Elevated platforms in `LevelDefinition::elevatedPlatforms` (right early, left landing, CP1 support, mid-left step, CP2 support, goal support).
 - Checkpoint 1 `{16.5, 1.8, 0}` size `{2.4, 1.6, 2.0}` respawn `{16.5, 1.8, 0}`.
 - Checkpoint 2 `{-15.5, 2.8, 0}` size `{2.4, 1.6, 2.0}` respawn `{-15.5, 2.8, 0}`.
 - Goal `{ -21.0, 3.8, 0 }` size `{2.0, 1.6, 1.8}` (two-post gate; not a checkpoint).
 - Walkable 30° slope at `{21.70, 1.6732, 0}` (optional dead-end past CP1). 60° slope at `{25.60, 0.966, 0}` (classification dead-end past the 30° test).
 - Moving platform path unchanged. Swept AABB X [-8, 8], Y [1.1, 1.5], Z [-1.5, 1.5].
 
-`world::kCheckpoints` is `std::array<CheckpointSpec, 2>`. Identity 0 = Checkpoint 1, 1 = Checkpoint 2. `RespawnState::activeCheckpointIndex` is `-1` (none), `0`, or `1`. Activation on a no-respawn frame is `expectedIndex = active + 1` against `kCheckpoints[expectedIndex]` only. CP2 cannot activate before CP1. Backtracking cannot downgrade. Enter restart restores `activeCheckpointIndex = -1` and initial spawn.
+`LevelDefinition::checkpoints` is `std::array<CheckpointSpec, 2>`. Identity 0 = Checkpoint 1, 1 = Checkpoint 2. `RespawnState::activeCheckpointIndex` is `-1` (none), `0`, or `1`. Activation on a no-respawn frame is `expectedIndex = active + 1` against `level.checkpoints[expectedIndex]` only. CP2 cannot activate before CP1. Backtracking cannot downgrade. Enter restart restores `activeCheckpointIndex = -1` and the level initial spawn.
 
 Application derives `CheckpointVisualState` (Future / Current / PreviouslyActivated) and passes `std::array<CheckpointVisualState, 2>` to Renderer. Renderer draws two post+beacon primitives from those states and checkpoint specs; it does not test overlap or mutate respawn. Debug/Development metrics show Active checkpoint None/1/2 plus per-checkpoint inside/state.
 
@@ -162,7 +162,7 @@ Status: complete (manually validated). Do not implement Milestone 25 in this sec
 
 ## Static hazards / hazard respawn (Milestone 25)
 
-M25 adds the first explicit non-fall lethal volumes: **exactly two** compile-time `HazardSpec` AABBs in `world/HazardWorld.h`. Identity is the array index. There is no health, no Jolt sensor, and no generic trigger type.
+M25 adds the first explicit non-fall lethal volumes: **exactly two** compile-time `HazardSpec` AABBs authored in `world/Level01.cpp`. Identity is the array index. There is no health, no Jolt sensor, and no generic trigger type.
 
 - Hazard 1 (index 0): corridor spikes `{11.5, 0.5, 0}` size `{1.4, 1.0, 2.0}` AABB X [10.8, 12.2], Y [0, 1.0], Z [-1, 1]
 - Hazard 2 (index 1): goal-gap spikes `{-18.5, 0.5, 0}` size `{1.2, 1.0, 2.0}` AABB X [-19.1, -17.9], Y [0, 1.0], Z [-1, 1]
@@ -173,7 +173,7 @@ Application tests `Player::Position()` (visual center) with `FindHazardIndexCont
 Fall > Hazard > Manual R > checkpoint / goal > Enter (M22 restartAvailableAtFrameStart)
 ```
 
-`PerformRespawn` increments `deathCount` for Fall or Hazard, never Manual. Destination is `respawnState.respawnPosition`. Ordinary Hazard respawn does not reset the moving platform or cyan box. After completion, Hazard death preserves `completed`. Enter restart does not need a hazard reset API (static world specs). Renderer reads `world::kHazards` and draws a red/orange bar matching the AABB plus three cube teeth on the top face; it does not detect contact. Debug/Development metrics show Inside hazard None/1/2 and Hazard contact this frame. Release draws hazards and runs the same death logic without ImGui.
+`PerformRespawn` increments `deathCount` for Fall or Hazard, never Manual. Destination is `respawnState.respawnPosition`. Ordinary Hazard respawn does not reset the moving platform or cyan box. After completion, Hazard death preserves `completed`. Enter restart does not need a hazard reset API (static world specs). Renderer reads `LevelDefinition::hazards` and draws a red/orange bar matching the AABB plus three cube teeth on the top face; it does not detect contact. Debug/Development metrics show Inside hazard None/1/2 and Hazard contact this frame. Release draws hazards and runs the same death logic without ImGui.
 
 User-confirmed Phase C evidence: hazard death +1; respawn at initial spawn before any checkpoint, CP1 after CP1, CP2 after CP2; Enter after LEVEL COMPLETE starts a fresh run and resets deathCount to 0.
 
@@ -181,7 +181,7 @@ Status: complete (manually approved). Do not implement Milestone 26 in this sect
 
 ## Collectibles / run counter (Milestone 26)
 
-M26 adds the first non-lethal collectible loop: **exactly three** compile-time `CollectibleSpec` AABBs in `world/CollectibleWorld.h`. Identity is the array index. Per-run flags live in `gameplay::CollectibleRunState` (`std::array<bool, 3>`); count is derived. Collection is optional and must not gate the goal.
+M26 adds the first non-lethal collectible loop: **exactly three** compile-time `CollectibleSpec` AABBs authored in `world/Level01.cpp`. Identity is the array index. Per-run flags live in `gameplay::CollectibleRunState` (`std::array<bool, world::kCollectibleCount>`); count is derived. Collection is optional and must not gate the goal. The array size remains compile-time coupled to Level 01's three collectibles.
 
 - Collectible 1 (index 0): right-platform hop `{5.0, 2.5, 0}` size `{1.0, 1.2, 1.0}`
 - Collectible 2 (index 1): left-landing hop `{-4.5, 4.0, 0}` size `{1.0, 1.2, 1.0}`
@@ -189,7 +189,7 @@ M26 adds the first non-lethal collectible loop: **exactly three** compile-time `
 
 Standing on the support does not collect (AABB sits just above standing center). A normal hop does. No Jolt sensor. Ordinary R/Fall/Hazard preserve flags; only Enter `RestartRun` clears them. Collection runs in the no-respawn branch after checkpoint/goal and is skipped when `restartAvailableAtFrameStart && Enter`.
 
-Renderer receives collected flags plus derived count, draws a gold 0.45 cube for available items only, and always draws `COLLECTED N / 3` in the upper-right after `EndMode3D`. Debug/Development metrics show Available/Collected, Inside, and Collected this frame.
+Renderer receives collected flags plus derived count, draws a gold 0.45 cube for available items only, and always draws `COLLECTED N / <level collectible count>` in the upper-right after `EndMode3D`. Debug/Development metrics show Available/Collected, Inside, and Collected this frame.
 
 Status: complete (manually approved). Do not implement Milestone 27 in this section.
 
@@ -230,4 +230,18 @@ This avoids a delete-then-rename window (old valid save gone, temp not yet promo
 
 Application zeros `sessionBestTimeState`, then loads once during Initialize. Only `Loaded` populates BEST. Missing/invalid/unsupported/IO leave `BEST --:--.---`. Save runs only inside the existing M28 new-record branch after the in-memory update. Save failure keeps the new in-memory BEST. Load does not create the user-data directory. Directory creation belongs to save only. Enter/R/Fall/Hazard/checkpoints/collectibles do not save. Only BEST persists; current TIME, completion, and other run state do not.
 
-Status: Phase B implementation complete / awaiting Phase C manual validation. Do not mark M29 complete. Do not implement Milestone 30.
+Status: complete (manually approved). Save v1 remains compatible with Milestone 30's single playable level. Do not implement save v2.
+
+## Level data v1 (Milestone 30)
+
+M30 introduces a project-owned immutable `world::LevelDefinition` for the current single playable level (`level_01`). Canonical authored values live in `world/Level01.cpp` (`CreateLevel01Definition()`). The factory populates literals directly; it does not copy legacy Level 01 globals.
+
+Application constructs the definition once as a member (`levelDefinition = CreateLevel01Definition()`), validates it at Initialize, and passes it read-only to PhysicsWorld (`Initialize(level)`) and Renderer (`DrawWorld(..., level, ...)`). Gameplay meaning (checkpoint activation, hazard death, collectible pickup, goal completion, timer, BEST) stays in Application. Runtime pose for the moving platform and cyan box stays in PhysicsWorld. `collected[]`, `activeCheckpointIndex`, `LevelCompletionState`, timer, and BEST stay outside `LevelDefinition`.
+
+Camera offset `{2, 3.5, 12}` and FOV 40 are level framing (`LevelCameraSpec`). Dead zone X/Y `1.5` / `0.75` and follow sharpness `8` remain `PlatformerCamera` controller policy. Player visual size `{0.8, 1.6, 0.8}` remains character/render configuration (`world::kPlayerVisualSize`), not level authoring. CharacterVirtual max slope remains 50° in PhysicsWorld.
+
+Only BEST is persisted (`PLATFORMER_SAVE 1` / `best_seconds`). The save does not store `level_01`. No external level file, editor, LevelManager, or second playable level.
+
+Phase B: live consumers migrated. World type headers keep reusable specs/helpers and no longer own Level 01 instance arrays. Debug/Development metrics include a read-only Level Data section sourced from the active definition.
+
+Status: Phase B implementation complete, awaiting Phase C manual validation. Do not mark M30 complete. Do not implement Milestone 31.

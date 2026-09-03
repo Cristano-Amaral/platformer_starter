@@ -8,6 +8,7 @@
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
+#include "world/LevelDefinition.h"
 #include "world/LevelGoal.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
@@ -152,9 +153,9 @@ void DrawCollectible(const world::CollectibleSpec& spec)
     DrawGreyboxBox(spec.center, visualSize, kCollectibleFill);
 }
 
-void DrawCollectedCounter(int collectedCount)
+void DrawCollectedCounter(int collectedCount, int collectibleTotal)
 {
-    const char* text = TextFormat("COLLECTED %d / 3", collectedCount);
+    const char* text = TextFormat("COLLECTED %d / %d", collectedCount, collectibleTotal);
     const int width = MeasureText(text, kCollectedHudFontSize);
     const int x = GetScreenWidth() - width - kCollectedHudMargin;
     DrawText(text, x, kCollectedHudMargin, kCollectedHudFontSize, kCollectibleHudText);
@@ -274,7 +275,7 @@ void DrawCheckpointMarker(
     DrawGreyboxBox(beaconCenter, beaconSizeVec, beaconColor);
 }
 
-void DrawLevelGoalMarker(bool levelCompleted)
+void DrawLevelGoalMarker(const world::LevelGoalSpec& goal, bool levelCompleted)
 {
     constexpr float postWidth = 0.16f;
     constexpr float postHeight = 1.6f;
@@ -284,20 +285,20 @@ void DrawLevelGoalMarker(bool levelCompleted)
     constexpr float zOffset = -0.90f;
 
     const float platformTopY =
-        world::kLevelGoal.center.y - world::kPlayerVisualSize.y * 0.5f;
+        goal.center.y - world::kPlayerVisualSize.y * 0.5f;
     const float postCenterY = platformTopY + postHeight * 0.5f;
-    const float z = world::kLevelGoal.center.z + zOffset;
+    const float z = goal.center.z + zOffset;
     const core::Vec3 postSize{postWidth, postHeight, postWidth};
     const core::Vec3 leftPost{
-        world::kLevelGoal.center.x - postSpread,
+        goal.center.x - postSpread,
         postCenterY,
         z};
     const core::Vec3 rightPost{
-        world::kLevelGoal.center.x + postSpread,
+        goal.center.x + postSpread,
         postCenterY,
         z};
     const core::Vec3 barCenter{
-        world::kLevelGoal.center.x,
+        goal.center.x,
         platformTopY + postHeight + barHeight * 0.5f,
         z};
     const core::Vec3 barSize{postSpread * 2.0f + postWidth, barHeight, barDepth};
@@ -669,6 +670,7 @@ void Renderer::BeginFrame()
 void Renderer::DrawWorld(
     const gameplay::Player& player,
     const gameplay::PlatformerCamera& camera,
+    const world::LevelDefinition& level,
     core::Vec3 physicsTestBoxPosition,
     core::Vec3 physicsTestBoxSize,
     core::Vec3 movingPlatformPosition,
@@ -685,11 +687,11 @@ void Renderer::DrawWorld(
     BeginMode3D(view);
 
     DrawGrid(kGridSlices, kGridSpacing);
-    DrawGreyboxBox(world::kGround.center, world::kGround.size, kGroundColor);
+    DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
 
     const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
     int platformIndex = 0;
-    for (const world::Box& platform : world::kElevatedPlatforms)
+    for (const world::Box& platform : level.elevatedPlatforms)
     {
         DrawGreyboxBox(
             platform.center,
@@ -699,9 +701,13 @@ void Renderer::DrawWorld(
     }
 
     DrawGreyboxBox(movingPlatformPosition, movingPlatformSize, kMovingPlatformColor);
-    DrawOrientedGreyboxBox(world::kWalkableSlope, kWalkableSlopeColor);
-    DrawOrientedGreyboxBox(world::kSteepSlope, kSteepSlopeColor);
-    for (const world::HazardSpec& hazard : world::kHazards)
+    DrawOrientedGreyboxBox(
+        level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],
+        kWalkableSlopeColor);
+    DrawOrientedGreyboxBox(
+        level.slopes[static_cast<std::size_t>(world::kLevel01SteepSlopeIndex)],
+        kSteepSlopeColor);
+    for (const world::HazardSpec& hazard : level.hazards)
     {
         DrawHazard(hazard);
     }
@@ -709,7 +715,7 @@ void Renderer::DrawWorld(
     {
         if (!collectibleCollected[static_cast<std::size_t>(collectibleIndex)])
         {
-            DrawCollectible(world::kCollectibles[static_cast<std::size_t>(collectibleIndex)]);
+            DrawCollectible(level.collectibles[static_cast<std::size_t>(collectibleIndex)]);
         }
     }
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
@@ -717,10 +723,10 @@ void Renderer::DrawWorld(
     for (int checkpointIndex = 0; checkpointIndex < world::kCheckpointCount; ++checkpointIndex)
     {
         DrawCheckpointMarker(
-            world::kCheckpoints[static_cast<std::size_t>(checkpointIndex)],
+            level.checkpoints[static_cast<std::size_t>(checkpointIndex)],
             checkpointVisuals[static_cast<std::size_t>(checkpointIndex)]);
     }
-    DrawLevelGoalMarker(levelCompleted);
+    DrawLevelGoalMarker(level.goal, levelCompleted);
 
     if (testTextureLoaded && testTexture != nullptr)
     {
@@ -770,7 +776,7 @@ void Renderer::DrawWorld(
 
     DrawRunTimer(elapsedSeconds);
     DrawSessionBest(hasBestTime, bestSeconds);
-    DrawCollectedCounter(collectedCount);
+    DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
     if (levelCompleted)
     {
         DrawLevelCompleteMessage();

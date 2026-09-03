@@ -2,6 +2,8 @@
 
 #include "core/Vec3.h"
 #include "world/CollectibleWorld.h"
+#include "world/LevelDefinition.h"
+#include "world/RespawnWorld.h"
 
 #include <array>
 #include <memory>
@@ -51,6 +53,7 @@ public:
     void DrawWorld(
         const gameplay::Player& player,
         const gameplay::PlatformerCamera& camera,
+        const world::LevelDefinition& level,
         core::Vec3 physicsTestBoxPosition,
         core::Vec3 physicsTestBoxSize,
         core::Vec3 movingPlatformPosition,

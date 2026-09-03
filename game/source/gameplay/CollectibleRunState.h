@@ -7,9 +7,8 @@
 
 namespace gameplay
 {
-// Application-owned per-run collection flags. Not owned by Player,
-// PhysicsWorld, or Renderer. PerformRespawn must not clear this.
-// The bool array is the source of truth; count is derived.
+// Application-owned per-run collection flags. Array size is compile-time
+// coupled to world::kCollectibleCount (Level 01 has exactly 3 collectibles).
 struct CollectibleRunState
 {
     std::array<bool, world::kCollectibleCount> collected{};
@@ -30,7 +29,8 @@ constexpr int CollectedCount(const CollectibleRunState& state)
 
 constexpr int FindAvailableCollectibleIndexContaining(
     core::Vec3 visualCenter,
-    const CollectibleRunState& state)
+    const CollectibleRunState& state,
+    const std::array<world::CollectibleSpec, world::kCollectibleCount>& collectibles)
 {
     for (int index = 0; index < world::kCollectibleCount; ++index)
     {
@@ -39,7 +39,7 @@ constexpr int FindAvailableCollectibleIndexContaining(
             continue;
         }
         if (world::PointInsideCollectible(
-                world::kCollectibles[static_cast<std::size_t>(index)], visualCenter))
+                collectibles[static_cast<std::size_t>(index)], visualCenter))
         {
             return index;
         }

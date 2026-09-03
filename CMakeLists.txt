@@ -76,6 +76,8 @@ add_executable(Platformer3D
     game/source/world/GreyboxWorld.h
     game/source/world/CollectibleWorld.h
     game/source/world/HazardWorld.h
+    game/source/world/LevelDefinition.h
+    game/source/world/Level01.cpp
     game/source/world/LevelGoal.h
     game/source/world/MovingPlatform.h
     game/source/world/RespawnWorld.h

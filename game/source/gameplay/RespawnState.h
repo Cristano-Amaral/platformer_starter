@@ -20,7 +20,7 @@ enum class RespawnReason
 struct RespawnState
 {
     int activeCheckpointIndex = world::kNoActiveCheckpointIndex;
-    core::Vec3 respawnPosition = world::kInitialSpawnVisualCenter;
+    core::Vec3 respawnPosition{};
     int deathCount = 0;
     RespawnReason lastRespawnReason = RespawnReason::None;
 };

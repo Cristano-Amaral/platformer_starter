@@ -7,15 +7,17 @@ namespace gameplay
 class PlatformerCamera
 {
 public:
-    // Tunable framing: mostly side-on (large +Z), slightly off-axis (+X).
-    core::Vec3 offset{2.0f, 3.5f, 12.0f};
-    float fieldOfViewY = 40.0f;
+    // Framing comes from LevelDefinition via ApplyLevelFraming. Dead zone and
+    // sharpness remain controller policy, not level authoring.
+    core::Vec3 offset{};
+    float fieldOfViewY = 0.0f;
 
     static constexpr float kHorizontalDeadZone = 1.5f;
     static constexpr float kVerticalDeadZone = 0.75f;
     // Higher = snappier follow. Units: 1/seconds. ~95% catch-up in 3/k seconds.
     static constexpr float kFollowSharpness = 8.0f;
 
+    void ApplyLevelFraming(core::Vec3 framingOffset, float framingFieldOfViewY);
     void Initialize(core::Vec3 playerPosition);
     void SnapToTarget(core::Vec3 playerPosition);
     void Update(core::Vec3 playerPosition, float deltaSeconds);

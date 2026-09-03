@@ -1,6 +1,7 @@
 #include "core/Application.h"
 
 #include "core/RunTimeFormat.h"
+#include "gameplay/PlatformerCamera.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -9,6 +10,7 @@
 #include "platform/Time.h"
 #include "world/CollectibleWorld.h"
 #include "world/HazardWorld.h"
+#include "world/LevelDefinition.h"
 #include "world/LevelGoal.h"
 
 #include <array>
@@ -138,6 +140,7 @@ bool BestTimeSaveFormatScaffoldingOk()
     const persistence::LoadBestTimeResult loaded = ParseBestTimeV1("PLATFORMER_SAVE 1\nbest_seconds 1.5\n");
     return loaded.status == LoadBestTimeStatus::Loaded && loaded.bestSeconds == 1.5;
 }
+}
 
 #if defined(GAME_DEVELOPMENT_TOOLS)
 void ReportBestTimeLoadDiagnostic(persistence::LoadBestTimeStatus status)
@@ -164,7 +167,6 @@ void ReportBestTimeSaveDiagnostic(persistence::SaveBestTimeStatus status)
     std::fprintf(stderr, "Best time save: save status Error.\n");
 }
 #endif
-}
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 namespace
@@ -285,6 +287,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::CollectibleRunState& collectibleRunState,
     const gameplay::RunTimerState& runTimerState,
     const gameplay::SessionBestTimeState& sessionBestTimeState,
+    const world::LevelDefinition& level,
     persistence::LoadBestTimeStatus bestTimeLoadStatus,
     persistence::SaveBestTimeStatus bestTimeSaveStatus,
     const char* bestTimeSavePath,
@@ -381,21 +384,21 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.texturedModelHasAlbedoTexture = renderer.TexturedModelHasAlbedoTexture();
 
     snapshot.respawnPosition = respawnState.respawnPosition;
-    snapshot.killPlaneY = world::kKillPlaneY;
+    snapshot.killPlaneY = level.killPlaneY;
     snapshot.deathCount = respawnState.deathCount;
     snapshot.lastRespawnReason = RespawnReasonName(respawnState.lastRespawnReason);
     snapshot.activeCheckpointLabel = ActiveCheckpointLabel(respawnState.activeCheckpointIndex);
     snapshot.checkpoint1Inside =
-        world::PointInsideCheckpoint(world::kCheckpoints[0], player.Position());
+        world::PointInsideCheckpoint(level.checkpoints[0], player.Position());
     snapshot.checkpoint1VisualState = CheckpointVisualStateName(
         world::CheckpointVisualStateForIndex(0, respawnState.activeCheckpointIndex));
     snapshot.checkpoint2Inside =
-        world::PointInsideCheckpoint(world::kCheckpoints[1], player.Position());
+        world::PointInsideCheckpoint(level.checkpoints[1], player.Position());
     snapshot.checkpoint2VisualState = CheckpointVisualStateName(
         world::CheckpointVisualStateForIndex(1, respawnState.activeCheckpointIndex));
 
     snapshot.insideHazardLabel = HazardIndexLabel(
-        world::FindHazardIndexContaining(player.Position()));
+        world::FindHazardIndexContaining(player.Position(), level.hazards));
     snapshot.hazardContactThisFrame = hazardContactThisFrame;
 
     snapshot.collectedCount = gameplay::CollectedCount(collectibleRunState);
@@ -406,7 +409,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
             collectibleRunState.collected[static_cast<std::size_t>(index)];
         snapshot.collectibleInside[static_cast<std::size_t>(index)] =
             world::PointInsideCollectible(
-                world::kCollectibles[static_cast<std::size_t>(index)],
+                level.collectibles[static_cast<std::size_t>(index)],
                 player.Position());
     }
 
@@ -419,12 +422,38 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.bestTimeSaveStatus = persistence::SaveBestTimeStatusName(bestTimeSaveStatus);
 
     snapshot.levelCompleted = levelCompletionState.completed;
-    snapshot.goalCenter = world::kLevelGoal.center;
-    snapshot.goalSize = world::kLevelGoal.size;
+    snapshot.goalCenter = level.goal.center;
+    snapshot.goalSize = level.goal.size;
     snapshot.playerInsideGoal =
-        world::PointInsideGoal(world::kLevelGoal, player.Position());
+        world::PointInsideGoal(level.goal, player.Position());
     snapshot.restartAvailable = levelCompletionState.completed;
     snapshot.restartedThisFrame = restartedThisFrame;
+
+    const std::size_t idLength =
+        level.id.size() < sizeof(snapshot.levelId) - 1 ? level.id.size()
+                                                       : sizeof(snapshot.levelId) - 1;
+    if (level.id.data() != nullptr && idLength > 0)
+    {
+        std::memcpy(snapshot.levelId, level.id.data(), idLength);
+    }
+    snapshot.levelId[idLength] = '\0';
+    snapshot.levelInitialSpawn = level.initialSpawnVisualCenter;
+    snapshot.levelKillPlaneY = level.killPlaneY;
+    snapshot.levelElevatedPlatformCount = static_cast<int>(level.elevatedPlatforms.size());
+    snapshot.levelSlopeCount = static_cast<int>(level.slopes.size());
+    snapshot.levelCheckpointCount = static_cast<int>(level.checkpoints.size());
+    snapshot.levelHazardCount = static_cast<int>(level.hazards.size());
+    snapshot.levelCollectibleCount = static_cast<int>(level.collectibles.size());
+    snapshot.levelStaticBoxCount = 1 + snapshot.levelElevatedPlatformCount;
+    snapshot.levelHasGoal = level.goal.size.x > 0.0f && level.goal.size.y > 0.0f
+        && level.goal.size.z > 0.0f;
+    snapshot.levelHasMovingPlatform = level.movingPlatform.size.x > 0.0f
+        && level.movingPlatform.size.y > 0.0f && level.movingPlatform.size.z > 0.0f
+        && level.movingPlatform.speed > 0.0f;
+    snapshot.levelHasDynamicBox = level.dynamicBox.size.x > 0.0f && level.dynamicBox.size.y > 0.0f
+        && level.dynamicBox.size.z > 0.0f && level.dynamicBox.mass > 0.0f;
+    snapshot.levelCameraOffset = level.camera.offset;
+    snapshot.levelCameraFieldOfViewY = level.camera.fieldOfViewY;
     return snapshot;
 }
 #endif
@@ -450,11 +479,12 @@ int Application::Run()
         player.Update(inputState, deltaSeconds, physicsWorld);
 
         const bool hazardContactThisFrame =
-            world::FindHazardIndexContaining(player.Position()) != world::kNoHazardIndex;
+            world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
+            != world::kNoHazardIndex;
 
         int collectedThisFrameIndex = world::kNoCollectibleIndex;
         bool respawnedThisFrame = false;
-        if (player.Position().y < world::kKillPlaneY)
+        if (player.Position().y < levelDefinition.killPlaneY)
         {
             PerformRespawn(gameplay::RespawnReason::Fall);
             respawnedThisFrame = true;
@@ -475,16 +505,17 @@ int Application::Run()
                 world::NextExpectedCheckpointIndex(respawnState.activeCheckpointIndex);
             if (world::IsValidCheckpointIndex(expectedIndex)
                 && world::PointInsideCheckpoint(
-                       world::kCheckpoints[static_cast<std::size_t>(expectedIndex)],
+                       levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)],
                        player.Position()))
             {
                 respawnState.activeCheckpointIndex = expectedIndex;
                 respawnState.respawnPosition =
-                    world::kCheckpoints[static_cast<std::size_t>(expectedIndex)].respawnPosition;
+                    levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)]
+                        .respawnPosition;
             }
 
             if (!levelCompletionState.completed
-                && world::PointInsideGoal(world::kLevelGoal, player.Position()))
+                && world::PointInsideGoal(levelDefinition.goal, player.Position()))
             {
                 levelCompletionState.completed = true;
                 runTimerState.frozen = true;
@@ -507,7 +538,8 @@ int Application::Run()
                 const int collectibleIndex =
                     gameplay::FindAvailableCollectibleIndexContaining(
                         player.Position(),
-                        collectibleRunState);
+                        collectibleRunState,
+                        levelDefinition.collectibles);
                 if (collectibleIndex != world::kNoCollectibleIndex)
                 {
                     collectibleRunState.collected[static_cast<std::size_t>(collectibleIndex)] =
@@ -536,6 +568,7 @@ int Application::Run()
         renderer.DrawWorld(
             player,
             camera,
+            levelDefinition,
             testBox.position,
             testBox.size,
             movingPlatform.position,
@@ -560,6 +593,7 @@ int Application::Run()
                 collectibleRunState,
                 runTimerState,
                 sessionBestTimeState,
+                levelDefinition,
                 bestTimeLoadStatus,
                 bestTimeSaveStatus,
                 bestTimeSavePathDisplay.c_str(),
@@ -585,7 +619,20 @@ void Application::Initialize()
 
     renderer.LoadRuntimeAssets();
 
-    if (!physicsWorld.Initialize())
+    if (!world::LevelDefinitionHasRequiredAuthoredContent(levelDefinition))
+    {
+        std::fprintf(stderr, "Level 01 data validation failed.\n");
+        renderer.UnloadRuntimeAssets();
+        window.Shutdown();
+        initialized = false;
+        return;
+    }
+
+    camera.ApplyLevelFraming(
+        levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
+    respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
+
+    if (!physicsWorld.Initialize(levelDefinition))
     {
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
@@ -666,11 +713,12 @@ void Application::RestartRun()
 {
     physicsWorld.ResetMovingPlatform();
     physicsWorld.ResetDynamicTestBox();
-    physicsWorld.ResetCharacter(world::kInitialSpawnVisualCenter, {});
+    physicsWorld.ResetCharacter(levelDefinition.initialSpawnVisualCenter, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
 
     respawnState = gameplay::RespawnState{};
+    respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState.completed = false;
     collectibleRunState = gameplay::CollectibleRunState{};
     runTimerState = gameplay::RunTimerState{};

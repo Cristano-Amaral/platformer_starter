@@ -4,6 +4,11 @@
 
 #include <memory>
 
+namespace world
+{
+struct LevelDefinition;
+}
+
 namespace physics
 {
 struct DynamicTestBox
@@ -72,7 +77,7 @@ public:
     PhysicsWorld(PhysicsWorld&&) = delete;
     PhysicsWorld& operator=(PhysicsWorld&&) = delete;
 
-    bool Initialize();
+    bool Initialize(const world::LevelDefinition& level);
     bool InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSize);
     void ResetCharacter(const core::Vec3& visualCenter, const core::Vec3& velocity);
     void ResetMovingPlatform();

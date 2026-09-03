@@ -1,8 +1,6 @@
 #include "physics/PhysicsWorld.h"
 
-#include "world/GreyboxWorld.h"
-#include "world/MovingPlatform.h"
-#include "world/Slope.h"
+#include "world/LevelDefinition.h"
 
 #include <Jolt/Jolt.h>
 
@@ -23,6 +21,7 @@
 
 #include <cmath>
 #include <cstdarg>
+#include <cstddef>
 #include <cstdio>
 #include <memory>
 #include <vector>
@@ -40,12 +39,6 @@ constexpr unsigned int kMaxBodyPairs = 64;
 constexpr unsigned int kMaxContactConstraints = 64;
 constexpr unsigned int kTempAllocatorBytes = 1 * 1024 * 1024;
 constexpr unsigned int kMaxPhysicsJobs = 256;
-
-constexpr core::Vec3 kDynamicBoxCenter{0.0f, 5.0f, 0.0f};
-constexpr core::Vec3 kDynamicBoxSize{1.0f, 1.0f, 1.0f};
-// 1 m cube at Jolt convex default 1000 kg/m^3 is ~1000 kg. Override to a crate-like 30 kg
-// so CharacterVirtual maxStrength (100 N) can produce a meaningful impulse response.
-constexpr float kDynamicBoxMass = 30.0f;
 
 // Capsule matching the 0.8 x 1.6 x 0.8 visual cube:
 // radius 0.4, cylinder height 0.8 => total height 1.6, diameter 0.8.
@@ -289,6 +282,8 @@ struct PhysicsWorld::Impl
     JPH::Ref<JPH::CharacterVirtual> character;
     core::Vec3 playerVisualSize{0.8f, 1.6f, 0.8f};
     float gameplayZ = 0.0f;
+    world::MovingPlatformSpec movingPlatformSpec{};
+    world::DynamicBoxSpec dynamicBoxSpec{};
     float movingPlatformDirection = 1.0f;
     float carriedGroundVelocityX = 0.0f;
     bool typesRegistered = false;
@@ -356,15 +351,15 @@ struct PhysicsWorld::Impl
         return true;
     }
 
-    bool AddGreyboxStaticBodies()
+    bool AddGreyboxStaticBodies(const world::LevelDefinition& level)
     {
-        if (!AddStaticBox(world::kGround, "ground"))
+        if (!AddStaticBox(level.ground, "ground"))
         {
             return false;
         }
 
         int index = 0;
-        for (const world::Box& platform : world::kElevatedPlatforms)
+        for (const world::Box& platform : level.elevatedPlatforms)
         {
             char name[64];
             std::snprintf(name, sizeof(name), "elevated platform %d", index);
@@ -375,11 +370,15 @@ struct PhysicsWorld::Impl
             ++index;
         }
 
-        if (!AddStaticSlope(world::kWalkableSlope, "walkable slope"))
+        if (!AddStaticSlope(
+                level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],
+                "walkable slope"))
         {
             return false;
         }
-        if (!AddStaticSlope(world::kSteepSlope, "steep slope"))
+        if (!AddStaticSlope(
+                level.slopes[static_cast<std::size_t>(world::kLevel01SteepSlopeIndex)],
+                "steep slope"))
         {
             return false;
         }
@@ -389,7 +388,7 @@ struct PhysicsWorld::Impl
 
     bool CreateMovingPlatform()
     {
-        const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+        const world::MovingPlatformSpec& spec = movingPlatformSpec;
         JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
         JPH::BodyCreationSettings settings(
             new JPH::BoxShape(ToHalfExtent(spec.size)),
@@ -416,7 +415,7 @@ struct PhysicsWorld::Impl
             return;
         }
 
-        const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+        const world::MovingPlatformSpec& spec = movingPlatformSpec;
         JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
         const JPH::RVec3 current = bodyInterface.GetPosition(movingPlatformId);
         float x = static_cast<float>(current.GetX());
@@ -517,12 +516,15 @@ PhysicsWorld::~PhysicsWorld()
     Shutdown();
 }
 
-bool PhysicsWorld::Initialize()
+bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
 {
     if (impl->initialized)
     {
         return true;
     }
+
+    impl->movingPlatformSpec = level.movingPlatform;
+    impl->dynamicBoxSpec = level.dynamicBox;
 
     JPH::RegisterDefaultAllocator();
     JPH::Trace = TraceImpl;
@@ -548,7 +550,7 @@ bool PhysicsWorld::Initialize()
         impl->objectVsBroadPhaseLayerFilter,
         impl->objectLayerPairFilter);
 
-    if (!impl->AddGreyboxStaticBodies())
+    if (!impl->AddGreyboxStaticBodies(level))
     {
         Shutdown();
         return false;
@@ -556,13 +558,13 @@ bool PhysicsWorld::Initialize()
 
     JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
     JPH::BodyCreationSettings boxSettings(
-        new JPH::BoxShape(ToHalfExtent(kDynamicBoxSize)),
-        ToRVec3(kDynamicBoxCenter),
+        new JPH::BoxShape(ToHalfExtent(impl->dynamicBoxSpec.size)),
+        ToRVec3(impl->dynamicBoxSpec.center),
         JPH::Quat::sIdentity(),
         JPH::EMotionType::Dynamic,
         ObjectLayers::Moving);
     boxSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-    boxSettings.mMassPropertiesOverride.mMass = kDynamicBoxMass;
+    boxSettings.mMassPropertiesOverride.mMass = impl->dynamicBoxSpec.mass;
     impl->dynamicBodyId = bodyInterface.CreateAndAddBody(boxSettings, JPH::EActivation::Activate);
     if (impl->dynamicBodyId.IsInvalid())
     {
@@ -582,9 +584,13 @@ bool PhysicsWorld::Initialize()
 
         const float inverseMass = lock.GetBody().GetMotionProperties()->GetInverseMass();
         const float mass = inverseMass > 0.0f ? (1.0f / inverseMass) : 0.0f;
-        if (std::fabs(mass - kDynamicBoxMass) > 0.01f)
+        if (std::fabs(mass - impl->dynamicBoxSpec.mass) > 0.01f)
         {
-            std::fprintf(stderr, "PhysicsWorld: dynamic test box mass is %.3f kg, expected %.3f kg.\n", mass, kDynamicBoxMass);
+            std::fprintf(
+                stderr,
+                "PhysicsWorld: dynamic test box mass is %.3f kg, expected %.3f kg.\n",
+                mass,
+                impl->dynamicBoxSpec.mass);
             Shutdown();
             return false;
         }
@@ -719,7 +725,7 @@ void PhysicsWorld::ResetMovingPlatform()
         return;
     }
 
-    const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+    const world::MovingPlatformSpec& spec = impl->movingPlatformSpec;
     JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
     bodyInterface.SetPositionAndRotation(
         impl->movingPlatformId,
@@ -741,7 +747,7 @@ void PhysicsWorld::ResetDynamicTestBox()
     JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
     bodyInterface.SetPositionAndRotation(
         impl->dynamicBodyId,
-        ToRVec3(kDynamicBoxCenter),
+        ToRVec3(impl->dynamicBoxSpec.center),
         JPH::Quat::sIdentity(),
         JPH::EActivation::Activate);
     bodyInterface.SetLinearVelocity(impl->dynamicBodyId, JPH::Vec3::sZero());
@@ -897,7 +903,7 @@ bool PhysicsWorld::IsDynamicTestBodyValid() const
 DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
 {
     DynamicTestBox box;
-    box.size = kDynamicBoxSize;
+    box.size = impl->dynamicBoxSpec.size;
     box.valid = IsDynamicTestBodyValid();
     if (!box.valid)
     {
@@ -915,7 +921,7 @@ DynamicTestBox PhysicsWorld::GetDynamicTestBox() const
 MovingPlatformState PhysicsWorld::GetMovingPlatform() const
 {
     MovingPlatformState state;
-    const world::MovingPlatformSpec& spec = world::kTestMovingPlatform;
+    const world::MovingPlatformSpec& spec = impl->movingPlatformSpec;
     state.size = spec.size;
     state.pathMinX = spec.pathMinX;
     state.pathMaxX = spec.pathMaxX;

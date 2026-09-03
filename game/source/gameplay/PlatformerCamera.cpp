@@ -18,6 +18,12 @@ float ExpSmooth(float current, float target, float deltaSeconds, float sharpness
 }
 }
 
+void PlatformerCamera::ApplyLevelFraming(core::Vec3 framingOffset, float framingFieldOfViewY)
+{
+    offset = framingOffset;
+    fieldOfViewY = framingFieldOfViewY;
+}
+
 void PlatformerCamera::Initialize(core::Vec3 playerPosition)
 {
     SnapToTarget(playerPosition);

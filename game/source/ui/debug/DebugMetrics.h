@@ -121,6 +121,21 @@ struct DebugMetricsSnapshot
     core::Vec3 goalCenter{};
     core::Vec3 goalSize{};
     bool playerInsideGoal = false;
+
+    char levelId[32]{};
+    core::Vec3 levelInitialSpawn{};
+    float levelKillPlaneY = 0.0f;
+    int levelStaticBoxCount = 0;
+    int levelElevatedPlatformCount = 0;
+    int levelSlopeCount = 0;
+    int levelCheckpointCount = 0;
+    int levelHazardCount = 0;
+    int levelCollectibleCount = 0;
+    bool levelHasGoal = false;
+    bool levelHasMovingPlatform = false;
+    bool levelHasDynamicBox = false;
+    core::Vec3 levelCameraOffset{};
+    float levelCameraFieldOfViewY = 0.0f;
 };
 
 void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);

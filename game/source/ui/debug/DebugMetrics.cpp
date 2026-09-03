@@ -77,6 +77,32 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Save status: %s", snapshot.bestTimeSaveStatus);
     }
 
+    if (ImGui::CollapsingHeader("Level Data", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Level ID: %s", snapshot.levelId);
+        ImGui::Text(
+            "Initial spawn: %.4f, %.4f, %.4f",
+            snapshot.levelInitialSpawn.x,
+            snapshot.levelInitialSpawn.y,
+            snapshot.levelInitialSpawn.z);
+        ImGui::Text("Kill plane Y: %.4f", snapshot.levelKillPlaneY);
+        ImGui::Text("Static boxes (ground + elevated): %d", snapshot.levelStaticBoxCount);
+        ImGui::Text("Elevated platforms: %d", snapshot.levelElevatedPlatformCount);
+        ImGui::Text("Slopes: %d", snapshot.levelSlopeCount);
+        ImGui::Text("Checkpoints: %d", snapshot.levelCheckpointCount);
+        ImGui::Text("Hazards: %d", snapshot.levelHazardCount);
+        ImGui::Text("Collectibles: %d", snapshot.levelCollectibleCount);
+        ImGui::Text("Goal present: %s", BoolText(snapshot.levelHasGoal));
+        ImGui::Text("Moving platform present: %s", BoolText(snapshot.levelHasMovingPlatform));
+        ImGui::Text("Dynamic box present: %s", BoolText(snapshot.levelHasDynamicBox));
+        ImGui::Text(
+            "Camera offset: %.4f, %.4f, %.4f",
+            snapshot.levelCameraOffset.x,
+            snapshot.levelCameraOffset.y,
+            snapshot.levelCameraOffset.z);
+        ImGui::Text("Camera FOV Y: %.4f", snapshot.levelCameraFieldOfViewY);
+    }
+
     if (ImGui::CollapsingHeader("Player transform", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("position X: %.4f", snapshot.playerPosition.x);

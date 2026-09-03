@@ -11,6 +11,7 @@
 #include "persistence/BestTimeSave.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
+#include "world/LevelDefinition.h"
 #include "world/RespawnWorld.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -32,9 +33,10 @@ private:
     void PerformRespawn(gameplay::RespawnReason reason);
     void RestartRun();
 
+    world::LevelDefinition levelDefinition = world::CreateLevel01Definition();
     platform::Window window;
     render::Renderer renderer;
-    gameplay::Player player{world::kInitialSpawnVisualCenter, world::kPlayerVisualSize};
+    gameplay::Player player{levelDefinition.initialSpawnVisualCenter, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
     gameplay::LevelCompletionState levelCompletionState;

@@ -76,5 +76,5 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 29 — Persistent Best Time / Save File v1 (Phase B implementation complete / awaiting Phase C manual validation).
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. Persist only BEST. Versioned text save. Application owns gameplay comparison. Persistence load/store only. Load once in Initialize. Save only on a new in-memory BEST (memory first). User-data path via platform::UserDataDirectory(). Promote temp→final via platform::ReplaceFileWithTemporary (no remove-final-then-rename). No SaveManager. Do not mark M29 complete. Do not implement Milestone 30.
+Milestone 30 — Level Data v1: Data-Driven Single Level (Phase B implementation complete, awaiting Phase C manual validation).
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`. One playable level (`level_01`). Canonical authored data lives in `world/Level01.cpp` via `CreateLevel01Definition()`. Application owns the immutable `LevelDefinition` and passes it to PhysicsWorld/Renderer. No editor, no external level files, no LevelManager. Do not mark M30 complete until Phase C passes. Do not implement Milestone 31.
