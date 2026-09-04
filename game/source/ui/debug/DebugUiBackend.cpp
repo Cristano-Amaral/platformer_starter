@@ -2,9 +2,12 @@
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 
+#include "editor/EditorLayout.h"
 #include "imgui.h"
 #include "raylib.h"
 #include "rlImGui.h"
+
+#include <filesystem>
 
 namespace ui
 {
@@ -21,8 +24,31 @@ void DebugUiBackend::Initialize()
     }
 
     rlImGuiSetup(true);
-    ImGui::GetIO().IniFilename = nullptr;
+    // Set after CreateContext and before the first NewFrame. Default ImGui
+    // would otherwise write ./imgui.ini in the process CWD.
+    iniFilenameStorage.clear();
+    const std::filesystem::path layoutPath = editor::EditorLayoutPath();
+    if (!layoutPath.empty())
+    {
+        editor::EnsureEditorLayoutDirectory();
+        iniFilenameStorage = layoutPath.string();
+        ImGui::GetIO().IniFilename = iniFilenameStorage.c_str();
+    }
+    else
+    {
+        ImGui::GetIO().IniFilename = nullptr;
+    }
     initialized = true;
+}
+
+void DebugUiBackend::SaveIniSettings()
+{
+    if (!initialized || iniFilenameStorage.empty())
+    {
+        return;
+    }
+
+    ImGui::SaveIniSettingsToDisk(iniFilenameStorage.c_str());
 }
 
 void DebugUiBackend::Shutdown()
@@ -33,6 +59,7 @@ void DebugUiBackend::Shutdown()
     }
 
     rlImGuiShutdown();
+    iniFilenameStorage.clear();
     initialized = false;
 }
 
@@ -92,6 +119,7 @@ namespace ui
 DebugUiBackend::~DebugUiBackend() = default;
 void DebugUiBackend::Initialize() {}
 void DebugUiBackend::Shutdown() {}
+void DebugUiBackend::SaveIniSettings() {}
 void DebugUiBackend::BeginFrame() {}
 void DebugUiBackend::EndFrame() {}
 bool DebugUiBackend::ConsumeTogglePressed()

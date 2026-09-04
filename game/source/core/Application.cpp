@@ -668,7 +668,8 @@ int Application::Run()
         if (levelEditorState.active)
         {
             editorInput = editor::PollEditorInput();
-            const bool applyLook = !debugUi.WantsMouseCapture();
+            const bool applyLook =
+                !debugUi.WantsMouseCapture() && !levelEditorState.gizmo.dragging;
             editor::UpdateEditorCamera(
                 levelEditorState.editorCamera,
                 editorInput,
@@ -695,6 +696,26 @@ int Application::Run()
             overlay.highlightCenter = highlight.center;
             overlay.highlightSize = highlight.size;
             overlay.highlightRotationZDegrees = highlight.rotationZDegrees;
+
+            const editor::EditorPendingTransformPreview pending =
+                editor::MakePendingTransformPreview(
+                    levelEditorState.selection,
+                    levelDefinition,
+                    levelEditorState.workingCopy);
+            overlay.drawPendingPreview = pending.visible;
+            overlay.pendingPreviewCenter = pending.center;
+            overlay.pendingPreviewSize = pending.size;
+
+            const editor::GizmoDrawRequest gizmo = editor::MakeGizmoDrawRequest(
+                levelEditorState.selection,
+                levelEditorState.workingCopy,
+                cameraView,
+                levelEditorState.gizmo);
+            overlay.drawTranslationGizmo = gizmo.visible;
+            overlay.gizmoOrigin = gizmo.origin;
+            overlay.gizmoAxisLength = gizmo.axisLength;
+            overlay.gizmoHoveredAxis = static_cast<int>(gizmo.hovered);
+            overlay.gizmoActiveAxis = static_cast<int>(gizmo.active);
         }
         else
         {
@@ -722,7 +743,10 @@ int Application::Run()
         const editor::LevelEditorViewContext levelEditorView{
             runtimeLevelPathDisplay.c_str(),
             movingPlatform.position,
-            testBox.position};
+            testBox.position,
+            static_cast<float>(window.Width()),
+            static_cast<float>(window.Height()),
+            false};
         const editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
@@ -763,19 +787,31 @@ int Application::Run()
                 false,
                 !keyboardCaptured,
                 !mouseCaptured);
-            if (!mouseCaptured && editorInput.selectPressed && !editorInput.lookHeld)
+            const editor::Ray3 ray = editor::ScreenToWorldRay(
+                cameraView,
+                editorInput.mouseX,
+                editorInput.mouseY,
+                static_cast<float>(window.Width()),
+                static_cast<float>(window.Height()));
+            const bool gizmoConsumedPointer = editor::UpdateGizmoInteraction(
+                levelEditorState.gizmo,
+                levelEditorState.selection,
+                levelEditorState.workingCopy,
+                cameraView,
+                ray,
+                mouseCaptured,
+                editorInput.lookHeld,
+                editorInput.selectPressed,
+                editorInput.selectHeld,
+                editorInput.selectReleased);
+            if (!mouseCaptured && editorInput.selectPressed && !editorInput.lookHeld
+                && !gizmoConsumedPointer)
             {
                 const editor::EditorPickingWorldState pickingWorld{
                     movingPlatform.position,
                     movingPlatform.size,
                     testBox.position,
                     testBox.size};
-                const editor::Ray3 ray = editor::ScreenToWorldRay(
-                    cameraView,
-                    editorInput.mouseX,
-                    editorInput.mouseY,
-                    static_cast<float>(window.Width()),
-                    static_cast<float>(window.Height()));
                 levelEditorState.selection = editor::PickNearest(
                     ray, editor::BuildPickingSet(levelDefinition, pickingWorld));
             }
@@ -968,9 +1004,11 @@ void Application::SetLevelEditorActive(bool active)
         {
             levelEditorState.selection = editor::ClearSelection();
         }
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
     }
     if (!active && levelEditorState.active)
     {
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
     }
@@ -989,11 +1027,13 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         levelEditorState.modified = false;
         levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::NotAttempted;
         levelEditorState.lastMessage = "Working copy reverted to the applied level.";
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
         return true;
     case editor::LevelEditorRequest::SaveLevelSource:
         SaveLevelEditorSource();
         return true;
     case editor::LevelEditorRequest::ApplyPreview:
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
         break;
     }
 

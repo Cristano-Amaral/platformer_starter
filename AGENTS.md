@@ -76,24 +76,24 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 33 — Visual Level Editor v2 (Phase B live editor implemented,
-awaiting Phase C manual validation).
+Milestone 34 — Visual Level Editor v3 (Phase C gizmo overlay + canonical source
+restore, awaiting final approval).
 See `docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and `docs/LEVEL_FORMAT_V1.md`.
 
-Milestone 32 is complete and merged. F2 still pauses simulation, edits a
-working copy, and uses Apply Preview / Revert / Save Level Source. Editable set
-is unchanged: spawn, gameplay camera offset/FOV, ground and
-`elevatedPlatforms[0..5]` center/size. Debug compiles the visual editor but
-cannot author. Release has no editor.
+Milestone 33 is complete and merged. F2 still pauses simulation, edits a
+working copy, and uses Apply Preview / Revert / Save Level Source. Viewport
+pick/highlight use the active/applied world; Inspector and the translation
+gizmo edit `workingCopy`. Editable set is unchanged. Debug compiles the visual
+editor but cannot author. Release has no editor.
 
-M33 Phase B made the visual editor live: F2 activates a session editor camera,
-Hierarchy, Inspector-by-selection, CPU world picking, spawn marker, and
-selection highlight. Inspector edits `workingCopy`; viewport pick/highlight
-use the active/applied world until Apply Preview. Selection is one
-`EditorSelection` on `LevelEditorState`.
-Do not implement gizmos, add/delete, or Milestone 34.
+M34 Phase B enabled world-space X/Y/Z translation for Spawn, Ground, and
+Elevated Platform 0..5, a pending ghost at the working transform, and persistent
+Dear ImGui layout with Reset Editor Layout
+(`%LOCALAPPDATA%\Platformer3D\editor_layout.ini`). Phase C correction: gizmo
+draws as a depth-independent editor overlay so handles stay readable inside
+meshes. Do not implement rotation/scale, add/delete, docking, or Milestone 35.
 
-Do not mark M33 complete. Do not create a SceneManager, EntityManager, UUID
+Do not mark M34 complete. Do not create a SceneManager, EntityManager, UUID
 system, Level Format v2, or a generic Inspector.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
@@ -103,4 +103,5 @@ cooked → staged `<exe>/assets/levels/level_01.level` → `LoadLevelFile` →
 owns it. There is no compiled Level 01 fallback. Missing/invalid/unsupported
 Level 01 is a fatal init error. M29 BEST save remains nonfatal. The M32 writer,
 authoring boundary, F2 editor, Apply Preview and source Save remain the live
-authoring path. M33 must not widen the editable set, auto-cook, or add gizmos.
+authoring path. M34 must not widen the editable set, auto-cook, add rotation/scale,
+or start Milestone 35.

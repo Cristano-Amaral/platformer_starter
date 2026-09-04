@@ -141,5 +141,10 @@ struct DebugMetricsSnapshot
     float levelCameraFieldOfViewY = 0.0f;
 };
 
-void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot);
+void DrawDebugMetrics(
+    const DebugMetricsSnapshot& snapshot,
+    float viewportWidth,
+    float viewportHeight,
+    bool forceDefaultLayout,
+    bool recoverOffscreenLayout);
 }

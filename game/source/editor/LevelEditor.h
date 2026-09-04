@@ -14,6 +14,7 @@
 
 #include "core/Vec3.h"
 #include "editor/EditorCamera.h"
+#include "editor/EditorGizmo.h"
 #include "editor/EditorSelection.h"
 
 #include <string>
@@ -79,6 +80,10 @@ struct LevelEditorState
     // highlight. Not persisted. Survives F2 close/reopen in this process.
     EditorSelection selection{};
     EditorCamera editorCamera{};
+    GizmoInteractionState gizmo{};
+    // Set by Reset Editor Layout; DebugUi consumes it over the following
+    // frames so Metrics (drawn before the button) also snaps to defaults.
+    int forceDefaultLayoutFrames = 0;
     LevelEditorApplyStatus lastApplyStatus = LevelEditorApplyStatus::NotAttempted;
     LevelEditorSaveStatus lastSaveStatus = LevelEditorSaveStatus::NotAttempted;
     // Short human-readable context for the last Apply or Save. Not a log.
@@ -98,6 +103,10 @@ struct LevelEditorViewContext
     const char* runtimeLevelPath = "";
     core::Vec3 movingPlatformRuntimeCenter{};
     core::Vec3 dynamicBoxRuntimeCenter{};
+    float viewportWidth = 1280.0f;
+    float viewportHeight = 720.0f;
+    bool forceDefaultLayout = false;
+    bool recoverOffscreenLayout = false;
 };
 
 // Serialize the supplied authored definition to the canonical project source

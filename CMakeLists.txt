@@ -46,8 +46,13 @@ add_executable(Platformer3D
     game/source/editor/AuthoringPaths.h
     game/source/editor/EditorCamera.cpp
     game/source/editor/EditorCamera.h
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorInput.h
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/editor/EditorLayoutUi.h
     game/source/editor/EditorMath.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
@@ -286,4 +291,37 @@ if(MSVC)
     target_compile_options(EditorPickingTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(EditorPickingTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 34 translation-gizmo math and editor-layout path. No window, raylib,
+# Jolt, or ImGui: live drag/render is exercised by Platformer3D, not this test.
+add_executable(EditorGizmoTest
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorGizmoTest.cpp
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/CameraView.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+if(WIN32)
+    target_sources(EditorGizmoTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(EditorGizmoTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(EditorGizmoTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorGizmoTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorGizmoTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(EditorGizmoTest PRIVATE ole32 shell32 uuid)
 endif()

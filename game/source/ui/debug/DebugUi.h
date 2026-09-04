@@ -11,6 +11,7 @@ class DebugUi
 public:
     void Initialize();
     void Shutdown();
+    void SaveEditorLayout();
 
     // The editor state and the active level are owned by Application. The
     // debug UI only hosts the panel and returns whatever action the user
@@ -29,5 +30,7 @@ public:
 private:
     DebugUiBackend backend;
     bool panelVisible = true;
+    bool recoveredMetricsLayout = false;
+    bool recoveredEditorWindowsLayout = false;
 };
 }

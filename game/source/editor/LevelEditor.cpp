@@ -9,6 +9,8 @@
 #endif
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/EditorLayout.h"
+#include "editor/EditorLayoutUi.h"
 #include "imgui.h"
 
 #include <cstddef>
@@ -93,6 +95,20 @@ namespace
 // such as 1.6732 down to 1.67. ImGui writes a field back only when edited.
 constexpr const char* kFloatFormat = "%.6f";
 
+void ApplyEditorWindowPlacement(
+    const char* windowName,
+    const LevelEditorViewContext& view)
+{
+    ApplyKnownEditorWindowPlacement(
+        windowName, view.viewportWidth, view.viewportHeight, view.forceDefaultLayout);
+}
+
+void RecoverEditorWindowIfNeeded(const char* windowName, const LevelEditorViewContext& view)
+{
+    RecoverKnownEditorWindowIfOffscreen(
+        windowName, view.viewportWidth, view.viewportHeight, view.recoverOffscreenLayout);
+}
+
 const char* BoolText(bool value)
 {
     return value ? "true" : "false";
@@ -113,13 +129,15 @@ void ReadOnlyFloat(const char* label, float value)
     ImGui::Text("%s: %.6f", label, value);
 }
 
-void DrawHierarchy(LevelEditorState& state)
+void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
 {
-    if (!ImGui::Begin("Hierarchy"))
+    ApplyEditorWindowPlacement(kHierarchyWindowName, view);
+    if (!ImGui::Begin(kHierarchyWindowName))
     {
         ImGui::End();
         return;
     }
+    RecoverEditorWindowIfNeeded(kHierarchyWindowName, view);
 
     const char* openGroup = nullptr;
     bool groupVisible = true;
@@ -154,7 +172,7 @@ void DrawHierarchy(LevelEditorState& state)
         }
 
         const bool selected = state.selection == entry.selection;
-        if (ImGui::Selectable(entry.label, selected))
+        if (ImGui::Selectable(entry.label, selected) && !state.gizmo.dragging)
         {
             state.selection = entry.selection;
         }
@@ -169,11 +187,13 @@ void DrawHierarchy(LevelEditorState& state)
 
 void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
 {
-    if (!ImGui::Begin("Inspector"))
+    ApplyEditorWindowPlacement(kInspectorWindowName, view);
+    if (!ImGui::Begin(kInspectorWindowName))
     {
         ImGui::End();
         return;
     }
+    RecoverEditorWindowIfNeeded(kInspectorWindowName, view);
 
     ImGui::Text("Selected: %s", SelectionDisplayName(state.selection));
     ImGui::Text("Editor nav speed: %.1f (session only)", state.editorCamera.movementSpeed);
@@ -286,11 +306,13 @@ LevelEditorRequest DrawLevelControls(
     const LevelEditorViewContext& view)
 {
     LevelEditorRequest request = LevelEditorRequest::None;
-    if (!ImGui::Begin("Level Editor"))
+    ApplyEditorWindowPlacement(kLevelEditorWindowName, view);
+    if (!ImGui::Begin(kLevelEditorWindowName))
     {
         ImGui::End();
         return request;
     }
+    RecoverEditorWindowIfNeeded(kLevelEditorWindowName, view);
 
     const bool authoringAvailable = IsLevelAuthoringAvailable();
     const bool workingCopyValid = world::IsWritableLevelDefinition(state.workingCopy);
@@ -362,13 +384,25 @@ LevelEditorRequest DrawLevelControls(
         {
             ImGui::TextUnformatted("Save disabled: Apply Preview first.");
         }
+
+        if (ImGui::Button("Reset Editor Layout"))
+        {
+            SnapKnownEditorWindowsToDefaults(view.viewportWidth, view.viewportHeight);
+            state.forceDefaultLayoutFrames = 2;
+        }
+        ImGui::TextWrapped(
+            "Reset Editor Layout restores Metrics, Hierarchy, Inspector, and Level Editor "
+            "positions. It does not change the level, selection, or camera.");
     }
 
     if (ImGui::CollapsingHeader("Information", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::TextWrapped(
             "RMB look, WASD move, Q/E down/up, Shift faster, wheel speed. "
-            "LMB picks the world. Hierarchy and Inspector share one selection.");
+            "LMB on an X/Y/Z handle translates the working copy; LMB elsewhere picks the world.");
+        ImGui::TextWrapped(
+            "The gizmo and pending ghost follow unapplied working-copy edits. "
+            "Active render, physics, picking and highlight stay put until Apply Preview.");
         ImGui::TextWrapped("Save updates the project source only. It does not recook or rebuild.");
         ImGui::TextWrapped(
             "Run python tools/cook_assets.py, then cmake --build, then relaunch to update the"
@@ -397,7 +431,7 @@ LevelEditorRequest DrawLevelEditor(
     state.modified = !world::AuthoredLevelDataEqual(state.workingCopy, activeLevel);
     state.dirty = !world::AuthoredLevelDataEqual(activeLevel, state.savedSourceBaseline);
 
-    DrawHierarchy(state);
+    DrawHierarchy(state, view);
     DrawInspector(state, view);
     return DrawLevelControls(state, activeLevel, view);
 }

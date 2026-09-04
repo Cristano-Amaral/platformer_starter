@@ -3,12 +3,25 @@
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 
 #include "core/RunTimeFormat.h"
+#include "editor/EditorLayout.h"
+#include "editor/EditorLayoutUi.h"
 #include "imgui.h"
+
+#include <filesystem>
 
 namespace ui
 {
 namespace
 {
+void ApplyEditorWindowPlacement(
+    const char* windowName,
+    float viewportWidth,
+    float viewportHeight,
+    bool forceDefaultLayout)
+{
+    editor::ApplyKnownEditorWindowPlacement(
+        windowName, viewportWidth, viewportHeight, forceDefaultLayout);
+}
 const char* BoolText(bool value)
 {
     return value ? "true" : "false";
@@ -30,9 +43,24 @@ float CoyoteRemaining(const DebugMetricsSnapshot& snapshot)
 }
 }
 
-void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
+void DrawDebugMetrics(
+    const DebugMetricsSnapshot& snapshot,
+    float viewportWidth,
+    float viewportHeight,
+    bool forceDefaultLayout,
+    bool recoverOffscreenLayout)
 {
-    ImGui::Begin("Platformer3D Metrics");
+    ApplyEditorWindowPlacement(
+        editor::kMetricsWindowName,
+        viewportWidth,
+        viewportHeight,
+        forceDefaultLayout);
+    ImGui::Begin(editor::kMetricsWindowName);
+    editor::RecoverKnownEditorWindowIfOffscreen(
+        editor::kMetricsWindowName,
+        viewportWidth,
+        viewportHeight,
+        recoverOffscreenLayout);
 
     if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -75,6 +103,10 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
         ImGui::Text("Save path: %s", snapshot.bestTimeSavePath);
         ImGui::Text("Load status: %s", snapshot.bestTimeLoadStatus);
         ImGui::Text("Save status: %s", snapshot.bestTimeSaveStatus);
+        const std::filesystem::path layoutPath = editor::EditorLayoutPath();
+        ImGui::TextWrapped(
+            "Editor layout: %s",
+            layoutPath.empty() ? "(unavailable)" : layoutPath.string().c_str());
     }
 
     if (ImGui::CollapsingHeader("Level Loading", ImGuiTreeNodeFlags_DefaultOpen))
@@ -347,7 +379,7 @@ void DrawDebugMetrics(const DebugMetricsSnapshot& snapshot)
 
 namespace ui
 {
-void DrawDebugMetrics(const DebugMetricsSnapshot&) {}
+void DrawDebugMetrics(const DebugMetricsSnapshot&, float, float, bool, bool) {}
 }
 
 #endif

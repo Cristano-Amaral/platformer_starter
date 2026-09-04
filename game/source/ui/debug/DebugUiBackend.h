@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace ui
 {
 class DebugUiBackend
@@ -15,6 +17,7 @@ public:
 
     void Initialize();
     void Shutdown();
+    void SaveIniSettings();
     void BeginFrame();
     void EndFrame();
     bool ConsumeTogglePressed();
@@ -28,5 +31,8 @@ public:
 
 private:
     bool initialized = false;
+    // Owns the bytes pointed to by ImGuiIO::IniFilename for the whole context
+    // lifetime. Never a temporary std::string.
+    std::string iniFilenameStorage;
 };
 }

@@ -27,6 +27,18 @@ struct DebugWorldOverlay
     core::Vec3 highlightCenter{};
     core::Vec3 highlightSize{};
     float highlightRotationZDegrees = 0.0f;
+    // Working-copy ghost. Distinct from the active highlight. Renderer does
+    // not own selection or workingCopy.
+    bool drawPendingPreview = false;
+    core::Vec3 pendingPreviewCenter{};
+    core::Vec3 pendingPreviewSize{};
+    // Translation gizmo at the working-copy origin. hovered/active: 0 none,
+    // 1 X, 2 Y, 3 Z (matches editor::EditorAxis).
+    bool drawTranslationGizmo = false;
+    core::Vec3 gizmoOrigin{};
+    float gizmoAxisLength = 1.0f;
+    int gizmoHoveredAxis = 0;
+    int gizmoActiveAxis = 0;
 };
 
 class Renderer

@@ -81,6 +81,8 @@ EditorInputState PollEditorInput()
 
     state.lookHeld = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
     state.selectPressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    state.selectHeld = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    state.selectReleased = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
     state.mouseDeltaX = GetMouseDelta().x;
     state.mouseDeltaY = GetMouseDelta().y;
     state.wheelDelta = GetMouseWheelMove();

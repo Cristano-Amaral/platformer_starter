@@ -362,4 +362,60 @@ Empty LMB click (not captured by ImGui) clears selection. RMB look never picks. 
 
 RMB held: mouse-look. WASD: move on look XZ. Q/E: world down/up. Shift: 2× speed. Wheel: movement speed (`1..40`). Ignored while ImGui wants keyboard or mouse.
 
-Status: Phase B implemented. M33 is **not** complete; Phase C manual validation remains. Milestone 34 has not started.
+Status: complete (manually approved and merged).
+
+## Visual level editor v3 (Milestone 34, Phase B)
+
+Phase B wires the Phase A math into the live Debug/Development editor. M34 is **not** complete until Phase C manual validation.
+
+### Translation gizmo
+
+**Targets.** Spawn, Ground, Elevated Platform 0..5. Camera stays numeric-only. M33 read-only kinds stay read-only. Runtime Player is not selectable.
+
+**Ownership.** `editor::GizmoInteractionState` lives on `LevelEditorState`. `GetEditablePosition` writes `workingCopy`. Application copies `GizmoDrawRequest` / `EditorPendingTransformPreview` into `render::DebugWorldOverlay` PODs. Renderer does not own selection, workingCopy, or drag state.
+
+**Draw order (inside `BeginMode3D`).** Normal world (including cooker probes) → active spawn marker → active M33 highlight → cyan pending ghost (working geometry, depth-tested) → X/Y/Z gizmo. The gizmo uses a depth-tested faint pass then a depth-independent overlay (`rlDisableDepthTest` + `rlDisableDepthMask` + `rlDisableBackfaceCulling`); those three states are restored immediately after the overlay batch flush. ImGui draws after `EndMode3D`, so panels sit over the gizmo.
+
+**Size.** Axis length = `distance * tan(fovY/2) * 0.22`, clamped to `[0.75, 24]`. Visual shaft/head use cylinders/cones (`max(0.038 * length, 0.045)` shaft radius); hit radius remains `0.09 * length` on the world-space shaft (hub skip unchanged).
+
+**Live tick.** After this-frame ImGui capture: `editor::UpdateGizmoInteraction` uses `PickGizmoHandle` / `BeginGizmoDrag` / `GizmoDragPosition`. Priority: ImGui > active drag/handle > M33 world pick. RMB never starts a drag; active LMB drag suppresses editor-camera look until release. Drag target identity is captured at press; Hierarchy clicks are ignored while dragging.
+
+**Drag.** Camera-facing plane containing the selected world axis; if `|axis × viewForward| < 0.05`, closest-points between mouse ray and axis. Position = `dragStart + (param - startParam) * axis`. X/Y/Z each leave the other two coordinates unchanged. Unusable rays keep the start pose (no NaN). Apply/Revert/F2 call `ClearGizmoInteraction` so a drag cannot survive a physics rebuild.
+
+**Sync.** Gizmo origin and pending preview use working-copy geometry. Active pick/highlight stay on the applied world until Apply Preview. Inspector reads the same `workingCopy` (one-frame latency after drag is acceptable).
+
+### Persistent layout
+
+Dear ImGui `IniFilename` is a backend-owned `std::string` pointing at `%LOCALAPPDATA%\Platformer3D\editor_layout.ini` (via `platform::UserDataDirectory()`, same project folder as BEST, not BEST serialization). It is set after `rlImGuiSetup` and before the first NewFrame. Null if the user-data path cannot be resolved. Debug and Development share the file. Release never touches it.
+
+First-run / missing file: `ImGuiCond_FirstUseEver` applies `ComputeDefaultEditorLayout` (metrics/hierarchy left, inspector/level editor right). Persisted ini wins afterwards. **Reset Editor Layout** (Level Editor actions) snaps all four named windows with `ImGuiCond_Always` / `SetWindowPos` by name and `SaveIniSettingsToDisk`. Off-screen recovery is one-shot after first `Begin` of Metrics and of the editor windows, using `ClampEditorWindowPlacement`. No docking. Window names are stable: `Platformer3D Metrics`, `Hierarchy`, `Inspector`, `Level Editor`.
+
+Status: Phase C visibility correction (depth-independent gizmo overlay) plus canonical Level 01 restore. M34 is **not** complete until that correction is approved. Milestone 35 has not started.
+
+### Future editor notes (not scheduled)
+
+These came up during M34 Phase C and are **not** in M34 or M35:
+
+- keyboard nudge of the selected object (WASD/Q/E remain editor-camera move);
+- a view-orientation widget (top-left axis triad) that is not the world translation gizmo;
+- visual resize/scale handles (Inspector numeric size + pending ghost stay the M34 path);
+- modifier + mouse wheel for editor-camera dolly/zoom (wheel currently changes move speed);
+- add/delete/duplicate authored objects and dynamic collections;
+- Hierarchy coverage of runtime-only and cooker demo probes (see inventory below).
+
+### Hierarchy inventory (M34)
+
+The Hierarchy lists the 21 authored Level Format v1 records. Visible 3D things that are **not** rows:
+
+| Visible thing | Classification | Why absent |
+|---|---|---|
+| Runtime Player mesh | runtime-only | Gameplay CharacterVirtual; only **Player Spawn** is authored |
+| XZ `DrawGrid` | technical/demo/render | Renderer debug ground grid, not LevelDefinition |
+| `textures/test_checker.png` quad | technical/demo/render | Cooker pipeline probe in front of spawn |
+| `models/test_static.glb` | technical/demo/render | Cooker GLB probe (right of spawn) |
+| `models/test_authored.glb` | technical/demo/render | Cooker authored-GLB probe (left of spawn) |
+| `models/test_textured.glb` | technical/demo/render | Cooker textured-GLB probe (further right) |
+| Editor spawn marker / highlight / pending ghost / gizmo | editor visualization | Overlay while F2 is active; not extra authored objects |
+| TIME / BEST / COLLECTED HUD | other | 2D overlay, not scene objects |
+
+The four cooker probes plus the Player mesh are the usual “I see it in the viewport but not in Hierarchy” set. Do not add them in M34.

@@ -15,6 +15,7 @@
 #include "raylib.h"
 #include "rlgl.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <filesystem>
@@ -67,6 +68,12 @@ constexpr int kBestHudGap = 4;
 constexpr Color kTimerHudText{240, 240, 244, 255};
 constexpr Color kSpawnMarkerFill{240, 200, 64, 255};
 constexpr Color kSelectionHighlightColor{255, 236, 64, 255};
+constexpr Color kPendingPreviewFill{48, 196, 220, 48};
+constexpr Color kPendingPreviewWire{72, 220, 236, 255};
+constexpr Color kGizmoAxisX{220, 72, 72, 255};
+constexpr Color kGizmoAxisY{72, 196, 88, 255};
+constexpr Color kGizmoAxisZ{72, 128, 232, 255};
+constexpr Color kGizmoAxisActive{255, 255, 255, 255};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -208,6 +215,107 @@ void DrawOrientedWires(core::Vec3 center, core::Vec3 size, float rotationZDegree
     rlPopMatrix();
 }
 
+void DrawGizmoAxis(
+    Vector3 origin,
+    Vector3 direction,
+    float length,
+    float shaftRadius,
+    Color color)
+{
+    const float headLength = length * 0.22f;
+    const float shaftLength = length - headLength;
+    const Vector3 shaftEnd{
+        origin.x + direction.x * shaftLength,
+        origin.y + direction.y * shaftLength,
+        origin.z + direction.z * shaftLength};
+    const Vector3 tip{
+        origin.x + direction.x * length,
+        origin.y + direction.y * length,
+        origin.z + direction.z * length};
+    DrawCylinderEx(origin, shaftEnd, shaftRadius, shaftRadius, 8, color);
+    DrawCylinderEx(shaftEnd, tip, shaftRadius * 2.4f, 0.0f, 8, color);
+}
+
+Color ScaleGizmoColor(Color color, unsigned char alpha)
+{
+    color.a = alpha;
+    return color;
+}
+
+void DrawTranslationGizmo(const DebugWorldOverlay& overlay)
+{
+    if (!overlay.drawTranslationGizmo || !(overlay.gizmoAxisLength > 0.0f))
+    {
+        return;
+    }
+
+    const float length = overlay.gizmoAxisLength;
+    // Visual only. Hit testing stays on EditorGizmo world-space shafts.
+    const float visualRadius = std::max(length * 0.038f, 0.045f);
+    const core::Vec3 origin = overlay.gizmoOrigin;
+    const Vector3 originRl = ToRaylib(origin);
+
+    const struct AxisDraw
+    {
+        int id;
+        Vector3 direction;
+        Color color;
+    } axes[] = {
+        {1, {1.0f, 0.0f, 0.0f}, kGizmoAxisX},
+        {2, {0.0f, 1.0f, 0.0f}, kGizmoAxisY},
+        {3, {0.0f, 0.0f, 1.0f}, kGizmoAxisZ},
+    };
+
+    const auto drawPass = [&](unsigned char alpha, float radiusScale)
+    {
+        DrawSphere(originRl, visualRadius * 0.85f * radiusScale, ScaleGizmoColor({220, 220, 228, 255}, alpha));
+        for (const AxisDraw& axis : axes)
+        {
+            const bool active = overlay.gizmoActiveAxis == axis.id;
+            const bool hovered = overlay.gizmoHoveredAxis == axis.id;
+            Color color = axis.color;
+            float radius = visualRadius * radiusScale;
+            if (active)
+            {
+                color = kGizmoAxisActive;
+                radius *= 1.35f;
+            }
+            else if (hovered)
+            {
+                color = {
+                    static_cast<unsigned char>(std::min(255, axis.color.r + 48)),
+                    static_cast<unsigned char>(std::min(255, axis.color.g + 48)),
+                    static_cast<unsigned char>(std::min(255, axis.color.b + 48)),
+                    255};
+                radius *= 1.2f;
+            }
+
+            DrawGizmoAxis(
+                originRl,
+                axis.direction,
+                length,
+                radius,
+                ScaleGizmoColor(color, alpha));
+        }
+    };
+
+    // Depth-tested pass: faint cue where a handle is not buried in the mesh.
+    drawPass(70, 0.85f);
+
+    // Editor overlay: X/Y/Z stay readable through Ground/Platform/Spawn.
+    // Flush before and after the GL state change; restore immediately so later
+    // 2D HUD / ImGui keep the default raylib depth policy.
+    rlDrawRenderBatchActive();
+    rlDisableDepthTest();
+    rlDisableDepthMask();
+    rlDisableBackfaceCulling();
+    drawPass(255, 1.0f);
+    rlDrawRenderBatchActive();
+    rlEnableBackfaceCulling();
+    rlEnableDepthMask();
+    rlEnableDepthTest();
+}
+
 void DrawWorldOverlay(const DebugWorldOverlay& overlay)
 {
     if (overlay.drawSpawnMarker
@@ -215,27 +323,46 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     {
         DrawGreyboxBox(overlay.spawnCenter, overlay.spawnSize, kSpawnMarkerFill);
     }
-    if (!overlay.drawHighlight
-        || !(overlay.highlightSize.x > 0.0f) || !(overlay.highlightSize.y > 0.0f)
-        || !(overlay.highlightSize.z > 0.0f))
+    if (overlay.drawHighlight
+        && overlay.highlightSize.x > 0.0f && overlay.highlightSize.y > 0.0f
+        && overlay.highlightSize.z > 0.0f)
     {
-        return;
+        if (overlay.highlightRotationZDegrees != 0.0f)
+        {
+            DrawOrientedWires(
+                overlay.highlightCenter,
+                overlay.highlightSize,
+                overlay.highlightRotationZDegrees,
+                kSelectionHighlightColor);
+        }
+        else
+        {
+            DrawCubeWires(
+                ToRaylib(overlay.highlightCenter),
+                overlay.highlightSize.x,
+                overlay.highlightSize.y,
+                overlay.highlightSize.z,
+                kSelectionHighlightColor);
+        }
     }
-    if (overlay.highlightRotationZDegrees != 0.0f)
+    if (overlay.drawPendingPreview
+        && overlay.pendingPreviewSize.x > 0.0f && overlay.pendingPreviewSize.y > 0.0f
+        && overlay.pendingPreviewSize.z > 0.0f)
     {
-        DrawOrientedWires(
-            overlay.highlightCenter,
-            overlay.highlightSize,
-            overlay.highlightRotationZDegrees,
-            kSelectionHighlightColor);
-        return;
+        DrawCube(
+            ToRaylib(overlay.pendingPreviewCenter),
+            overlay.pendingPreviewSize.x,
+            overlay.pendingPreviewSize.y,
+            overlay.pendingPreviewSize.z,
+            kPendingPreviewFill);
+        DrawCubeWires(
+            ToRaylib(overlay.pendingPreviewCenter),
+            overlay.pendingPreviewSize.x,
+            overlay.pendingPreviewSize.y,
+            overlay.pendingPreviewSize.z,
+            kPendingPreviewWire);
     }
-    DrawCubeWires(
-        ToRaylib(overlay.highlightCenter),
-        overlay.highlightSize.x,
-        overlay.highlightSize.y,
-        overlay.highlightSize.z,
-        kSelectionHighlightColor);
+    DrawTranslationGizmo(overlay);
 }
 
 void DrawTestTextureQuad(const Texture2D& texture)
@@ -766,7 +893,6 @@ void Renderer::DrawWorld(
             checkpointVisuals[static_cast<std::size_t>(checkpointIndex)]);
     }
     DrawLevelGoalMarker(level.goal, levelCompleted);
-    DrawWorldOverlay(overlay);
 
     if (testTextureLoaded && testTexture != nullptr)
     {
@@ -811,6 +937,10 @@ void Renderer::DrawWorld(
     {
         DrawMissingModelFallback(kTexturedModelPosition, kMissingTexturedModelFallbackColor);
     }
+
+    // Editor overlay last in 3D: world + cooker probes, then marker/highlight/
+    // pending ghost, then the depth-independent gizmo. ImGui is after EndMode3D.
+    DrawWorldOverlay(overlay);
 
     EndMode3D();
 

@@ -6,11 +6,18 @@ void DebugUi::Initialize()
 {
     backend.Initialize();
     panelVisible = true;
+    recoveredMetricsLayout = false;
+    recoveredEditorWindowsLayout = false;
 }
 
 void DebugUi::Shutdown()
 {
     backend.Shutdown();
+}
+
+void DebugUi::SaveEditorLayout()
+{
+    backend.SaveIniSettings();
 }
 
 editor::LevelEditorRequest DebugUi::Draw(
@@ -24,10 +31,20 @@ editor::LevelEditorRequest DebugUi::Draw(
         panelVisible = !panelVisible;
     }
 
+    editor::LevelEditorViewContext view = levelEditorView;
+    view.forceDefaultLayout = levelEditorState.forceDefaultLayoutFrames > 0;
+
     backend.BeginFrame();
     if (panelVisible)
     {
-        DrawDebugMetrics(snapshot);
+        const bool recoverMetrics = !recoveredMetricsLayout && !view.forceDefaultLayout;
+        DrawDebugMetrics(
+            snapshot,
+            view.viewportWidth,
+            view.viewportHeight,
+            view.forceDefaultLayout,
+            recoverMetrics);
+        recoveredMetricsLayout = true;
     }
 
     // Hierarchy / Inspector / Level Editor are their own windows, independent
@@ -35,7 +52,15 @@ editor::LevelEditorRequest DebugUi::Draw(
     editor::LevelEditorRequest request = editor::LevelEditorRequest::None;
     if (levelEditorState.active)
     {
-        request = editor::DrawLevelEditor(levelEditorState, level, levelEditorView);
+        view.recoverOffscreenLayout =
+            !recoveredEditorWindowsLayout && !view.forceDefaultLayout;
+        request = editor::DrawLevelEditor(levelEditorState, level, view);
+        recoveredEditorWindowsLayout = true;
+    }
+    if (levelEditorState.forceDefaultLayoutFrames > 0)
+    {
+        backend.SaveIniSettings();
+        --levelEditorState.forceDefaultLayoutFrames;
     }
     backend.EndFrame();
     return request;

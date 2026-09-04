@@ -19,6 +19,8 @@ struct EditorInputState
 
     bool lookHeld = false;
     bool selectPressed = false;
+    bool selectHeld = false;
+    bool selectReleased = false;
     float mouseDeltaX = 0.0f;
     float mouseDeltaY = 0.0f;
     float wheelDelta = 0.0f;
