@@ -22,6 +22,9 @@ public:
     // here so ImGui knowledge stays in the debug-UI backend rather than
     // leaking into input or gameplay. False where ImGui is not compiled in.
     bool WantsKeyboardCapture() const;
+    // Same boundary for the mouse: clicks, drags and wheel on an ImGui panel
+    // must not look, pick, or dolly the editor world behind it.
+    bool WantsMouseCapture() const;
 
 private:
     bool initialized = false;

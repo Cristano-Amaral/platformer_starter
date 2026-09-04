@@ -280,9 +280,7 @@ Configuration policy: Release has no ImGui and no editor. Debug and Development 
 
 ### Editor ownership
 
-`editor/LevelEditor.h` holds `LevelEditorState` (`active`, `dirty`, `selectedPlatformIndex`, `lastSaveStatus`) and the Phase A read-only panel. Application remains the sole owner of the active `LevelDefinition` and of all gameplay state; it holds the editor state next to `DebugUi` under `PLATFORMER_ENABLE_DEBUG_UI` and passes both read-only into `DebugUi::Draw`. There is no EditorManager, LevelManager, SceneManager, EntityManager, ECS, event bus, property/value model, or reflection.
-
-Status: Phase A design and scaffolding complete.
+`editor/LevelEditor.h` holds `LevelEditorState` (`active`, `modified`, `dirty`, `selection`, `editorCamera`, apply/save status). Application remains the sole owner of the active `LevelDefinition` and of all gameplay state; it holds the editor state next to `DebugUi` under `PLATFORMER_ENABLE_DEBUG_UI`. There is no EditorManager, LevelManager, SceneManager, EntityManager, ECS, event bus, property/value model, or reflection.
 
 ## Development level editor v1 (Milestone 32, Phase B)
 
@@ -324,4 +322,44 @@ Activating the editor copies the active definition into the working copy and cle
 
 The dirty baseline is seeded in `Initialize` from the staged level that was just loaded, so `Dirty` starts false and tracks only this session's applied edits. M32 does not reconcile a staged copy that disagrees with the repository source, does not watch the filesystem, and does not detect external edits; the next explicit save overwrites them.
 
-Status: Phase B implementation complete, awaiting Phase C manual validation. M32 is **not** complete. Milestone 33 has not started.
+Status: complete (manually approved and merged).
+
+## Visual level editor v2 (Milestone 33, Phase B)
+
+Phase B makes the visual editor live on top of the M32 contract. F2 still pauses the whole simulation, edits a working copy, and Apply/Revert/Save keep the same Modified/Dirty/authoring rules. M33 adds navigation and selection only.
+
+### The four questions (now live)
+
+**A. Editor camera.** A dedicated `editor::EditorCamera` (position, yaw, pitch, speed, FOV) owned by `LevelEditorState`, not `PlatformerCamera`. Navigation never writes `LevelDefinition.camera`. `Renderer::DrawWorld` consumes a project-owned `render::CameraView` and does not own camera state: gameplay builds it from `PlatformerCamera`; the editor builds it from `EditorCamera`. First F2 seeds from `gameplayTarget + offset` / current FOV; later F2 toggles in the same process keep the pose. Apply Preview may reset the gameplay camera; it does not move the editor camera. On editor exit, `SnapToTarget(Player)` so follow state does not interpolate from a stale pose. Disk persistence: none. RMB look hides the cursor only while held, via `input::SetMouseLookActive` in the input backend.
+
+**B. Selection.** One `editor::EditorSelection { EditorObjectKind kind; size_t index; }` on `LevelEditorState`. The M32 `selectedPlatformIndex` combo is retired. Type + index matches fixed v1 arrays. No UUID. Hierarchy, picking, Inspector and highlight share this identity. Inspector resolves fields against `workingCopy`. Viewport picking and highlight resolve transforms against the **active/applied** `LevelDefinition` plus runtime poses for moving objects. Apply/Revert/Save keep the same identity. Selecting/navigating does not mark Modified or Dirty. Selection survives F2 close/reopen in the same process if still valid.
+
+**C. Mouse to object.** `editor::PollEditorInput()` (input backend, not Application/raylib) supplies mouse position, LMB press and RMB hold. `platform::Window::Width/Height` supply the resizable viewport. `ScreenToWorldRay(CameraView, mouse, viewport)` builds a project-owned `Ray3`. `BuildPickingSet(appliedLevel, runtime poses)` emits CPU proxies from the visible world; `PickNearest` takes the smallest positive hit. Ties keep the earlier proxy (hierarchy order). Unapplied Inspector edits do not move pick/highlight. Jolt raycasts are not used.
+
+**D. Synchronization.** Hierarchy click and world pick both assign `state.selection`. Inspector routes on that value. Highlight is an `EditorHighlightRequest` built from the same proxy the picker used; Renderer draws it read-only from `DebugWorldOverlay`.
+
+### Live UI
+
+Three ImGui windows, no docking: `Hierarchy` (fixed `kHierarchyEntries`, collapsible groups for Platforms/Slopes/Checkpoints/Hazards/Collectibles), `Inspector` (selected object only), `Level Editor` (status, Apply/Revert/Save). None shows "No object selected." Read-only kinds use `Text`, never `InputFloat`.
+
+### Picking proxies
+
+| Kind | World pick | Proxy |
+|---|---|---|
+| Player Spawn | yes | `kPlayerVisualSize` AABB at **applied** spawn (Debug/Development marker) |
+| Camera | no | framing spec, not a placed object |
+| Ground / Platform 0..5 | yes | **applied** AABB |
+| Slope | yes | **applied** oriented local AABB |
+| Moving Platform | yes | **runtime** center/size (visible frozen pose), Inspector stays authored read-only |
+| Checkpoint / Hazard / Goal | yes | **applied** trigger AABB |
+| Collectible | yes | `world::kCollectibleVisualSize` cube at **applied** center |
+| Dynamic Cyan Box | yes | **runtime** center/size |
+| Runtime Player | no | not an authored object |
+
+Empty LMB click (not captured by ImGui) clears selection. RMB look never picks. Keyboard move, world pick and wheel run after ImGui so this frame's `WantsKeyboardCapture()` / `WantsMouseCapture()` block them. RMB look still uses the previous-frame mouse-capture flag (same one-frame lag as M32 F2). Inspector continues to edit `workingCopy`; the spawn marker and static pick/highlight proxies use the active definition until Apply Preview.
+
+### Controls
+
+RMB held: mouse-look. WASD: move on look XZ. Q/E: world down/up. Shift: 2× speed. Wheel: movement speed (`1..40`). Ignored while ImGui wants keyboard or mouse.
+
+Status: Phase B implemented. M33 is **not** complete; Phase C manual validation remains. Milestone 34 has not started.

@@ -44,6 +44,15 @@ add_executable(Platformer3D
     game/source/core/Vec3.h
     game/source/editor/AuthoringPaths.cpp
     game/source/editor/AuthoringPaths.h
+    game/source/editor/EditorCamera.cpp
+    game/source/editor/EditorCamera.h
+    game/source/editor/EditorHierarchy.h
+    game/source/editor/EditorInput.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
     game/source/gameplay/PlatformerCamera.cpp
@@ -71,6 +80,7 @@ add_executable(Platformer3D
     game/source/platform/Window.h
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
+    game/source/render/CameraView.h
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
@@ -252,3 +262,28 @@ endif()
 target_compile_definitions(PhysicsRebuildTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
+
+# Milestone 33 picking/selection math. Not shipped. No window, raylib,
+# Jolt, or ImGui: the editor must pick authored proxies with project-owned CPU
+# math rather than Jolt raycasts.
+add_executable(EditorPickingTest
+    game/source/editor/EditorCamera.cpp
+    game/source/editor/EditorCamera.h
+    game/source/editor/EditorHierarchy.h
+    game/source/editor/EditorInput.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorPickingTest.cpp
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/render/CameraView.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(EditorPickingTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorPickingTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorPickingTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()

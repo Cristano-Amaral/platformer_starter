@@ -19,11 +19,12 @@ public:
         const DebugMetricsSnapshot& snapshot,
         editor::LevelEditorState& levelEditorState,
         const world::LevelDefinition& level,
-        const char* runtimeLevelPath);
+        const editor::LevelEditorViewContext& levelEditorView);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.
     bool WantsKeyboardCapture() const;
+    bool WantsMouseCapture() const;
 
 private:
     DebugUiBackend backend;

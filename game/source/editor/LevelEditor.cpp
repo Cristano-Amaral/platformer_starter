@@ -1,5 +1,8 @@
 #include "editor/LevelEditor.h"
 
+#include "editor/EditorHierarchy.h"
+#include "editor/EditorSelection.h"
+
 #if defined(PLATFORMER_ENABLE_DEBUG_UI) || defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "editor/AuthoringPaths.h"
 #include "world/LevelWriter.h"
@@ -9,6 +12,7 @@
 #include "imgui.h"
 
 #include <cstddef>
+#include <cstring>
 #endif
 
 namespace editor
@@ -99,48 +103,188 @@ void EditVec3(const char* label, core::Vec3& value)
     ImGui::InputFloat3(label, &value.x, kFloatFormat);
 }
 
-const char* SelectionLabel(int index)
+void ReadOnlyVec3(const char* label, core::Vec3 value)
 {
-    switch (index)
+    ImGui::Text("%s: %.6f  %.6f  %.6f", label, value.x, value.y, value.z);
+}
+
+void ReadOnlyFloat(const char* label, float value)
+{
+    ImGui::Text("%s: %.6f", label, value);
+}
+
+void DrawHierarchy(LevelEditorState& state)
+{
+    if (!ImGui::Begin("Hierarchy"))
     {
-    case 0:
-        return "Platform 0";
-    case 1:
-        return "Platform 1";
-    case 2:
-        return "Platform 2";
-    case 3:
-        return "Platform 3";
-    case 4:
-        return "Platform 4";
-    case 5:
-        return "Platform 5";
-    default:
+        ImGui::End();
+        return;
+    }
+
+    const char* openGroup = nullptr;
+    bool groupVisible = true;
+    for (std::size_t index = 0; index < kHierarchyEntryCount; ++index)
+    {
+        const HierarchyEntry& entry = kHierarchyEntries[index];
+        const bool grouped = entry.group[0] != '\0';
+        if (grouped)
+        {
+            if (openGroup == nullptr || std::strcmp(openGroup, entry.group) != 0)
+            {
+                if (openGroup != nullptr && groupVisible)
+                {
+                    ImGui::TreePop();
+                }
+                openGroup = entry.group;
+                groupVisible = ImGui::TreeNodeEx(entry.group, ImGuiTreeNodeFlags_DefaultOpen);
+            }
+            if (!groupVisible)
+            {
+                continue;
+            }
+        }
+        else if (openGroup != nullptr)
+        {
+            if (groupVisible)
+            {
+                ImGui::TreePop();
+            }
+            openGroup = nullptr;
+            groupVisible = true;
+        }
+
+        const bool selected = state.selection == entry.selection;
+        if (ImGui::Selectable(entry.label, selected))
+        {
+            state.selection = entry.selection;
+        }
+    }
+    if (openGroup != nullptr && groupVisible)
+    {
+        ImGui::TreePop();
+    }
+
+    ImGui::End();
+}
+
+void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
+{
+    if (!ImGui::Begin("Inspector"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Text("Selected: %s", SelectionDisplayName(state.selection));
+    ImGui::Text("Editor nav speed: %.1f (session only)", state.editorCamera.movementSpeed);
+    ImGui::Separator();
+
+    if (state.selection.kind == EditorObjectKind::None)
+    {
+        ImGui::TextUnformatted("No object selected.");
+        ImGui::End();
+        return;
+    }
+
+    // Inspector always reads/writes the working copy. Viewport pick/highlight
+    // stay on the applied world until Apply Preview.
+    world::LevelDefinition& level = state.workingCopy;
+    switch (state.selection.kind)
+    {
+    case EditorObjectKind::Spawn:
+        EditVec3("Spawn X Y Z", level.initialSpawnVisualCenter);
+        break;
+    case EditorObjectKind::Camera:
+        ImGui::TextWrapped(
+            "Gameplay camera authoring (LevelDefinition.camera). These values "
+            "frame the follow camera after Apply Preview. They are not the "
+            "editor navigation camera.");
+        EditVec3("Offset X Y Z", level.camera.offset);
+        ImGui::InputFloat("FOV Y", &level.camera.fieldOfViewY, 0.0f, 0.0f, kFloatFormat);
+        break;
+    case EditorObjectKind::Ground:
+        EditVec3("Center X Y Z", level.ground.center);
+        EditVec3("Size X Y Z", level.ground.size);
+        break;
+    case EditorObjectKind::ElevatedPlatform:
+        if (state.selection.index < level.elevatedPlatforms.size())
+        {
+            world::Box& platform = level.elevatedPlatforms[state.selection.index];
+            EditVec3("Center X Y Z", platform.center);
+            EditVec3("Size X Y Z", platform.size);
+        }
+        break;
+    case EditorObjectKind::Slope:
+        ImGui::TextUnformatted("Read-only in M33.");
+        if (state.selection.index < level.slopes.size())
+        {
+            const world::SlopeSpec& slope = level.slopes[state.selection.index];
+            ReadOnlyVec3("Center", slope.center);
+            ReadOnlyVec3("Size", slope.size);
+            ReadOnlyFloat("Rotation Z degrees", slope.rotationZDegrees);
+        }
+        break;
+    case EditorObjectKind::MovingPlatform:
+        ImGui::TextUnformatted("Read-only in M33.");
+        ReadOnlyVec3("Size", level.movingPlatform.size);
+        ReadOnlyFloat("Path min X", level.movingPlatform.pathMinX);
+        ReadOnlyFloat("Path max X", level.movingPlatform.pathMaxX);
+        ReadOnlyFloat("Center Y", level.movingPlatform.centerY);
+        ReadOnlyFloat("Center Z", level.movingPlatform.centerZ);
+        ReadOnlyFloat("Speed", level.movingPlatform.speed);
+        ReadOnlyFloat("Start X", level.movingPlatform.startX);
+        ReadOnlyVec3("Runtime position", view.movingPlatformRuntimeCenter);
+        break;
+    case EditorObjectKind::Checkpoint:
+        ImGui::TextUnformatted("Read-only in M33.");
+        if (state.selection.index < level.checkpoints.size())
+        {
+            const world::CheckpointSpec& checkpoint = level.checkpoints[state.selection.index];
+            ReadOnlyVec3("Trigger center", checkpoint.center);
+            ReadOnlyVec3("Trigger size", checkpoint.size);
+            ReadOnlyVec3("Respawn position", checkpoint.respawnPosition);
+        }
+        break;
+    case EditorObjectKind::Hazard:
+        ImGui::TextUnformatted("Read-only in M33.");
+        if (state.selection.index < level.hazards.size())
+        {
+            const world::HazardSpec& hazard = level.hazards[state.selection.index];
+            ReadOnlyVec3("Center", hazard.center);
+            ReadOnlyVec3("Size", hazard.size);
+        }
+        break;
+    case EditorObjectKind::Collectible:
+        ImGui::TextUnformatted("Read-only in M33.");
+        if (state.selection.index < level.collectibles.size())
+        {
+            ReadOnlyVec3("Authored position", level.collectibles[state.selection.index].center);
+        }
+        break;
+    case EditorObjectKind::Goal:
+        ImGui::TextUnformatted("Read-only in M33.");
+        ReadOnlyVec3("Center", level.goal.center);
+        ReadOnlyVec3("Size", level.goal.size);
+        break;
+    case EditorObjectKind::DynamicBox:
+        ImGui::TextUnformatted("Read-only in M33.");
+        ReadOnlyVec3("Authored center", level.dynamicBox.center);
+        ReadOnlyVec3("Authored size", level.dynamicBox.size);
+        ReadOnlyFloat("Mass", level.dynamicBox.mass);
+        ReadOnlyVec3("Runtime position", view.dynamicBoxRuntimeCenter);
+        break;
+    case EditorObjectKind::None:
         break;
     }
-    return "Ground";
+
+    ImGui::End();
 }
 
-world::Box& SelectedBox(world::LevelDefinition& level, int selectionIndex)
-{
-    if (selectionIndex < 0 || selectionIndex >= world::kLevel01ElevatedPlatformCount)
-    {
-        return level.ground;
-    }
-    return level.elevatedPlatforms[static_cast<std::size_t>(selectionIndex)];
-}
-}
-
-LevelEditorRequest DrawLevelEditor(
+LevelEditorRequest DrawLevelControls(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
-    const char* runtimeLevelPath)
+    const LevelEditorViewContext& view)
 {
-    // Derived from authored data rather than widget return values, so a field
-    // that reports "edited" without changing the value stays unmodified.
-    state.modified = !world::AuthoredLevelDataEqual(state.workingCopy, activeLevel);
-    state.dirty = !world::AuthoredLevelDataEqual(activeLevel, state.savedSourceBaseline);
-
     LevelEditorRequest request = LevelEditorRequest::None;
     if (!ImGui::Begin("Level Editor"))
     {
@@ -175,42 +319,7 @@ LevelEditorRequest DrawLevelEditor(
             ImGui::TextUnformatted(
                 "Source (read-only): (authoring disabled in this configuration)");
         }
-        ImGui::TextWrapped("Runtime staged (read-only): %s", runtimeLevelPath);
-    }
-
-    if (ImGui::CollapsingHeader("Spawn", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        EditVec3("Spawn X Y Z", state.workingCopy.initialSpawnVisualCenter);
-    }
-
-    if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        EditVec3("Offset X Y Z", state.workingCopy.camera.offset);
-        ImGui::InputFloat(
-            "FOV Y", &state.workingCopy.camera.fieldOfViewY, 0.0f, 0.0f, kFloatFormat);
-    }
-
-    if (ImGui::CollapsingHeader("Static Geometry", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        if (ImGui::BeginCombo("Selection", SelectionLabel(state.selectedPlatformIndex)))
-        {
-            for (int index = kGroundSelectionIndex;
-                 index < world::kLevel01ElevatedPlatformCount;
-                 ++index)
-            {
-                if (ImGui::Selectable(
-                        SelectionLabel(index),
-                        state.selectedPlatformIndex == index))
-                {
-                    state.selectedPlatformIndex = index;
-                }
-            }
-            ImGui::EndCombo();
-        }
-
-        world::Box& box = SelectedBox(state.workingCopy, state.selectedPlatformIndex);
-        EditVec3("Center X Y Z", box.center);
-        EditVec3("Size X Y Z", box.size);
+        ImGui::TextWrapped("Runtime staged (read-only): %s", view.runtimeLevelPath);
     }
 
     if (ImGui::CollapsingHeader("Actions", ImGuiTreeNodeFlags_DefaultOpen))
@@ -257,6 +366,9 @@ LevelEditorRequest DrawLevelEditor(
 
     if (ImGui::CollapsingHeader("Information", ImGuiTreeNodeFlags_DefaultOpen))
     {
+        ImGui::TextWrapped(
+            "RMB look, WASD move, Q/E down/up, Shift faster, wheel speed. "
+            "LMB picks the world. Hierarchy and Inspector share one selection.");
         ImGui::TextWrapped("Save updates the project source only. It does not recook or rebuild.");
         ImGui::TextWrapped(
             "Run python tools/cook_assets.py, then cmake --build, then relaunch to update the"
@@ -266,12 +378,28 @@ LevelEditorRequest DrawLevelEditor(
         ImGui::TextWrapped(
             "Closing and reopening the editor discards unapplied working-copy edits.");
         ImGui::TextWrapped(
-            "Editable in M32: spawn, camera offset and FOV, ground and elevated platform"
-            " center/size. Everything else is read-only.");
+            "Editable: spawn, gameplay camera offset/FOV, ground and elevated platform"
+            " center/size. Other hierarchy objects are read-only in M33.");
     }
 
     ImGui::End();
     return request;
+}
+}
+
+LevelEditorRequest DrawLevelEditor(
+    LevelEditorState& state,
+    const world::LevelDefinition& activeLevel,
+    const LevelEditorViewContext& view)
+{
+    // Derived from authored data rather than widget return values, so a field
+    // that reports "edited" without changing the value stays unmodified.
+    state.modified = !world::AuthoredLevelDataEqual(state.workingCopy, activeLevel);
+    state.dirty = !world::AuthoredLevelDataEqual(activeLevel, state.savedSourceBaseline);
+
+    DrawHierarchy(state);
+    DrawInspector(state, view);
+    return DrawLevelControls(state, activeLevel, view);
 }
 
 #else
@@ -279,7 +407,7 @@ LevelEditorRequest DrawLevelEditor(
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState&,
     const world::LevelDefinition&,
-    const char*)
+    const LevelEditorViewContext&)
 {
     return LevelEditorRequest::None;
 }

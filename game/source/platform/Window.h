@@ -16,6 +16,8 @@ public:
     bool Initialize();
     void Shutdown();
     bool ShouldClose() const;
+    int Width() const;
+    int Height() const;
 
 private:
     bool initialized = false;

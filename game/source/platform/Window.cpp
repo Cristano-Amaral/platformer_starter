@@ -47,4 +47,14 @@ bool Window::ShouldClose() const
 {
     return WindowShouldClose();
 }
+
+int Window::Width() const
+{
+    return initialized ? GetScreenWidth() : 0;
+}
+
+int Window::Height() const
+{
+    return initialized ? GetScreenHeight() : 0;
+}
 }

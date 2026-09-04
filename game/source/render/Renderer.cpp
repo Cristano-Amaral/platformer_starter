@@ -2,7 +2,6 @@
 
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
-#include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
 #include "world/CollectibleWorld.h"
@@ -66,7 +65,8 @@ constexpr int kTimerHudFontSize = 22;
 constexpr int kTimerHudMargin = 20;
 constexpr int kBestHudGap = 4;
 constexpr Color kTimerHudText{240, 240, 244, 255};
-constexpr float kCollectibleVisualSize = 0.45f;
+constexpr Color kSpawnMarkerFill{240, 200, 64, 255};
+constexpr Color kSelectionHighlightColor{255, 236, 64, 255};
 
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
@@ -147,9 +147,9 @@ void DrawHazard(const world::HazardSpec& spec)
 void DrawCollectible(const world::CollectibleSpec& spec)
 {
     const core::Vec3 visualSize{
-        kCollectibleVisualSize,
-        kCollectibleVisualSize,
-        kCollectibleVisualSize};
+        world::kCollectibleVisualSize,
+        world::kCollectibleVisualSize,
+        world::kCollectibleVisualSize};
     DrawGreyboxBox(spec.center, visualSize, kCollectibleFill);
 }
 
@@ -188,16 +188,54 @@ void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
     rlPopMatrix();
 }
 
-Camera3D MakeCamera(const gameplay::PlatformerCamera& camera)
+Camera3D MakeCamera(const CameraView& view)
 {
-    const core::Vec3 target = camera.Target();
-    Camera3D view{};
-    view.position = ToRaylib(target + camera.offset);
-    view.target = ToRaylib(target);
-    view.up = Vector3{0.0f, 1.0f, 0.0f};
-    view.fovy = camera.fieldOfViewY;
-    view.projection = CAMERA_PERSPECTIVE;
-    return view;
+    Camera3D camera{};
+    camera.position = ToRaylib(view.position);
+    camera.target = ToRaylib(view.target);
+    camera.up = ToRaylib(view.up);
+    camera.fovy = view.fieldOfViewY;
+    camera.projection = CAMERA_PERSPECTIVE;
+    return camera;
+}
+
+void DrawOrientedWires(core::Vec3 center, core::Vec3 size, float rotationZDegrees, Color color)
+{
+    rlPushMatrix();
+    rlTranslatef(center.x, center.y, center.z);
+    rlRotatef(rotationZDegrees, 0.0f, 0.0f, 1.0f);
+    DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, size.x, size.y, size.z, color);
+    rlPopMatrix();
+}
+
+void DrawWorldOverlay(const DebugWorldOverlay& overlay)
+{
+    if (overlay.drawSpawnMarker
+        && overlay.spawnSize.x > 0.0f && overlay.spawnSize.y > 0.0f && overlay.spawnSize.z > 0.0f)
+    {
+        DrawGreyboxBox(overlay.spawnCenter, overlay.spawnSize, kSpawnMarkerFill);
+    }
+    if (!overlay.drawHighlight
+        || !(overlay.highlightSize.x > 0.0f) || !(overlay.highlightSize.y > 0.0f)
+        || !(overlay.highlightSize.z > 0.0f))
+    {
+        return;
+    }
+    if (overlay.highlightRotationZDegrees != 0.0f)
+    {
+        DrawOrientedWires(
+            overlay.highlightCenter,
+            overlay.highlightSize,
+            overlay.highlightRotationZDegrees,
+            kSelectionHighlightColor);
+        return;
+    }
+    DrawCubeWires(
+        ToRaylib(overlay.highlightCenter),
+        overlay.highlightSize.x,
+        overlay.highlightSize.y,
+        overlay.highlightSize.z,
+        kSelectionHighlightColor);
 }
 
 void DrawTestTextureQuad(const Texture2D& texture)
@@ -669,7 +707,7 @@ void Renderer::BeginFrame()
 
 void Renderer::DrawWorld(
     const gameplay::Player& player,
-    const gameplay::PlatformerCamera& camera,
+    const CameraView& cameraView,
     const world::LevelDefinition& level,
     core::Vec3 physicsTestBoxPosition,
     core::Vec3 physicsTestBoxSize,
@@ -681,9 +719,10 @@ void Renderer::DrawWorld(
         int collectedCount,
         double elapsedSeconds,
         bool hasBestTime,
-        double bestSeconds)
+        double bestSeconds,
+        const DebugWorldOverlay& overlay)
 {
-    const Camera3D view = MakeCamera(camera);
+    const Camera3D view = MakeCamera(cameraView);
     BeginMode3D(view);
 
     DrawGrid(kGridSlices, kGridSpacing);
@@ -727,6 +766,7 @@ void Renderer::DrawWorld(
             checkpointVisuals[static_cast<std::size_t>(checkpointIndex)]);
     }
     DrawLevelGoalMarker(level.goal, levelCompleted);
+    DrawWorldOverlay(overlay);
 
     if (testTextureLoaded && testTexture != nullptr)
     {

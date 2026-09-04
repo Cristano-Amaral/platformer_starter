@@ -9,11 +9,13 @@
 #include "persistence/BestTimeSave.h"
 #include "platform/RuntimePaths.h"
 #include "platform/Time.h"
+#include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/LevelGoal.h"
+#include "world/RespawnWorld.h"
 
 #include <array>
 #include <cmath>
@@ -29,6 +31,9 @@ static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/EditorCamera.h"
+#include "editor/EditorInput.h"
+#include "editor/EditorPicking.h"
 #include "editor/LevelEditor.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
@@ -47,6 +52,17 @@ std::array<world::CheckpointVisualState, world::kCheckpointCount> MakeCheckpoint
         world::CheckpointVisualStateForIndex(0, activeCheckpointIndex),
         world::CheckpointVisualStateForIndex(1, activeCheckpointIndex),
     };
+}
+
+render::CameraView MakeGameplayCameraView(const gameplay::PlatformerCamera& camera)
+{
+    const core::Vec3 target = camera.Target();
+    render::CameraView view{};
+    view.position = target + camera.offset;
+    view.target = target;
+    view.up = {0.0f, 1.0f, 0.0f};
+    view.fieldOfViewY = camera.fieldOfViewY;
+    return view;
 }
 
 bool RunTimeFormatScaffoldingOk()
@@ -645,10 +661,50 @@ int Application::Run()
 
         const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
+        render::CameraView cameraView = MakeGameplayCameraView(camera);
+        render::DebugWorldOverlay overlay{};
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        editor::EditorInputState editorInput{};
+        if (levelEditorState.active)
+        {
+            editorInput = editor::PollEditorInput();
+            const bool applyLook = !debugUi.WantsMouseCapture();
+            editor::UpdateEditorCamera(
+                levelEditorState.editorCamera,
+                editorInput,
+                deltaSeconds,
+                applyLook,
+                false,
+                false);
+            input::SetMouseLookActive(applyLook && editorInput.lookHeld);
+
+            cameraView = editor::MakeCameraView(levelEditorState.editorCamera);
+            overlay.drawSpawnMarker = true;
+            overlay.spawnCenter = levelDefinition.initialSpawnVisualCenter;
+            overlay.spawnSize = world::kPlayerVisualSize;
+
+            const editor::EditorPickingWorldState pickingWorld{
+                movingPlatform.position,
+                movingPlatform.size,
+                testBox.position,
+                testBox.size};
+            const editor::EditorHighlightRequest highlight = editor::MakeHighlightRequest(
+                levelEditorState.selection,
+                editor::BuildPickingSet(levelDefinition, pickingWorld));
+            overlay.drawHighlight = highlight.visible;
+            overlay.highlightCenter = highlight.center;
+            overlay.highlightSize = highlight.size;
+            overlay.highlightRotationZDegrees = highlight.rotationZDegrees;
+        }
+        else
+        {
+            input::SetMouseLookActive(false);
+        }
+#endif
         renderer.BeginFrame();
         renderer.DrawWorld(
             player,
-            camera,
+            cameraView,
             levelDefinition,
             testBox.position,
             testBox.size,
@@ -660,8 +716,13 @@ int Application::Run()
             gameplay::CollectedCount(collectibleRunState),
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
-            sessionBestTimeState.bestSeconds);
+            sessionBestTimeState.bestSeconds,
+            overlay);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        const editor::LevelEditorViewContext levelEditorView{
+            runtimeLevelPathDisplay.c_str(),
+            movingPlatform.position,
+            testBox.position};
         const editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
@@ -687,7 +748,38 @@ int Application::Run()
                 deltaSeconds),
             levelEditorState,
             levelDefinition,
-            runtimeLevelPathDisplay.c_str());
+            levelEditorView);
+        if (levelEditorState.active)
+        {
+            // Keyboard move, wheel and world pick use this frame's ImGui capture
+            // so typing into Inspector and clicking/scrolling panels cannot
+            // drive the viewport behind them.
+            const bool mouseCaptured = debugUi.WantsMouseCapture();
+            const bool keyboardCaptured = debugUi.WantsKeyboardCapture();
+            editor::UpdateEditorCamera(
+                levelEditorState.editorCamera,
+                editorInput,
+                deltaSeconds,
+                false,
+                !keyboardCaptured,
+                !mouseCaptured);
+            if (!mouseCaptured && editorInput.selectPressed && !editorInput.lookHeld)
+            {
+                const editor::EditorPickingWorldState pickingWorld{
+                    movingPlatform.position,
+                    movingPlatform.size,
+                    testBox.position,
+                    testBox.size};
+                const editor::Ray3 ray = editor::ScreenToWorldRay(
+                    cameraView,
+                    editorInput.mouseX,
+                    editorInput.mouseY,
+                    static_cast<float>(window.Width()),
+                    static_cast<float>(window.Height()));
+                levelEditorState.selection = editor::PickNearest(
+                    ray, editor::BuildPickingSet(levelDefinition, pickingWorld));
+            }
+        }
 #endif
         renderer.EndFrame();
 
@@ -866,6 +958,21 @@ void Application::SetLevelEditorActive(bool active)
         levelEditorState.modified = false;
         levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::NotAttempted;
         levelEditorState.lastMessage.clear();
+        editor::SeedEditorCameraFromGameplay(
+            levelEditorState.editorCamera,
+            camera.Target(),
+            camera.offset,
+            camera.fieldOfViewY);
+        if (!editor::IsValidSelection(
+                levelEditorState.workingCopy, levelEditorState.selection))
+        {
+            levelEditorState.selection = editor::ClearSelection();
+        }
+    }
+    if (!active && levelEditorState.active)
+    {
+        camera.SnapToTarget(player.Position());
+        input::SetMouseLookActive(false);
     }
 
     levelEditorState.active = active;
@@ -984,6 +1091,7 @@ void Application::SaveLevelEditorSource()
 void Application::Shutdown()
 {
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    input::SetMouseLookActive(false);
     debugUi.Shutdown();
 #endif
     physicsWorld.Shutdown();

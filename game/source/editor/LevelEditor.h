@@ -1,15 +1,20 @@
 #pragma once
 
-// Development level editor (Milestone 32).
+// Development/Debug level editor (Milestone 32 + Milestone 33 Phase B).
 //
 // Application stays the owner of the active world::LevelDefinition and of all
 // gameplay state. The editor owns only its working copy of authored data and
 // asks Application to perform Apply/Revert/Save through a returned request, so
 // physics rebuilds and gameplay resets stay where ownership already lives.
 //
+// M33 adds session camera, one selection, Hierarchy, and Inspector routing.
 // No property/value model, no reflection, no undo stack, no manager types.
 
 #include "world/LevelDefinition.h"
+
+#include "core/Vec3.h"
+#include "editor/EditorCamera.h"
+#include "editor/EditorSelection.h"
 
 #include <string>
 
@@ -20,10 +25,6 @@ inline constexpr int kEditableSpawnCount = 1;
 inline constexpr int kEditableCameraCount = 2;
 inline constexpr int kEditableGroundCount = 1;
 inline constexpr int kEditableElevatedPlatformCount = 6;
-
-// Static Geometry selector value meaning "the ground box" rather than an
-// index into LevelDefinition::elevatedPlatforms.
-inline constexpr int kGroundSelectionIndex = -1;
 
 enum class LevelEditorApplyStatus
 {
@@ -74,7 +75,10 @@ struct LevelEditorState
     // successfully saved source state.
     bool dirty = false;
 
-    int selectedPlatformIndex = kGroundSelectionIndex;
+    // Single selection shared by Hierarchy, world picking, Inspector, and
+    // highlight. Not persisted. Survives F2 close/reopen in this process.
+    EditorSelection selection{};
+    EditorCamera editorCamera{};
     LevelEditorApplyStatus lastApplyStatus = LevelEditorApplyStatus::NotAttempted;
     LevelEditorSaveStatus lastSaveStatus = LevelEditorSaveStatus::NotAttempted;
     // Short human-readable context for the last Apply or Save. Not a log.
@@ -87,17 +91,26 @@ struct LevelEditorSaveResult
     std::string message;
 };
 
+// Frozen runtime poses and path text the Inspector may display read-only.
+// Not authored data and never written back into workingCopy.
+struct LevelEditorViewContext
+{
+    const char* runtimeLevelPath = "";
+    core::Vec3 movingPlatformRuntimeCenter{};
+    core::Vec3 dynamicBoxRuntimeCenter{};
+};
+
 // Serialize the supplied authored definition to the canonical project source
 // through the Development authoring root. Returns Error without touching any
 // file where source authoring is not compiled in (Debug and Release).
 LevelEditorSaveResult SaveLevelSource(const world::LevelDefinition& level);
 
-// Draws the panel and returns the requested action. Must be called inside an
-// active Dear ImGui frame. Updates state.modified / state.dirty and edits
+// Draws Hierarchy, Inspector, and Level/Save controls. Must be called inside
+// an active Dear ImGui frame. Updates state.modified / state.dirty and edits
 // state.workingCopy only. No-op returning None where Dear ImGui is not
 // compiled in, so Release links no editor UI.
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
-    const char* runtimeLevelPath);
+    const LevelEditorViewContext& view);
 }

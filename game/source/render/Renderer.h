@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/RespawnWorld.h"
@@ -11,11 +12,23 @@
 namespace gameplay
 {
 class Player;
-class PlatformerCamera;
 }
 
 namespace render
 {
+// Debug/Development overlay drawn in the same 3D pass as the world. Renderer
+// does not own selection or editor camera; Application fills this each frame.
+struct DebugWorldOverlay
+{
+    bool drawSpawnMarker = false;
+    core::Vec3 spawnCenter{};
+    core::Vec3 spawnSize{};
+    bool drawHighlight = false;
+    core::Vec3 highlightCenter{};
+    core::Vec3 highlightSize{};
+    float highlightRotationZDegrees = 0.0f;
+};
+
 class Renderer
 {
 public:
@@ -52,7 +65,7 @@ public:
     void BeginFrame();
     void DrawWorld(
         const gameplay::Player& player,
-        const gameplay::PlatformerCamera& camera,
+        const CameraView& cameraView,
         const world::LevelDefinition& level,
         core::Vec3 physicsTestBoxPosition,
         core::Vec3 physicsTestBoxSize,
@@ -64,7 +77,8 @@ public:
         int collectedCount,
         double elapsedSeconds,
         bool hasBestTime,
-        double bestSeconds);
+        double bestSeconds,
+        const DebugWorldOverlay& overlay = {});
     void EndFrame();
 
 private:

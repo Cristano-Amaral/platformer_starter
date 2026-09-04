@@ -54,6 +54,16 @@ bool DebugUiBackend::WantsKeyboardCapture() const
     return ImGui::GetIO().WantCaptureKeyboard;
 }
 
+bool DebugUiBackend::WantsMouseCapture() const
+{
+    if (!initialized)
+    {
+        return false;
+    }
+
+    return ImGui::GetIO().WantCaptureMouse;
+}
+
 void DebugUiBackend::BeginFrame()
 {
     if (!initialized)
@@ -89,6 +99,10 @@ bool DebugUiBackend::ConsumeTogglePressed()
     return false;
 }
 bool DebugUiBackend::WantsKeyboardCapture() const
+{
+    return false;
+}
+bool DebugUiBackend::WantsMouseCapture() const
 {
     return false;
 }

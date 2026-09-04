@@ -17,7 +17,7 @@ editor::LevelEditorRequest DebugUi::Draw(
     const DebugMetricsSnapshot& snapshot,
     editor::LevelEditorState& levelEditorState,
     const world::LevelDefinition& level,
-    const char* runtimeLevelPath)
+    const editor::LevelEditorViewContext& levelEditorView)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -30,12 +30,12 @@ editor::LevelEditorRequest DebugUi::Draw(
         DrawDebugMetrics(snapshot);
     }
 
-    // The Level Editor panel is its own window driven by the editor toggle,
-    // independent of the F1 metrics panel.
+    // Hierarchy / Inspector / Level Editor are their own windows, independent
+    // of the F1 metrics panel, and driven by the F2 editor toggle.
     editor::LevelEditorRequest request = editor::LevelEditorRequest::None;
     if (levelEditorState.active)
     {
-        request = editor::DrawLevelEditor(levelEditorState, level, runtimeLevelPath);
+        request = editor::DrawLevelEditor(levelEditorState, level, levelEditorView);
     }
     backend.EndFrame();
     return request;
@@ -44,5 +44,10 @@ editor::LevelEditorRequest DebugUi::Draw(
 bool DebugUi::WantsKeyboardCapture() const
 {
     return backend.WantsKeyboardCapture();
+}
+
+bool DebugUi::WantsMouseCapture() const
+{
+    return backend.WantsMouseCapture();
 }
 }

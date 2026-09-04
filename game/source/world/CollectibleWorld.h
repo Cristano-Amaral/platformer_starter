@@ -16,6 +16,8 @@ struct CollectibleSpec
 
 inline constexpr int kCollectibleCount = 3;
 inline constexpr int kNoCollectibleIndex = -1;
+// Visual/picking cube. Shared so editor proxies match what Renderer draws.
+inline constexpr float kCollectibleVisualSize = 0.45f;
 
 constexpr bool PointInsideCollectible(const CollectibleSpec& spec, core::Vec3 visualCenter)
 {
