@@ -76,9 +76,9 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 38 — Runtime Asset Staging & Cook-and-Stage Workflow
-(Phase B live Development menu; awaiting Phase C). Milestone 37 is
-complete and merged. Milestone 39 has not started. See `docs/MILESTONES.md`
+Milestone 39 — Development Runtime Level Reload
+(Phase B live Level menu; awaiting Phase C). Milestone 38 is
+complete and merged. Milestone 40 has not started. See `docs/MILESTONES.md`
 and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -93,10 +93,12 @@ depth-independent gizmo overlay. M35 is complete (resize, orientation widget,
 Translate-only nudge, Alt+wheel dolly). M36 is complete (F2 Dear ImGui menu
 bar: View / Transform / Level). M37 is complete: Development-only Build menu
 and Tool Output. `Build > Cook Assets` remains only `python tools/cook_assets.py`.
-M38 Phase B wires Development `Build > Stage Runtime Assets` and
-`Build > Cook & Stage` to the shared `cmake -P cmake/StageRuntimeAssets.cmake`
-path. Cook Assets remains cook-only. Do not add automatic cook/build/stage
-chains, hot reload, restart, Add/Delete, docking, or Milestone 39.
+M38 is complete: Development `Build > Stage Runtime Assets` and
+`Build > Cook & Stage` use `cmake -P cmake/StageRuntimeAssets.cmake`.
+Cook Assets remains cook-only. M39 Phase B adds Development
+`Level > Reload Runtime Level` (in-process staged Level Format v1 reload).
+Do not add automatic cook/build/stage/reload chains, file watching,
+general hot reload, Add/Delete, docking, or Milestone 40.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -109,4 +111,6 @@ authoring path. Save Level Source is not Cook Assets; Cook Assets is not
 runtime staging. M38 Development `Build > Stage Runtime Assets` stages
 cooked files into `build/windows-vs2022/bin/Development/assets/` without a
 C++ build. `Build > Cook & Stage` cooks then stages. Those jobs do not
-change M37 Cook Assets / Build Development meanings.
+change M37 Cook Assets / Build Development meanings. M39 Development
+`Level > Reload Runtime Level` reloads the staged runtime level in-process.
+It does not Save, Cook, Stage, or restart. Awaiting Phase C.

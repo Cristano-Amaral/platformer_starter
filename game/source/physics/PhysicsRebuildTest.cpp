@@ -202,6 +202,44 @@ int main()
         world.InitializePlayer(parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
         "InitializePlayer after repeated shutdown");
 
+    {
+        physics::PhysicsWorld live;
+        Expect(live.Initialize(parsed.level), "live Initialize for TryRebuild");
+        Expect(
+            live.InitializePlayer(parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "live InitializePlayer for TryRebuild");
+        Expect(live.StaticBodyCount() == 9, "live static count before TryRebuild");
+
+        world::LevelDefinition moved = parsed.level;
+        moved.elevatedPlatforms[0].center.x = 9.0f;
+        moved.camera.fieldOfViewY = 55.0f;
+        Expect(
+            live.TryRebuild(
+                moved, moved.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "TryRebuild succeeds without Shutdown first");
+        Expect(live.IsInitialized(), "TryRebuild leaves world initialized");
+        Expect(live.StaticBodyCount() == 9, "TryRebuild rebuilds the same static count");
+        Expect(
+            live.GetMovingPlatform().position.x == moved.movingPlatform.startX,
+            "TryRebuild resets moving platform to authored start");
+        Expect(
+            live.GetDynamicTestBox().position.y == moved.dynamicBox.center.y,
+            "TryRebuild resets dynamic box to authored center");
+
+        physics::PhysicsWorld probe;
+        Expect(probe.Initialize(parsed.level), "second world Initialize while live exists");
+        Expect(
+            probe.InitializePlayer(parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "second world InitializePlayer");
+        Expect(live.IsInitialized() && probe.IsInitialized(), "two PhysicsWorld instances coexist");
+        probe.Shutdown();
+        Expect(live.IsInitialized(), "shutting down the second world preserves the live world");
+        Expect(live.StaticBodyCount() == 9, "live static bodies survive the other world's Shutdown");
+        Expect(
+            live.GetPlayerPhysicsState().characterInitialized,
+            "live CharacterVirtual survives the other world's Shutdown");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d physics rebuild test(s) failed.\n", gFailures);

@@ -70,6 +70,8 @@ add_executable(Platformer3D
     game/source/editor/EditorWorkspace.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
+    game/source/editor/RuntimeLevelReload.cpp
+    game/source/editor/RuntimeLevelReload.h
     game/source/gameplay/PlatformerCamera.cpp
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
@@ -219,11 +221,16 @@ add_custom_command(TARGET Platformer3D POST_BUILD
     COMMENT "Staging cooked runtime assets next to the executable"
 )
 
-# Level Format v1 parser/writer test binary. Not shipped. Does not link
+# Level Format v1 parser/writer/reload-core test binary. Not shipped. Does not link
 # raylib/Jolt/ImGui. The platform file-replacement TU is the only OS-specific
 # dependency, needed because SaveLevelFile promotes through that boundary
-# instead of duplicating ReplaceFileW/MoveFileExW.
+# instead of duplicating ReplaceFileW/MoveFileExW. M39 reload prepare/reconcile
+# lives here so candidate parse can be tested without the game.
 add_executable(LevelFileTest
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/RuntimeLevelReload.cpp
+    game/source/editor/RuntimeLevelReload.h
     game/source/platform/FileReplace.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h

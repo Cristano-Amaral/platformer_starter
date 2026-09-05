@@ -53,6 +53,33 @@ const char* LevelEditorSaveStatusName(LevelEditorSaveStatus status)
     return "NotAttempted";
 }
 
+const char* LevelEditorReloadStatusName(LevelEditorReloadStatus status)
+{
+    switch (status)
+    {
+    case LevelEditorReloadStatus::NotAttempted:
+        return "NotAttempted";
+    case LevelEditorReloadStatus::Reloaded:
+        return "Reloaded";
+    case LevelEditorReloadStatus::Rejected:
+        return "Rejected";
+    case LevelEditorReloadStatus::Missing:
+        return "Missing";
+    case LevelEditorReloadStatus::Invalid:
+        return "Invalid";
+    case LevelEditorReloadStatus::Error:
+        return "Error";
+    }
+    return "NotAttempted";
+}
+
+void ResetLevelActionStatuses(LevelEditorState& state)
+{
+    state.lastApplyStatus = LevelEditorApplyStatus::NotAttempted;
+    state.lastSaveStatus = LevelEditorSaveStatus::NotAttempted;
+    state.lastReloadStatus = LevelEditorReloadStatus::NotAttempted;
+}
+
 // Source authoring is Development only. Debug and Release compile the stub, so
 // they contain no repository path literal and no write path at all.
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
@@ -315,10 +342,14 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
 LevelEditorRequest DrawLevelControls(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
-    const LevelEditorViewContext& view)
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner)
 {
     LevelEditorRequest request = LevelEditorRequest::None;
     ApplyEditorWindowPlacement(kLevelEditorWindowName, view);
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    (void)toolRunner;
+#endif
     if (!ImGui::Begin(kLevelEditorWindowName, &state.workspace.showLevelEditor))
     {
         ImGui::End();
@@ -336,8 +367,18 @@ LevelEditorRequest DrawLevelControls(
         ImGui::Text("Modified (unapplied edits): %s", BoolText(state.modified));
         ImGui::Text("Dirty (applied but unsaved): %s", BoolText(state.dirty));
         ImGui::Text("Authoring: %s", authoringAvailable ? "Available" : "Unavailable");
-        ImGui::Text("Last Apply: %s", LevelEditorApplyStatusName(state.lastApplyStatus));
-        ImGui::Text("Last Save: %s", LevelEditorSaveStatusName(state.lastSaveStatus));
+        if (state.lastApplyStatus != LevelEditorApplyStatus::NotAttempted)
+        {
+            ImGui::Text("Last Apply: %s", LevelEditorApplyStatusName(state.lastApplyStatus));
+        }
+        if (state.lastSaveStatus != LevelEditorSaveStatus::NotAttempted)
+        {
+            ImGui::Text("Last Save: %s", LevelEditorSaveStatusName(state.lastSaveStatus));
+        }
+        if (state.lastReloadStatus != LevelEditorReloadStatus::NotAttempted)
+        {
+            ImGui::Text("Last Reload: %s", LevelEditorReloadStatusName(state.lastReloadStatus));
+        }
         if (!state.lastMessage.empty())
         {
             ImGui::TextWrapped("Detail: %s", state.lastMessage.c_str());
@@ -428,6 +469,27 @@ LevelEditorRequest DrawLevelControls(
             ImGui::TextUnformatted("Save disabled: Apply Preview first.");
         }
 
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        const bool toolRunning = toolRunner.IsRunning();
+        ImGui::BeginDisabled(
+            !editor::CanReloadRuntimeLevel(authoringAvailable, state.modified, toolRunning));
+        if (ImGui::Button("Reload Runtime Level"))
+        {
+            request = LevelEditorRequest::ReloadRuntimeLevel;
+        }
+        ImGui::EndDisabled();
+        if (state.modified)
+        {
+            ImGui::TextUnformatted(
+                "Reload disabled: Apply Preview or Revert Working Copy first.");
+        }
+        else if (toolRunning)
+        {
+            ImGui::TextUnformatted(
+                "Reload disabled: wait for the running Build tool to finish.");
+        }
+#endif
+
         if (ImGui::Button("Reset Editor Layout"))
         {
             ResetEditorWorkspaceLayout(state, view.viewportWidth, view.viewportHeight);
@@ -447,9 +509,14 @@ LevelEditorRequest DrawLevelControls(
             "The gizmo and pending ghost follow unapplied working-copy edits. "
             "Active render, physics, picking and highlight stay put until Apply Preview.");
         ImGui::TextWrapped("Save updates the project source only. It does not recook or rebuild.");
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         ImGui::TextWrapped(
-            "Run python tools/cook_assets.py, then cmake --build, then relaunch to update the"
-            " cooked and staged runtime files.");
+            "Reload Runtime Level re-reads the staged runtime file in-process. "
+            "It does not Save, Cook, Stage, Build, or restart.");
+        ImGui::TextWrapped(
+            "After Save, use Build > Cook & Stage, then Level > Reload Runtime Level. "
+            "Staging does not reload in-memory assets by itself.");
+#endif
         ImGui::TextWrapped(
             "Applied but unsaved edits live in memory only and are lost when the process exits.");
         ImGui::TextWrapped(
@@ -559,6 +626,18 @@ LevelEditorRequest DrawEditorMenuBar(
             request = LevelEditorRequest::SaveLevelSource;
         }
         ImGui::EndDisabled();
+
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        ImGui::Separator();
+        ImGui::BeginDisabled(
+            !CanReloadRuntimeLevel(
+                authoringAvailable, state.modified, toolRunner.IsRunning()));
+        if (ImGui::MenuItem("Reload Runtime Level"))
+        {
+            request = LevelEditorRequest::ReloadRuntimeLevel;
+        }
+        ImGui::EndDisabled();
+#endif
 
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Editor Layout"))
@@ -702,7 +781,8 @@ void DrawEditorToolOutput(
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
-    const LevelEditorViewContext& view)
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner)
 {
     RefreshLevelEditorDerivedFlags(state, activeLevel);
 
@@ -718,7 +798,7 @@ LevelEditorRequest DrawLevelEditor(
     {
         return LevelEditorRequest::None;
     }
-    return DrawLevelControls(state, activeLevel, view);
+    return DrawLevelControls(state, activeLevel, view, toolRunner);
 }
 
 #else
@@ -739,7 +819,8 @@ void DrawEditorToolOutput(LevelEditorState&, const LevelEditorViewContext&, Edit
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState&,
     const world::LevelDefinition&,
-    const LevelEditorViewContext&)
+    const LevelEditorViewContext&,
+    EditorToolRunner&)
 {
     return LevelEditorRequest::None;
 }

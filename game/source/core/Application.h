@@ -36,10 +36,12 @@ private:
     void RestartRun();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     void SetLevelEditorActive(bool active);
-    // Returns false when a physics rebuild left the process unusable. The
-    // frame loop then exits and Run() reports failure.
+    // Physics rebuilds use TryRebuild so a failure leaves the active world
+    // intact and this returns true.
     bool HandleLevelEditorRequest(editor::LevelEditorRequest request);
     bool ApplyLevelEditorPreview();
+    bool ReloadRuntimeLevelFromStaged();
+    void ResetGameplayAfterCommittedLevel();
     void SaveLevelEditorSource();
 #endif
 

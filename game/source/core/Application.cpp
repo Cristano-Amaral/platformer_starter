@@ -31,6 +31,7 @@ static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/AuthoringPaths.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
 #include "editor/EditorNudge.h"
@@ -38,6 +39,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/EditorPicking.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
+#include "editor/RuntimeLevelReload.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
 
@@ -1121,7 +1123,7 @@ void Application::SetLevelEditorActive(bool active)
         // previous session are discarded so the toggle stays deterministic.
         levelEditorState.workingCopy = levelDefinition;
         levelEditorState.modified = false;
-        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::NotAttempted;
+        editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage.clear();
         editor::SeedEditorCameraFromGameplay(
             levelEditorState.editorCamera,
@@ -1154,13 +1156,16 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
     case editor::LevelEditorRequest::RevertWorkingCopy:
         levelEditorState.workingCopy = levelDefinition;
         levelEditorState.modified = false;
-        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::NotAttempted;
+        editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage = "Working copy reverted to the applied level.";
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         return true;
     case editor::LevelEditorRequest::SaveLevelSource:
         SaveLevelEditorSource();
         return true;
+    case editor::LevelEditorRequest::ReloadRuntimeLevel:
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        return ReloadRuntimeLevelFromStaged();
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         break;
@@ -1175,6 +1180,7 @@ bool Application::ApplyLevelEditorPreview()
     // invalid working copy cannot shut physics down or move the camera.
     if (!world::IsWritableLevelDefinition(levelEditorState.workingCopy))
     {
+        editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Invalid;
         levelEditorState.lastMessage =
             "Apply rejected: authored validation failed. Active level unchanged.";
@@ -1182,6 +1188,7 @@ bool Application::ApplyLevelEditorPreview()
     }
     if (levelEditorState.workingCopy.id != world::kLevel01Id)
     {
+        editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Invalid;
         levelEditorState.lastMessage = "Apply rejected: Level ID must remain level_01.";
         return true;
@@ -1189,34 +1196,115 @@ bool Application::ApplyLevelEditorPreview()
 
     const world::LevelDefinition candidate = levelEditorState.workingCopy;
 
-    // Rebuild before committing: if Jolt cannot build the candidate, the
-    // active definition never describes a world that failed to exist.
-    physicsWorld.Shutdown();
-    if (!physicsWorld.Initialize(candidate))
+    if (!physicsWorld.TryRebuild(
+            candidate, candidate.initialSpawnVisualCenter, player.Size()))
     {
-        std::fprintf(
-            stderr,
-            "Level editor: PhysicsWorld::Initialize failed during Apply Preview. "
-            "Physics cannot be restored; shutting down.\n");
+        editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Error;
-        levelEditorState.lastMessage = "Physics rebuild failed. Shutting down.";
-        return false;
-    }
-    if (!physicsWorld.InitializePlayer(candidate.initialSpawnVisualCenter, player.Size()))
-    {
-        std::fprintf(
-            stderr,
-            "Level editor: PhysicsWorld::InitializePlayer failed during Apply Preview. "
-            "Physics cannot be restored; shutting down.\n");
-        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Error;
-        levelEditorState.lastMessage = "Player rebuild failed. Shutting down.";
-        return false;
+        levelEditorState.lastMessage = "Physics rebuild failed. Active level unchanged.";
+        return true;
     }
 
     levelDefinition = candidate;
+    ResetGameplayAfterCommittedLevel();
 
-    // Editor-only fresh preview run. Deliberately not RestartRun: the whole
-    // level was rebuilt, not just reset.
+    // sessionBestTimeState, the persisted BEST, and the level-loading
+    // diagnostics are intentionally untouched.
+    levelEditorState.workingCopy = levelDefinition;
+    levelEditorState.modified = false;
+    editor::ResetLevelActionStatuses(levelEditorState);
+    levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
+    levelEditorState.lastMessage =
+        "Applied. Rendering and collision were rebuilt from the same authored data.";
+    return true;
+}
+
+bool Application::ReloadRuntimeLevelFromStaged()
+{
+    const bool authoringAvailable = editor::IsLevelAuthoringAvailable();
+    const bool toolRunning = editorToolRunner.IsRunning();
+    if (!editor::CanReloadRuntimeLevel(
+            authoringAvailable, levelEditorState.modified, toolRunning))
+    {
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Rejected;
+        if (!authoringAvailable)
+        {
+            levelEditorState.lastMessage =
+                "Reload Runtime Level is available in Development only. Active level unchanged.";
+        }
+        else if (levelEditorState.modified)
+        {
+            levelEditorState.lastMessage =
+                "Reload rejected: apply or revert unapplied working-copy edits first. "
+                "Active level unchanged.";
+        }
+        else
+        {
+            levelEditorState.lastMessage =
+                "Reload rejected: a Build tool is still running. Active level unchanged.";
+        }
+        return true;
+    }
+
+    const std::filesystem::path stagedPath =
+        platform::RuntimeAssetPath(world::kLevel01RuntimeLogicalId);
+    const editor::RuntimeLevelReloadPrepareResult prepared =
+        editor::PrepareRuntimeLevelReload(stagedPath, levelEditorState.modified);
+    if (prepared.status != editor::RuntimeLevelReloadStatus::Ready)
+    {
+        editor::ResetLevelActionStatuses(levelEditorState);
+        switch (prepared.status)
+        {
+        case editor::RuntimeLevelReloadStatus::RejectedModified:
+            levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Rejected;
+            break;
+        case editor::RuntimeLevelReloadStatus::Missing:
+            levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Missing;
+            break;
+        case editor::RuntimeLevelReloadStatus::Invalid:
+        case editor::RuntimeLevelReloadStatus::UnsupportedVersion:
+            levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Invalid;
+            break;
+        default:
+            levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Error;
+            break;
+        }
+        levelEditorState.lastMessage = prepared.message;
+        return true;
+    }
+
+    if (!physicsWorld.TryRebuild(
+            prepared.candidate,
+            prepared.candidate.initialSpawnVisualCenter,
+            player.Size()))
+    {
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Error;
+        levelEditorState.lastMessage = "Physics rebuild failed. Active level unchanged.";
+        return true;
+    }
+
+    levelDefinition = prepared.candidate;
+    ResetGameplayAfterCommittedLevel();
+
+    const editor::RuntimeLevelReloadReconcileResult reconciled =
+        editor::ReconcileAfterRuntimeLevelReload(
+            levelDefinition, levelEditorState.savedSourceBaseline);
+    levelEditorState.workingCopy = reconciled.workingCopy;
+    levelEditorState.modified = reconciled.modified;
+    levelEditorState.dirty = reconciled.dirty;
+    levelEditorState.selection = reconciled.selection;
+    editor::ClearGizmoInteraction(levelEditorState.gizmo);
+    editor::ResetLevelActionStatuses(levelEditorState);
+    levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Reloaded;
+    levelEditorState.lastMessage =
+        "Reloaded staged runtime level. Source, cooked, and staged files were not written.";
+    return true;
+}
+
+void Application::ResetGameplayAfterCommittedLevel()
+{
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     respawnState = gameplay::RespawnState{};
@@ -1227,27 +1315,20 @@ bool Application::ApplyLevelEditorPreview()
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
     camera.Initialize(player.Position());
-
-    // sessionBestTimeState, the persisted BEST, and the level-loading
-    // diagnostics are intentionally untouched.
-    levelEditorState.workingCopy = levelDefinition;
-    levelEditorState.modified = false;
-    levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
-    levelEditorState.lastMessage =
-        "Applied. Rendering and collision were rebuilt from the same authored data.";
-    return true;
 }
 
 void Application::SaveLevelEditorSource()
 {
     // Always the active/applied definition, never the working copy.
     const editor::LevelEditorSaveResult result = editor::SaveLevelSource(levelDefinition);
+    editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastSaveStatus = result.status;
     if (result.status == editor::LevelEditorSaveStatus::Saved)
     {
         levelEditorState.savedSourceBaseline = levelDefinition;
         levelEditorState.lastMessage =
-            "Source saved. Run cooker/build to update cooked/staged runtime files.";
+            "Source saved. Cook & Stage, then Reload Runtime Level, to load staged data. "
+            "Source only was written.";
         return;
     }
 

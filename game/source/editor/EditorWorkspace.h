@@ -36,6 +36,11 @@ float OrientationWidgetLiveExtraTopInset(bool editorActive, float lastMenuBarHei
 bool CanApplyPreview(bool modified, bool workingCopyValid);
 bool CanRevertWorkingCopy(bool modified);
 bool CanSaveLevelSource(bool authoringAvailable, bool modified);
+// Policy A: Development-only, rejected while unapplied working-copy edits
+// exist, and rejected while EditorToolRunner.IsRunning(). Dirty-but-not-Modified
+// does not block. toolRunnerRunning is the runner's IsRunning(), not a second flag.
+bool CanReloadRuntimeLevel(
+    bool authoringAvailable, bool modified, bool toolRunnerRunning);
 
 // Returns false and leaves mode unchanged while a gizmo drag is active.
 bool TrySetEditorTransformMode(

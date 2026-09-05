@@ -63,6 +63,8 @@ constexpr float kMaxStrength = 100.0f;
 // inside the padded CharacterVirtual volume and does not rest on the same surfaces.
 constexpr float kInnerShapeFraction = 0.9f;
 
+int gJoltRegistrationUsers = 0;
+
 namespace ObjectLayers
 {
 constexpr JPH::ObjectLayer NonMoving = 0;
@@ -286,7 +288,7 @@ struct PhysicsWorld::Impl
     world::DynamicBoxSpec dynamicBoxSpec{};
     float movingPlatformDirection = 1.0f;
     float carriedGroundVelocityX = 0.0f;
-    bool typesRegistered = false;
+    bool holdsJoltRegistration = false;
     bool initialized = false;
 
     bool AddStaticBox(const world::Box& box, const char* name)
@@ -530,13 +532,16 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
     JPH::Trace = TraceImpl;
     JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
 
-    if (JPH::Factory::sInstance == nullptr)
+    if (gJoltRegistrationUsers == 0)
     {
-        JPH::Factory::sInstance = new JPH::Factory();
+        if (JPH::Factory::sInstance == nullptr)
+        {
+            JPH::Factory::sInstance = new JPH::Factory();
+        }
+        JPH::RegisterTypes();
     }
-
-    JPH::RegisterTypes();
-    impl->typesRegistered = true;
+    ++gJoltRegistrationUsers;
+    impl->holdsJoltRegistration = true;
 
     impl->tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(kTempAllocatorBytes);
     impl->jobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(kMaxPhysicsJobs);
@@ -686,6 +691,24 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
         {},
         *impl->tempAllocator);
     impl->EnforceFixedZ();
+    return true;
+}
+
+bool PhysicsWorld::TryRebuild(
+    const world::LevelDefinition& level,
+    core::Vec3 playerVisualCenter,
+    core::Vec3 playerVisualSize)
+{
+    PhysicsWorld replacement;
+    if (!replacement.Initialize(level))
+    {
+        return false;
+    }
+    if (!replacement.InitializePlayer(playerVisualCenter, playerVisualSize))
+    {
+        return false;
+    }
+    impl.swap(replacement.impl);
     return true;
 }
 
@@ -873,14 +896,17 @@ void PhysicsWorld::Shutdown()
     impl->jobSystem.reset();
     impl->tempAllocator.reset();
 
-    if (impl->typesRegistered)
+    if (impl->holdsJoltRegistration)
     {
-        JPH::UnregisterTypes();
-        impl->typesRegistered = false;
+        impl->holdsJoltRegistration = false;
+        --gJoltRegistrationUsers;
+        if (gJoltRegistrationUsers == 0)
+        {
+            JPH::UnregisterTypes();
+            delete JPH::Factory::sInstance;
+            JPH::Factory::sInstance = nullptr;
+        }
     }
-
-    delete JPH::Factory::sInstance;
-    JPH::Factory::sInstance = nullptr;
 
     impl->initialized = false;
 }

@@ -44,6 +44,16 @@ enum class LevelEditorSaveStatus
     Error,
 };
 
+enum class LevelEditorReloadStatus
+{
+    NotAttempted,
+    Reloaded,
+    Rejected,
+    Missing,
+    Invalid,
+    Error,
+};
+
 // What the panel asks Application to do this frame. Application executes it
 // after the frame is presented, so no frame ever draws mismatched geometry.
 enum class LevelEditorRequest
@@ -52,10 +62,12 @@ enum class LevelEditorRequest
     ApplyPreview,
     RevertWorkingCopy,
     SaveLevelSource,
+    ReloadRuntimeLevel,
 };
 
 const char* LevelEditorApplyStatusName(LevelEditorApplyStatus status);
 const char* LevelEditorSaveStatusName(LevelEditorSaveStatus status);
+const char* LevelEditorReloadStatusName(LevelEditorReloadStatus status);
 
 struct LevelEditorState
 {
@@ -92,9 +104,14 @@ struct LevelEditorState
     int forceDefaultLayoutFrames = 0;
     LevelEditorApplyStatus lastApplyStatus = LevelEditorApplyStatus::NotAttempted;
     LevelEditorSaveStatus lastSaveStatus = LevelEditorSaveStatus::NotAttempted;
-    // Short human-readable context for the last Apply or Save. Not a log.
+    LevelEditorReloadStatus lastReloadStatus = LevelEditorReloadStatus::NotAttempted;
+    // Short human-readable context for the last Apply, Save, or Reload. Not a log.
     std::string lastMessage;
 };
+
+// One current Level-action status: clears Apply/Save/Reload so the panel
+// cannot show a stale success next to a newer failure message.
+void ResetLevelActionStatuses(LevelEditorState& state);
 
 struct LevelEditorSaveResult
 {
@@ -135,7 +152,8 @@ void ResetEditorWorkspaceLayout(
     float viewportHeight);
 
 // F2-only Dear ImGui main menu bar (View / Transform / Level, plus Build in
-// Development). Must be called after rlImGuiBegin and before the editor panels.
+// Development). Development Level includes Reload Runtime Level. Must be
+// called after rlImGuiBegin and before the editor panels.
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
@@ -154,5 +172,6 @@ void DrawEditorToolOutput(
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
-    const LevelEditorViewContext& view);
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner);
 }

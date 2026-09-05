@@ -58,6 +58,12 @@ bool CanSaveLevelSource(bool authoringAvailable, bool modified)
     return authoringAvailable && !modified;
 }
 
+bool CanReloadRuntimeLevel(
+    bool authoringAvailable, bool modified, bool toolRunnerRunning)
+{
+    return authoringAvailable && !modified && !toolRunnerRunning;
+}
+
 bool TrySetEditorTransformMode(
     EditorTransformMode& mode,
     bool gizmoDragging,

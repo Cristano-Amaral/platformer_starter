@@ -66,7 +66,7 @@ editor::LevelEditorRequest DebugUi::Draw(
     {
         view.recoverOffscreenLayout =
             !recoveredEditorWindowsLayout && !view.forceDefaultLayout;
-        panelRequest = editor::DrawLevelEditor(levelEditorState, level, view);
+        panelRequest = editor::DrawLevelEditor(levelEditorState, level, view, toolRunner);
         recoveredEditorWindowsLayout = true;
     }
     if (levelEditorState.forceDefaultLayoutFrames > 0)

@@ -79,6 +79,12 @@ public:
 
     bool Initialize(const world::LevelDefinition& level);
     bool InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSize);
+    // Build a replacement world first; swap only on success so a failed
+    // rebuild leaves this instance intact. Used by Apply Preview and reload.
+    bool TryRebuild(
+        const world::LevelDefinition& level,
+        core::Vec3 playerVisualCenter,
+        core::Vec3 playerVisualSize);
     void ResetCharacter(const core::Vec3& visualCenter, const core::Vec3& velocity);
     void ResetMovingPlatform();
     void ResetDynamicTestBox();

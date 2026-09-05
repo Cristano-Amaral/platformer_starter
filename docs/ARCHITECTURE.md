@@ -109,7 +109,7 @@ Three locations are distinct:
 
 Save Level Source is not Cook Assets. Cook Assets is not runtime staging. The cooker never copies into `<exe>/assets/`. CMake does not cook. Staging is `cmake -P cmake/StageRuntimeAssets.cmake` with `-DPLATFORMER_COOKED_DIR` and `-DPLATFORMER_STAGE_DEST`, sharing `cmake/RuntimeAssets.cmake`. `Platformer3D` POST_BUILD invokes that script into `$<TARGET_FILE_DIR:Platformer3D>/assets` for Debug, Development, and Release. The same script is the M38 Stage Runtime Assets child process (Development dest: `build/windows-vs2022/bin/Development/assets`). Staging does not compile or link. `copy_if_different` / `file(COPY_FILE ... ONLY_IF_DIFFERENT)` skips identical bytes. Stale destination files are not deleted. Build Development remains `cmake --build --preset windows-development`.
 
-The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test uses Save → Cook & Stage → Restart. Build Development is not required solely to copy cooked files. `Build > Stage Runtime Assets` always targets the Development runtime tree.
+The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test uses Save → Cook & Stage → Restart, or Development `Level > Reload Runtime Level` from the staged file without closing the process. `Build > Stage Runtime Assets` always targets the Development runtime tree. Reload does not Save, Cook, Stage, or Build.
 
 Cook from the repository root:
 
@@ -484,4 +484,24 @@ Phase A introduced one staging implementation used by CMake POST_BUILD and by De
 
 **Inventory / stale files / no auto Save.** Unchanged from Phase A. Staging never deletes extra destination files. Neither job Apply/Revert/Saves or restarts the game.
 
-Status: Phase B implemented, awaiting Phase C. Milestone 38 is **not** complete. Milestone 39 has not started.
+Status: Milestone 38 is complete and merged.
+
+## Development runtime level reload (Milestone 39, Phase B)
+
+Phase A added in-process reload of Level Format v1 from the **staged** runtime file. Phase B wires the live Development `Level > Reload Runtime Level` item. It is not general hot reload and not an `EditorToolRunner` job.
+
+**Authority.** Same path as startup: `platform::RuntimeAssetPath(world::kLevel01RuntimeLogicalId)` → `<exe>/assets/levels/level_01.level`. Development dest is `build/windows-vs2022/bin/Development/assets/levels/level_01.level`. Reload never reads `game/assets/source` or `game/assets/cooked`.
+
+**Live routing.** ImGui emits only `LevelEditorRequest::ReloadRuntimeLevel`. `Application::HandleLevelEditorRequest` calls `ReloadRuntimeLevelFromStaged` → `PrepareRuntimeLevelReload` → `PhysicsWorld::TryRebuild` → commit/reconcile/`ResetGameplayAfterCommittedLevel`. Drawing code does not call Prepare/TryRebuild.
+
+**Transaction.** `PrepareRuntimeLevelReload` parse/validates a candidate. `PhysicsWorld::TryRebuild` builds a replacement world and swaps only on success. Failure leaves the active world, `workingCopy`, and BEST intact. Apply Preview uses the same rebuild primitive.
+
+**Enable.** `CanReloadRuntimeLevel(authoringAvailable, modified, toolRunnerRunning)`: Development-only, rejected while `Modified`, rejected while `EditorToolRunner::IsRunning()` (Policy A: do not read staged files mid Cook & Stage / Stage / Build). Dirty-but-not-Modified does not block. `savedSourceBaseline` is not updated. After success: `workingCopy = active`, Modified false, Dirty iff staged active differs from saved source.
+
+**Session.** Same reset as Apply Preview (`ResetGameplayAfterCommittedLevel`): player at spawn, checkpoints/collectibles/goal/timer/platform/box reset. Persistent BEST is not touched. Editor navigation camera and transform mode stay. Selection and gizmo clear. Tool Output is unrelated (not opened, cleared, or cancelled).
+
+**Status.** One current Level-action message in the Level Editor panel (`lastApplyStatus` / `lastSaveStatus` / `lastReloadStatus` plus `lastMessage`). A newer Apply/Save/Revert/Reload clears the other status enums so stale lines are not shown together.
+
+**Menus.** Development Level: Apply Preview, Revert Working Copy, Save Level Source, separator, Reload Runtime Level, separator, Reset Editor Layout. Debug omits Reload (and Build). Release has no editor.
+
+Status: Phase B implemented, awaiting Phase C. Milestone 39 is **not** complete. Milestone 40 has not started.

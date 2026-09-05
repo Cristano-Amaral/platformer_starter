@@ -1,3 +1,4 @@
+#include "editor/RuntimeLevelReload.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/LevelWriter.h"
@@ -154,6 +155,13 @@ std::string ReadAll(const std::filesystem::path& path)
         return {};
     }
     return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+}
+
+void WriteAll(const std::filesystem::path& path, std::string_view text)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    stream.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
 std::string ReplaceFirstLineStartingWith(const std::string& text, std::string_view prefix, const char* replacement)
@@ -555,6 +563,103 @@ int main()
         Expect(
             !world::AuthoredLevelDataEqual(parsed.level, idEdit),
             "authored equality detects id change");
+    }
+
+    // ---- Milestone 39 staged reload core (no ImGui, no tools) ----
+    // Persistent BEST is Application/session state, not LevelDefinition.
+    // Prepare/Reconcile never read or write best_time_v1.txt.
+    {
+        std::error_code cleanupError;
+        const std::filesystem::path reloadDir =
+            std::filesystem::temp_directory_path() / "platformer3d_m39_reload";
+        std::filesystem::remove_all(reloadDir, cleanupError);
+        std::filesystem::create_directories(reloadDir, cleanupError);
+
+        const std::filesystem::path stagedPath = reloadDir / "assets" / "levels" / "level_01.level";
+        const std::filesystem::path sourcePath = reloadDir / "source" / "levels" / "level_01.level";
+        const std::filesystem::path cookedPath = reloadDir / "cooked" / "levels" / "level_01.level";
+
+        world::LevelDefinition stagedFov55 = parsed.level;
+        stagedFov55.camera.fieldOfViewY = 55.0f;
+        const std::string staged55Text = world::SerializeLevelText(stagedFov55);
+        const std::string staged40Text = world::SerializeLevelText(parsed.level);
+        WriteAll(stagedPath, staged55Text);
+        WriteAll(sourcePath, staged40Text);
+        WriteAll(cookedPath, staged40Text);
+        const std::string sourceBefore = ReadAll(sourcePath);
+        const std::string cookedBefore = ReadAll(cookedPath);
+        const std::string stagedBefore = ReadAll(stagedPath);
+
+        const editor::RuntimeLevelReloadPrepareResult ready =
+            editor::PrepareRuntimeLevelReload(stagedPath, false);
+        Expect(ready.status == editor::RuntimeLevelReloadStatus::Ready, "reload success Ready");
+        Expect(ready.candidate.camera.fieldOfViewY == 55.0f, "reload candidate FOV from staged 55");
+        Expect(ready.candidate.camera.fieldOfViewY != 40.0f, "reload does not use FOV 40 source");
+
+        Expect(ReadAll(sourcePath) == sourceBefore, "reload does not write source");
+        Expect(ReadAll(cookedPath) == cookedBefore, "reload does not write cooked");
+        Expect(ReadAll(stagedPath) == stagedBefore, "reload does not rewrite staged");
+
+        WriteAll(stagedPath, staged40Text);
+        const editor::RuntimeLevelReloadPrepareResult stale =
+            editor::PrepareRuntimeLevelReload(stagedPath, false);
+        Expect(stale.status == editor::RuntimeLevelReloadStatus::Ready, "stale staged still Ready");
+        Expect(
+            stale.candidate.camera.fieldOfViewY == 40.0f,
+            "reload authority is staged FOV 40 when source/cooked differ");
+
+        const editor::RuntimeLevelReloadPrepareResult modifiedGuard =
+            editor::PrepareRuntimeLevelReload(stagedPath, true);
+        Expect(
+            modifiedGuard.status == editor::RuntimeLevelReloadStatus::RejectedModified,
+            "Modified guard rejects before read");
+        Expect(modifiedGuard.candidate.id.empty(), "Modified guard has no candidate");
+
+        const editor::RuntimeLevelReloadPrepareResult missingStaged =
+            editor::PrepareRuntimeLevelReload(reloadDir / "assets" / "levels" / "missing.level", false);
+        Expect(missingStaged.status == editor::RuntimeLevelReloadStatus::Missing, "missing staged Missing");
+
+        const editor::RuntimeLevelReloadPrepareResult relative =
+            editor::PrepareRuntimeLevelReload(std::filesystem::path("levels") / "level_01.level", false);
+        Expect(relative.status == editor::RuntimeLevelReloadStatus::Error, "relative path Error");
+
+        const std::filesystem::path malformedPath = reloadDir / "assets" / "levels" / "malformed.level";
+        WriteAll(malformedPath, "NOT_A_LEVEL\n");
+        const editor::RuntimeLevelReloadPrepareResult malformed =
+            editor::PrepareRuntimeLevelReload(malformedPath, false);
+        Expect(malformed.status == editor::RuntimeLevelReloadStatus::Invalid, "malformed staged Invalid");
+
+        world::LevelDefinition invalidLevel = parsed.level;
+        invalidLevel.camera.fieldOfViewY = 0.0f;
+        const std::filesystem::path invalidPath = reloadDir / "assets" / "levels" / "invalid.level";
+        WriteAll(invalidPath, "PLATFORMER_LEVEL 1\nid level_01\nspawn 0 0.8 0\n");
+        const editor::RuntimeLevelReloadPrepareResult invalid =
+            editor::PrepareRuntimeLevelReload(invalidPath, false);
+        Expect(invalid.status == editor::RuntimeLevelReloadStatus::Invalid, "invalid candidate Invalid");
+
+        world::LevelDefinition otherLevel = parsed.level;
+        otherLevel.id = "other_level";
+        const std::filesystem::path otherIdPath = reloadDir / "assets" / "levels" / "other.level";
+        WriteAll(otherIdPath, world::SerializeLevelText(otherLevel));
+        const editor::RuntimeLevelReloadPrepareResult wrongId =
+            editor::PrepareRuntimeLevelReload(otherIdPath, false);
+        Expect(wrongId.status == editor::RuntimeLevelReloadStatus::Invalid, "non-level_01 id Invalid");
+
+        const editor::RuntimeLevelReloadReconcileResult sameBaseline =
+            editor::ReconcileAfterRuntimeLevelReload(parsed.level, parsed.level);
+        Expect(world::AuthoredLevelDataEqual(sameBaseline.workingCopy, parsed.level), "reconcile copies active");
+        Expect(!sameBaseline.modified, "successful reload Modified false");
+        Expect(!sameBaseline.dirty, "Dirty false when staged matches saved source baseline");
+        Expect(sameBaseline.selection.kind == editor::EditorObjectKind::None, "selection cleared");
+
+        world::LevelDefinition saved55 = parsed.level;
+        saved55.camera.fieldOfViewY = 55.0f;
+        const editor::RuntimeLevelReloadReconcileResult dirtyStaged =
+            editor::ReconcileAfterRuntimeLevelReload(parsed.level, saved55);
+        Expect(!dirtyStaged.modified, "Dirty-but-not-Modified: Modified false");
+        Expect(dirtyStaged.dirty, "Dirty true when staged active differs from saved source");
+
+        std::filesystem::remove_all(reloadDir, cleanupError);
     }
 
     Expect(

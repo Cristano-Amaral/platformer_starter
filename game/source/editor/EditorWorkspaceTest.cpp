@@ -78,6 +78,25 @@ int main()
         Expect(
             editor::CanSaveLevelSource(true, false),
             "Save Development rule: enabled when authoring and applied");
+        Expect(
+            !editor::CanReloadRuntimeLevel(false, false, false),
+            "Reload Debug rule: disabled when authoring is unavailable");
+        Expect(
+            !editor::CanReloadRuntimeLevel(false, true, false),
+            "Reload Debug rule: still disabled while modified");
+        Expect(
+            !editor::CanReloadRuntimeLevel(true, true, false),
+            "Reload Policy A: disabled while Modified");
+        Expect(
+            !editor::CanReloadRuntimeLevel(true, false, true),
+            "Reload Policy A: disabled while a Build tool is Running");
+        Expect(
+            !editor::CanReloadRuntimeLevel(true, true, true),
+            "Reload remains disabled when both Modified and a tool is Running");
+        Expect(
+            editor::CanReloadRuntimeLevel(true, false, false),
+            "Reload Development rule: enabled when authoring, unmodified, idle tools");
+        // Dirty is not an argument: Dirty-but-not-Modified stays enabled.
     }
 
     {
