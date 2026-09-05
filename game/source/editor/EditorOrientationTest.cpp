@@ -110,6 +110,12 @@ int main()
         Expect(narrow.originX - narrow.radius >= 0.0f, "narrow widget stays on-screen left");
         Expect(
             narrow.originX + narrow.radius <= 400.0f, "narrow widget stays on-screen right");
+        const editor::OrientationWidgetLayout withMenu =
+            editor::MakeOrientationWidgetLayout(1280.0f, 720.0f, 32.0f);
+        Expect(
+            NearlyEqual(withMenu.originY, layout.originY + 32.0f),
+            "menu-bar inset lowers widget without changing X");
+        Expect(NearlyEqual(withMenu.originX, layout.originX), "menu-bar inset keeps right placement");
         const editor::OrientationWidgetAxes axes = editor::ProjectOrientationWidgetAxes(camera);
         const float xTipX = layout.originX + axes.x.x * layout.radius;
         const float xTipY = layout.originY - axes.x.y * layout.radius;

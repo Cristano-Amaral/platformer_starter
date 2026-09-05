@@ -29,7 +29,6 @@ public:
 
 private:
     DebugUiBackend backend;
-    bool panelVisible = true;
     bool recoveredMetricsLayout = false;
     bool recoveredEditorWindowsLayout = false;
 };

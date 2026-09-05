@@ -38,7 +38,10 @@ float DefaultEditorPanelWidth(float viewportWidth)
 }
 }
 
-OrientationWidgetLayout MakeOrientationWidgetLayout(float viewportWidth, float viewportHeight)
+OrientationWidgetLayout MakeOrientationWidgetLayout(
+    float viewportWidth,
+    float viewportHeight,
+    float extraTopInset)
 {
     OrientationWidgetLayout layout{};
     layout.radius = kOrientationWidgetRadius;
@@ -48,10 +51,11 @@ OrientationWidgetLayout MakeOrientationWidgetLayout(float viewportWidth, float v
     const float height = viewportHeight > 1.0f ? viewportHeight : 720.0f;
     const float panelWidth = DefaultEditorPanelWidth(width);
     const float reserved = panelWidth + kOrientationWidgetEdgeMargin;
+    const float topInset = extraTopInset > 0.0f ? extraTopInset : 0.0f;
 
     layout.originX =
         width - reserved - layout.radius - kOrientationWidgetInspectorGap;
-    layout.originY = kOrientationWidgetTopMargin + layout.radius;
+    layout.originY = kOrientationWidgetTopMargin + topInset + layout.radius;
 
     const float minX = layout.radius + kOrientationWidgetEdgeMargin;
     const float maxX = width - layout.radius - kOrientationWidgetEdgeMargin;

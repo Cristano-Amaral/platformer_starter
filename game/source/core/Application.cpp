@@ -36,6 +36,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/EditorNudge.h"
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
+#include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
@@ -761,7 +762,9 @@ int Application::Run()
             const editor::OrientationWidgetLayout widgetLayout =
                 editor::MakeOrientationWidgetLayout(
                     static_cast<float>(window.Width()),
-                    static_cast<float>(window.Height()));
+                    static_cast<float>(window.Height()),
+                    editor::OrientationWidgetLiveExtraTopInset(
+                        levelEditorState.active, levelEditorState.menuBarHeight));
             const editor::OrientationWidgetAxes widgetAxes =
                 editor::ProjectOrientationWidgetAxes(levelEditorState.editorCamera);
             renderer.DrawOrientationWidget({
@@ -845,7 +848,9 @@ int Application::Run()
                 const editor::OrientationWidgetLayout widgetLayout =
                     editor::MakeOrientationWidgetLayout(
                         static_cast<float>(window.Width()),
-                        static_cast<float>(window.Height()));
+                        static_cast<float>(window.Height()),
+                        editor::OrientationWidgetLiveExtraTopInset(
+                            levelEditorState.active, levelEditorState.menuBarHeight));
                 const editor::OrientationWidgetAxes widgetAxes =
                     editor::ProjectOrientationWidgetAxes(levelEditorState.editorCamera);
                 const editor::CanonicalEditorView canonical = editor::PickOrientationWidget(

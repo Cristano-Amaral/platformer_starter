@@ -432,4 +432,18 @@ Phase B wires the approved Phase A math into the live Debug/Development editor. 
 
 **Dolly.** `ResolveEditorWheel`: Alt+wheel is dolly (`clamp(wheel * speed * 0.35, ±8)` along look-forward) and does not change `movementSpeed`. Ordinary wheel still changes speed. ImGui mouse capture and active transform drag suppress both.
 
-Status: Phase B implemented, awaiting Phase C manual validation. Milestone 35 is **not** complete. Milestone 36 has not started.
+Status: Milestone 35 is complete and merged.
+
+## Editor menu bar and workspace (Milestone 36, Phase B)
+
+Phase B wires the approved Phase A workspace into the live Debug/Development editor. F2 shows `ImGui::BeginMainMenuBar()` after `rlImGuiBegin`, before Metrics/Hierarchy/Inspector/Level Editor. The bar overlays the raylib framebuffer; it does not shrink the 3D viewport, change camera projection, or offset `ScreenToWorldRay` / mouse Y.
+
+**View.** Checkable items bind `workspace.showMetrics`, `showHierarchy`, `showInspector`, `showLevelEditor`. F1, View > Metrics, and the Metrics close button share `showMetrics`. Hierarchy/Inspector/Level Editor follow F2; Metrics does not. Closing a panel sets only its visibility bool (selection, workingCopy, transformMode, and pending edits remain). Hidden panels reopen from View. F2 off/on preserves session visibility and transform mode.
+
+**Transform / Level.** Translate and Resize call `TrySetEditorTransformMode` on the same `transformMode` as the Level Editor radios (disabled while `gizmo.dragging`). Apply Preview / Revert Working Copy / Save Level Source emit the existing `LevelEditorRequest` values; Application still executes them after the UI frame. Enable policy is `CanApplyPreview` / `CanRevertWorkingCopy` / `CanSaveLevelSource`. `CanApplyPreview` uses in-memory working-copy validity (`IsWritableLevelDefinition`), not source authoring — Debug can Apply and cannot Save. Reset Editor Layout is `ResetEditorWorkspaceLayout` (menu and panel share it): default poses plus all four visibility bools true. It does not Apply/Revert/Save or touch authored/camera/selection/mode flags.
+
+**Orientation widget.** Live `extraTopInset` is `OrientationWidgetLiveExtraTopInset(active, menuBarHeight)` (`GetFrameHeight()` stored from the bar, or 24 px until the first F2 frame, plus 8 px gap). Upper-right placement is otherwise unchanged. Widget math, hit radius, and canonical views are unchanged.
+
+Cooker/build integration, Add/Delete/Duplicate, docking, and Milestone 37 are out of scope.
+
+Status: Phase B live integration implemented, awaiting Phase C manual validation. Milestone 36 is **not** complete.

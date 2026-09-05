@@ -62,6 +62,8 @@ add_executable(Platformer3D
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
     game/source/gameplay/PlatformerCamera.cpp
@@ -348,4 +350,18 @@ if(MSVC)
     target_compile_options(EditorOrientationTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(EditorOrientationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 36 Phase A workspace visibility and shared action-enable policy.
+# No window, raylib, or ImGui.
+add_executable(EditorWorkspaceTest
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/EditorWorkspaceTest.cpp
+)
+target_include_directories(EditorWorkspaceTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorWorkspaceTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorWorkspaceTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
