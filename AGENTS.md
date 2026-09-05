@@ -76,11 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 37 — Editor Tool Runner: Asset Cooker & Build Integration
-(implementation and Phase C manual validation complete; awaiting Git
-closure — do not commit, push, or merge until the user requests it).
-Milestone 36 is complete and merged. Milestone 38 has not started. See
-`docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and `docs/LEVEL_FORMAT_V1.md`.
+Milestone 38 — Runtime Asset Staging & Cook-and-Stage Workflow
+(Phase B live Development menu; awaiting Phase C). Milestone 37 is
+complete and merged. Milestone 39 has not started. See `docs/MILESTONES.md`
+and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
 working copy, and uses Apply Preview / Revert / Save Level Source. Viewport
@@ -92,15 +91,12 @@ M34 added world-space X/Y/Z translation for Spawn, Ground, and Elevated
 Platform 0..5, a pending ghost, persistent Dear ImGui layout, and a
 depth-independent gizmo overlay. M35 is complete (resize, orientation widget,
 Translate-only nudge, Alt+wheel dolly). M36 is complete (F2 Dear ImGui menu
-bar: View / Transform / Level). M37 adds a Development-only Build menu and
-Tool Output. Debug has no Build menu and does not launch tools.
-`Build > Cook Assets` runs only `python tools/cook_assets.py` (repository
-cooked assets). It does not stage runtime assets, build, or restart. CMake
-POST_BUILD still stages cooked files into
-`build/windows-vs2022/bin/<Config>/assets/`. After authored edits, a
-fresh-restart test is Save → Cook → Build (may be a C++ no-op) → Restart.
-Do not add automatic cook/build/stage chains, Add/Delete, docking, or
-Milestone 38.
+bar: View / Transform / Level). M37 is complete: Development-only Build menu
+and Tool Output. `Build > Cook Assets` remains only `python tools/cook_assets.py`.
+M38 Phase B wires Development `Build > Stage Runtime Assets` and
+`Build > Cook & Stage` to the shared `cmake -P cmake/StageRuntimeAssets.cmake`
+path. Cook Assets remains cook-only. Do not add automatic cook/build/stage
+chains, hot reload, restart, Add/Delete, docking, or Milestone 39.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -110,4 +106,7 @@ owns it. There is no compiled Level 01 fallback. Missing/invalid/unsupported
 Level 01 is a fatal init error. M29 BEST save remains nonfatal. The M32 writer,
 authoring boundary, F2 editor, Apply Preview and source Save remain the live
 authoring path. Save Level Source is not Cook Assets; Cook Assets is not
-runtime staging.
+runtime staging. M38 Development `Build > Stage Runtime Assets` stages
+cooked files into `build/windows-vs2022/bin/Development/assets/` without a
+C++ build. `Build > Cook & Stage` cooks then stages. Those jobs do not
+change M37 Cook Assets / Build Development meanings.

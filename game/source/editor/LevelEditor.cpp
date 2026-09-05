@@ -577,6 +577,15 @@ LevelEditorRequest DrawEditorMenuBar(
         {
             RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::CookAssets);
         }
+        // Concise label; the job always stages Development runtime assets.
+        if (ImGui::MenuItem("Stage Runtime Assets"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::StageRuntimeAssets);
+        }
+        if (ImGui::MenuItem("Cook & Stage"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::CookAndStage);
+        }
         ImGui::EndDisabled();
         ImGui::Separator();
         ImGui::BeginDisabled(toolRunning);
@@ -657,16 +666,17 @@ void DrawEditorToolOutput(
     {
         ImGui::TextUnformatted("Exit code: -");
     }
-    if (snapshot.buildAllStepCount > 0
+    if (snapshot.sequenceStepCount > 0
         && (snapshot.state == EditorToolJobState::Running
             || snapshot.state == EditorToolJobState::Failed
             || snapshot.state == EditorToolJobState::Succeeded))
     {
         ImGui::Text(
-            "Build All: %d/%d %s",
-            snapshot.buildAllStep,
-            snapshot.buildAllStepCount,
-            snapshot.currentStepLabel.c_str());
+            "%s: %d/%d %s",
+            snapshot.displayLabel.c_str(),
+            snapshot.sequenceStepIndex,
+            snapshot.sequenceStepCount,
+            snapshot.sequenceStepLabel.c_str());
     }
 
     ImGui::BeginDisabled(toolRunner.IsRunning());

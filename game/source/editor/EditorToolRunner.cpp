@@ -46,11 +46,11 @@ EditorToolJobSnapshot EditorToolRunner::Snapshot() const
     snapshot.hasExitCode = hasExitCode;
     snapshot.elapsedSeconds = elapsedSeconds;
     snapshot.log = log;
-    if (kind == EditorToolKind::BuildAll && !sequence.empty())
+    if (IsMultiStepEditorToolKind(kind) && !sequence.empty())
     {
-        snapshot.buildAllStep = static_cast<int>(sequenceIndex) + 1;
-        snapshot.buildAllStepCount = static_cast<int>(sequence.size());
-        snapshot.currentStepLabel = BuildAllStepLabel(static_cast<int>(sequenceIndex));
+        snapshot.sequenceStepIndex = static_cast<int>(sequenceIndex) + 1;
+        snapshot.sequenceStepCount = static_cast<int>(sequence.size());
+        snapshot.sequenceStepLabel = ToolSequenceStepLabel(kind, static_cast<int>(sequenceIndex));
     }
     return snapshot;
 }
@@ -170,6 +170,48 @@ bool EditorToolRunner::TryStart(
     {
         sequence = {MakeCookAssetsCommand(repositoryRoot)};
     }
+    else if (requestedKind == EditorToolKind::StageRuntimeAssets)
+    {
+        if (!IsCMakeBuildTreeConfigured(repositoryRoot))
+        {
+            return BeginFailed(
+                requestedKind,
+                "error: CMake build tree is not configured. Run: cmake --preset windows-vs2022\n");
+        }
+        if (!IsCookedAssetsRoot(CookedAssetsRoot(repositoryRoot)))
+        {
+            return BeginFailed(
+                requestedKind,
+                "error: cooked assets directory is missing. Run: python tools/cook_assets.py\n");
+        }
+        if (!CanStageRuntimeAssets(repositoryRoot))
+        {
+            return BeginFailed(
+                requestedKind, "error: staging script cmake/StageRuntimeAssets.cmake is missing.\n");
+        }
+        sequence = {MakeStageRuntimeAssetsCommand(repositoryRoot)};
+    }
+    else if (requestedKind == EditorToolKind::CookAndStage)
+    {
+        if (!IsCMakeBuildTreeConfigured(repositoryRoot))
+        {
+            return BeginFailed(
+                requestedKind,
+                "error: CMake build tree is not configured. Run: cmake --preset windows-vs2022\n");
+        }
+        if (!IsCookedAssetsRoot(CookedAssetsRoot(repositoryRoot)))
+        {
+            return BeginFailed(
+                requestedKind,
+                "error: cooked assets directory is missing. Run: python tools/cook_assets.py\n");
+        }
+        if (!CanStageRuntimeAssets(repositoryRoot))
+        {
+            return BeginFailed(
+                requestedKind, "error: staging script cmake/StageRuntimeAssets.cmake is missing.\n");
+        }
+        sequence = MakeCookAndStagePlan(repositoryRoot);
+    }
     else if (requestedKind == EditorToolKind::BuildDebug)
     {
         if (!IsCMakeBuildTreeConfigured(repositoryRoot))
@@ -202,9 +244,9 @@ bool EditorToolRunner::TryStart(
     }
 
     state = EditorToolJobState::Running;
-    if (kind == EditorToolKind::BuildAll)
+    if (IsMultiStepEditorToolKind(kind))
     {
-        AppendBuildAllStepMarker(0);
+        AppendSequenceStepMarker(0);
     }
     if (!LaunchCurrentCommand())
     {
@@ -246,13 +288,67 @@ bool EditorToolRunner::TryStartCommand(const EditorToolCommand& command, bool ex
     return true;
 }
 
+bool EditorToolRunner::TryStartSequence(
+    EditorToolKind requestedKind,
+    const std::vector<EditorToolCommand>& steps,
+    bool executionAvailable)
+{
+    if (IsRunning())
+    {
+        return false;
+    }
+
+    log.clear();
+    hasExitCode = false;
+    exitCode = 0;
+    elapsedSeconds = 0.0;
+    sequence.clear();
+    sequenceIndex = 0;
+    process.Shutdown();
+    if (!executionAvailable)
+    {
+        return BeginFailed(
+            requestedKind, "error: external tool execution is unavailable in this configuration.\n");
+    }
+    if (steps.empty())
+    {
+        return BeginFailed(requestedKind, "error: tool sequence is empty. No process was launched.\n");
+    }
+
+    kind = requestedKind;
+    displayLabel = EditorToolKindName(requestedKind);
+    sequence = steps;
+    startTime = std::chrono::steady_clock::now();
+    state = EditorToolJobState::Running;
+    if (IsMultiStepEditorToolKind(kind) || sequence.size() > 1)
+    {
+        AppendSequenceStepMarker(0);
+    }
+    if (!LaunchCurrentCommand())
+    {
+        RefreshElapsed(elapsedSeconds, startTime);
+        return true;
+    }
+    return true;
+}
+
 void EditorToolRunner::AppendOutput(std::string_view chunk)
 {
     AppendBoundedLog(log, chunk, kEditorToolLogMaxBytes);
 }
 
-void EditorToolRunner::AppendBuildAllStepMarker(int zeroBasedStep)
+void EditorToolRunner::AppendSequenceStepMarker(int zeroBasedStep)
 {
+    if (kind == EditorToolKind::CookAndStage)
+    {
+        AppendOutput("=== Cook & Stage: Step ");
+        AppendOutput(std::to_string(zeroBasedStep + 1));
+        AppendOutput("/2 - ");
+        AppendOutput(CookAndStageStepLabel(zeroBasedStep));
+        AppendOutput(" ===\n");
+        return;
+    }
+
     AppendOutput("=== Build All: Step ");
     AppendOutput(std::to_string(zeroBasedStep + 1));
     AppendOutput("/3 - ");
@@ -272,7 +368,7 @@ void EditorToolRunner::FinishProcess(int processExitCode)
     hasExitCode = true;
     exitCode = processExitCode;
     AppendExitCodeLine(processExitCode);
-    if (kind != EditorToolKind::BuildAll)
+    if (!IsMultiStepEditorToolKind(kind) && sequence.size() <= 1)
     {
         state = processExitCode == 0 ? EditorToolJobState::Succeeded : EditorToolJobState::Failed;
         RefreshElapsed(elapsedSeconds, startTime);
@@ -283,8 +379,9 @@ void EditorToolRunner::FinishProcess(int processExitCode)
         static_cast<int>(sequenceIndex), processExitCode, static_cast<int>(sequence.size()));
     if (advance == BuildAllAdvanceResult::Failed)
     {
-        AppendOutput("Build All failed at ");
-        AppendOutput(BuildAllStepLabel(static_cast<int>(sequenceIndex)));
+        AppendOutput(EditorToolKindName(kind));
+        AppendOutput(" failed at ");
+        AppendOutput(ToolSequenceStepLabel(kind, static_cast<int>(sequenceIndex)));
         AppendOutput("\n");
         state = EditorToolJobState::Failed;
         RefreshElapsed(elapsedSeconds, startTime);
@@ -292,14 +389,15 @@ void EditorToolRunner::FinishProcess(int processExitCode)
     }
     if (advance == BuildAllAdvanceResult::Succeeded)
     {
-        AppendOutput("Build All succeeded.\n");
+        AppendOutput(EditorToolKindName(kind));
+        AppendOutput(" succeeded.\n");
         state = EditorToolJobState::Succeeded;
         RefreshElapsed(elapsedSeconds, startTime);
         return;
     }
 
     ++sequenceIndex;
-    AppendBuildAllStepMarker(static_cast<int>(sequenceIndex));
+    AppendSequenceStepMarker(static_cast<int>(sequenceIndex));
     hasExitCode = false;
     if (!LaunchCurrentCommand())
     {

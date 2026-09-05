@@ -107,9 +107,9 @@ Three locations are distinct:
 - `game/assets/cooked/` — canonical cooked repository copies (`python tools/cook_assets.py` writes here).
 - `build/windows-vs2022/bin/<Config>/assets/` — staged runtime copy the built game loads.
 
-Save Level Source is not Cook Assets. Cook Assets is not runtime staging. The cooker never copies into `<exe>/assets/`. CMake does not cook. A POST_BUILD step on `Platformer3D` stages cooked files next to the executable (`copy_if_different`). That staging runs as part of `cmake --build --preset windows-*`, including when the C++ compile/link is an incremental no-op, so the executable timestamp need not change when only asset data changed. Build Development remains that CMake preset; it is not a dedicated "stage assets" command.
+Save Level Source is not Cook Assets. Cook Assets is not runtime staging. The cooker never copies into `<exe>/assets/`. CMake does not cook. Staging is `cmake -P cmake/StageRuntimeAssets.cmake` with `-DPLATFORMER_COOKED_DIR` and `-DPLATFORMER_STAGE_DEST`, sharing `cmake/RuntimeAssets.cmake`. `Platformer3D` POST_BUILD invokes that script into `$<TARGET_FILE_DIR:Platformer3D>/assets` for Debug, Development, and Release. The same script is the M38 Stage Runtime Assets child process (Development dest: `build/windows-vs2022/bin/Development/assets`). Staging does not compile or link. `copy_if_different` / `file(COPY_FILE ... ONLY_IF_DIFFERENT)` skips identical bytes. Stale destination files are not deleted. Build Development remains `cmake --build --preset windows-development`.
 
-The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test is: Apply Preview → Save Level Source → Cook Assets → Build Development → Restart Development. Cook-only then restarting an already-built exe still loads the previous staged file.
+The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test uses Save → Cook & Stage → Restart. Build Development is not required solely to copy cooked files. `Build > Stage Runtime Assets` always targets the Development runtime tree.
 
 Cook from the repository root:
 
@@ -460,11 +460,11 @@ Status: Milestone 36 is complete and merged.
 
 The Development editor launches the project's existing cooker and CMake presets as external child processes. Debug keeps the M36 editor and does not show Build or Tool Output. Release has no editor.
 
-**Build menu** (F2, Development only): Cook Assets; Build Debug / Development / Release / Build All; Tool Output. Start items call `EditorToolRunner::TryStart` with `RepositoryRoot()` and `IsEditorToolExecutionAvailable()`. Starting a job sets `workspace.showToolOutput = true`. While Running, start items are disabled; View/Transform/Level stay usable.
+**Build menu** (F2, Development only): Cook Assets; Stage Runtime Assets; Cook & Stage; Build Debug / Development / Release / Build All; Tool Output. Start items call `EditorToolRunner::TryStart` with `RepositoryRoot()` and `IsEditorToolExecutionAvailable()`. Starting a job sets `workspace.showToolOutput = true`. While Running, start items are disabled; View/Transform/Level stay usable.
 
-**Commands.** `Build > Cook Assets` is only `python tools/cook_assets.py` (cwd = repository root). It does not stage runtime assets, build any configuration, or restart the game. `Build Development` is still `cmake --build --preset windows-development`. Existing POST_BUILD staging copies cooked files into that configuration's runtime `assets/` directory; the menu item is not a separate stage command.
+**Commands.** `Build > Cook Assets` is only `python tools/cook_assets.py` (cwd = repository root). It does not stage runtime assets, build any configuration, or restart the game. `Build Development` is still `cmake --build --preset windows-development`. `Build > Stage Runtime Assets` is `cmake -P cmake/StageRuntimeAssets.cmake` into the Development runtime `assets/` directory and is not a C++ build.
 
-**Tool Output.** `DrawEditorToolOutput` reads the runner snapshot (label, Idle/Running/Succeeded/Failed, elapsed, exit code, Build All step, bounded log). `p_open` is `showToolOutput`. View > Tool Output and Build > Tool Output share that bool. Clear is disabled while Running. Auto-scroll sticks to the bottom when the user is already near the bottom.
+**Tool Output.** `DrawEditorToolOutput` reads the runner snapshot (label, Idle/Running/Succeeded/Failed, elapsed, exit code, generic sequence step, bounded log). Multi-step jobs display `{displayLabel}: {index}/{count} {step}` (Build All and Cook & Stage). `p_open` is `showToolOutput`. View > Tool Output and Build > Tool Output share that bool. Clear is disabled while Running. Auto-scroll sticks to the bottom when the user is already near the bottom.
 
 **Frame loop.** `Application` owns the runner. `Poll()` runs every debug-UI frame, even if Tool Output is hidden. `Shutdown()` terminates a running child before ImGui teardown.
 
@@ -472,6 +472,16 @@ The Development editor launches the project's existing cooker and CMake presets 
 
 **Layout.** Default Tool Output is a bottom strip (~180 px on 1280×720). Reset Editor Layout shows all five panels and snaps known windows, including Tool Output.
 
-**Future UX (not M37, not M38).** Phase C showed Cook Assets updating `game/assets/cooked/` without refreshing the already-staged runtime copy. An explicit Stage Runtime Assets or Cook & Stage action may be considered later. M37 keeps independent commands.
+Status: Milestone 37 is complete and merged.
 
-Status: Milestone 37 implementation and Phase C manual validation are complete. Git closure has not been requested. Milestone 38 has not started.
+## Runtime asset staging (Milestone 38)
+
+Phase A introduced one staging implementation used by CMake POST_BUILD and by Development editor jobs. Phase B wires the live Development Build menu. Debug still has no Build menu. Release has no editor.
+
+**Stage Runtime Assets.** Concise menu label for staging **Development** runtime assets only (`build/windows-vs2022/bin/Development/assets`). Command: `cmake -P cmake/StageRuntimeAssets.cmake` with cooked root `game/assets/cooked`. Does not cook, `--build`, MSBuild, or restart. Allowed while Development is running (asset files are not the exe lock). Updates disk only; no hot reload. Requires a configured CMake tree and a cooked directory. Exit 0 is success.
+
+**Cook & Stage.** Sequence owned by `EditorToolRunner`: Cook Assets, then Stage Runtime Assets. Cook failure skips Stage. Stage failure is Failed at Stage Runtime Assets. Markers: `=== Cook & Stage: Step N/2 - ... ===`. One active job at a time.
+
+**Inventory / stale files / no auto Save.** Unchanged from Phase A. Staging never deletes extra destination files. Neither job Apply/Revert/Saves or restarts the game.
+
+Status: Phase B implemented, awaiting Phase C. Milestone 38 is **not** complete. Milestone 39 has not started.

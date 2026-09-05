@@ -30,9 +30,10 @@ struct EditorToolJobSnapshot
     bool hasExitCode = false;
     double elapsedSeconds = 0.0;
     std::string log;
-    int buildAllStep = 0;
-    int buildAllStepCount = 0;
-    std::string currentStepLabel;
+    // Filled only for multi-step jobs (Build All, Cook & Stage). Index is 1-based.
+    int sequenceStepIndex = 0;
+    int sequenceStepCount = 0;
+    std::string sequenceStepLabel;
 };
 
 const char* EditorToolJobStateName(EditorToolJobState state);
@@ -52,6 +53,12 @@ public:
     // invoking CMake or the cooker.
     bool TryStartCommand(const EditorToolCommand& command, bool executionAvailable);
 
+    // Tests drive multi-step jobs (Cook & Stage) with fixture children.
+    bool TryStartSequence(
+        EditorToolKind kind,
+        const std::vector<EditorToolCommand>& steps,
+        bool executionAvailable);
+
     void Poll();
     void Shutdown();
     void ClearLog();
@@ -61,7 +68,7 @@ private:
     bool LaunchCurrentCommand();
     void FinishProcess(int exitCode);
     void AppendOutput(std::string_view chunk);
-    void AppendBuildAllStepMarker(int zeroBasedStep);
+    void AppendSequenceStepMarker(int zeroBasedStep);
     void AppendExitCodeLine(int processExitCode);
 
     platform::HostProcess process;

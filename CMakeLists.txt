@@ -179,7 +179,7 @@ set_target_properties(Platformer3D PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# Cooker owns source -> cooked. CMake only stages cooked files next to the exe:
+# Cooker owns source -> cooked. Staging copies cooked files next to the exe:
 #   <exe dir>/assets/textures/test_checker.png
 #   <exe dir>/assets/models/test_static.glb
 #   <exe dir>/assets/models/test_authored.glb
@@ -188,14 +188,11 @@ set_target_properties(Platformer3D PROPERTIES
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
 # The staged level file is required at runtime; Application loads it once in Initialize.
+# Inventory lives in cmake/RuntimeAssets.cmake so POST_BUILD and editor
+# Stage Runtime Assets share one list. cmake/StageRuntimeAssets.cmake is the
+# implementation; this POST_BUILD invokes it and does not compile/link.
 set(PLATFORMER_COOKED_DIR "${CMAKE_SOURCE_DIR}/game/assets/cooked")
-set(PLATFORMER_RUNTIME_ASSETS
-    textures/test_checker.png
-    models/test_static.glb
-    models/test_authored.glb
-    models/test_textured.glb
-    levels/level_01.level
-)
+include("${CMAKE_SOURCE_DIR}/cmake/RuntimeAssets.cmake")
 
 set(PLATFORMER_MISSING_COOKED_ASSETS)
 foreach(relative IN LISTS PLATFORMER_RUNTIME_ASSETS)
@@ -213,20 +210,12 @@ if(PLATFORMER_MISSING_COOKED_ASSETS)
         "  python tools/cook_assets.py")
 endif()
 
-set(PLATFORMER_STAGE_ASSET_COMMANDS)
-foreach(relative IN LISTS PLATFORMER_RUNTIME_ASSETS)
-    cmake_path(GET relative PARENT_PATH relative_dir)
-    list(APPEND PLATFORMER_STAGE_ASSET_COMMANDS
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "$<TARGET_FILE_DIR:Platformer3D>/assets/${relative_dir}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${PLATFORMER_COOKED_DIR}/${relative}"
-            "$<TARGET_FILE_DIR:Platformer3D>/assets/${relative}"
-    )
-endforeach()
-
+file(TO_CMAKE_PATH "${PLATFORMER_COOKED_DIR}" PLATFORMER_COOKED_DIR)
 add_custom_command(TARGET Platformer3D POST_BUILD
-    ${PLATFORMER_STAGE_ASSET_COMMANDS}
+    COMMAND "${CMAKE_COMMAND}"
+        "-DPLATFORMER_COOKED_DIR=${PLATFORMER_COOKED_DIR}"
+        "-DPLATFORMER_STAGE_DEST=$<TARGET_FILE_DIR:Platformer3D>/assets"
+        -P "${CMAKE_SOURCE_DIR}/cmake/StageRuntimeAssets.cmake"
     COMMENT "Staging cooked runtime assets next to the executable"
 )
 
@@ -363,8 +352,9 @@ else()
     target_compile_options(EditorOrientationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Milestone 37 Phase A process/tool-runner job logic. No window, raylib, or ImGui.
-# Windows tests launch cmd.exe only; they do not compile the game or run CMake/cooker.
+# Milestone 37/38 process/tool-runner job logic. No window, raylib, or ImGui.
+# Windows tests launch cmd.exe fixtures and may invoke cmake -P staging.
+# They do not compile the game or run cmake --build / MSBuild.
 add_executable(EditorToolRunnerTest
     game/source/editor/EditorToolCommands.cpp
     game/source/editor/EditorToolCommands.h
