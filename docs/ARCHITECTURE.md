@@ -101,7 +101,15 @@ Only abstract boundaries that are known to vary by target:
 Do not build a general-purpose engine before the game needs it.
 
 ## Asset pipeline
-Authored files live in `game/assets/source/`. The Python cooker writes runtime-ready copies to `game/assets/cooked/`. The game never loads from `source/`.
+Three locations are distinct:
+
+- `game/assets/source/` — authored source (Save Level Source writes here).
+- `game/assets/cooked/` — canonical cooked repository copies (`python tools/cook_assets.py` writes here).
+- `build/windows-vs2022/bin/<Config>/assets/` — staged runtime copy the built game loads.
+
+Save Level Source is not Cook Assets. Cook Assets is not runtime staging. The cooker never copies into `<exe>/assets/`. CMake does not cook. A POST_BUILD step on `Platformer3D` stages cooked files next to the executable (`copy_if_different`). That staging runs as part of `cmake --build --preset windows-*`, including when the C++ compile/link is an incremental no-op, so the executable timestamp need not change when only asset data changed. Build Development remains that CMake preset; it is not a dedicated "stage assets" command.
+
+The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test is: Apply Preview → Save Level Source → Cook Assets → Build Development → Restart Development. Cook-only then restarting an already-built exe still loads the previous staged file.
 
 Cook from the repository root:
 
@@ -111,7 +119,7 @@ The cooker uses the Python standard library plus cooker-only **Pillow 12.3.0** (
 
 Standalone runtime PNGs (`kind: runtime_png`) use recipe `runtime_png.max512.lanczos.v1`: maximum dimension **512 px**, aspect ratio preserved, no upscale, no crop, Pillow `LANCZOS` when downscaling. Sources already within the limit are copied byte-for-byte. GLBs remain opaque byte copies; images embedded in `models/test_textured.glb` are not resized. Changing the recipe (max dimension, filter, or encoding) recooks even if source bytes are unchanged. See `tools/README.md`.
 
-CMake does not cook. After configure, a POST_BUILD step stages cooked files next to the executable:
+Staged runtime files (POST_BUILD `copy_if_different` from cooked):
 
     <executable directory>/assets/textures/test_checker.png
     <executable directory>/assets/models/test_static.glb
@@ -444,6 +452,26 @@ Phase B wires the approved Phase A workspace into the live Debug/Development edi
 
 **Orientation widget.** Live `extraTopInset` is `OrientationWidgetLiveExtraTopInset(active, menuBarHeight)` (`GetFrameHeight()` stored from the bar, or 24 px until the first F2 frame, plus 8 px gap). Upper-right placement is otherwise unchanged. Widget math, hit radius, and canonical views are unchanged.
 
-Cooker/build integration, Add/Delete/Duplicate, docking, and Milestone 37 are out of scope.
+Cooker/build integration, Add/Delete/Duplicate, docking, and Milestone 37 were out of scope for M36.
 
-Status: Phase B live integration implemented, awaiting Phase C manual validation. Milestone 36 is **not** complete.
+Status: Milestone 36 is complete and merged.
+
+## Editor tool runner (Milestone 37)
+
+The Development editor launches the project's existing cooker and CMake presets as external child processes. Debug keeps the M36 editor and does not show Build or Tool Output. Release has no editor.
+
+**Build menu** (F2, Development only): Cook Assets; Build Debug / Development / Release / Build All; Tool Output. Start items call `EditorToolRunner::TryStart` with `RepositoryRoot()` and `IsEditorToolExecutionAvailable()`. Starting a job sets `workspace.showToolOutput = true`. While Running, start items are disabled; View/Transform/Level stay usable.
+
+**Commands.** `Build > Cook Assets` is only `python tools/cook_assets.py` (cwd = repository root). It does not stage runtime assets, build any configuration, or restart the game. `Build Development` is still `cmake --build --preset windows-development`. Existing POST_BUILD staging copies cooked files into that configuration's runtime `assets/` directory; the menu item is not a separate stage command.
+
+**Tool Output.** `DrawEditorToolOutput` reads the runner snapshot (label, Idle/Running/Succeeded/Failed, elapsed, exit code, Build All step, bounded log). `p_open` is `showToolOutput`. View > Tool Output and Build > Tool Output share that bool. Clear is disabled while Running. Auto-scroll sticks to the bottom when the user is already near the bottom.
+
+**Frame loop.** `Application` owns the runner. `Poll()` runs every debug-UI frame, even if Tool Output is hidden. `Shutdown()` terminates a running child before ImGui teardown.
+
+**Policy.** No auto configure, Save, Apply, cook-before-build, cook-before-stage, or restart. Self-build Policy A: Build Development stays enabled; LNK1168 while this exe is running is expected Failed when a relink is actually required. Incremental no-op builds can succeed with the exe locked because they do not relink.
+
+**Layout.** Default Tool Output is a bottom strip (~180 px on 1280×720). Reset Editor Layout shows all five panels and snaps known windows, including Tool Output.
+
+**Future UX (not M37, not M38).** Phase C showed Cook Assets updating `game/assets/cooked/` without refreshing the already-staged runtime copy. An explicit Stage Runtime Assets or Cook & Stage action may be considered later. M37 keeps independent commands.
+
+Status: Milestone 37 implementation and Phase C manual validation are complete. Git closure has not been requested. Milestone 38 has not started.

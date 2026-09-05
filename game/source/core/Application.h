@@ -63,6 +63,7 @@ private:
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     ui::DebugUi debugUi;
     editor::LevelEditorState levelEditorState;
+    editor::EditorToolRunner editorToolRunner;
 #endif
     bool initialized = false;
     // Set only when an editor physics rebuild fails. Normal gameplay never

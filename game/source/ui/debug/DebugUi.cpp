@@ -23,7 +23,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     const DebugMetricsSnapshot& snapshot,
     editor::LevelEditorState& levelEditorState,
     const world::LevelDefinition& level,
-    const editor::LevelEditorViewContext& levelEditorView)
+    const editor::LevelEditorViewContext& levelEditorView,
+    editor::EditorToolRunner& toolRunner)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -39,7 +40,7 @@ editor::LevelEditorRequest DebugUi::Draw(
     if (levelEditorState.active)
     {
         editor::RefreshLevelEditorDerivedFlags(levelEditorState, level);
-        menuRequest = editor::DrawEditorMenuBar(levelEditorState, level, view);
+        menuRequest = editor::DrawEditorMenuBar(levelEditorState, level, view, toolRunner);
         view.forceDefaultLayout = levelEditorState.forceDefaultLayoutFrames > 0;
     }
 
@@ -55,6 +56,8 @@ editor::LevelEditorRequest DebugUi::Draw(
             &levelEditorState.workspace.showMetrics);
         recoveredMetricsLayout = true;
     }
+
+    editor::DrawEditorToolOutput(levelEditorState, view, toolRunner);
 
     // Hierarchy / Inspector / Level Editor are their own windows, independent
     // of the F1 metrics panel, and driven by the F2 editor toggle.

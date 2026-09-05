@@ -115,6 +115,8 @@ struct LevelEditorViewContext
     bool recoverOffscreenLayout = false;
 };
 
+class EditorToolRunner;
+
 // Serialize the supplied authored definition to the canonical project source
 // through the Development authoring root. Returns Error without touching any
 // file where source authoring is not compiled in (Debug and Release).
@@ -132,12 +134,18 @@ void ResetEditorWorkspaceLayout(
     float viewportWidth,
     float viewportHeight);
 
-// F2-only Dear ImGui main menu bar (View / Transform / Level). Must be called
-// after rlImGuiBegin and before the editor panels.
+// F2-only Dear ImGui main menu bar (View / Transform / Level, plus Build in
+// Development). Must be called after rlImGuiBegin and before the editor panels.
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
-    const LevelEditorViewContext& view);
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner);
+
+void DrawEditorToolOutput(
+    LevelEditorState& state,
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner);
 
 // Draws Hierarchy, Inspector, and Level/Save controls. Must be called inside
 // an active Dear ImGui frame. Updates state.modified / state.dirty and edits

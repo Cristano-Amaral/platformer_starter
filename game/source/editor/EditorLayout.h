@@ -16,6 +16,7 @@ inline constexpr const char* kMetricsWindowName = "Platformer3D Metrics";
 inline constexpr const char* kHierarchyWindowName = "Hierarchy";
 inline constexpr const char* kInspectorWindowName = "Inspector";
 inline constexpr const char* kLevelEditorWindowName = "Level Editor";
+inline constexpr const char* kToolOutputWindowName = "Tool Output";
 
 struct EditorWindowPlacement
 {
@@ -32,6 +33,7 @@ struct EditorLayoutDefaults
     EditorWindowPlacement hierarchy{};
     EditorWindowPlacement inspector{};
     EditorWindowPlacement levelEditor{};
+    EditorWindowPlacement toolOutput{};
 };
 
 // Joins an already-resolved user-data root. Empty/relative roots yield empty.

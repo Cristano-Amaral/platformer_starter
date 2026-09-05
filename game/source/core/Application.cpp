@@ -783,6 +783,7 @@ int Application::Run()
             static_cast<float>(window.Width()),
             static_cast<float>(window.Height()),
             false};
+        editorToolRunner.Poll();
         const editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
@@ -808,7 +809,8 @@ int Application::Run()
                 deltaSeconds),
             levelEditorState,
             levelDefinition,
-            levelEditorView);
+            levelEditorView,
+            editorToolRunner);
         if (levelEditorState.active)
         {
             // Keyboard move, wheel and world pick use this frame's ImGui capture
@@ -1259,6 +1261,7 @@ void Application::Shutdown()
 {
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     input::SetMouseLookActive(false);
+    editorToolRunner.Shutdown();
     debugUi.Shutdown();
 #endif
     physicsWorld.Shutdown();

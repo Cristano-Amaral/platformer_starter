@@ -353,8 +353,13 @@ int main()
         Expect(
             std::strcmp(defaults.levelEditor.name, editor::kLevelEditorWindowName) == 0,
             "level editor name");
+        Expect(
+            std::strcmp(defaults.toolOutput.name, editor::kToolOutputWindowName) == 0,
+            "tool output name");
         Expect(defaults.inspector.x > defaults.metrics.x, "inspector is on the right");
         Expect(defaults.hierarchy.y > defaults.metrics.y, "hierarchy sits below metrics");
+        Expect(defaults.toolOutput.y > defaults.inspector.y, "tool output sits lower than Inspector");
+        Expect(defaults.toolOutput.width > defaults.inspector.width, "tool output is wider than Inspector");
 
         editor::EditorWindowPlacement offscreen{
             editor::kInspectorWindowName, 8000.0f, -4000.0f, 340.0f, 360.0f};

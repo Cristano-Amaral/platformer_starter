@@ -1,6 +1,7 @@
 #pragma once
 
 #include "editor/LevelEditor.h"
+#include "editor/EditorToolRunner.h"
 #include "ui/debug/DebugMetrics.h"
 #include "ui/debug/DebugUiBackend.h"
 
@@ -20,7 +21,8 @@ public:
         const DebugMetricsSnapshot& snapshot,
         editor::LevelEditorState& levelEditorState,
         const world::LevelDefinition& level,
-        const editor::LevelEditorViewContext& levelEditorView);
+        const editor::LevelEditorViewContext& levelEditorView,
+        editor::EditorToolRunner& toolRunner);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.

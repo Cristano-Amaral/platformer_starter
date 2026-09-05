@@ -1,9 +1,8 @@
 #pragma once
 
 // Milestone 36: one authoritative editor-workspace visibility and
-// action-enable policy. The F2 menu bar and the existing panels share this
-// state; they are not a second implementation. Not authored, not persisted,
-// not BEST.
+// action-enable policy. showToolOutput owns the Development Tool Output
+// window. Debug keeps the M36 editor without Build.
 
 #include "editor/EditorGizmo.h"
 
@@ -15,6 +14,7 @@ struct EditorWorkspaceState
     bool showHierarchy = true;
     bool showInspector = true;
     bool showLevelEditor = true;
+    bool showToolOutput = true;
 };
 
 inline constexpr float kEditorMainMenuBarNominalHeight = 24.0f;

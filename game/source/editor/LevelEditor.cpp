@@ -11,6 +11,8 @@
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
+#include "editor/EditorToolCommands.h"
+#include "editor/EditorToolRunner.h"
 #include "imgui.h"
 
 #include <cstddef>
@@ -472,10 +474,22 @@ void ResetEditorWorkspaceLayout(
     state.forceDefaultLayoutFrames = 2;
 }
 
+void RequestEditorToolStart(
+    EditorToolRunner& toolRunner,
+    EditorWorkspaceState& workspace,
+    EditorToolKind kind)
+{
+    if (toolRunner.TryStart(kind, RepositoryRoot(), IsEditorToolExecutionAvailable()))
+    {
+        workspace.showToolOutput = true;
+    }
+}
+
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition&,
-    const LevelEditorViewContext& view)
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner)
 {
     LevelEditorRequest request = LevelEditorRequest::None;
     if (!ImGui::BeginMainMenuBar())
@@ -491,6 +505,9 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::MenuItem("Hierarchy", nullptr, &state.workspace.showHierarchy);
         ImGui::MenuItem("Inspector", nullptr, &state.workspace.showInspector);
         ImGui::MenuItem("Level Editor", nullptr, &state.workspace.showLevelEditor);
+#if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
+        ImGui::MenuItem("Tool Output", nullptr, &state.workspace.showToolOutput);
+#endif
         ImGui::EndMenu();
     }
 
@@ -551,8 +568,125 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::EndMenu();
     }
 
+#if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
+    if (ImGui::BeginMenu("Build"))
+    {
+        const bool toolRunning = toolRunner.IsRunning();
+        ImGui::BeginDisabled(toolRunning);
+        if (ImGui::MenuItem("Cook Assets"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::CookAssets);
+        }
+        ImGui::EndDisabled();
+        ImGui::Separator();
+        ImGui::BeginDisabled(toolRunning);
+        if (ImGui::MenuItem("Build Debug"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::BuildDebug);
+        }
+        if (ImGui::MenuItem("Build Development"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::BuildDevelopment);
+        }
+        if (ImGui::MenuItem("Build Release"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::BuildRelease);
+        }
+        if (ImGui::MenuItem("Build All"))
+        {
+            RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::BuildAll);
+        }
+        ImGui::EndDisabled();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Tool Output"))
+        {
+            state.workspace.showToolOutput = true;
+        }
+        ImGui::EndMenu();
+    }
+#else
+    (void)toolRunner;
+#endif
+
     ImGui::EndMainMenuBar();
     return request;
+}
+
+void DrawEditorToolOutput(
+    LevelEditorState& state,
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner)
+{
+#if !defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
+    (void)state;
+    (void)view;
+    (void)toolRunner;
+#else
+    if (!state.workspace.showToolOutput)
+    {
+        return;
+    }
+
+    ApplyKnownEditorWindowPlacement(
+        kToolOutputWindowName, view.viewportWidth, view.viewportHeight, view.forceDefaultLayout);
+    if (!ImGui::Begin(kToolOutputWindowName, &state.workspace.showToolOutput))
+    {
+        ImGui::End();
+        return;
+    }
+    RecoverKnownEditorWindowIfOffscreen(
+        kToolOutputWindowName,
+        view.viewportWidth,
+        view.viewportHeight,
+        view.recoverOffscreenLayout);
+
+    const EditorToolJobSnapshot snapshot = toolRunner.Snapshot();
+    const char* jobLabel = snapshot.displayLabel.empty() ? "(none)" : snapshot.displayLabel.c_str();
+    if (snapshot.state == EditorToolJobState::Idle && snapshot.log.empty())
+    {
+        jobLabel = "(none)";
+    }
+    ImGui::Text("Job: %s", jobLabel);
+    ImGui::Text("State: %s", EditorToolJobStateName(snapshot.state));
+    ImGui::Text("Elapsed: %.1f s", snapshot.elapsedSeconds);
+    if (snapshot.hasExitCode)
+    {
+        ImGui::Text("Exit code: %d", snapshot.exitCode);
+    }
+    else
+    {
+        ImGui::TextUnformatted("Exit code: -");
+    }
+    if (snapshot.buildAllStepCount > 0
+        && (snapshot.state == EditorToolJobState::Running
+            || snapshot.state == EditorToolJobState::Failed
+            || snapshot.state == EditorToolJobState::Succeeded))
+    {
+        ImGui::Text(
+            "Build All: %d/%d %s",
+            snapshot.buildAllStep,
+            snapshot.buildAllStepCount,
+            snapshot.currentStepLabel.c_str());
+    }
+
+    ImGui::BeginDisabled(toolRunner.IsRunning());
+    if (ImGui::Button("Clear"))
+    {
+        toolRunner.ClearLog();
+    }
+    ImGui::EndDisabled();
+
+    ImGui::BeginChild("ToolOutputLog", ImVec2(0.0f, 0.0f), true, ImGuiWindowFlags_HorizontalScrollbar);
+    const bool stickToBottom =
+        ImGui::GetScrollMaxY() <= 0.0f || ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 16.0f;
+    ImGui::TextUnformatted(snapshot.log.c_str());
+    if (stickToBottom)
+    {
+        ImGui::SetScrollHereY(1.0f);
+    }
+    ImGui::EndChild();
+    ImGui::End();
+#endif
 }
 
 LevelEditorRequest DrawLevelEditor(
@@ -584,10 +718,13 @@ void ResetEditorWorkspaceLayout(LevelEditorState&, float, float) {}
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState&,
     const world::LevelDefinition&,
-    const LevelEditorViewContext&)
+    const LevelEditorViewContext&,
+    EditorToolRunner&)
 {
     return LevelEditorRequest::None;
 }
+
+void DrawEditorToolOutput(LevelEditorState&, const LevelEditorViewContext&, EditorToolRunner&) {}
 
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState&,

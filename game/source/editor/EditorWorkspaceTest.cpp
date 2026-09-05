@@ -25,10 +25,11 @@ int main()
 
     {
         EditorWorkspaceState workspace{};
-        Expect(editor::AllEditorPanelsVisible(workspace), "defaults: all four visible");
+        Expect(editor::AllEditorPanelsVisible(workspace), "defaults: all five visible");
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(!workspace.showMetrics, "Metrics toggle hides Metrics");
-        Expect(workspace.showHierarchy && workspace.showInspector && workspace.showLevelEditor,
+        Expect(workspace.showHierarchy && workspace.showInspector && workspace.showLevelEditor
+                && workspace.showToolOutput,
             "Metrics toggle leaves other panels");
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(workspace.showMetrics, "Metrics toggle restores Metrics");
@@ -40,9 +41,10 @@ int main()
         workspace.showHierarchy = false;
         workspace.showInspector = false;
         workspace.showLevelEditor = false;
+        workspace.showToolOutput = false;
         const EditorTransformMode mode = EditorTransformMode::Resize;
         editor::ResetEditorWorkspaceVisibility(workspace);
-        Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all four visible");
+        Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all five visible");
         Expect(mode == EditorTransformMode::Resize, "Reset does not change transform mode");
     }
 
@@ -53,6 +55,9 @@ int main()
         workspace.showInspector = false;
         Expect(level.id == "level_01", "hiding Inspector does not mutate authored data");
         Expect(!workspace.showInspector, "Inspector can be hidden independently");
+        workspace.showToolOutput = false;
+        Expect(!workspace.showToolOutput, "Tool Output visibility is independent");
+        Expect(workspace.showHierarchy && workspace.showLevelEditor, "hiding Tool Output leaves editor panels");
     }
 
     {

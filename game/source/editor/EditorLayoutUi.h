@@ -61,7 +61,8 @@ inline void SnapKnownEditorWindowsToDefaults(float viewportWidth, float viewport
         &defaults.metrics,
         &defaults.hierarchy,
         &defaults.inspector,
-        &defaults.levelEditor};
+        &defaults.levelEditor,
+        &defaults.toolOutput};
     for (const EditorWindowPlacement* placement : windows)
     {
         ImGui::SetWindowPos(

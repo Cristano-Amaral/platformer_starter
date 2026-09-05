@@ -62,6 +62,10 @@ add_executable(Platformer3D
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorToolCommands.cpp
+    game/source/editor/EditorToolCommands.h
+    game/source/editor/EditorToolRunner.cpp
+    game/source/editor/EditorToolRunner.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/editor/LevelEditor.cpp
@@ -83,6 +87,7 @@ add_executable(Platformer3D
     game/source/persistence/BestTimeSave.cpp
     game/source/persistence/BestTimeSave.h
     game/source/platform/FileReplace.h
+    game/source/platform/HostProcess.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/platform/Time.cpp
@@ -116,10 +121,13 @@ add_executable(Platformer3D
 if(WIN32)
     target_sources(Platformer3D PRIVATE
         game/source/platform/FileReplaceWindows.cpp
-        game/source/platform/RuntimePathsWindows.cpp)
+        game/source/platform/RuntimePathsWindows.cpp
+        $<$<CONFIG:Development>:game/source/platform/WindowsHostProcess.cpp>
+        $<$<NOT:$<CONFIG:Development>>:game/source/platform/HostProcessStub.cpp>)
 else()
     target_sources(Platformer3D PRIVATE
         game/source/platform/FileReplacePosix.cpp
+        game/source/platform/HostProcessStub.cpp
         game/source/platform/RuntimePathsPosix.cpp)
 endif()
 
@@ -159,9 +167,12 @@ target_compile_definitions(Platformer3D PRIVATE
 # disabled, and Release receives neither the macro nor the path literal, so the
 # shipped binary carries no developer repository path and stays relocatable.
 file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/game/assets/source" PLATFORMER_AUTHORING_SOURCE_ROOT)
+file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" PLATFORMER_REPOSITORY_ROOT)
 target_compile_definitions(Platformer3D PRIVATE
     $<$<CONFIG:Development>:PLATFORMER_ENABLE_LEVEL_AUTHORING=1>
     "$<$<CONFIG:Development>:PLATFORMER_AUTHORING_SOURCE_ROOT=\"${PLATFORMER_AUTHORING_SOURCE_ROOT}\">"
+    $<$<CONFIG:Development>:PLATFORMER_ENABLE_EDITOR_TOOLS=1>
+    "$<$<CONFIG:Development>:PLATFORMER_REPOSITORY_ROOT=\"${PLATFORMER_REPOSITORY_ROOT}\">"
 )
 
 set_target_properties(Platformer3D PROPERTIES
@@ -351,6 +362,31 @@ if(MSVC)
 else()
     target_compile_options(EditorOrientationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Milestone 37 Phase A process/tool-runner job logic. No window, raylib, or ImGui.
+# Windows tests launch cmd.exe only; they do not compile the game or run CMake/cooker.
+add_executable(EditorToolRunnerTest
+    game/source/editor/EditorToolCommands.cpp
+    game/source/editor/EditorToolCommands.h
+    game/source/editor/EditorToolRunner.cpp
+    game/source/editor/EditorToolRunner.h
+    game/source/editor/EditorToolRunnerTest.cpp
+    game/source/platform/HostProcess.h
+)
+if(WIN32)
+    target_sources(EditorToolRunnerTest PRIVATE game/source/platform/WindowsHostProcess.cpp)
+else()
+    target_sources(EditorToolRunnerTest PRIVATE game/source/platform/HostProcessStub.cpp)
+endif()
+target_include_directories(EditorToolRunnerTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorToolRunnerTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorToolRunnerTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(EditorToolRunnerTest PRIVATE
+    "PLATFORMER_REPOSITORY_ROOT=\"${PLATFORMER_REPOSITORY_ROOT}\""
+)
 
 # Milestone 36 Phase A workspace visibility and shared action-enable policy.
 # No window, raylib, or ImGui.
