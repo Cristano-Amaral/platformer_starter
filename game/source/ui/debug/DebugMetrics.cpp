@@ -48,14 +48,15 @@ void DrawDebugMetrics(
     float viewportWidth,
     float viewportHeight,
     bool forceDefaultLayout,
-    bool recoverOffscreenLayout)
+    bool recoverOffscreenLayout,
+    bool* open)
 {
     ApplyEditorWindowPlacement(
         editor::kMetricsWindowName,
         viewportWidth,
         viewportHeight,
         forceDefaultLayout);
-    ImGui::Begin(editor::kMetricsWindowName);
+    ImGui::Begin(editor::kMetricsWindowName, open);
     editor::RecoverKnownEditorWindowIfOffscreen(
         editor::kMetricsWindowName,
         viewportWidth,
@@ -379,7 +380,8 @@ void DrawDebugMetrics(
 
 namespace ui
 {
-void DrawDebugMetrics(const DebugMetricsSnapshot&, float, float, bool, bool) {}
+void DrawDebugMetrics(
+    const DebugMetricsSnapshot&, float, float, bool, bool, bool*) {}
 }
 
 #endif

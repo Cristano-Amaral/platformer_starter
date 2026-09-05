@@ -5,7 +5,6 @@ namespace ui
 void DebugUi::Initialize()
 {
     backend.Initialize();
-    panelVisible = true;
     recoveredMetricsLayout = false;
     recoveredEditorWindowsLayout = false;
 }
@@ -28,14 +27,23 @@ editor::LevelEditorRequest DebugUi::Draw(
 {
     if (backend.ConsumeTogglePressed())
     {
-        panelVisible = !panelVisible;
+        editor::ToggleEditorWorkspaceMetrics(levelEditorState.workspace);
     }
 
     editor::LevelEditorViewContext view = levelEditorView;
     view.forceDefaultLayout = levelEditorState.forceDefaultLayoutFrames > 0;
 
     backend.BeginFrame();
-    if (panelVisible)
+
+    editor::LevelEditorRequest menuRequest = editor::LevelEditorRequest::None;
+    if (levelEditorState.active)
+    {
+        editor::RefreshLevelEditorDerivedFlags(levelEditorState, level);
+        menuRequest = editor::DrawEditorMenuBar(levelEditorState, level, view);
+        view.forceDefaultLayout = levelEditorState.forceDefaultLayoutFrames > 0;
+    }
+
+    if (levelEditorState.workspace.showMetrics)
     {
         const bool recoverMetrics = !recoveredMetricsLayout && !view.forceDefaultLayout;
         DrawDebugMetrics(
@@ -43,18 +51,19 @@ editor::LevelEditorRequest DebugUi::Draw(
             view.viewportWidth,
             view.viewportHeight,
             view.forceDefaultLayout,
-            recoverMetrics);
+            recoverMetrics,
+            &levelEditorState.workspace.showMetrics);
         recoveredMetricsLayout = true;
     }
 
     // Hierarchy / Inspector / Level Editor are their own windows, independent
     // of the F1 metrics panel, and driven by the F2 editor toggle.
-    editor::LevelEditorRequest request = editor::LevelEditorRequest::None;
+    editor::LevelEditorRequest panelRequest = editor::LevelEditorRequest::None;
     if (levelEditorState.active)
     {
         view.recoverOffscreenLayout =
             !recoveredEditorWindowsLayout && !view.forceDefaultLayout;
-        request = editor::DrawLevelEditor(levelEditorState, level, view);
+        panelRequest = editor::DrawLevelEditor(levelEditorState, level, view);
         recoveredEditorWindowsLayout = true;
     }
     if (levelEditorState.forceDefaultLayoutFrames > 0)
@@ -63,7 +72,7 @@ editor::LevelEditorRequest DebugUi::Draw(
         --levelEditorState.forceDefaultLayoutFrames;
     }
     backend.EndFrame();
-    return request;
+    return panelRequest != editor::LevelEditorRequest::None ? panelRequest : menuRequest;
 }
 
 bool DebugUi::WantsKeyboardCapture() const

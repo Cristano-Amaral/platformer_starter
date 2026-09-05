@@ -48,7 +48,10 @@ inline constexpr float kOrientationWidgetNarrowShiftY = 84.0f;
 
 // Upper-right of the unobstructed 3D view: left of the default Inspector
 // column, below the top chrome. Not persisted. Not bound to live ImGui pose.
-OrientationWidgetLayout MakeOrientationWidgetLayout(float viewportWidth, float viewportHeight);
+OrientationWidgetLayout MakeOrientationWidgetLayout(
+    float viewportWidth,
+    float viewportHeight,
+    float extraTopInset = 0.0f);
 
 OrientationWidgetAxes ProjectOrientationWidgetAxes(const EditorCamera& camera);
 

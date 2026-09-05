@@ -146,5 +146,6 @@ void DrawDebugMetrics(
     float viewportWidth,
     float viewportHeight,
     bool forceDefaultLayout,
-    bool recoverOffscreenLayout);
+    bool recoverOffscreenLayout,
+    bool* open);
 }

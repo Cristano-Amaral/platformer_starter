@@ -87,6 +87,16 @@ LevelEditorSaveResult SaveLevelSource(const world::LevelDefinition&)
 
 #endif
 
+void RefreshLevelEditorDerivedFlags(
+    LevelEditorState& state,
+    const world::LevelDefinition& activeLevel)
+{
+    // Derived from authored data rather than widget return values, so a field
+    // that reports "edited" without changing the value stays unmodified.
+    state.modified = !world::AuthoredLevelDataEqual(state.workingCopy, activeLevel);
+    state.dirty = !world::AuthoredLevelDataEqual(activeLevel, state.savedSourceBaseline);
+}
+
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 
 namespace
@@ -132,7 +142,7 @@ void ReadOnlyFloat(const char* label, float value)
 void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
 {
     ApplyEditorWindowPlacement(kHierarchyWindowName, view);
-    if (!ImGui::Begin(kHierarchyWindowName))
+    if (!ImGui::Begin(kHierarchyWindowName, &state.workspace.showHierarchy))
     {
         ImGui::End();
         return;
@@ -188,7 +198,7 @@ void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
 void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
 {
     ApplyEditorWindowPlacement(kInspectorWindowName, view);
-    if (!ImGui::Begin(kInspectorWindowName))
+    if (!ImGui::Begin(kInspectorWindowName, &state.workspace.showInspector))
     {
         ImGui::End();
         return;
@@ -307,7 +317,7 @@ LevelEditorRequest DrawLevelControls(
 {
     LevelEditorRequest request = LevelEditorRequest::None;
     ApplyEditorWindowPlacement(kLevelEditorWindowName, view);
-    if (!ImGui::Begin(kLevelEditorWindowName))
+    if (!ImGui::Begin(kLevelEditorWindowName, &state.workspace.showLevelEditor))
     {
         ImGui::End();
         return request;
@@ -347,18 +357,18 @@ LevelEditorRequest DrawLevelControls(
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::BeginDisabled(state.gizmo.dragging);
-        int mode = state.transformMode == EditorTransformMode::Resize ? 1 : 0;
-        if (ImGui::RadioButton("Translate", mode == 0))
+        if (ImGui::RadioButton(
+                "Translate", state.transformMode == EditorTransformMode::Translate))
         {
-            mode = 0;
+            editor::TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Translate);
         }
         ImGui::SameLine();
-        if (ImGui::RadioButton("Resize", mode == 1))
+        if (ImGui::RadioButton("Resize", state.transformMode == EditorTransformMode::Resize))
         {
-            mode = 1;
+            editor::TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Resize);
         }
-        state.transformMode =
-            mode == 1 ? EditorTransformMode::Resize : EditorTransformMode::Translate;
         ImGui::EndDisabled();
         if (state.gizmo.dragging)
         {
@@ -377,7 +387,7 @@ LevelEditorRequest DrawLevelControls(
 
     if (ImGui::CollapsingHeader("Actions", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::BeginDisabled(!state.modified || !workingCopyValid);
+        ImGui::BeginDisabled(!editor::CanApplyPreview(state.modified, workingCopyValid));
         if (ImGui::Button("Apply Preview"))
         {
             request = LevelEditorRequest::ApplyPreview;
@@ -385,7 +395,7 @@ LevelEditorRequest DrawLevelControls(
         ImGui::EndDisabled();
 
         ImGui::SameLine();
-        ImGui::BeginDisabled(!state.modified);
+        ImGui::BeginDisabled(!editor::CanRevertWorkingCopy(state.modified));
         if (ImGui::Button("Revert Working Copy"))
         {
             request = LevelEditorRequest::RevertWorkingCopy;
@@ -401,7 +411,7 @@ LevelEditorRequest DrawLevelControls(
 
         // Save always writes the active/applied definition, so unapplied edits
         // cannot reach the source file.
-        ImGui::BeginDisabled(!authoringAvailable || state.modified);
+        ImGui::BeginDisabled(!editor::CanSaveLevelSource(authoringAvailable, state.modified));
         if (ImGui::Button("Save Level Source"))
         {
             request = LevelEditorRequest::SaveLevelSource;
@@ -418,12 +428,11 @@ LevelEditorRequest DrawLevelControls(
 
         if (ImGui::Button("Reset Editor Layout"))
         {
-            SnapKnownEditorWindowsToDefaults(view.viewportWidth, view.viewportHeight);
-            state.forceDefaultLayoutFrames = 2;
+            ResetEditorWorkspaceLayout(state, view.viewportWidth, view.viewportHeight);
         }
         ImGui::TextWrapped(
             "Reset Editor Layout restores Metrics, Hierarchy, Inspector, and Level Editor "
-            "positions. It does not change the level, selection, or camera.");
+            "positions and shows all four panels. It does not change the level, selection, or camera.");
     }
 
     if (ImGui::CollapsingHeader("Information", ImGuiTreeNodeFlags_DefaultOpen))
@@ -453,22 +462,132 @@ LevelEditorRequest DrawLevelControls(
 }
 }
 
+void ResetEditorWorkspaceLayout(
+    LevelEditorState& state,
+    float viewportWidth,
+    float viewportHeight)
+{
+    ResetEditorWorkspaceVisibility(state.workspace);
+    SnapKnownEditorWindowsToDefaults(viewportWidth, viewportHeight);
+    state.forceDefaultLayoutFrames = 2;
+}
+
+LevelEditorRequest DrawEditorMenuBar(
+    LevelEditorState& state,
+    const world::LevelDefinition&,
+    const LevelEditorViewContext& view)
+{
+    LevelEditorRequest request = LevelEditorRequest::None;
+    if (!ImGui::BeginMainMenuBar())
+    {
+        return request;
+    }
+
+    state.menuBarHeight = ImGui::GetFrameHeight();
+
+    if (ImGui::BeginMenu("View"))
+    {
+        ImGui::MenuItem("Metrics", "F1", &state.workspace.showMetrics);
+        ImGui::MenuItem("Hierarchy", nullptr, &state.workspace.showHierarchy);
+        ImGui::MenuItem("Inspector", nullptr, &state.workspace.showInspector);
+        ImGui::MenuItem("Level Editor", nullptr, &state.workspace.showLevelEditor);
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Transform"))
+    {
+        ImGui::BeginDisabled(state.gizmo.dragging);
+        if (ImGui::MenuItem(
+                "Translate",
+                nullptr,
+                state.transformMode == EditorTransformMode::Translate))
+        {
+            TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Translate);
+        }
+        if (ImGui::MenuItem(
+                "Resize",
+                nullptr,
+                state.transformMode == EditorTransformMode::Resize))
+        {
+            TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Resize);
+        }
+        ImGui::EndDisabled();
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Level"))
+    {
+        const bool authoringAvailable = IsLevelAuthoringAvailable();
+        const bool workingCopyValid = world::IsWritableLevelDefinition(state.workingCopy);
+
+        ImGui::BeginDisabled(!CanApplyPreview(state.modified, workingCopyValid));
+        if (ImGui::MenuItem("Apply Preview"))
+        {
+            request = LevelEditorRequest::ApplyPreview;
+        }
+        ImGui::EndDisabled();
+
+        ImGui::BeginDisabled(!CanRevertWorkingCopy(state.modified));
+        if (ImGui::MenuItem("Revert Working Copy"))
+        {
+            request = LevelEditorRequest::RevertWorkingCopy;
+        }
+        ImGui::EndDisabled();
+
+        ImGui::BeginDisabled(!CanSaveLevelSource(authoringAvailable, state.modified));
+        if (ImGui::MenuItem("Save Level Source"))
+        {
+            request = LevelEditorRequest::SaveLevelSource;
+        }
+        ImGui::EndDisabled();
+
+        ImGui::Separator();
+        if (ImGui::MenuItem("Reset Editor Layout"))
+        {
+            ResetEditorWorkspaceLayout(state, view.viewportWidth, view.viewportHeight);
+        }
+        ImGui::EndMenu();
+    }
+
+    ImGui::EndMainMenuBar();
+    return request;
+}
+
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
     const LevelEditorViewContext& view)
 {
-    // Derived from authored data rather than widget return values, so a field
-    // that reports "edited" without changing the value stays unmodified.
-    state.modified = !world::AuthoredLevelDataEqual(state.workingCopy, activeLevel);
-    state.dirty = !world::AuthoredLevelDataEqual(activeLevel, state.savedSourceBaseline);
+    RefreshLevelEditorDerivedFlags(state, activeLevel);
 
-    DrawHierarchy(state, view);
-    DrawInspector(state, view);
+    if (state.workspace.showHierarchy)
+    {
+        DrawHierarchy(state, view);
+    }
+    if (state.workspace.showInspector)
+    {
+        DrawInspector(state, view);
+    }
+    if (!state.workspace.showLevelEditor)
+    {
+        return LevelEditorRequest::None;
+    }
     return DrawLevelControls(state, activeLevel, view);
 }
 
 #else
+
+void ResetEditorWorkspaceLayout(LevelEditorState&, float, float) {}
+
+LevelEditorRequest DrawEditorMenuBar(
+    LevelEditorState&,
+    const world::LevelDefinition&,
+    const LevelEditorViewContext&)
+{
+    return LevelEditorRequest::None;
+}
 
 LevelEditorRequest DrawLevelEditor(
     LevelEditorState&,

@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 35 — Visual Level Editor v4 (Phase C functional validation passed;
-orientation-widget placement correction awaiting final approval). M34 is
-complete and merged.
-See `docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and `docs/LEVEL_FORMAT_V1.md`.
+Milestone 36 — Editor Menu Bar & Workspace Controls (Phase B live menu
+wired, awaiting Phase C manual validation). Milestone 35 is complete and
+merged. See `docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and
+`docs/LEVEL_FORMAT_V1.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
 working copy, and uses Apply Preview / Revert / Save Level Source. Viewport
@@ -89,12 +89,12 @@ editor but cannot author. Release has no editor.
 
 M34 added world-space X/Y/Z translation for Spawn, Ground, and Elevated
 Platform 0..5, a pending ghost, persistent Dear ImGui layout, and a
-depth-independent gizmo overlay. M35 Phase B wires live Translate/Resize,
-the orientation widget, keyboard nudge (Translate mode only), and Alt+wheel
-dolly. Do not implement rotation, add/delete, docking, or Milestone 36.
-
-Do not mark M35 complete. Do not create a SceneManager, EntityManager, UUID
-system, Level Format v2, or a generic Inspector.
+depth-independent gizmo overlay. M35 is complete (resize, orientation widget,
+Translate-only nudge, Alt+wheel dolly). M36 Phase B shows a Dear ImGui main
+menu bar (View / Transform / Level) while F2 is active, over the same
+workspace bools, `transformMode`, and `LevelEditorRequest` actions as the
+panels. Do not implement Cooker/build integration, add/delete, docking, or
+Milestone 37. Do not mark M36 complete.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -103,5 +103,5 @@ cooked → staged `<exe>/assets/levels/level_01.level` → `LoadLevelFile` →
 owns it. There is no compiled Level 01 fallback. Missing/invalid/unsupported
 Level 01 is a fatal init error. M29 BEST save remains nonfatal. The M32 writer,
 authoring boundary, F2 editor, Apply Preview and source Save remain the live
-authoring path. M35 must not widen add/delete, auto-cook, add rotation, or
-start Milestone 36.
+authoring path. M36 must not add Cooker/build integration, object add/delete,
+or start Milestone 37.
