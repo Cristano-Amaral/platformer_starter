@@ -81,6 +81,7 @@ struct LevelEditorState
     EditorSelection selection{};
     EditorCamera editorCamera{};
     GizmoInteractionState gizmo{};
+    EditorTransformMode transformMode = EditorTransformMode::Translate;
     // Set by Reset Editor Layout; DebugUi consumes it over the following
     // frames so Metrics (drawn before the button) also snaps to defaults.
     int forceDefaultLayoutFrames = 0;

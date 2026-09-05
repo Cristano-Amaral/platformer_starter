@@ -344,6 +344,37 @@ LevelEditorRequest DrawLevelControls(
         ImGui::TextWrapped("Runtime staged (read-only): %s", view.runtimeLevelPath);
     }
 
+    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::BeginDisabled(state.gizmo.dragging);
+        int mode = state.transformMode == EditorTransformMode::Resize ? 1 : 0;
+        if (ImGui::RadioButton("Translate", mode == 0))
+        {
+            mode = 0;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Resize", mode == 1))
+        {
+            mode = 1;
+        }
+        state.transformMode =
+            mode == 1 ? EditorTransformMode::Resize : EditorTransformMode::Translate;
+        ImGui::EndDisabled();
+        if (state.gizmo.dragging)
+        {
+            ImGui::TextUnformatted("Mode locked while a gizmo drag is active.");
+        }
+        if (state.transformMode == EditorTransformMode::Resize
+            && state.selection.kind != EditorObjectKind::None
+            && !IsResizeSelection(state.selection))
+        {
+            ImGui::TextUnformatted("Selected object is not resizable");
+        }
+        ImGui::TextWrapped(
+            "Nudge (Translate mode): Ctrl+Arrows/PageUp/PageDown. Precision: Ctrl+Shift.");
+        ImGui::TextWrapped("Dolly: Alt+mouse wheel. Ordinary wheel still changes nav speed.");
+    }
+
     if (ImGui::CollapsingHeader("Actions", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::BeginDisabled(!state.modified || !workingCopyValid);
@@ -398,8 +429,9 @@ LevelEditorRequest DrawLevelControls(
     if (ImGui::CollapsingHeader("Information", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::TextWrapped(
-            "RMB look, WASD move, Q/E down/up, Shift faster, wheel speed. "
-            "LMB on an X/Y/Z handle translates the working copy; LMB elsewhere picks the world.");
+            "RMB look, WASD move, Q/E down/up, Shift faster, wheel speed, Alt+wheel dolly. "
+            "Translate: LMB on an X/Y/Z handle moves the working copy. "
+            "Resize: LMB on a cube handle changes authored size; the cyan ghost is the true size.");
         ImGui::TextWrapped(
             "The gizmo and pending ghost follow unapplied working-copy edits. "
             "Active render, physics, picking and highlight stay put until Apply Preview.");

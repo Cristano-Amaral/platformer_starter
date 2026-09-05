@@ -1,6 +1,7 @@
 #include "editor/EditorGizmo.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorMath.h"
+#include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
 #include "world/LevelDefinition.h"
 
@@ -479,6 +480,295 @@ int main()
                  {EditorObjectKind::Slope, 0}, active, MakeView({0.0f, 5.0f, 20.0f}, {}), {})
                  .visible,
             "slope has no live gizmo request");
+    }
+
+    // ---- M35 Phase A resize support / lookup ----
+    {
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Spawn, 0}), "spawn is not resize");
+        Expect(editor::IsResizeSelection({EditorObjectKind::Ground, 0}), "ground is resize");
+        Expect(
+            editor::IsResizeSelection({EditorObjectKind::ElevatedPlatform, 0}),
+            "platform 0 is resize");
+        Expect(
+            !editor::IsResizeSelection({EditorObjectKind::Camera, 0}), "camera is not resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Slope, 0}), "slope is not resize");
+        world::LevelDefinition level = MakeStubLevel();
+        Expect(
+            editor::GetEditableSize(level, {EditorObjectKind::Spawn, 0}) == nullptr,
+            "spawn has no mutable size");
+        core::Vec3* size = editor::GetEditableSize(level, {EditorObjectKind::ElevatedPlatform, 0});
+        Expect(size != nullptr, "platform 0 has mutable size");
+        if (size != nullptr)
+        {
+            size->x = 6.0f;
+        }
+        Expect(NearlyEqual(level.elevatedPlatforms[0].size.x, 6.0f), "size lookup mutates working");
+        Expect(NearlyEqual(level.elevatedPlatforms[0].center.x, 5.0f), "size lookup leaves center");
+    }
+
+    // ---- X/Y/Z resize, center preserved, continuity, min clamp ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        const render::CameraView view = MakeView({20.0f, 8.0f, 20.0f}, {5.0f, 0.75f, 0.0f});
+        EditorSelection platform0{EditorObjectKind::ElevatedPlatform, 0};
+        const core::Vec3 origin = working.elevatedPlatforms[0].center;
+        const core::Vec3 startSize = working.elevatedPlatforms[0].size;
+        const float length = editor::GizmoWorldLength(view, origin);
+
+        editor::GizmoInteractionState state{};
+        Expect(
+            editor::BeginResizeDrag(
+                state,
+                platform0,
+                EditorAxis::X,
+                1,
+                origin,
+                startSize,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                view),
+            "begin +X resize");
+        const core::Vec3 sizeX = editor::GizmoResizeSize(
+            state, RayThrough(view, {origin.x + length + 1.0f, origin.y, origin.z}), view);
+        Expect(sizeX.x > startSize.x, "X resize grows size.x");
+        Expect(NearlyEqual(sizeX.y, startSize.y), "X resize keeps size.y");
+        Expect(NearlyEqual(sizeX.z, startSize.z), "X resize keeps size.z");
+        Expect(Vec3Near(working.elevatedPlatforms[0].center, origin), "X resize does not move center");
+
+        const core::Vec3 again = editor::GizmoResizeSize(
+            state, RayThrough(view, {origin.x + length + 1.0f, origin.y, origin.z}), view);
+        Expect(Vec3Near(sizeX, again), "resize is absolute from drag start");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginResizeDrag(
+                state,
+                platform0,
+                EditorAxis::Y,
+                1,
+                origin,
+                startSize,
+                RayThrough(view, {origin.x, origin.y + length, origin.z}),
+                view),
+            "begin +Y resize");
+        const core::Vec3 sizeY = editor::GizmoResizeSize(
+            state, RayThrough(view, {origin.x, origin.y + length + 0.5f, origin.z}), view);
+        Expect(sizeY.y > startSize.y, "Y resize grows size.y");
+        Expect(NearlyEqual(sizeY.x, startSize.x), "Y resize keeps size.x");
+        Expect(NearlyEqual(sizeY.z, startSize.z), "Y resize keeps size.z");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginResizeDrag(
+                state,
+                platform0,
+                EditorAxis::Z,
+                1,
+                origin,
+                startSize,
+                RayThrough(view, {origin.x, origin.y, origin.z + length}),
+                view),
+            "begin +Z resize");
+        const core::Vec3 sizeZ = editor::GizmoResizeSize(
+            state, RayThrough(view, {origin.x, origin.y, origin.z + length + 0.5f}), view);
+        Expect(sizeZ.z > startSize.z, "Z resize grows size.z");
+        Expect(NearlyEqual(sizeZ.x, startSize.x), "Z resize keeps size.x");
+        Expect(NearlyEqual(sizeZ.y, startSize.y), "Z resize keeps size.y");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginResizeDrag(
+                state,
+                platform0,
+                EditorAxis::X,
+                1,
+                origin,
+                startSize,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                view),
+            "begin shrink X");
+        const core::Vec3 shrunk = editor::GizmoResizeSize(
+            state, RayThrough(view, {origin.x - 50.0f, origin.y, origin.z}), view);
+        Expect(NearlyEqual(shrunk.x, editor::kMinAuthoredBoxExtent, 0.001f), "size.x clamps to min");
+        Expect(shrunk.x > 0.0f, "clamped size is positive");
+        Expect(std::isfinite(shrunk.x) && std::isfinite(shrunk.y) && std::isfinite(shrunk.z),
+            "clamped size is finite");
+    }
+
+    // ---- negative handle grows when pulled outward; near-parallel finite ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        const render::CameraView view = MakeView({20.0f, 8.0f, 20.0f}, {5.0f, 0.75f, 0.0f});
+        EditorSelection platform0{EditorObjectKind::ElevatedPlatform, 0};
+        const core::Vec3 origin = working.elevatedPlatforms[0].center;
+        const core::Vec3 startSize = working.elevatedPlatforms[0].size;
+        const float length = editor::GizmoWorldLength(view, origin);
+        editor::GizmoInteractionState state{};
+        Expect(
+            editor::BeginResizeDrag(
+                state,
+                platform0,
+                EditorAxis::X,
+                -1,
+                origin,
+                startSize,
+                RayThrough(view, {origin.x - length, origin.y, origin.z}),
+                view),
+            "begin -X resize");
+        const core::Vec3 grown = editor::GizmoResizeSize(
+            state, RayThrough(view, {origin.x - length - 1.0f, origin.y, origin.z}), view);
+        Expect(grown.x > startSize.x, "pulling -X handle outward grows size.x");
+
+        // Same relative geometry as the M34 translation fallback: camera looks along X
+        // from ~12 m, ray is offset in Y so closest-points can start.
+        const render::CameraView parallel =
+            MakeView({origin.x + 12.0f, origin.y, origin.z}, origin);
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginResizeDrag(
+                state,
+                platform0,
+                EditorAxis::X,
+                1,
+                origin,
+                startSize,
+                RayThrough(parallel, {origin.x, origin.y + 1.0f, origin.z}),
+                parallel),
+            "near-parallel resize can begin");
+        const core::Vec3 parallelSize = editor::GizmoResizeSize(
+            state, RayThrough(parallel, {origin.x, origin.y + 2.0f, origin.z + 1.0f}), parallel);
+        Expect(
+            std::isfinite(parallelSize.x) && std::isfinite(parallelSize.y)
+                && std::isfinite(parallelSize.z),
+            "near-parallel resize stays finite");
+    }
+
+    // ---- live resize writes working size, not a stub cache ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        const world::LevelDefinition active = working;
+        const render::CameraView view = MakeView({20.0f, 8.0f, 20.0f}, {5.0f, 0.75f, 0.0f});
+        EditorSelection platform0{EditorObjectKind::ElevatedPlatform, 0};
+        const core::Vec3 origin = working.elevatedPlatforms[0].center;
+        const float length = editor::GizmoWorldLength(view, origin);
+        editor::GizmoInteractionState state{};
+        Expect(
+            editor::UpdateResizeInteraction(
+                state,
+                platform0,
+                working,
+                view,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                false,
+                false,
+                true,
+                true,
+                false),
+            "resize press consumes pointer");
+        Expect(
+            editor::UpdateResizeInteraction(
+                state,
+                {EditorObjectKind::Ground, 0},
+                working,
+                view,
+                RayThrough(view, {origin.x + length + 1.0f, origin.y, origin.z}),
+                false,
+                false,
+                false,
+                true,
+                false),
+            "resize drag ignores incidental selection");
+        Expect(working.elevatedPlatforms[0].size.x > 4.0f, "resize writes working size.x");
+        Expect(NearlyEqual(working.elevatedPlatforms[0].center.x, 5.0f), "resize keeps working center");
+        Expect(NearlyEqual(active.elevatedPlatforms[0].size.x, 4.0f), "active size unchanged");
+        const editor::EditorPendingTransformPreview preview =
+            editor::MakePendingTransformPreview(platform0, active, working);
+        Expect(preview.visible, "size-only working edit shows pending preview");
+        Expect(NearlyEqual(preview.size.x, working.elevatedPlatforms[0].size.x),
+            "preview uses working size");
+        Expect(NearlyEqual(preview.center.x, 5.0f), "preview keeps working center");
+        Expect(
+            !editor::MakeResizeGizmoDrawRequest(
+                 {EditorObjectKind::Spawn, 0}, working, view, {})
+                 .visible,
+            "spawn has no resize gizmo request");
+        Expect(
+            editor::MakeResizeGizmoDrawRequest(platform0, working, view, {}).visible,
+            "platform has resize gizmo request");
+    }
+
+    // ---- M35 Phase A nudge ----
+    {
+        Expect(NearlyEqual(editor::NudgeStep(false), 0.10f, 0.0001f), "normal nudge is 0.10");
+        Expect(NearlyEqual(editor::NudgeStep(true), 0.01f, 0.0001f), "precision nudge is 0.01");
+        world::LevelDefinition working = MakeStubLevel();
+        const world::LevelDefinition active = working;
+        EditorSelection spawn{EditorObjectKind::Spawn, 0};
+        Expect(
+            editor::ApplyNudge(working, spawn, EditorAxis::X, 1.0f, false), "nudge spawn +X");
+        Expect(NearlyEqual(working.initialSpawnVisualCenter.x, 0.10f, 0.0001f), "nudge +X step");
+        Expect(NearlyEqual(working.initialSpawnVisualCenter.y, 0.8f), "nudge X keeps Y");
+        Expect(NearlyEqual(working.initialSpawnVisualCenter.z, 0.0f), "nudge X keeps Z");
+        Expect(
+            editor::ApplyNudge(working, spawn, EditorAxis::X, -1.0f, false), "nudge spawn -X");
+        Expect(NearlyEqual(working.initialSpawnVisualCenter.x, 0.0f, 0.0001f), "nudge -X restores");
+        Expect(
+            editor::ApplyNudge(working, spawn, EditorAxis::Y, 1.0f, true), "precision +Y");
+        Expect(NearlyEqual(working.initialSpawnVisualCenter.y, 0.81f, 0.0001f), "precision Y step");
+        Expect(
+            editor::ApplyNudge(working, spawn, EditorAxis::Z, -1.0f, false), "nudge -Z");
+        Expect(NearlyEqual(working.initialSpawnVisualCenter.z, -0.10f, 0.0001f), "nudge -Z step");
+        Expect(NearlyEqual(active.initialSpawnVisualCenter.x, 0.0f), "nudge does not touch a copy of active");
+        Expect(
+            !editor::ApplyNudge(working, {EditorObjectKind::Camera, 0}, EditorAxis::X, 1.0f, false),
+            "camera cannot nudge");
+        Expect(
+            editor::ApplyNudge(
+                working, {EditorObjectKind::Ground, 0}, EditorAxis::X, 1.0f, false),
+            "ground can nudge");
+        Expect(std::isfinite(working.ground.center.x), "nudge result is finite");
+        Expect(
+            editor::NudgeAllowed(editor::EditorTransformMode::Translate, false, false),
+            "nudge allowed in Translate");
+        Expect(
+            !editor::NudgeAllowed(editor::EditorTransformMode::Resize, false, false),
+            "nudge blocked in Resize mode");
+        Expect(
+            !editor::NudgeAllowed(editor::EditorTransformMode::Translate, true, false),
+            "nudge blocked when ImGui wants keyboard");
+        Expect(
+            !editor::NudgeAllowed(editor::EditorTransformMode::Translate, false, true),
+            "nudge blocked during gizmo drag");
+        const core::Vec3 spawnBefore = working.initialSpawnVisualCenter;
+        Expect(
+            !editor::ApplyNudge(
+                working,
+                spawn,
+                EditorAxis::X,
+                1.0f,
+                false,
+                editor::EditorTransformMode::Resize),
+            "Resize mode ApplyNudge is a no-op");
+        Expect(
+            Vec3Near(working.initialSpawnVisualCenter, spawnBefore, 0.0001f),
+            "Resize-mode nudge leaves working center");
+    }
+
+    // ---- resize handle pick identifies axis and sign ----
+    {
+        const core::Vec3 origin{};
+        const float length = 2.0f;
+        const float hitRadius = length * editor::kResizeHandleHitFraction;
+        editor::Ray3 plusX{{length, 0.0f, -4.0f}, {0.0f, 0.0f, 1.0f}};
+        const editor::ResizeHandlePick plus = editor::PickResizeHandle(plusX, origin, length, hitRadius);
+        Expect(plus.axis == EditorAxis::X && plus.sign == 1, "+X cube pick");
+        editor::Ray3 minusX{{-length, 0.0f, -4.0f}, {0.0f, 0.0f, 1.0f}};
+        const editor::ResizeHandlePick minus =
+            editor::PickResizeHandle(minusX, origin, length, hitRadius);
+        Expect(minus.axis == EditorAxis::X && minus.sign == -1, "-X cube pick");
+        editor::Ray3 miss{{8.0f, 8.0f, 8.0f}, {0.0f, 1.0f, 0.0f}};
+        Expect(
+            editor::PickResizeHandle(miss, origin, length, hitRadius).axis == EditorAxis::None,
+            "missed resize handle");
     }
 
     if (gFailures != 0)

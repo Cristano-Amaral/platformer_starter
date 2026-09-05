@@ -89,6 +89,44 @@ EditorInputState PollEditorInput()
     const Vector2 mouse = GetMousePosition();
     state.mouseX = mouse.x;
     state.mouseY = mouse.y;
+
+    state.ctrlHeld = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+    state.altHeld = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
+    state.nudgePrecision = state.ctrlHeld && state.faster;
+    if (state.ctrlHeld)
+    {
+        const auto pressed = [](int key) {
+            return IsKeyPressed(key) || IsKeyPressedRepeat(key);
+        };
+        if (pressed(KEY_RIGHT))
+        {
+            state.nudgeX += 1;
+        }
+        if (pressed(KEY_LEFT))
+        {
+            state.nudgeX -= 1;
+        }
+        if (pressed(KEY_PAGE_UP))
+        {
+            state.nudgeY += 1;
+        }
+        if (pressed(KEY_PAGE_DOWN))
+        {
+            state.nudgeY -= 1;
+        }
+        if (pressed(KEY_UP))
+        {
+            state.nudgeZ += 1;
+        }
+        if (pressed(KEY_DOWN))
+        {
+            state.nudgeZ -= 1;
+        }
+    }
+    if (state.altHeld)
+    {
+        state.dollyWheelDelta = state.wheelDelta;
+    }
     return state;
 }
 }

@@ -364,9 +364,9 @@ RMB held: mouse-look. WASD: move on look XZ. Q/E: world down/up. Shift: 2× spee
 
 Status: complete (manually approved and merged).
 
-## Visual level editor v3 (Milestone 34, Phase B)
+## Visual level editor v3 (Milestone 34)
 
-Phase B wires the Phase A math into the live Debug/Development editor. M34 is **not** complete until Phase C manual validation.
+M34 is complete and merged. Translation gizmo, pending ghost, persistent layout, and depth-independent overlay remain the live editor path.
 
 ### Translation gizmo
 
@@ -390,20 +390,20 @@ Dear ImGui `IniFilename` is a backend-owned `std::string` pointing at `%LOCALAPP
 
 First-run / missing file: `ImGuiCond_FirstUseEver` applies `ComputeDefaultEditorLayout` (metrics/hierarchy left, inspector/level editor right). Persisted ini wins afterwards. **Reset Editor Layout** (Level Editor actions) snaps all four named windows with `ImGuiCond_Always` / `SetWindowPos` by name and `SaveIniSettingsToDisk`. Off-screen recovery is one-shot after first `Begin` of Metrics and of the editor windows, using `ClampEditorWindowPlacement`. No docking. Window names are stable: `Platformer3D Metrics`, `Hierarchy`, `Inspector`, `Level Editor`.
 
-Status: Phase C visibility correction (depth-independent gizmo overlay) plus canonical Level 01 restore. M34 is **not** complete until that correction is approved. Milestone 35 has not started.
+Status: complete and merged.
 
-### Future editor notes (not scheduled)
+### Future editor notes (scheduled as Milestone 35)
 
-These came up during M34 Phase C and are **not** in M34 or M35:
+M35 Phase A implements math/tests for:
 
-- keyboard nudge of the selected object (WASD/Q/E remain editor-camera move);
-- a view-orientation widget (top-left axis triad) that is not the world translation gizmo;
-- visual resize/scale handles (Inspector numeric size + pending ghost stay the M34 path);
-- modifier + mouse wheel for editor-camera dolly/zoom (wheel currently changes move speed);
-- add/delete/duplicate authored objects and dynamic collections;
-- Hierarchy coverage of runtime-only and cooker demo probes (see inventory below).
+- visual resize handles (Ground / Platform 0..5, center-preserving box size);
+- a screen-space orientation/view widget;
+- keyboard object nudge (Ctrl+arrows / PageUp / PageDown);
+- Alt + mouse-wheel editor-camera dolly.
 
-### Hierarchy inventory (M34)
+Live wiring is Phase B. Still out of M35: add/delete/duplicate, rotation, Hierarchy coverage of cooker probes.
+
+### Hierarchy inventory (M34 / M35)
 
 The Hierarchy lists the 21 authored Level Format v1 records. Visible 3D things that are **not** rows:
 
@@ -418,4 +418,18 @@ The Hierarchy lists the 21 authored Level Format v1 records. Visible 3D things t
 | Editor spawn marker / highlight / pending ghost / gizmo | editor visualization | Overlay while F2 is active; not extra authored objects |
 | TIME / BEST / COLLECTED HUD | other | 2D overlay, not scene objects |
 
-The four cooker probes plus the Player mesh are the usual “I see it in the viewport but not in Hierarchy” set. Do not add them in M34.
+The four cooker probes plus the Player mesh are the usual “I see it in the viewport but not in Hierarchy” set. Do not add them in M35.
+
+## Visual level editor v4 (Milestone 35, Phase B)
+
+Phase B wires the approved Phase A math into the live Debug/Development editor. `EditorTransformMode` is shown as Translate/Resize radios (disabled during an active drag). Application still never serializes mode, widget, nudge, or editor camera.
+
+**Resize.** Ground and Elevated Platform 0..5 only. Handles are cubes at `origin ± axis * gizmoLength` (camera-scaled triad, not box faces). Drag uses the M34 axis-parameter solver. `newSize.axis = start + 2 * handleSign * axisDelta`, then clamp to `kMinAuthoredBoxExtent` (0.12). Center is unchanged. The pending ghost is the true size feedback. Spawn in Resize mode shows no handles and the hint "Selected object is not resizable". Same depth-independent overlay as M34 translation. Hover/active identify axis **and** sign.
+
+**Orientation widget.** Screen-space after EndMode3D, before ImGui. Adaptive upper-right placement: `originX = viewportWidth - (defaultInspectorColumn) - radius - 24`, `originY = 64 + radius` (center ~100 px from the top on a 1280 view), left of the default Inspector column, not bound to the live ImGui pose and not persisted. Canonical views change yaw/pitch only: Front 0/0, Back 180/0, Right −90/0, Left 90/0, Top keeps yaw and sets pitch −89. Bottom is omitted. Priority: ImGui > widget > gizmo > world pick. Does not dirty Modified/Dirty/BEST or authored camera.
+
+**Nudge.** Ctrl+Left/Right = ∓/+X, Ctrl+PageDown/PageUp = ∓/+Y, Ctrl+Down/Up = ∓/+Z. Ctrl+Shift = 0.01 precision, else 0.10. **Translate mode only.** ImGui keyboard capture and active gizmo drag suppress it.
+
+**Dolly.** `ResolveEditorWheel`: Alt+wheel is dolly (`clamp(wheel * speed * 0.35, ±8)` along look-forward) and does not change `movementSpeed`. Ordinary wheel still changes speed. ImGui mouse capture and active transform drag suppress both.
+
+Status: Phase B implemented, awaiting Phase C manual validation. Milestone 35 is **not** complete. Milestone 36 has not started.

@@ -54,6 +54,10 @@ add_executable(Platformer3D
     game/source/editor/EditorLayout.h
     game/source/editor/EditorLayoutUi.h
     game/source/editor/EditorMath.h
+    game/source/editor/EditorNudge.cpp
+    game/source/editor/EditorNudge.h
+    game/source/editor/EditorOrientation.cpp
+    game/source/editor/EditorOrientation.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
@@ -302,6 +306,8 @@ add_executable(EditorGizmoTest
     game/source/editor/EditorLayout.cpp
     game/source/editor/EditorLayout.h
     game/source/editor/EditorMath.h
+    game/source/editor/EditorNudge.cpp
+    game/source/editor/EditorNudge.h
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
@@ -324,4 +330,22 @@ else()
 endif()
 if(WIN32)
     target_link_libraries(EditorGizmoTest PRIVATE ole32 shell32 uuid)
+endif()
+
+# Milestone 35 Phase A orientation-widget and dolly math. No window.
+add_executable(EditorOrientationTest
+    game/source/editor/EditorCamera.cpp
+    game/source/editor/EditorCamera.h
+    game/source/editor/EditorInput.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorOrientation.cpp
+    game/source/editor/EditorOrientation.h
+    game/source/editor/EditorOrientationTest.cpp
+    game/source/render/CameraView.h
+)
+target_include_directories(EditorOrientationTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorOrientationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorOrientationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()

@@ -39,6 +39,22 @@ struct DebugWorldOverlay
     float gizmoAxisLength = 1.0f;
     int gizmoHoveredAxis = 0;
     int gizmoActiveAxis = 0;
+    // Resize cubes at +/- axisLength. Sign is +1 / -1; ignored for translate.
+    bool drawResizeGizmo = false;
+    int gizmoHoveredSign = 1;
+    int gizmoActiveSign = 1;
+};
+
+// Screen-space orientation triad. Drawn after EndMode3D, before ImGui.
+struct OrientationWidgetOverlay
+{
+    bool visible = false;
+    float originX = 872.0f;
+    float originY = 100.0f;
+    float radius = 36.0f;
+    core::Vec3 x{};
+    core::Vec3 y{};
+    core::Vec3 z{};
 };
 
 class Renderer
@@ -91,6 +107,7 @@ public:
         bool hasBestTime,
         double bestSeconds,
         const DebugWorldOverlay& overlay = {});
+    void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);
     void EndFrame();
 
 private:

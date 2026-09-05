@@ -33,6 +33,8 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
+#include "editor/EditorNudge.h"
+#include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
 #include "editor/LevelEditor.h"
 #include "ui/debug/DebugMetrics.h"
@@ -706,16 +708,30 @@ int Application::Run()
             overlay.pendingPreviewCenter = pending.center;
             overlay.pendingPreviewSize = pending.size;
 
-            const editor::GizmoDrawRequest gizmo = editor::MakeGizmoDrawRequest(
-                levelEditorState.selection,
-                levelEditorState.workingCopy,
-                cameraView,
-                levelEditorState.gizmo);
-            overlay.drawTranslationGizmo = gizmo.visible;
+            const editor::GizmoDrawRequest gizmo =
+                levelEditorState.transformMode == editor::EditorTransformMode::Resize
+                    ? editor::MakeResizeGizmoDrawRequest(
+                          levelEditorState.selection,
+                          levelEditorState.workingCopy,
+                          cameraView,
+                          levelEditorState.gizmo)
+                    : editor::MakeGizmoDrawRequest(
+                          levelEditorState.selection,
+                          levelEditorState.workingCopy,
+                          cameraView,
+                          levelEditorState.gizmo);
+            overlay.drawTranslationGizmo =
+                gizmo.visible
+                && levelEditorState.transformMode == editor::EditorTransformMode::Translate;
+            overlay.drawResizeGizmo =
+                gizmo.visible
+                && levelEditorState.transformMode == editor::EditorTransformMode::Resize;
             overlay.gizmoOrigin = gizmo.origin;
             overlay.gizmoAxisLength = gizmo.axisLength;
             overlay.gizmoHoveredAxis = static_cast<int>(gizmo.hovered);
             overlay.gizmoActiveAxis = static_cast<int>(gizmo.active);
+            overlay.gizmoHoveredSign = gizmo.hoveredSign;
+            overlay.gizmoActiveSign = gizmo.activeSign;
         }
         else
         {
@@ -740,6 +756,23 @@ int Application::Run()
             sessionBestTimeState.bestSeconds,
             overlay);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        if (levelEditorState.active)
+        {
+            const editor::OrientationWidgetLayout widgetLayout =
+                editor::MakeOrientationWidgetLayout(
+                    static_cast<float>(window.Width()),
+                    static_cast<float>(window.Height()));
+            const editor::OrientationWidgetAxes widgetAxes =
+                editor::ProjectOrientationWidgetAxes(levelEditorState.editorCamera);
+            renderer.DrawOrientationWidget({
+                true,
+                widgetLayout.originX,
+                widgetLayout.originY,
+                widgetLayout.radius,
+                widgetAxes.x,
+                widgetAxes.y,
+                widgetAxes.z});
+        }
         const editor::LevelEditorViewContext levelEditorView{
             runtimeLevelPathDisplay.c_str(),
             movingPlatform.position,
@@ -780,32 +813,86 @@ int Application::Run()
             // drive the viewport behind them.
             const bool mouseCaptured = debugUi.WantsMouseCapture();
             const bool keyboardCaptured = debugUi.WantsKeyboardCapture();
+            const bool dragging = levelEditorState.gizmo.dragging;
+            const editor::EditorWheelIntent wheelIntent = editor::ResolveEditorWheel(
+                mouseCaptured,
+                dragging,
+                editorInput.altHeld,
+                editorInput.wheelDelta);
             editor::UpdateEditorCamera(
                 levelEditorState.editorCamera,
                 editorInput,
                 deltaSeconds,
                 false,
                 !keyboardCaptured,
-                !mouseCaptured);
+                wheelIntent == editor::EditorWheelIntent::NavigationSpeed);
+            if (wheelIntent == editor::EditorWheelIntent::Dolly)
+            {
+                editor::ApplyEditorCameraDolly(
+                    levelEditorState.editorCamera, editorInput.dollyWheelDelta);
+            }
+
             const editor::Ray3 ray = editor::ScreenToWorldRay(
                 cameraView,
                 editorInput.mouseX,
                 editorInput.mouseY,
                 static_cast<float>(window.Width()),
                 static_cast<float>(window.Height()));
-            const bool gizmoConsumedPointer = editor::UpdateGizmoInteraction(
-                levelEditorState.gizmo,
-                levelEditorState.selection,
-                levelEditorState.workingCopy,
-                cameraView,
-                ray,
-                mouseCaptured,
-                editorInput.lookHeld,
-                editorInput.selectPressed,
-                editorInput.selectHeld,
-                editorInput.selectReleased);
+
+            bool widgetConsumedPointer = false;
+            if (!mouseCaptured && !dragging && editorInput.selectPressed && !editorInput.lookHeld)
+            {
+                const editor::OrientationWidgetLayout widgetLayout =
+                    editor::MakeOrientationWidgetLayout(
+                        static_cast<float>(window.Width()),
+                        static_cast<float>(window.Height()));
+                const editor::OrientationWidgetAxes widgetAxes =
+                    editor::ProjectOrientationWidgetAxes(levelEditorState.editorCamera);
+                const editor::CanonicalEditorView canonical = editor::PickOrientationWidget(
+                    editorInput.mouseX,
+                    editorInput.mouseY,
+                    widgetLayout,
+                    widgetAxes);
+                if (canonical != editor::CanonicalEditorView::None)
+                {
+                    editor::ApplyCanonicalEditorView(levelEditorState.editorCamera, canonical);
+                    widgetConsumedPointer = true;
+                }
+            }
+
+            const bool selectPressedForGizmo =
+                editorInput.selectPressed && !widgetConsumedPointer;
+            bool gizmoConsumedPointer = false;
+            if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
+            {
+                gizmoConsumedPointer = editor::UpdateResizeInteraction(
+                    levelEditorState.gizmo,
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    ray,
+                    mouseCaptured,
+                    editorInput.lookHeld,
+                    selectPressedForGizmo,
+                    editorInput.selectHeld,
+                    editorInput.selectReleased);
+            }
+            else
+            {
+                gizmoConsumedPointer = editor::UpdateGizmoInteraction(
+                    levelEditorState.gizmo,
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    ray,
+                    mouseCaptured,
+                    editorInput.lookHeld,
+                    selectPressedForGizmo,
+                    editorInput.selectHeld,
+                    editorInput.selectReleased);
+            }
             if (!mouseCaptured && editorInput.selectPressed && !editorInput.lookHeld
-                && !gizmoConsumedPointer)
+                && !widgetConsumedPointer && !gizmoConsumedPointer)
             {
                 const editor::EditorPickingWorldState pickingWorld{
                     movingPlatform.position,
@@ -814,6 +901,41 @@ int Application::Run()
                     testBox.size};
                 levelEditorState.selection = editor::PickNearest(
                     ray, editor::BuildPickingSet(levelDefinition, pickingWorld));
+            }
+
+            if (editor::NudgeAllowed(
+                    levelEditorState.transformMode, keyboardCaptured, levelEditorState.gizmo.dragging))
+            {
+                if (editorInput.nudgeX != 0)
+                {
+                    editor::ApplyNudge(
+                        levelEditorState.workingCopy,
+                        levelEditorState.selection,
+                        editor::EditorAxis::X,
+                        static_cast<float>(editorInput.nudgeX),
+                        editorInput.nudgePrecision,
+                        levelEditorState.transformMode);
+                }
+                if (editorInput.nudgeY != 0)
+                {
+                    editor::ApplyNudge(
+                        levelEditorState.workingCopy,
+                        levelEditorState.selection,
+                        editor::EditorAxis::Y,
+                        static_cast<float>(editorInput.nudgeY),
+                        editorInput.nudgePrecision,
+                        levelEditorState.transformMode);
+                }
+                if (editorInput.nudgeZ != 0)
+                {
+                    editor::ApplyNudge(
+                        levelEditorState.workingCopy,
+                        levelEditorState.selection,
+                        editor::EditorAxis::Z,
+                        static_cast<float>(editorInput.nudgeZ),
+                        editorInput.nudgePrecision,
+                        levelEditorState.transformMode);
+                }
             }
         }
 #endif

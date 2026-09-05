@@ -76,8 +76,9 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 34 — Visual Level Editor v3 (Phase C gizmo overlay + canonical source
-restore, awaiting final approval).
+Milestone 35 — Visual Level Editor v4 (Phase C functional validation passed;
+orientation-widget placement correction awaiting final approval). M34 is
+complete and merged.
 See `docs/MILESTONES.md`, `docs/ARCHITECTURE.md`, and `docs/LEVEL_FORMAT_V1.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -86,14 +87,13 @@ pick/highlight use the active/applied world; Inspector and the translation
 gizmo edit `workingCopy`. Editable set is unchanged. Debug compiles the visual
 editor but cannot author. Release has no editor.
 
-M34 Phase B enabled world-space X/Y/Z translation for Spawn, Ground, and
-Elevated Platform 0..5, a pending ghost at the working transform, and persistent
-Dear ImGui layout with Reset Editor Layout
-(`%LOCALAPPDATA%\Platformer3D\editor_layout.ini`). Phase C correction: gizmo
-draws as a depth-independent editor overlay so handles stay readable inside
-meshes. Do not implement rotation/scale, add/delete, docking, or Milestone 35.
+M34 added world-space X/Y/Z translation for Spawn, Ground, and Elevated
+Platform 0..5, a pending ghost, persistent Dear ImGui layout, and a
+depth-independent gizmo overlay. M35 Phase B wires live Translate/Resize,
+the orientation widget, keyboard nudge (Translate mode only), and Alt+wheel
+dolly. Do not implement rotation, add/delete, docking, or Milestone 36.
 
-Do not mark M34 complete. Do not create a SceneManager, EntityManager, UUID
+Do not mark M35 complete. Do not create a SceneManager, EntityManager, UUID
 system, Level Format v2, or a generic Inspector.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
@@ -103,5 +103,5 @@ cooked → staged `<exe>/assets/levels/level_01.level` → `LoadLevelFile` →
 owns it. There is no compiled Level 01 fallback. Missing/invalid/unsupported
 Level 01 is a fatal init error. M29 BEST save remains nonfatal. The M32 writer,
 authoring boundary, F2 editor, Apply Preview and source Save remain the live
-authoring path. M34 must not widen the editable set, auto-cook, add rotation/scale,
-or start Milestone 35.
+authoring path. M35 must not widen add/delete, auto-cook, add rotation, or
+start Milestone 36.

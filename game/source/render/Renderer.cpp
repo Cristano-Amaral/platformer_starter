@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace render
 {
@@ -316,6 +317,97 @@ void DrawTranslationGizmo(const DebugWorldOverlay& overlay)
     rlEnableDepthTest();
 }
 
+void DrawResizeGizmo(const DebugWorldOverlay& overlay)
+{
+    if (!overlay.drawResizeGizmo || !(overlay.gizmoAxisLength > 0.0f))
+    {
+        return;
+    }
+
+    const float length = overlay.gizmoAxisLength;
+    const float visualRadius = std::max(length * 0.038f, 0.045f);
+    const float cubeSize = std::max(length * 0.14f, 0.16f);
+    const core::Vec3 origin = overlay.gizmoOrigin;
+    const Vector3 originRl = ToRaylib(origin);
+
+    const struct AxisDraw
+    {
+        int id;
+        Vector3 direction;
+        Color color;
+    } axes[] = {
+        {1, {1.0f, 0.0f, 0.0f}, kGizmoAxisX},
+        {2, {0.0f, 1.0f, 0.0f}, kGizmoAxisY},
+        {3, {0.0f, 0.0f, 1.0f}, kGizmoAxisZ},
+    };
+
+    const auto drawPass = [&](unsigned char alpha, float radiusScale)
+    {
+        DrawSphere(originRl, visualRadius * 0.7f * radiusScale, ScaleGizmoColor({220, 220, 228, 255}, alpha));
+        for (const AxisDraw& axis : axes)
+        {
+            const Vector3 negative{
+                originRl.x - axis.direction.x * length,
+                originRl.y - axis.direction.y * length,
+                originRl.z - axis.direction.z * length};
+            const Vector3 positive{
+                originRl.x + axis.direction.x * length,
+                originRl.y + axis.direction.y * length,
+                originRl.z + axis.direction.z * length};
+            DrawCylinderEx(
+                negative,
+                positive,
+                visualRadius * 0.55f * radiusScale,
+                visualRadius * 0.55f * radiusScale,
+                8,
+                ScaleGizmoColor(axis.color, static_cast<unsigned char>(alpha / 2 + 40)));
+
+            const int signs[] = {1, -1};
+            for (int sign : signs)
+            {
+                const bool active =
+                    overlay.gizmoActiveAxis == axis.id && overlay.gizmoActiveSign == sign;
+                const bool hovered =
+                    overlay.gizmoHoveredAxis == axis.id && overlay.gizmoHoveredSign == sign;
+                Color color = axis.color;
+                float size = cubeSize * radiusScale;
+                if (active)
+                {
+                    color = kGizmoAxisActive;
+                    size *= 1.28f;
+                }
+                else if (hovered)
+                {
+                    color = {
+                        static_cast<unsigned char>(std::min(255, axis.color.r + 48)),
+                        static_cast<unsigned char>(std::min(255, axis.color.g + 48)),
+                        static_cast<unsigned char>(std::min(255, axis.color.b + 48)),
+                        255};
+                    size *= 1.16f;
+                }
+
+                const Vector3 handle{
+                    originRl.x + axis.direction.x * length * static_cast<float>(sign),
+                    originRl.y + axis.direction.y * length * static_cast<float>(sign),
+                    originRl.z + axis.direction.z * length * static_cast<float>(sign)};
+                DrawCube(handle, size, size, size, ScaleGizmoColor(color, alpha));
+            }
+        }
+    };
+
+    drawPass(70, 0.85f);
+
+    rlDrawRenderBatchActive();
+    rlDisableDepthTest();
+    rlDisableDepthMask();
+    rlDisableBackfaceCulling();
+    drawPass(255, 1.0f);
+    rlDrawRenderBatchActive();
+    rlEnableBackfaceCulling();
+    rlEnableDepthMask();
+    rlEnableDepthTest();
+}
+
 void DrawWorldOverlay(const DebugWorldOverlay& overlay)
 {
     if (overlay.drawSpawnMarker
@@ -363,6 +455,7 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             kPendingPreviewWire);
     }
     DrawTranslationGizmo(overlay);
+    DrawResizeGizmo(overlay);
 }
 
 void DrawTestTextureQuad(const Texture2D& texture)
@@ -950,6 +1043,69 @@ void Renderer::DrawWorld(
     if (levelCompleted)
     {
         DrawLevelCompleteMessage();
+    }
+}
+
+void Renderer::DrawOrientationWidget(const OrientationWidgetOverlay& overlay)
+{
+    if (!overlay.visible || !(overlay.radius > 0.0f))
+    {
+        return;
+    }
+
+    const float ox = overlay.originX;
+    const float oy = overlay.originY;
+    const float radius = overlay.radius;
+    DrawCircle(static_cast<int>(ox), static_cast<int>(oy), radius + 10.0f, Color{18, 20, 28, 150});
+    DrawCircleLines(static_cast<int>(ox), static_cast<int>(oy), radius + 10.0f, Color{210, 214, 224, 180});
+
+    struct AxisTip
+    {
+        core::Vec3 projected;
+        Color color;
+        const char* label;
+        float depth;
+    };
+
+    AxisTip axes[] = {
+        {overlay.x, kGizmoAxisX, "X", overlay.x.z},
+        {overlay.y, kGizmoAxisY, "Y", overlay.y.z},
+        {overlay.z, kGizmoAxisZ, "Z", overlay.z.z},
+    };
+    if (axes[0].depth > axes[1].depth)
+    {
+        std::swap(axes[0], axes[1]);
+    }
+    if (axes[1].depth > axes[2].depth)
+    {
+        std::swap(axes[1], axes[2]);
+    }
+    if (axes[0].depth > axes[1].depth)
+    {
+        std::swap(axes[0], axes[1]);
+    }
+
+    for (const AxisTip& axis : axes)
+    {
+        const float posX = ox + axis.projected.x * radius;
+        const float posY = oy - axis.projected.y * radius;
+        const float negX = ox - axis.projected.x * radius;
+        const float negY = oy + axis.projected.y * radius;
+        const Color dim{
+            static_cast<unsigned char>(axis.color.r / 2 + 20),
+            static_cast<unsigned char>(axis.color.g / 2 + 20),
+            static_cast<unsigned char>(axis.color.b / 2 + 20),
+            200};
+        DrawLineEx({ox, oy}, {negX, negY}, 2.0f, dim);
+        DrawCircle(static_cast<int>(negX), static_cast<int>(negY), 4.0f, dim);
+        DrawLineEx({ox, oy}, {posX, posY}, 3.0f, axis.color);
+        DrawCircle(static_cast<int>(posX), static_cast<int>(posY), 6.0f, axis.color);
+        DrawText(
+            axis.label,
+            static_cast<int>(posX) + 7,
+            static_cast<int>(posY) - 6,
+            12,
+            axis.color);
     }
 }
 

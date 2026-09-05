@@ -29,6 +29,8 @@ inline constexpr float kEditorCameraMaxSpeed = 40.0f;
 inline constexpr float kEditorCameraLookDegreesPerPixel = 0.15f;
 inline constexpr float kEditorCameraFastMultiplier = 2.0f;
 inline constexpr float kEditorCameraWheelSpeedStep = 1.0f;
+inline constexpr float kEditorCameraDollyWheelScale = 0.35f;
+inline constexpr float kEditorCameraDollyMaxStep = 8.0f;
 
 core::Vec3 EditorCameraForward(const EditorCamera& camera);
 core::Vec3 EditorCameraRight(const EditorCamera& camera);
@@ -55,4 +57,22 @@ void UpdateEditorCamera(
     bool applyLook,
     bool applyMove,
     bool applyWheel);
+
+// Moves along look-forward. Does not change FOV or movementSpeed.
+bool ApplyEditorCameraDolly(EditorCamera& camera, float wheelDelta);
+
+enum class EditorWheelIntent
+{
+    None,
+    NavigationSpeed,
+    Dolly,
+};
+
+// Alt+wheel is dolly and must not also change movementSpeed. ImGui capture and
+// an active transform drag suppress both intents.
+EditorWheelIntent ResolveEditorWheel(
+    bool imguiWantsMouse,
+    bool transformDragging,
+    bool altHeld,
+    float wheelDelta);
 }

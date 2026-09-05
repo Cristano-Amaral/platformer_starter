@@ -145,6 +145,26 @@ float RaySegmentDistance(Ray3 ray, core::Vec3 a, core::Vec3 b, float& rayDistanc
     rayDistance = rayT;
     return Length(Sub(onRay, onSeg));
 }
+
+float RayPointDistance(Ray3 ray, core::Vec3 point, float& rayDistance)
+{
+    const float directionLengthSq = LengthSquared(ray.direction);
+    if (directionLengthSq < kMinRayLengthSquared)
+    {
+        rayDistance = 0.0f;
+        return std::numeric_limits<float>::infinity();
+    }
+
+    const core::Vec3 toPoint = Sub(point, ray.origin);
+    float rayT = Dot(toPoint, ray.direction) / directionLengthSq;
+    if (rayT < 0.0f)
+    {
+        rayT = 0.0f;
+    }
+    rayDistance = rayT;
+    const core::Vec3 onRay = Add(ray.origin, Scale(ray.direction, rayT));
+    return Length(Sub(onRay, point));
+}
 }
 
 const char* EditorAxisName(EditorAxis axis)
@@ -189,6 +209,19 @@ bool IsGizmoSelection(EditorSelection selection)
     switch (selection.kind)
     {
     case EditorObjectKind::Spawn:
+    case EditorObjectKind::Ground:
+        return selection.index == 0;
+    case EditorObjectKind::ElevatedPlatform:
+        return selection.index < world::kLevel01ElevatedPlatformCount;
+    default:
+        return false;
+    }
+}
+
+bool IsResizeSelection(EditorSelection selection)
+{
+    switch (selection.kind)
+    {
     case EditorObjectKind::Ground:
         return selection.index == 0;
     case EditorObjectKind::ElevatedPlatform:
@@ -254,6 +287,69 @@ const core::Vec3* GetEditablePosition(
         break;
     }
     return nullptr;
+}
+
+core::Vec3* GetEditableSize(world::LevelDefinition& level, EditorSelection selection)
+{
+    switch (selection.kind)
+    {
+    case EditorObjectKind::Ground:
+        if (selection.index == 0)
+        {
+            return &level.ground.size;
+        }
+        break;
+    case EditorObjectKind::ElevatedPlatform:
+        if (selection.index < level.elevatedPlatforms.size())
+        {
+            return &level.elevatedPlatforms[selection.index].size;
+        }
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
+const core::Vec3* GetEditableSize(
+    const world::LevelDefinition& level,
+    EditorSelection selection)
+{
+    switch (selection.kind)
+    {
+    case EditorObjectKind::Ground:
+        if (selection.index == 0)
+        {
+            return &level.ground.size;
+        }
+        break;
+    case EditorObjectKind::ElevatedPlatform:
+        if (selection.index < level.elevatedPlatforms.size())
+        {
+            return &level.elevatedPlatforms[selection.index].size;
+        }
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
+float ClampAuthoredBoxExtent(float value)
+{
+    if (!std::isfinite(value) || value < kMinAuthoredBoxExtent)
+    {
+        return kMinAuthoredBoxExtent;
+    }
+    return value;
+}
+
+core::Vec3 ClampAuthoredBoxSize(core::Vec3 size)
+{
+    return {
+        ClampAuthoredBoxExtent(size.x),
+        ClampAuthoredBoxExtent(size.y),
+        ClampAuthoredBoxExtent(size.z)};
 }
 
 bool GetGizmoPreviewBox(
@@ -494,6 +590,225 @@ void EndGizmoDrag(GizmoInteractionState& state)
     state.dragTarget = {};
     state.dragStartPosition = {};
     state.dragStartAxisParameter = 0.0f;
+    state.dragStartSize = {};
+    state.dragHandleSign = 1;
+}
+
+GizmoDrawRequest MakeResizeGizmoDrawRequest(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    const GizmoInteractionState& interaction)
+{
+    GizmoDrawRequest request{};
+    const core::Vec3* origin = GetEditablePosition(workingCopy, selection);
+    if (origin == nullptr || !IsResizeSelection(selection))
+    {
+        return request;
+    }
+
+    request.visible = true;
+    request.origin = *origin;
+    request.axisLength = GizmoWorldLength(view, request.origin);
+    request.hovered = interaction.hovered;
+    request.hoveredSign = interaction.hoveredSign;
+    request.active = interaction.dragging ? interaction.active : EditorAxis::None;
+    request.activeSign = interaction.dragging ? interaction.dragHandleSign : 1;
+    return request;
+}
+
+ResizeHandlePick PickResizeHandle(
+    Ray3 ray,
+    core::Vec3 origin,
+    float axisLength,
+    float hitRadius)
+{
+    ResizeHandlePick pick{};
+    if (!(axisLength > 0.0f) || !(hitRadius > 0.0f) || LengthSquared(ray.direction) < kMinRayLengthSquared)
+    {
+        return pick;
+    }
+
+    float bestDistance = std::numeric_limits<float>::infinity();
+    const EditorAxis axes[] = {EditorAxis::X, EditorAxis::Y, EditorAxis::Z};
+    const int signs[] = {1, -1};
+    for (EditorAxis axis : axes)
+    {
+        const core::Vec3 direction = EditorAxisDirection(axis);
+        for (int sign : signs)
+        {
+            const core::Vec3 handle =
+                Add(origin, Scale(direction, axisLength * static_cast<float>(sign)));
+            float rayDistance = 0.0f;
+            const float distance = RayPointDistance(ray, handle, rayDistance);
+            if (distance <= hitRadius && rayDistance >= 0.0f && distance < bestDistance)
+            {
+                bestDistance = distance;
+                pick.axis = axis;
+                pick.sign = sign;
+            }
+        }
+    }
+    return pick;
+}
+
+bool BeginResizeDrag(
+    GizmoInteractionState& state,
+    EditorSelection selection,
+    EditorAxis axis,
+    int handleSign,
+    core::Vec3 workingPosition,
+    core::Vec3 workingSize,
+    Ray3 mouseRay,
+    const render::CameraView& view)
+{
+    if (!IsResizeSelection(selection) || axis == EditorAxis::None || handleSign == 0
+        || !IsFiniteVec3(workingPosition) || !IsFiniteVec3(workingSize))
+    {
+        return false;
+    }
+
+    float parameter = 0.0f;
+    if (!AxisParameterFromRay(
+            mouseRay, workingPosition, EditorAxisDirection(axis), view, parameter))
+    {
+        return false;
+    }
+
+    state.dragging = true;
+    state.active = axis;
+    state.hovered = axis;
+    state.dragTarget = selection;
+    state.dragStartPosition = workingPosition;
+    state.dragStartAxisParameter = parameter;
+    state.dragStartSize = workingSize;
+    state.dragHandleSign = handleSign > 0 ? 1 : -1;
+    state.hoveredSign = state.dragHandleSign;
+    return true;
+}
+
+core::Vec3 GizmoResizeSize(
+    const GizmoInteractionState& state,
+    Ray3 mouseRay,
+    const render::CameraView& view)
+{
+    if (!state.dragging || state.active == EditorAxis::None)
+    {
+        return ClampAuthoredBoxSize(state.dragStartSize);
+    }
+
+    float parameter = 0.0f;
+    if (!AxisParameterFromRay(
+            mouseRay,
+            state.dragStartPosition,
+            EditorAxisDirection(state.active),
+            view,
+            parameter))
+    {
+        return ClampAuthoredBoxSize(state.dragStartSize);
+    }
+
+    const float delta = parameter - state.dragStartAxisParameter;
+    if (!std::isfinite(delta))
+    {
+        return ClampAuthoredBoxSize(state.dragStartSize);
+    }
+
+    const float signedDelta = static_cast<float>(state.dragHandleSign) * delta;
+    core::Vec3 size = state.dragStartSize;
+    const float change = kResizeSizeFromAxisDelta * signedDelta;
+    switch (state.active)
+    {
+    case EditorAxis::X:
+        size.x = state.dragStartSize.x + change;
+        break;
+    case EditorAxis::Y:
+        size.y = state.dragStartSize.y + change;
+        break;
+    case EditorAxis::Z:
+        size.z = state.dragStartSize.z + change;
+        break;
+    case EditorAxis::None:
+        break;
+    }
+    return ClampAuthoredBoxSize(size);
+}
+
+bool UpdateResizeInteraction(
+    GizmoInteractionState& state,
+    EditorSelection currentSelection,
+    world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    Ray3 mouseRay,
+    bool imguiWantsMouse,
+    bool lookHeld,
+    bool selectPressed,
+    bool selectHeld,
+    bool selectReleased)
+{
+    if (state.dragging)
+    {
+        if (selectReleased || !selectHeld)
+        {
+            EndGizmoDrag(state);
+            return true;
+        }
+
+        core::Vec3* size = GetEditableSize(workingCopy, state.dragTarget);
+        if (size == nullptr)
+        {
+            ClearGizmoInteraction(state);
+            return true;
+        }
+
+        *size = GizmoResizeSize(state, mouseRay, view);
+        state.hovered = state.active;
+        state.hoveredSign = state.dragHandleSign;
+        return true;
+    }
+
+    if (imguiWantsMouse)
+    {
+        state.hovered = EditorAxis::None;
+        state.hoveredSign = 1;
+        return false;
+    }
+
+    if (!IsResizeSelection(currentSelection))
+    {
+        state.hovered = EditorAxis::None;
+        state.hoveredSign = 1;
+        return false;
+    }
+
+    const core::Vec3* origin = GetEditablePosition(workingCopy, currentSelection);
+    const core::Vec3* size = GetEditableSize(workingCopy, currentSelection);
+    if (origin == nullptr || size == nullptr)
+    {
+        state.hovered = EditorAxis::None;
+        state.hoveredSign = 1;
+        return false;
+    }
+
+    const float axisLength = GizmoWorldLength(view, *origin);
+    const ResizeHandlePick pick =
+        PickResizeHandle(mouseRay, *origin, axisLength, axisLength * kResizeHandleHitFraction);
+    state.hovered = pick.axis;
+    state.hoveredSign = pick.sign;
+    if (lookHeld || !selectPressed || pick.axis == EditorAxis::None)
+    {
+        return false;
+    }
+
+    return BeginResizeDrag(
+        state,
+        currentSelection,
+        pick.axis,
+        pick.sign,
+        *origin,
+        *size,
+        mouseRay,
+        view);
 }
 
 bool UpdateGizmoInteraction(

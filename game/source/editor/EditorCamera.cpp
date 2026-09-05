@@ -114,4 +114,59 @@ void UpdateEditorCamera(
 
     ClampEditorCamera(camera);
 }
+
+bool ApplyEditorCameraDolly(EditorCamera& camera, float wheelDelta)
+{
+    if (wheelDelta == 0.0f || !std::isfinite(wheelDelta))
+    {
+        return false;
+    }
+
+    const core::Vec3 forward = EditorCameraForward(camera);
+    if (!std::isfinite(forward.x) || !std::isfinite(forward.y) || !std::isfinite(forward.z))
+    {
+        return false;
+    }
+
+    float step = wheelDelta * camera.movementSpeed * kEditorCameraDollyWheelScale;
+    if (!std::isfinite(step))
+    {
+        return false;
+    }
+    if (step > kEditorCameraDollyMaxStep)
+    {
+        step = kEditorCameraDollyMaxStep;
+    }
+    else if (step < -kEditorCameraDollyMaxStep)
+    {
+        step = -kEditorCameraDollyMaxStep;
+    }
+
+    const core::Vec3 next = camera.position + Scale(forward, step);
+    if (!std::isfinite(next.x) || !std::isfinite(next.y) || !std::isfinite(next.z))
+    {
+        return false;
+    }
+
+    camera.position = next;
+    ClampEditorCamera(camera);
+    return true;
+}
+
+EditorWheelIntent ResolveEditorWheel(
+    bool imguiWantsMouse,
+    bool transformDragging,
+    bool altHeld,
+    float wheelDelta)
+{
+    if (imguiWantsMouse || transformDragging || wheelDelta == 0.0f || !std::isfinite(wheelDelta))
+    {
+        return EditorWheelIntent::None;
+    }
+    if (altHeld)
+    {
+        return EditorWheelIntent::Dolly;
+    }
+    return EditorWheelIntent::NavigationSpeed;
+}
 }

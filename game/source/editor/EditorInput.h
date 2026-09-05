@@ -26,6 +26,16 @@ struct EditorInputState
     float wheelDelta = 0.0f;
     float mouseX = 0.0f;
     float mouseY = 0.0f;
+
+    // Milestone 35: consumed only while the level editor is active, after
+    // current-frame ImGui capture is known.
+    bool ctrlHeld = false;
+    bool altHeld = false;
+    int nudgeX = 0;
+    int nudgeY = 0;
+    int nudgeZ = 0;
+    bool nudgePrecision = false;
+    float dollyWheelDelta = 0.0f;
 };
 
 EditorInputState PollEditorInput();
