@@ -59,9 +59,22 @@ bool CanSaveLevelSource(bool authoringAvailable, bool modified)
 }
 
 bool CanReloadRuntimeLevel(
-    bool authoringAvailable, bool modified, bool toolRunnerRunning)
+    bool authoringAvailable,
+    bool modified,
+    bool toolRunnerRunning,
+    bool cookStageReloadPending)
 {
-    return authoringAvailable && !modified && !toolRunnerRunning;
+    return authoringAvailable && !modified && !toolRunnerRunning && !cookStageReloadPending;
+}
+
+bool CanStartCookStageReload(
+    bool authoringAvailable,
+    bool modified,
+    bool toolRunnerRunning,
+    bool workflowPending)
+{
+    return CanReloadRuntimeLevel(
+        authoringAvailable, modified, toolRunnerRunning, workflowPending);
 }
 
 bool TrySetEditorTransformMode(

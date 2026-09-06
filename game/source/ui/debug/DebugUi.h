@@ -22,7 +22,8 @@ public:
         editor::LevelEditorState& levelEditorState,
         const world::LevelDefinition& level,
         const editor::LevelEditorViewContext& levelEditorView,
-        editor::EditorToolRunner& toolRunner);
+        editor::EditorToolRunner& toolRunner,
+        bool cookStageReloadPending);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.

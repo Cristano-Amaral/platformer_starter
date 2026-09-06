@@ -79,24 +79,41 @@ int main()
             editor::CanSaveLevelSource(true, false),
             "Save Development rule: enabled when authoring and applied");
         Expect(
-            !editor::CanReloadRuntimeLevel(false, false, false),
+            !editor::CanReloadRuntimeLevel(false, false, false, false),
             "Reload Debug rule: disabled when authoring is unavailable");
         Expect(
-            !editor::CanReloadRuntimeLevel(false, true, false),
+            !editor::CanReloadRuntimeLevel(false, true, false, false),
             "Reload Debug rule: still disabled while modified");
         Expect(
-            !editor::CanReloadRuntimeLevel(true, true, false),
+            !editor::CanReloadRuntimeLevel(true, true, false, false),
             "Reload Policy A: disabled while Modified");
         Expect(
-            !editor::CanReloadRuntimeLevel(true, false, true),
+            !editor::CanReloadRuntimeLevel(true, false, true, false),
             "Reload Policy A: disabled while a Build tool is Running");
         Expect(
-            !editor::CanReloadRuntimeLevel(true, true, true),
+            !editor::CanReloadRuntimeLevel(true, true, true, false),
             "Reload remains disabled when both Modified and a tool is Running");
         Expect(
-            editor::CanReloadRuntimeLevel(true, false, false),
+            !editor::CanReloadRuntimeLevel(true, false, false, true),
+            "Reload blocked while Cook, Stage & Reload is pending");
+        Expect(
+            editor::CanReloadRuntimeLevel(true, false, false, false),
             "Reload Development rule: enabled when authoring, unmodified, idle tools");
-        // Dirty is not an argument: Dirty-but-not-Modified stays enabled.
+        Expect(
+            !editor::CanStartCookStageReload(false, false, false, false),
+            "Cook, Stage & Reload disabled when authoring is unavailable");
+        Expect(
+            !editor::CanStartCookStageReload(true, true, false, false),
+            "Cook, Stage & Reload disabled while Modified");
+        Expect(
+            !editor::CanStartCookStageReload(true, false, true, false),
+            "Cook, Stage & Reload disabled while runner is Running");
+        Expect(
+            !editor::CanStartCookStageReload(true, false, false, true),
+            "Cook, Stage & Reload disabled while workflow is pending");
+        Expect(
+            editor::CanStartCookStageReload(true, false, false, false),
+            "Dirty is not a start argument: unmodified idle may start");
     }
 
     {

@@ -76,9 +76,9 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 39 — Development Runtime Level Reload
-(Phase B live Level menu; awaiting Phase C). Milestone 38 is
-complete and merged. Milestone 40 has not started. See `docs/MILESTONES.md`
+Milestone 40 — Cook, Stage & Reload Workflow
+(Phase B live Build menu; awaiting Phase C). Milestone 39 is
+complete and merged. Milestone 41 has not started. See `docs/MILESTONES.md`
 and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -95,10 +95,12 @@ bar: View / Transform / Level). M37 is complete: Development-only Build menu
 and Tool Output. `Build > Cook Assets` remains only `python tools/cook_assets.py`.
 M38 is complete: Development `Build > Stage Runtime Assets` and
 `Build > Cook & Stage` use `cmake -P cmake/StageRuntimeAssets.cmake`.
-Cook Assets remains cook-only. M39 Phase B adds Development
-`Level > Reload Runtime Level` (in-process staged Level Format v1 reload).
-Do not add automatic cook/build/stage/reload chains, file watching,
-general hot reload, Add/Delete, docking, or Milestone 40.
+Cook Assets remains cook-only. M39 is complete: Development
+`Level > Reload Runtime Level` reloads staged Level Format v1 in-process.
+M40 Phase B adds Development `Build > Cook, Stage & Reload`
+(canonical Cook & Stage, then one in-process M39 reload).
+Do not add automatic Apply/Save, file watching, general hot reload,
+Add/Delete, docking, or Milestone 41.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -113,4 +115,6 @@ cooked files into `build/windows-vs2022/bin/Development/assets/` without a
 C++ build. `Build > Cook & Stage` cooks then stages. Those jobs do not
 change M37 Cook Assets / Build Development meanings. M39 Development
 `Level > Reload Runtime Level` reloads the staged runtime level in-process.
-It does not Save, Cook, Stage, or restart. Awaiting Phase C.
+It does not Save, Cook, Stage, or restart. M40 Development
+`Build > Cook, Stage & Reload` runs canonical Cook & Stage then one
+in-process M39 reload. Awaiting Phase C.

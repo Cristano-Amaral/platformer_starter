@@ -63,6 +63,7 @@ enum class LevelEditorRequest
     RevertWorkingCopy,
     SaveLevelSource,
     ReloadRuntimeLevel,
+    CookStageAndReload,
 };
 
 const char* LevelEditorApplyStatusName(LevelEditorApplyStatus status);
@@ -152,13 +153,14 @@ void ResetEditorWorkspaceLayout(
     float viewportHeight);
 
 // F2-only Dear ImGui main menu bar (View / Transform / Level, plus Build in
-// Development). Development Level includes Reload Runtime Level. Must be
-// called after rlImGuiBegin and before the editor panels.
+// Development). Development Level includes Reload Runtime Level. Development
+// Build includes Cook, Stage & Reload (intent only; Application orchestrates).
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
     const LevelEditorViewContext& view,
-    EditorToolRunner& toolRunner);
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending);
 
 void DrawEditorToolOutput(
     LevelEditorState& state,
@@ -173,5 +175,6 @@ LevelEditorRequest DrawLevelEditor(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
     const LevelEditorViewContext& view,
-    EditorToolRunner& toolRunner);
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending);
 }

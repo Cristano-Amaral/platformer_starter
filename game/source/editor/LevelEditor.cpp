@@ -343,12 +343,14 @@ LevelEditorRequest DrawLevelControls(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
     const LevelEditorViewContext& view,
-    EditorToolRunner& toolRunner)
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending)
 {
     LevelEditorRequest request = LevelEditorRequest::None;
     ApplyEditorWindowPlacement(kLevelEditorWindowName, view);
 #if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
     (void)toolRunner;
+    (void)cookStageReloadPending;
 #endif
     if (!ImGui::Begin(kLevelEditorWindowName, &state.workspace.showLevelEditor))
     {
@@ -472,7 +474,8 @@ LevelEditorRequest DrawLevelControls(
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         const bool toolRunning = toolRunner.IsRunning();
         ImGui::BeginDisabled(
-            !editor::CanReloadRuntimeLevel(authoringAvailable, state.modified, toolRunning));
+            !editor::CanReloadRuntimeLevel(
+                authoringAvailable, state.modified, toolRunning, cookStageReloadPending));
         if (ImGui::Button("Reload Runtime Level"))
         {
             request = LevelEditorRequest::ReloadRuntimeLevel;
@@ -487,6 +490,11 @@ LevelEditorRequest DrawLevelControls(
         {
             ImGui::TextUnformatted(
                 "Reload disabled: wait for the running Build tool to finish.");
+        }
+        else if (cookStageReloadPending)
+        {
+            ImGui::TextUnformatted(
+                "Reload disabled: Cook, Stage & Reload is still finishing.");
         }
 #endif
 
@@ -514,8 +522,8 @@ LevelEditorRequest DrawLevelControls(
             "Reload Runtime Level re-reads the staged runtime file in-process. "
             "It does not Save, Cook, Stage, Build, or restart.");
         ImGui::TextWrapped(
-            "After Save, use Build > Cook & Stage, then Level > Reload Runtime Level. "
-            "Staging does not reload in-memory assets by itself.");
+            "After Save, use Build > Cook, Stage & Reload (or Cook & Stage then "
+            "Level > Reload Runtime Level). Staging does not reload in-memory assets by itself.");
 #endif
         ImGui::TextWrapped(
             "Applied but unsaved edits live in memory only and are lost when the process exits.");
@@ -556,9 +564,13 @@ LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition&,
     const LevelEditorViewContext& view,
-    EditorToolRunner& toolRunner)
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending)
 {
     LevelEditorRequest request = LevelEditorRequest::None;
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    (void)cookStageReloadPending;
+#endif
     if (!ImGui::BeginMainMenuBar())
     {
         return request;
@@ -631,7 +643,10 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::Separator();
         ImGui::BeginDisabled(
             !CanReloadRuntimeLevel(
-                authoringAvailable, state.modified, toolRunner.IsRunning()));
+                authoringAvailable,
+                state.modified,
+                toolRunner.IsRunning(),
+                cookStageReloadPending));
         if (ImGui::MenuItem("Reload Runtime Level"))
         {
             request = LevelEditorRequest::ReloadRuntimeLevel;
@@ -651,7 +666,8 @@ LevelEditorRequest DrawEditorMenuBar(
     if (ImGui::BeginMenu("Build"))
     {
         const bool toolRunning = toolRunner.IsRunning();
-        ImGui::BeginDisabled(toolRunning);
+        const bool toolsBusy = toolRunning || cookStageReloadPending;
+        ImGui::BeginDisabled(toolsBusy);
         if (ImGui::MenuItem("Cook Assets"))
         {
             RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::CookAssets);
@@ -666,8 +682,21 @@ LevelEditorRequest DrawEditorMenuBar(
             RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::CookAndStage);
         }
         ImGui::EndDisabled();
+
+        ImGui::BeginDisabled(
+            !CanStartCookStageReload(
+                IsLevelAuthoringAvailable(),
+                state.modified,
+                toolRunning,
+                cookStageReloadPending));
+        if (ImGui::MenuItem("Cook, Stage & Reload"))
+        {
+            request = LevelEditorRequest::CookStageAndReload;
+        }
+        ImGui::EndDisabled();
+
         ImGui::Separator();
-        ImGui::BeginDisabled(toolRunning);
+        ImGui::BeginDisabled(toolsBusy);
         if (ImGui::MenuItem("Build Debug"))
         {
             RequestEditorToolStart(toolRunner, state.workspace, EditorToolKind::BuildDebug);
@@ -782,7 +811,8 @@ LevelEditorRequest DrawLevelEditor(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
     const LevelEditorViewContext& view,
-    EditorToolRunner& toolRunner)
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending)
 {
     RefreshLevelEditorDerivedFlags(state, activeLevel);
 
@@ -798,7 +828,8 @@ LevelEditorRequest DrawLevelEditor(
     {
         return LevelEditorRequest::None;
     }
-    return DrawLevelControls(state, activeLevel, view, toolRunner);
+    return DrawLevelControls(
+        state, activeLevel, view, toolRunner, cookStageReloadPending);
 }
 
 #else
@@ -809,7 +840,8 @@ LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState&,
     const world::LevelDefinition&,
     const LevelEditorViewContext&,
-    EditorToolRunner&)
+    EditorToolRunner&,
+    bool)
 {
     return LevelEditorRequest::None;
 }
@@ -820,7 +852,8 @@ LevelEditorRequest DrawLevelEditor(
     LevelEditorState&,
     const world::LevelDefinition&,
     const LevelEditorViewContext&,
-    EditorToolRunner&)
+    EditorToolRunner&,
+    bool)
 {
     return LevelEditorRequest::None;
 }

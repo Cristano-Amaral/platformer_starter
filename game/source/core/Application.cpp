@@ -32,11 +32,13 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "editor/AuthoringPaths.h"
+#include "editor/CookStageReloadWorkflow.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
+#include "editor/EditorToolCommands.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
 #include "editor/RuntimeLevelReload.h"
@@ -785,7 +787,23 @@ int Application::Run()
             static_cast<float>(window.Width()),
             static_cast<float>(window.Height()),
             false};
+        // Cook, Stage & Reload observation lives in Application::Run, not in
+        // ImGui Draw, so F2 hide and panel visibility cannot cancel it.
         editorToolRunner.Poll();
+        {
+            const editor::CookStageReloadStatus statusBeforeObserve =
+                cookStageReload.LastStatus();
+            const editor::EditorToolJobSnapshot toolSnapshot = editorToolRunner.Snapshot();
+            cookStageReload.Observe(toolSnapshot.kind, toolSnapshot.state);
+            if (statusBeforeObserve == editor::CookStageReloadStatus::WaitingForCookAndStage
+                && cookStageReload.LastStatus() == editor::CookStageReloadStatus::ExternalFailed)
+            {
+                editor::ResetLevelActionStatuses(levelEditorState);
+                levelEditorState.lastMessage =
+                    "Cook, Stage & Reload failed before Reload. "
+                    "See Tool Output for Cook/Stage details.";
+            }
+        }
         const editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
@@ -812,7 +830,8 @@ int Application::Run()
             levelEditorState,
             levelDefinition,
             levelEditorView,
-            editorToolRunner);
+            editorToolRunner,
+            cookStageReload.IsPending());
         if (levelEditorState.active)
         {
             // Keyboard move, wheel and world pick use this frame's ImGui capture
@@ -957,6 +976,7 @@ int Application::Run()
         {
             fatalError = true;
         }
+        FinishCookStageAndReloadIfReady();
 #endif
     }
 
@@ -1166,6 +1186,8 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
     case editor::LevelEditorRequest::ReloadRuntimeLevel:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         return ReloadRuntimeLevelFromStaged();
+    case editor::LevelEditorRequest::CookStageAndReload:
+        return StartCookStageAndReload();
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         break;
@@ -1224,7 +1246,10 @@ bool Application::ReloadRuntimeLevelFromStaged()
     const bool authoringAvailable = editor::IsLevelAuthoringAvailable();
     const bool toolRunning = editorToolRunner.IsRunning();
     if (!editor::CanReloadRuntimeLevel(
-            authoringAvailable, levelEditorState.modified, toolRunning))
+            authoringAvailable,
+            levelEditorState.modified,
+            toolRunning,
+            cookStageReload.IsPending()))
     {
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Rejected;
@@ -1239,10 +1264,16 @@ bool Application::ReloadRuntimeLevelFromStaged()
                 "Reload rejected: apply or revert unapplied working-copy edits first. "
                 "Active level unchanged.";
         }
-        else
+        else if (toolRunning)
         {
             levelEditorState.lastMessage =
                 "Reload rejected: a Build tool is still running. Active level unchanged.";
+        }
+        else
+        {
+            levelEditorState.lastMessage =
+                "Reload rejected: Cook, Stage & Reload is still finishing. "
+                "Active level unchanged.";
         }
         return true;
     }
@@ -1303,6 +1334,102 @@ bool Application::ReloadRuntimeLevelFromStaged()
     return true;
 }
 
+bool Application::StartCookStageAndReload()
+{
+    const bool authoringAvailable = editor::IsLevelAuthoringAvailable();
+    if (!editor::CanStartCookStageReload(
+            authoringAvailable,
+            levelEditorState.modified,
+            editorToolRunner.IsRunning(),
+            cookStageReload.IsPending()))
+    {
+        cookStageReload.MarkRejected();
+        editor::ResetLevelActionStatuses(levelEditorState);
+        if (!authoringAvailable)
+        {
+            levelEditorState.lastMessage =
+                "Cook, Stage & Reload is available in Development only.";
+        }
+        else if (levelEditorState.modified)
+        {
+            levelEditorState.lastMessage =
+                "Cook, Stage & Reload rejected: apply or revert unapplied working-copy "
+                "edits first.";
+        }
+        else if (cookStageReload.IsPending())
+        {
+            levelEditorState.lastMessage =
+                "Cook, Stage & Reload rejected: the workflow is still finishing.";
+        }
+        else
+        {
+            levelEditorState.lastMessage =
+                "Cook, Stage & Reload rejected: a Build tool is still running.";
+        }
+        return true;
+    }
+
+    if (!editorToolRunner.TryStart(
+            editor::EditorToolKind::CookAndStage,
+            editor::RepositoryRoot(),
+            editor::IsEditorToolExecutionAvailable()))
+    {
+        cookStageReload.MarkRejected();
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage =
+            "Cook, Stage & Reload rejected: could not start Cook & Stage.";
+        return true;
+    }
+
+    levelEditorState.workspace.showToolOutput = true;
+    if (!editorToolRunner.IsRunning())
+    {
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage =
+            "Cook, Stage & Reload stopped: Cook & Stage failed to start. See Tool Output.";
+        return true;
+    }
+
+    if (!cookStageReload.BeginWaiting())
+    {
+        cookStageReload.MarkRejected();
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage =
+            "Cook, Stage & Reload rejected: workflow was already pending. "
+            "Cook & Stage continues in Tool Output.";
+        return true;
+    }
+
+    editor::ResetLevelActionStatuses(levelEditorState);
+    levelEditorState.lastMessage =
+        "Cook, Stage & Reload running. See Tool Output for Cook & Stage.";
+    return true;
+}
+
+void Application::FinishCookStageAndReloadIfReady()
+{
+    if (!cookStageReload.TakeReloadRequest())
+    {
+        return;
+    }
+
+    ReloadRuntimeLevelFromStaged();
+    const bool succeeded =
+        levelEditorState.lastReloadStatus == editor::LevelEditorReloadStatus::Reloaded;
+    cookStageReload.NotifyReloadFinished(succeeded);
+    if (succeeded)
+    {
+        levelEditorState.lastMessage =
+            "Cook, Stage & Reload completed. Staged runtime level is now loaded.";
+    }
+    else
+    {
+        levelEditorState.lastMessage =
+            "Cook & Stage succeeded, but Reload Runtime Level failed. "
+            + levelEditorState.lastMessage;
+    }
+}
+
 void Application::ResetGameplayAfterCommittedLevel()
 {
     player.ResetMovementState();
@@ -1342,6 +1469,7 @@ void Application::Shutdown()
 {
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     input::SetMouseLookActive(false);
+    cookStageReload.Cancel();
     editorToolRunner.Shutdown();
     debugUi.Shutdown();
 #endif

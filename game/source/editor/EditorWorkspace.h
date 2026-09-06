@@ -37,10 +37,22 @@ bool CanApplyPreview(bool modified, bool workingCopyValid);
 bool CanRevertWorkingCopy(bool modified);
 bool CanSaveLevelSource(bool authoringAvailable, bool modified);
 // Policy A: Development-only, rejected while unapplied working-copy edits
-// exist, and rejected while EditorToolRunner.IsRunning(). Dirty-but-not-Modified
-// does not block. toolRunnerRunning is the runner's IsRunning(), not a second flag.
+// exist, rejected while EditorToolRunner.IsRunning(), and rejected while a
+// Cook, Stage & Reload workflow is pending (transition window). Dirty does
+// not block. toolRunnerRunning is the runner's IsRunning(), not a second flag.
 bool CanReloadRuntimeLevel(
-    bool authoringAvailable, bool modified, bool toolRunnerRunning);
+    bool authoringAvailable,
+    bool modified,
+    bool toolRunnerRunning,
+    bool cookStageReloadPending);
+
+// Same guards as a convenience Cook, Stage & Reload start. Dirty is not a
+// parameter and does not block.
+bool CanStartCookStageReload(
+    bool authoringAvailable,
+    bool modified,
+    bool toolRunnerRunning,
+    bool workflowPending);
 
 // Returns false and leaves mode unchanged while a gizmo drag is active.
 bool TrySetEditorTransformMode(

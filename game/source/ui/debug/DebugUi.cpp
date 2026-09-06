@@ -24,7 +24,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     editor::LevelEditorState& levelEditorState,
     const world::LevelDefinition& level,
     const editor::LevelEditorViewContext& levelEditorView,
-    editor::EditorToolRunner& toolRunner)
+    editor::EditorToolRunner& toolRunner,
+    bool cookStageReloadPending)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -40,7 +41,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     if (levelEditorState.active)
     {
         editor::RefreshLevelEditorDerivedFlags(levelEditorState, level);
-        menuRequest = editor::DrawEditorMenuBar(levelEditorState, level, view, toolRunner);
+        menuRequest = editor::DrawEditorMenuBar(
+            levelEditorState, level, view, toolRunner, cookStageReloadPending);
         view.forceDefaultLayout = levelEditorState.forceDefaultLayoutFrames > 0;
     }
 
@@ -66,7 +68,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     {
         view.recoverOffscreenLayout =
             !recoveredEditorWindowsLayout && !view.forceDefaultLayout;
-        panelRequest = editor::DrawLevelEditor(levelEditorState, level, view, toolRunner);
+        panelRequest = editor::DrawLevelEditor(
+            levelEditorState, level, view, toolRunner, cookStageReloadPending);
         recoveredEditorWindowsLayout = true;
     }
     if (levelEditorState.forceDefaultLayoutFrames > 0)

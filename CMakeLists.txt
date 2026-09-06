@@ -44,6 +44,8 @@ add_executable(Platformer3D
     game/source/core/Vec3.h
     game/source/editor/AuthoringPaths.cpp
     game/source/editor/AuthoringPaths.h
+    game/source/editor/CookStageReloadWorkflow.cpp
+    game/source/editor/CookStageReloadWorkflow.h
     game/source/editor/EditorCamera.cpp
     game/source/editor/EditorCamera.h
     game/source/editor/EditorGizmo.cpp
@@ -397,4 +399,20 @@ if(MSVC)
     target_compile_options(EditorWorkspaceTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(EditorWorkspaceTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or
+# HostProcess. Shares enable helpers with EditorWorkspaceTest.
+add_executable(CookStageReloadWorkflowTest
+    game/source/editor/CookStageReloadWorkflow.cpp
+    game/source/editor/CookStageReloadWorkflow.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/CookStageReloadWorkflowTest.cpp
+)
+target_include_directories(CookStageReloadWorkflowTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(CookStageReloadWorkflowTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(CookStageReloadWorkflowTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()

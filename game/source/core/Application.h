@@ -16,6 +16,7 @@
 #include "world/RespawnWorld.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/CookStageReloadWorkflow.h"
 #include "editor/LevelEditor.h"
 #include "ui/debug/DebugUi.h"
 #endif
@@ -41,6 +42,8 @@ private:
     bool HandleLevelEditorRequest(editor::LevelEditorRequest request);
     bool ApplyLevelEditorPreview();
     bool ReloadRuntimeLevelFromStaged();
+    bool StartCookStageAndReload();
+    void FinishCookStageAndReloadIfReady();
     void ResetGameplayAfterCommittedLevel();
     void SaveLevelEditorSource();
 #endif
@@ -66,6 +69,7 @@ private:
     ui::DebugUi debugUi;
     editor::LevelEditorState levelEditorState;
     editor::EditorToolRunner editorToolRunner;
+    editor::CookStageReloadWorkflow cookStageReload;
 #endif
     bool initialized = false;
     // Set only when an editor physics rebuild fails. Normal gameplay never

@@ -109,7 +109,7 @@ Three locations are distinct:
 
 Save Level Source is not Cook Assets. Cook Assets is not runtime staging. The cooker never copies into `<exe>/assets/`. CMake does not cook. Staging is `cmake -P cmake/StageRuntimeAssets.cmake` with `-DPLATFORMER_COOKED_DIR` and `-DPLATFORMER_STAGE_DEST`, sharing `cmake/RuntimeAssets.cmake`. `Platformer3D` POST_BUILD invokes that script into `$<TARGET_FILE_DIR:Platformer3D>/assets` for Debug, Development, and Release. The same script is the M38 Stage Runtime Assets child process (Development dest: `build/windows-vs2022/bin/Development/assets`). Staging does not compile or link. `copy_if_different` / `file(COPY_FILE ... ONLY_IF_DIFFERENT)` skips identical bytes. Stale destination files are not deleted. Build Development remains `cmake --build --preset windows-development`.
 
-The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test uses Save → Cook & Stage → Restart, or Development `Level > Reload Runtime Level` from the staged file without closing the process. `Build > Stage Runtime Assets` always targets the Development runtime tree. Reload does not Save, Cook, Stage, or Build.
+The game never loads from `source/` or `cooked/`. After authored level edits, a fresh-restart test uses Save → Cook & Stage → Restart, or Development `Level > Reload Runtime Level` / `Build > Cook, Stage & Reload` from the staged file without closing the process. `Build > Stage Runtime Assets` always targets the Development runtime tree. Reload does not Save, Cook, Stage, or Build. Cook, Stage & Reload does not auto Apply or auto Save.
 
 Cook from the repository root:
 
@@ -504,4 +504,20 @@ Phase A added in-process reload of Level Format v1 from the **staged** runtime f
 
 **Menus.** Development Level: Apply Preview, Revert Working Copy, Save Level Source, separator, Reload Runtime Level, separator, Reset Editor Layout. Debug omits Reload (and Build). Release has no editor.
 
-Status: Phase B implemented, awaiting Phase C. Milestone 39 is **not** complete. Milestone 40 has not started.
+Status: Milestone 39 is complete and merged.
+
+## Cook, Stage & Reload workflow (Milestone 40, Phase B)
+
+Phase B wires the live Development `Build > Cook, Stage & Reload` item. It is cross-boundary orchestration, not a third Cook/Stage implementation and not an `EditorToolKind` for Reload.
+
+**Live menu.** After `Cook & Stage`, before the C++ Build separator. The item emits only `LevelEditorRequest::CookStageAndReload`. Enable: `CanStartCookStageReload(authoring, modified, runner.IsRunning(), workflow.IsPending())`. Other Build jobs are also disabled while the workflow is pending (ReloadPending window after CookAndStage Succeeded). Debug has no Build menu. Release has no editor.
+
+**Owner.** `Application` owns `CookStageReloadWorkflow` beside the existing `EditorToolRunner`. `DrawEditorMenuBar` does not poll jobs or call reload.
+
+**Bridge.** One `EditorToolRunner::Poll` per frame in `Application::Run` (independent of F2), then `Observe`. On structured `Succeeded` + `CookAndStage`, the workflow arms `ReloadPending`. After the frame is presented, `TakeReloadRequest` fires **exactly one** `ReloadRuntimeLevelFromStaged`. No busy-wait. Shutdown: `Cancel()` then `EditorToolRunner::Shutdown()`.
+
+**Enable.** Dirty does not block. No automatic Apply or Save. Manual `Level > Reload Runtime Level` stays disabled while pending.
+
+**Status.** Tool Output keeps Cook & Stage 1/2–2/2. Level `lastMessage`: running / failed before Reload / Cook & Stage succeeded but Reload failed + M39 reason / completed. Starting the workflow clears stale Apply/Save/Reload status enums.
+
+Status: Phase B implemented, awaiting Phase C. Milestone 40 is **not** complete. Milestone 41 has not started.
