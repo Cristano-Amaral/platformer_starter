@@ -2,6 +2,7 @@
 
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorMath.h"
+#include "editor/EditorWorkspace.h"
 #include "world/RespawnWorld.h"
 
 #include <cmath>
@@ -144,6 +145,18 @@ Ray3 ScreenToWorldRay(
         forward + Scale(right, ndcX * tanHalf * aspect) + Scale(up, ndcY * tanHalf),
         forward);
     return ray;
+}
+
+Ray3 ScreenToWorldRayFromWindow(
+    const render::CameraView& view,
+    float windowMouseX,
+    float windowMouseY,
+    const EditorContentViewport& viewport)
+{
+    float localX = 0.0f;
+    float localY = 0.0f;
+    MapWindowMouseToContent(windowMouseX, windowMouseY, viewport, localX, localY);
+    return ScreenToWorldRay(view, localX, localY, viewport.width, viewport.height);
 }
 
 EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& appliedLevel)

@@ -1,8 +1,9 @@
 #pragma once
 
-// Milestone 36: one authoritative editor-workspace visibility and
-// action-enable policy. showToolOutput owns the Development Tool Output
-// window. Debug keeps the M36 editor without Build.
+// Milestone 36 workspace visibility plus Milestone 43 Quick Toolbar chrome.
+// showToolOutput owns the Development Tool Output window. showQuickToolbar is
+// Development authoring chrome, not a floating panel. Debug keeps the M36
+// editor without Build and without the Quick Toolbar.
 
 #include "editor/EditorGizmo.h"
 
@@ -16,21 +17,74 @@ struct EditorWorkspaceState
     bool showLevelEditor = true;
     bool showToolOutput = true;
     bool showObjectPalette = true;
+    bool showQuickToolbar = true;
 };
 
 inline constexpr float kEditorMainMenuBarNominalHeight = 24.0f;
+inline constexpr float kEditorQuickToolbarNominalHeight = 28.0f;
 inline constexpr float kOrientationWidgetMenuBarGap = 8.0f;
+
+// Shared editor content/viewport geometry. Window origin is top-left.
+// When F2 is on, 3D content starts below the menu bar and, if visible,
+// the Quick Toolbar. This is not a docking framework.
+struct EditorContentViewport
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+};
 
 void ResetEditorWorkspaceVisibility(EditorWorkspaceState& workspace);
 void ToggleEditorWorkspaceMetrics(EditorWorkspaceState& workspace);
 bool AllEditorPanelsVisible(const EditorWorkspaceState& workspace);
+
+float ResolveEditorMenuBarHeight(float lastMenuBarHeight);
+float ResolveEditorToolbarHeight(float lastToolbarHeight);
+
+// Menu bar plus optional toolbar. 0 when the editor is inactive.
+float LiveEditorChromeHeight(
+    bool editorActive,
+    float lastMenuBarHeight,
+    float lastToolbarHeight,
+    bool toolbarVisible);
+
+EditorContentViewport MakeEditorContentViewport(
+    float windowWidth,
+    float windowHeight,
+    float chromeTopHeight);
+
+void MapWindowMouseToContent(
+    float windowMouseX,
+    float windowMouseY,
+    const EditorContentViewport& viewport,
+    float& localX,
+    float& localY);
+
+bool PointInEditorContentViewport(
+    float windowX,
+    float windowY,
+    const EditorContentViewport& viewport);
+
+// True when ImGui wants the pointer or the cursor is outside the 3D content.
+// Uses the caller's current-frame capture flag; do not pass a previous frame.
+bool EditorViewportPointerBlocked(
+    float windowMouseX,
+    float windowMouseY,
+    const EditorContentViewport& viewport,
+    bool imguiWantsMouse);
 
 // Extra top inset for MakeOrientationWidgetLayout when a main menu bar is live.
 float OrientationWidgetMenuBarTopInset(float menuBarHeight);
 
 // Live Application path: 0 when F2 is off. When F2 is on, uses last frame's
 // menu-bar height, or kEditorMainMenuBarNominalHeight before the first bar.
-float OrientationWidgetLiveExtraTopInset(bool editorActive, float lastMenuBarHeight);
+// Toolbar height is added only while the Quick Toolbar is visible.
+float OrientationWidgetLiveExtraTopInset(
+    bool editorActive,
+    float lastMenuBarHeight,
+    float lastToolbarHeight = 0.0f,
+    bool toolbarVisible = false);
 
 // workingCopyValid is in-memory LevelDefinition validity (finite values, size,
 // FOV) — not source-authoring availability. Debug may Apply and must not Save.

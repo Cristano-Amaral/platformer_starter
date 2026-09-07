@@ -116,6 +116,14 @@ int main()
             NearlyEqual(withMenu.originY, layout.originY + 32.0f),
             "menu-bar inset lowers widget without changing X");
         Expect(NearlyEqual(withMenu.originX, layout.originX), "menu-bar inset keeps right placement");
+        const editor::OrientationWidgetLayout withToolbar =
+            editor::MakeOrientationWidgetLayout(1280.0f, 720.0f, 32.0f + 28.0f);
+        Expect(
+            NearlyEqual(withToolbar.originY, withMenu.originY + 28.0f),
+            "toolbar-visible inset lowers widget by toolbar height");
+        Expect(
+            NearlyEqual(withToolbar.originX, withMenu.originX),
+            "toolbar-visible inset keeps right placement");
         const editor::OrientationWidgetAxes axes = editor::ProjectOrientationWidgetAxes(camera);
         const float xTipX = layout.originX + axes.x.x * layout.radius;
         const float xTipY = layout.originY - axes.x.y * layout.radius;

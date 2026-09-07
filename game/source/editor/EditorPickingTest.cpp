@@ -4,6 +4,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorWorkspace.h"
 #include "gameplay/CollectibleRunState.h"
 #include "world/LevelDefinition.h"
 
@@ -302,6 +303,18 @@ int main()
         const editor::Ray3 right = editor::ScreenToWorldRay(view, 100.0f, 50.0f, 100.0f, 100.0f);
         Expect(right.direction.x > 0.1f, "right-edge pixel has +X");
         Expect(right.direction.z < 0.0f, "right-edge pixel still looks forward");
+
+        const editor::EditorContentViewport menuOnly =
+            editor::MakeEditorContentViewport(100.0f, 100.0f, 20.0f);
+        const editor::EditorContentViewport withToolbar =
+            editor::MakeEditorContentViewport(100.0f, 100.0f, 40.0f);
+        const editor::Ray3 menuCenter = editor::ScreenToWorldRayFromWindow(
+            view, 50.0f, menuOnly.y + menuOnly.height * 0.5f, menuOnly);
+        const editor::Ray3 toolbarCenter = editor::ScreenToWorldRayFromWindow(
+            view, 50.0f, withToolbar.y + withToolbar.height * 0.5f, withToolbar);
+        Expect(
+            Vec3Near(menuCenter.direction, toolbarCenter.direction, 0.01f),
+            "toolbar-visible and hidden content-center picks share the look ray");
     }
 
     // ---- editor camera does not touch authored framing ----

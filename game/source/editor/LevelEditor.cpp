@@ -563,8 +563,8 @@ LevelEditorRequest DrawLevelControls(
         }
         ImGui::TextWrapped(
             "Reset Editor Layout restores Metrics, Hierarchy, Inspector, Level Editor, "
-            "Object Palette, and Tool Output positions and shows those panels. "
-            "It does not change the level, selection, or camera.");
+            "Object Palette, Tool Output, and Quick Toolbar visibility and window positions. "
+            "It does not change the level, selection, camera, or last build configuration.");
     }
 
     if (ImGui::CollapsingHeader("Information", ImGuiTreeNodeFlags_DefaultOpen))
@@ -646,6 +646,7 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::MenuItem("Level Editor", nullptr, &state.workspace.showLevelEditor);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         ImGui::MenuItem("Object Palette", nullptr, &state.workspace.showObjectPalette);
+        ImGui::MenuItem("Quick Toolbar", nullptr, &state.workspace.showQuickToolbar);
 #endif
 #if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
         ImGui::MenuItem("Tool Output", nullptr, &state.workspace.showToolOutput);
@@ -887,6 +888,177 @@ LevelEditorRequest DrawEditorMenuBar(
     return request;
 }
 
+namespace
+{
+void DrawQuickToolbarTransformButton(
+    LevelEditorState& state,
+    const char* label,
+    const char* tooltip,
+    EditorTransformMode mode)
+{
+    const bool active = state.transformMode == mode;
+    if (active)
+    {
+        const ImVec4 pressed = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+        ImGui::PushStyleColor(ImGuiCol_Button, pressed);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, pressed);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, pressed);
+    }
+    ImGui::BeginDisabled(state.gizmo.dragging);
+    if (ImGui::Button(label))
+    {
+        TrySetEditorTransformMode(state.transformMode, state.gizmo.dragging, mode);
+    }
+    ImGui::EndDisabled();
+    if (active)
+    {
+        ImGui::PopStyleColor(3);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip("%s", tooltip);
+    }
+}
+
+void DrawQuickToolbarCommandButton(
+    const char* label,
+    const char* tooltip,
+    bool enabled,
+    LevelEditorRequest command,
+    LevelEditorRequest& request)
+{
+    ImGui::BeginDisabled(!enabled);
+    if (ImGui::Button(label))
+    {
+        request = command;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip("%s", tooltip);
+    }
+}
+}
+
+LevelEditorRequest DrawEditorQuickToolbar(
+    LevelEditorState& state,
+    const world::LevelDefinition&,
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending)
+{
+    LevelEditorRequest request = LevelEditorRequest::None;
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    (void)toolRunner;
+    (void)cookStageReloadPending;
+    state.toolbarHeight = 0.0f;
+    return request;
+#else
+    if (!state.workspace.showQuickToolbar)
+    {
+        state.toolbarHeight = 0.0f;
+        return request;
+    }
+
+    const float menuHeight = ResolveEditorMenuBarHeight(state.menuBarHeight);
+    const ImGuiIO& io = ImGui::GetIO();
+    const float toolbarH =
+        ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().WindowPadding.y * 2.0f;
+    ImGui::SetNextWindowPos(ImVec2(0.0f, menuHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, toolbarH), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    const ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+        | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoNavFocus;
+    if (!ImGui::Begin("##EditorQuickToolbar", nullptr, flags))
+    {
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+        state.toolbarHeight = 0.0f;
+        return request;
+    }
+
+    DrawQuickToolbarTransformButton(
+        state, "Translate", "Translate", EditorTransformMode::Translate);
+    ImGui::SameLine();
+    DrawQuickToolbarTransformButton(state, "Resize", "Resize", EditorTransformMode::Resize);
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+
+    const bool workingCopyValid = world::IsWritableLevelDefinition(state.workingCopy);
+    DrawQuickToolbarCommandButton(
+        "Apply",
+        "Apply Preview",
+        CanApplyPreview(state.modified, workingCopyValid),
+        QuickToolbarApplyPreviewRequest(),
+        request);
+    ImGui::SameLine();
+    DrawQuickToolbarCommandButton(
+        "Revert",
+        "Revert Working Copy",
+        CanRevertWorkingCopy(state.modified),
+        QuickToolbarRevertWorkingCopyRequest(),
+        request);
+    ImGui::SameLine();
+    DrawQuickToolbarCommandButton(
+        "Save",
+        "Save Level Source",
+        CanSaveLevelSource(IsLevelAuthoringAvailable(), state.modified),
+        QuickToolbarSaveLevelSourceRequest(),
+        request);
+
+#if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Build:");
+    ImGui::SameLine();
+    const char* buildItems[] = {"Debug", "Development", "Release", "All"};
+    int buildIndex = static_cast<int>(state.selectedBuildTarget);
+    if (buildIndex < 0 || buildIndex > 3)
+    {
+        buildIndex = static_cast<int>(kDefaultEditorBuildTarget);
+        state.selectedBuildTarget = kDefaultEditorBuildTarget;
+    }
+    ImGui::SetNextItemWidth(132.0f);
+    if (ImGui::Combo("##QuickToolbarBuild", &buildIndex, buildItems, 4))
+    {
+        state.selectedBuildTarget = static_cast<EditorBuildTarget>(buildIndex);
+        SaveEditorBuildSelection(state.selectedBuildTarget);
+    }
+
+    ImGui::SameLine();
+    const bool toolsBusy = toolRunner.IsRunning() || cookStageReloadPending;
+    ImGui::BeginDisabled(toolsBusy || !CanStartEditorToolJob(
+                                          IsEditorToolExecutionAvailable(), toolRunner.IsRunning()));
+    if (ImGui::Button("Run"))
+    {
+        RequestEditorToolStart(
+            toolRunner,
+            state.workspace,
+            EditorToolKindForBuildTarget(state.selectedBuildTarget));
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip("Run selected build");
+    }
+#else
+    (void)toolRunner;
+    (void)cookStageReloadPending;
+#endif
+
+    state.toolbarHeight = ImGui::GetWindowSize().y;
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    return request;
+#endif
+}
+
 void DrawEditorToolOutput(
     LevelEditorState& state,
     const LevelEditorViewContext& view,
@@ -1007,6 +1179,16 @@ LevelEditorRequest DrawEditorMenuBar(
     EditorToolRunner&,
     bool)
 {
+    return LevelEditorRequest::None;
+}
+
+LevelEditorRequest DrawEditorQuickToolbar(
+    LevelEditorState& state,
+    const world::LevelDefinition&,
+    EditorToolRunner&,
+    bool)
+{
+    state.toolbarHeight = 0.0f;
     return LevelEditorRequest::None;
 }
 

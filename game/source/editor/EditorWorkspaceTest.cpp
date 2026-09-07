@@ -29,7 +29,8 @@ int main()
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(!workspace.showMetrics, "Metrics toggle hides Metrics");
         Expect(workspace.showHierarchy && workspace.showInspector && workspace.showLevelEditor
-                && workspace.showToolOutput && workspace.showObjectPalette,
+                && workspace.showToolOutput && workspace.showObjectPalette
+                && workspace.showQuickToolbar,
             "Metrics toggle leaves other panels");
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(workspace.showMetrics, "Metrics toggle restores Metrics");
@@ -43,6 +44,7 @@ int main()
         workspace.showLevelEditor = false;
         workspace.showToolOutput = false;
         workspace.showObjectPalette = false;
+        workspace.showQuickToolbar = false;
         const EditorTransformMode mode = EditorTransformMode::Resize;
         editor::ResetEditorWorkspaceVisibility(workspace);
         Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all default panels visible");
@@ -146,6 +148,23 @@ int main()
         Expect(
             editor::OrientationWidgetLiveExtraTopInset(true, 19.0f) == 27.0f,
             "F2 on: live inset uses last menu-bar height plus gap");
+        Expect(
+            editor::OrientationWidgetLiveExtraTopInset(true, 24.0f, 28.0f, false) == 32.0f,
+            "hidden toolbar: inset stays menu-only");
+        Expect(
+            editor::OrientationWidgetLiveExtraTopInset(true, 24.0f, 28.0f, true) == 60.0f,
+            "visible toolbar: inset adds toolbar height plus gap");
+    }
+
+    {
+        const editor::EditorContentViewport menuOnly =
+            editor::MakeEditorContentViewport(1280.0f, 720.0f, 24.0f);
+        Expect(menuOnly.y == 24.0f, "menu-only content Y");
+        Expect(menuOnly.height == 696.0f, "menu-only content height");
+        const editor::EditorContentViewport withToolbar =
+            editor::MakeEditorContentViewport(1280.0f, 720.0f, 52.0f);
+        Expect(withToolbar.y == 52.0f, "menu+toolbar content Y");
+        Expect(withToolbar.height == 668.0f, "menu+toolbar content height");
     }
 
     if (gFailures != 0)

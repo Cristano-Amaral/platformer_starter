@@ -76,9 +76,9 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 42 — Object Palette & Placement Workflow
-(Development Object Palette + viewport placement; awaiting manual acceptance).
-Milestone 41 is complete and merged. Milestone 43 has not started.
+Milestone 43 — Editor Quick Toolbar
+(Development Quick Toolbar below the menu bar; awaiting manual acceptance).
+Milestone 42 is complete and merged. Milestone 44 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -109,17 +109,24 @@ Visible pending workingCopy objects are viewport-pickable. Platform Add follows
 the Jolt leftover body budget (58). Checkpoint/Hazard/Collectible share the v1
 256-line / 64 KiB parser guard. Edit > Add uses camera-region X/Y and spawn.z
 lane. Duplicate is +1 X and does not snap to the lane.
-M42 adds a Development-only Object Palette and explicit viewport placement
-mode for those four categories. Palette entries are tool toggles: the same
-category again, or Esc, exits placement. Active category is highlighted with
+M42 is complete: Development-only Object Palette and explicit viewport
+placement mode for those four categories. Palette entries are tool toggles:
+the same category again, or Esc, exits placement. Active category is highlighted with
 status text. Placement mode itself does not mutate workingCopy. Confirm reuses
 M41 Add at the resolved world center. Repeated clicks stay in the same mode.
 Gizmo/widget/ImGui/RMB gestures consume the pointer for the whole LMB hold so
 they never confirm placement. Surface-hit previews stay bright; camera-fallback
 previews use a quieter wire style. F2 close / successful Apply / Revert /
 successful Reload cancel placement. Debug has no Object Palette. Release has
-no editor. Do not add automatic cook/build/stage/reload chains, file watching,
-general hot reload, docking, a tool framework, or Milestone 43.
+no editor.
+M43 adds a Development-only Quick Toolbar fixed below the menu bar:
+Translate/Resize (canonical TransformMode), Apply/Revert/Save (canonical
+LevelEditorRequest), and a persisted build selector (Debug/Development/Release/All,
+default Development) that Run maps through EditorToolRunner. View > Quick Toolbar
+shares workspace visibility. Reset Editor Layout restores toolbar visibility and
+does not reset the last build selection. The 3D viewport starts below menu+toolbar
+when the toolbar is visible. Do not add Undo/Redo, Cook/Stage/Reload toolbar
+buttons, a command registry, docking, a tool framework, or Milestone 44.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -139,4 +146,5 @@ It does not Save, Cook, Stage, or restart. M40 Development
 in-process M39 reload. M41 lifecycle edits mutate `workingCopy` only and
 still require Apply Preview, then Save, then Cook, Stage & Reload.
 M42 placement still requires that same Apply / Save / Cook, Stage & Reload
-path. Awaiting manual acceptance.
+path. M43 placement and picking use the content viewport below the Quick Toolbar.
+Awaiting manual acceptance.

@@ -14,6 +14,7 @@
 
 #include "core/Vec3.h"
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/EditorBuildPreference.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSelection.h"
@@ -73,6 +74,22 @@ enum class LevelEditorRequest
     DeleteSelected,
 };
 
+// Toolbar Level actions are the canonical request enum — not a second command.
+inline LevelEditorRequest QuickToolbarApplyPreviewRequest()
+{
+    return LevelEditorRequest::ApplyPreview;
+}
+
+inline LevelEditorRequest QuickToolbarRevertWorkingCopyRequest()
+{
+    return LevelEditorRequest::RevertWorkingCopy;
+}
+
+inline LevelEditorRequest QuickToolbarSaveLevelSourceRequest()
+{
+    return LevelEditorRequest::SaveLevelSource;
+}
+
 const char* LevelEditorApplyStatusName(LevelEditorApplyStatus status);
 const char* LevelEditorSaveStatusName(LevelEditorSaveStatus status);
 const char* LevelEditorReloadStatusName(LevelEditorReloadStatus status);
@@ -111,8 +128,12 @@ struct LevelEditorState
     // Prevents gizmo drag-release from confirming placement.
     bool placementPointerBlocked = false;
     // Last BeginMainMenuBar frame height. 0 until the first F2 menu frame.
-    // Used only for orientation-widget top inset; not authored or persisted.
+    // Used with toolbarHeight for shared content-viewport chrome.
     float menuBarHeight = 0.0f;
+    // Last Quick Toolbar window height. 0 when hidden or before the first draw.
+    float toolbarHeight = 0.0f;
+    // Editor preference. Not Level Format. Reset Editor Layout does not clear it.
+    EditorBuildTarget selectedBuildTarget = kDefaultEditorBuildTarget;
     // Set by Reset Editor Layout; DebugUi consumes it over the following
     // frames so Metrics (drawn before the button) also snaps to defaults.
     int forceDefaultLayoutFrames = 0;
@@ -174,6 +195,14 @@ LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
     const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending);
+
+// Development-only fixed Quick Toolbar directly below the menu bar.
+// Alternate UI for existing Transform / Level / Build commands.
+LevelEditorRequest DrawEditorQuickToolbar(
+    LevelEditorState& state,
+    const world::LevelDefinition& activeLevel,
     EditorToolRunner& toolRunner,
     bool cookStageReloadPending);
 

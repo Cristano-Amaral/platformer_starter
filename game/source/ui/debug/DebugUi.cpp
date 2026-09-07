@@ -43,6 +43,12 @@ editor::LevelEditorRequest DebugUi::Draw(
         editor::RefreshLevelEditorDerivedFlags(levelEditorState, level);
         menuRequest = editor::DrawEditorMenuBar(
             levelEditorState, level, view, toolRunner, cookStageReloadPending);
+        const editor::LevelEditorRequest toolbarRequest = editor::DrawEditorQuickToolbar(
+            levelEditorState, level, toolRunner, cookStageReloadPending);
+        if (menuRequest == editor::LevelEditorRequest::None)
+        {
+            menuRequest = toolbarRequest;
+        }
         view.forceDefaultLayout = levelEditorState.forceDefaultLayoutFrames > 0;
     }
 

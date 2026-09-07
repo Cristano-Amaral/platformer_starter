@@ -444,11 +444,11 @@ Status: Milestone 35 is complete and merged.
 
 ## Editor menu bar and workspace (Milestone 36, Phase B)
 
-Phase B wires the approved Phase A workspace into the live Debug/Development editor. F2 shows `ImGui::BeginMainMenuBar()` after `rlImGuiBegin`, before Metrics/Hierarchy/Inspector/Level Editor. The bar overlays the raylib framebuffer; it does not shrink the 3D viewport, change camera projection, or offset `ScreenToWorldRay` / mouse Y.
+Phase B wires the approved Phase A workspace into the live Debug/Development editor. F2 shows `ImGui::BeginMainMenuBar()` after `rlImGuiBegin`, before Metrics/Hierarchy/Inspector/Level Editor. M36 originally overlaid the bar on the raylib framebuffer. Milestone 43 owns shared content-viewport chrome: while F2 is on, 3D rendering, rays, and picking use the region below the menu bar (and below the Quick Toolbar when it is visible).
 
-**View.** Checkable items bind `workspace.showMetrics`, `showHierarchy`, `showInspector`, `showLevelEditor`. Development also binds `showObjectPalette`. F1, View > Metrics, and the Metrics close button share `showMetrics`. Hierarchy/Inspector/Level Editor/Object Palette follow F2; Metrics does not. Closing a panel sets only its visibility bool (selection, workingCopy, transformMode, and pending edits remain). Hidden panels reopen from View. F2 off/on preserves session visibility and transform mode. Closing Object Palette does not cancel placement mode.
+**View.** Checkable items bind `workspace.showMetrics`, `showHierarchy`, `showInspector`, `showLevelEditor`. Development also binds `showObjectPalette` and `showQuickToolbar`. F1, View > Metrics, and the Metrics close button share `showMetrics`. Hierarchy/Inspector/Level Editor/Object Palette follow F2; Metrics does not. Closing a panel sets only its visibility bool (selection, workingCopy, transformMode, and pending edits remain). Hidden panels reopen from View. F2 off/on preserves session visibility and transform mode. Closing Object Palette does not cancel placement mode.
 
-**Transform / Level.** Translate and Resize call `TrySetEditorTransformMode` on the same `transformMode` as the Level Editor radios (disabled while `gizmo.dragging`). Apply Preview / Revert Working Copy / Save Level Source emit the existing `LevelEditorRequest` values; Application still executes them after the UI frame. Enable policy is `CanApplyPreview` / `CanRevertWorkingCopy` / `CanSaveLevelSource`. `CanApplyPreview` uses in-memory working-copy validity (`IsWritableLevelDefinition`), not source authoring — Debug can Apply and cannot Save. Reset Editor Layout is `ResetEditorWorkspaceLayout` (menu and panel share it): default poses plus all four visibility bools true. It does not Apply/Revert/Save or touch authored/camera/selection/mode flags.
+**Transform / Level.** Translate and Resize call `TrySetEditorTransformMode` on the same `transformMode` as the Level Editor radios (disabled while `gizmo.dragging`). Apply Preview / Revert Working Copy / Save Level Source emit the existing `LevelEditorRequest` values; Application still executes them after the UI frame. Enable policy is `CanApplyPreview` / `CanRevertWorkingCopy` / `CanSaveLevelSource`. `CanApplyPreview` uses in-memory working-copy validity (`IsWritableLevelDefinition`), not source authoring — Debug can Apply and cannot Save. Reset Editor Layout is `ResetEditorWorkspaceLayout` (menu and panel share it): default poses plus default visibility (including Object Palette and Quick Toolbar). It does not Apply/Revert/Save, does not reset the last build configuration, and does not touch authored/camera/selection/mode flags.
 
 **Orientation widget.** Live `extraTopInset` is `OrientationWidgetLiveExtraTopInset(active, menuBarHeight)` (`GetFrameHeight()` stored from the bar, or 24 px until the first F2 frame, plus 8 px gap). Upper-right placement is otherwise unchanged. Widget math, hit radius, and canonical views are unchanged.
 
@@ -576,7 +576,7 @@ ImGui emits `LevelEditorRequest` only. `HandleAuthoredLifecycleRequest` (Applica
 
 **Delete key.** Development Delete (not Backspace, not Ctrl+D) emits the same `DeleteSelected` request as Edit > Delete Selected, after ImGui `WantCaptureKeyboard` / `WantTextInput`. Disabled cases do nothing: invalid/unsupported selection, gizmo drag, referenced Platform, last remaining Platform. Platforms are deletable when count > 1 and the selected Platform is not referenced by `support_index_cp1` / `support_index_cp2` / `support_index_goal`.
 
-Status: Milestone 41 is complete and merged. Milestone 42 is Object Palette & Placement Workflow.
+Status: Milestone 41 is complete and merged. Milestone 42 is complete and merged.
 
 ## Object Palette and placement (Milestone 42)
 
@@ -592,4 +592,24 @@ Development-only authoring UX on top of M41. No Level Format change, no second l
 
 **Cleanup.** Successful Apply, Revert, and successful Reload clear the candidate and set mode to None. Palette-created pending objects follow M41: Revert drops them with `workingCopy = active`.
 
-Status: Implemented, awaiting manual acceptance. Milestone 43 has not started.
+Status: Milestone 42 is complete and merged. Milestone 43 is Editor Quick Toolbar.
+
+## Editor Quick Toolbar (Milestone 43)
+
+Development-only compact Quick Toolbar fixed immediately below the F2 menu bar. Alternate UI for existing commands. No second command authority, no icon font, no docking framework, no Level Format change.
+
+**Chrome.** `EditorContentViewport` / `LiveEditorChromeHeight` is the shared geometry authority. While F2 is on, menu bar, optional toolbar, and 3D content occupy separate vertical regions. `Renderer::DrawWorld` uses a sub-viewport so the world is not drawn under the chrome. `ScreenToWorldRayFromWindow` maps window mouse into that rectangle. Hidden toolbar returns to menu-only bounds. F2 off is the full window.
+
+**View.** `workspace.showQuickToolbar` (default true). `View > Quick Toolbar` shares that bool. Reset Editor Layout restores visibility on. Not a floating ImGui layout window (`NoSavedSettings`). Debug has no authoring toolbar. Release has no editor.
+
+**Transform.** Translate/Resize call `TrySetEditorTransformMode` on the same `transformMode` as the Transform menu and Level Editor radios. Active button uses `ImGuiCol_ButtonActive`. Resize availability remains `IsResizeSelection` (mode can still be selected; handles follow canonical rules).
+
+**Level actions.** Apply / Revert / Save emit `LevelEditorRequest::ApplyPreview` / `RevertWorkingCopy` / `SaveLevelSource` through `QuickToolbar*Request()` helpers. Enable policy is the existing `CanApplyPreview` / `CanRevertWorkingCopy` / `CanSaveLevelSource`.
+
+**Build selector.** `EditorBuildTarget` on `LevelEditorState` (Debug / Development / Release / All). First-run default Development. Persisted as `%LOCALAPPDATA%\Platformer3D\editor_build_selection.txt`, not Level Format and not `editor_layout.ini`. Invalid values fall back to Development. Reset Editor Layout does **not** reset the last selection. Run maps through `EditorToolKindForBuildTarget` into `RequestEditorToolStart` / `EditorToolRunner`. Combo stays editable while a job runs (affects the next Run only). Run is disabled while the runner is busy or Cook, Stage & Reload is pending. Tool Output behavior is unchanged.
+
+**Input.** Toolbar is ImGui; Application uses this-frame `WantCaptureMouse` plus `EditorViewportPointerBlocked` so chrome clicks cannot pick, place, drag a gizmo, or move the camera.
+
+**Orientation / M42.** Widget `extraTopInset` includes toolbar height when visible. Placement rays use the same content viewport. Object Palette is not merged into the toolbar.
+
+Status: Implemented, awaiting manual acceptance. Milestone 44 has not started.

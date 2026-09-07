@@ -68,6 +68,8 @@ add_executable(Platformer3D
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPlacement.cpp
     game/source/editor/EditorPlacement.h
+    game/source/editor/EditorBuildPreference.cpp
+    game/source/editor/EditorBuildPreference.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorToolCommands.cpp
@@ -315,6 +317,8 @@ add_executable(EditorPickingTest
     game/source/editor/EditorPickingTest.cpp
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
     game/source/render/CameraView.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
@@ -461,6 +465,55 @@ else()
     target_compile_options(EditorPlacementTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 43: Quick Toolbar mapping, chrome geometry, and build preference.
+# No window, raylib, or ImGui.
+add_executable(EditorQuickToolbarTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorBuildPreference.cpp
+    game/source/editor/EditorBuildPreference.h
+    game/source/editor/EditorCamera.cpp
+    game/source/editor/EditorCamera.h
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorOrientation.cpp
+    game/source/editor/EditorOrientation.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorPlacement.cpp
+    game/source/editor/EditorPlacement.h
+    game/source/editor/EditorQuickToolbarTest.cpp
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorToolCommands.cpp
+    game/source/editor/EditorToolCommands.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/LevelEditor.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/CameraView.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+if(WIN32)
+    target_sources(EditorQuickToolbarTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(EditorQuickToolbarTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(EditorQuickToolbarTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorQuickToolbarTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorQuickToolbarTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(EditorQuickToolbarTest PRIVATE ole32 shell32 uuid)
+endif()
+
 # Milestone 41 Phase B: owner-side lifecycle requests without ImGui.
 add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/AuthoredLifecycleCommands.cpp
@@ -479,6 +532,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorSelection.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
 )

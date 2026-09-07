@@ -81,6 +81,14 @@ Ray3 ScreenToWorldRay(
     float viewportWidth,
     float viewportHeight);
 
+struct EditorContentViewport;
+
+Ray3 ScreenToWorldRayFromWindow(
+    const render::CameraView& view,
+    float windowMouseX,
+    float windowMouseY,
+    const EditorContentViewport& viewport);
+
 EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& appliedLevel);
 
 // Viewport proxies for the currently applied/rendered level, plus runtime

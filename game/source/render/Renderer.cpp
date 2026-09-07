@@ -13,10 +13,12 @@
 #include "world/Slope.h"
 
 #include "raylib.h"
+#include "raymath.h"
 #include "rlgl.h"
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -323,6 +325,58 @@ Camera3D MakeCamera(const CameraView& view)
     camera.fovy = view.fieldOfViewY;
     camera.projection = CAMERA_PERSPECTIVE;
     return camera;
+}
+
+void BeginMode3DInRect(const Camera3D& camera, const WorldViewRect& rect)
+{
+    const int screenW = GetScreenWidth();
+    const int screenH = GetScreenHeight();
+    int width = rect.width;
+    int height = rect.height;
+    if (width < 1)
+    {
+        width = 1;
+    }
+    if (height < 1)
+    {
+        height = 1;
+    }
+    int x = rect.x;
+    int y = rect.y;
+    if (x < 0)
+    {
+        x = 0;
+    }
+    if (y < 0)
+    {
+        y = 0;
+    }
+
+    rlDrawRenderBatchActive();
+    rlViewport(x, screenH - (y + height), width, height);
+
+    rlMatrixMode(RL_PROJECTION);
+    rlPushMatrix();
+    rlLoadIdentity();
+
+    const double aspect = static_cast<double>(width) / static_cast<double>(height);
+    const double top = RL_CULL_DISTANCE_NEAR * std::tan(static_cast<double>(camera.fovy) * 0.5 * DEG2RAD);
+    const double right = top * aspect;
+    rlFrustum(-right, right, -top, top, RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+
+    rlMatrixMode(RL_MODELVIEW);
+    rlLoadIdentity();
+    const Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
+    rlMultMatrixf(MatrixToFloat(matView));
+    rlEnableDepthTest();
+
+    (void)screenW;
+}
+
+void EndMode3DRestoreViewport()
+{
+    EndMode3D();
+    rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
 }
 
 void DrawOrientedWires(core::Vec3 center, core::Vec3 size, float rotationZDegrees, Color color)
@@ -1257,10 +1311,19 @@ void Renderer::DrawWorld(
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
-        const DebugWorldOverlay& overlay)
+        const DebugWorldOverlay& overlay,
+        WorldViewRect viewRect)
 {
     const Camera3D view = MakeCamera(cameraView);
-    BeginMode3D(view);
+    const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
+    if (subViewport)
+    {
+        BeginMode3DInRect(view, viewRect);
+    }
+    else
+    {
+        BeginMode3D(view);
+    }
 
     DrawGrid(kGridSlices, kGridSpacing);
     DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
@@ -1379,7 +1442,14 @@ void Renderer::DrawWorld(
     // depth-independent gizmo. ImGui is after EndMode3D.
     DrawWorldOverlay(overlay);
 
-    EndMode3D();
+    if (subViewport)
+    {
+        EndMode3DRestoreViewport();
+    }
+    else
+    {
+        EndMode3D();
+    }
 
     DrawRunTimer(elapsedSeconds);
     DrawSessionBest(hasBestTime, bestSeconds);

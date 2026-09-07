@@ -4,6 +4,7 @@
 #include "editor/EditorPicking.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
+#include "render/CameraView.h"
 
 #include <cmath>
 #include <cstdio>
@@ -452,6 +453,31 @@ int main()
         Expect(mode == PlacementMode::Hazard, "palette switch only changes mode");
         Expect(working.collectibles.size() == before, "palette switch creates no object");
         Expect(working.hazards.size() == MakeActiveLevel().hazards.size(), "palette switch adds no Hazard");
+    }
+
+    {
+        render::CameraView view{};
+        view.position = {0.0f, 4.0f, 12.0f};
+        view.target = {0.0f, 4.0f, 11.0f};
+        view.up = {0.0f, 1.0f, 0.0f};
+        view.fieldOfViewY = 40.0f;
+        const editor::EditorContentViewport hidden = editor::MakeEditorContentViewport(
+            1280.0f, 720.0f, editor::LiveEditorChromeHeight(true, 24.0f, 28.0f, false));
+        const editor::EditorContentViewport shown = editor::MakeEditorContentViewport(
+            1280.0f, 720.0f, editor::LiveEditorChromeHeight(true, 24.0f, 28.0f, true));
+        const editor::Ray3 hiddenRay = editor::ScreenToWorldRayFromWindow(
+            view, 640.0f, hidden.y + hidden.height * 0.5f, hidden);
+        const editor::Ray3 shownRay = editor::ScreenToWorldRayFromWindow(
+            view, 640.0f, shown.y + shown.height * 0.5f, shown);
+        Expect(Vec3Near(hiddenRay.direction, shownRay.direction),
+            "M42 placement center ray matches with toolbar visible or hidden");
+        Expect(
+            editor::EditorViewportPointerBlocked(100.0f, 30.0f, shown, false),
+            "toolbar click is not a placement confirm region");
+        Expect(
+            !editor::ShouldConfirmPlacement(
+                PlacementMode::Collectible, true, true, false, false, false, false, true),
+            "toolbar ImGui capture does not place");
     }
 
     if (gFailures != 0)

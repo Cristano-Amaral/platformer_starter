@@ -227,6 +227,47 @@ void CopyBounded(char* destination, std::size_t destinationSize, std::string_vie
     }
     destination[length] = '\0';
 }
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+bool EditorQuickToolbarVisible(const editor::LevelEditorState& state)
+{
+    return state.active && state.workspace.showQuickToolbar
+        && editor::IsLevelAuthoringAvailable();
+}
+
+editor::EditorContentViewport MakeLiveEditorContentViewport(
+    float windowWidth,
+    float windowHeight,
+    const editor::LevelEditorState& state)
+{
+    return editor::MakeEditorContentViewport(
+        windowWidth,
+        windowHeight,
+        editor::LiveEditorChromeHeight(
+            state.active,
+            state.menuBarHeight,
+            state.toolbarHeight,
+            EditorQuickToolbarVisible(state)));
+}
+
+render::WorldViewRect MakeWorldViewRect(const editor::EditorContentViewport& viewport)
+{
+    render::WorldViewRect rect{};
+    rect.x = static_cast<int>(viewport.x);
+    rect.y = static_cast<int>(viewport.y);
+    rect.width = static_cast<int>(viewport.width);
+    rect.height = static_cast<int>(viewport.height);
+    if (rect.width < 1)
+    {
+        rect.width = 1;
+    }
+    if (rect.height < 1)
+    {
+        rect.height = 1;
+    }
+    return rect;
+}
+#endif
 }
 
 #if defined(GAME_DEVELOPMENT_TOOLS)
@@ -682,16 +723,25 @@ int Application::Run()
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         render::CameraView cameraView = MakeGameplayCameraView(camera);
         render::DebugWorldOverlay overlay{};
+        render::WorldViewRect worldViewRect{};
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         editor::EditorInputState editorInput{};
+        editor::EditorContentViewport editorViewport{};
         if (levelEditorState.active)
         {
             editorInput = editor::PollEditorInput();
             window.SetEscapeClosesWindow(
                 !editor::IsLevelAuthoringAvailable()
                 || !editor::PlacementModeIsActive(levelEditorState.placementMode));
+            editorViewport = MakeLiveEditorContentViewport(
+                static_cast<float>(window.Width()),
+                static_cast<float>(window.Height()),
+                levelEditorState);
+            worldViewRect = MakeWorldViewRect(editorViewport);
             const bool applyLook =
-                !debugUi.WantsMouseCapture() && !levelEditorState.gizmo.dragging;
+                !debugUi.WantsMouseCapture() && !levelEditorState.gizmo.dragging
+                && editor::PointInEditorContentViewport(
+                    editorInput.mouseX, editorInput.mouseY, editorViewport);
             editor::UpdateEditorCamera(
                 levelEditorState.editorCamera,
                 editorInput,
@@ -780,12 +830,11 @@ int Application::Run()
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
             if (editor::PlacementModeIsActive(levelEditorState.placementMode))
             {
-                const editor::Ray3 previewRay = editor::ScreenToWorldRay(
+                const editor::Ray3 previewRay = editor::ScreenToWorldRayFromWindow(
                     cameraView,
                     editorInput.mouseX,
                     editorInput.mouseY,
-                    static_cast<float>(window.Width()),
-                    static_cast<float>(window.Height()));
+                    editorViewport);
                 const editor::PlacementCandidate candidate = editor::ResolvePlacementCandidate(
                     levelEditorState.placementMode,
                     previewRay,
@@ -907,7 +956,8 @@ int Application::Run()
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
-            overlay);
+            overlay,
+            worldViewRect);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
         {
@@ -916,7 +966,10 @@ int Application::Run()
                     static_cast<float>(window.Width()),
                     static_cast<float>(window.Height()),
                     editor::OrientationWidgetLiveExtraTopInset(
-                        levelEditorState.active, levelEditorState.menuBarHeight));
+                        levelEditorState.active,
+                        levelEditorState.menuBarHeight,
+                        levelEditorState.toolbarHeight,
+                        EditorQuickToolbarVisible(levelEditorState)));
             const editor::OrientationWidgetAxes widgetAxes =
                 editor::ProjectOrientationWidgetAxes(levelEditorState.editorCamera);
             renderer.DrawOrientationWidget({
@@ -935,7 +988,10 @@ int Application::Run()
                     editor::PlacementModeName(levelEditorState.placementMode),
                     overlay.placementCandidateFallback,
                     editor::OrientationWidgetLiveExtraTopInset(
-                        levelEditorState.active, levelEditorState.menuBarHeight));
+                        levelEditorState.active,
+                        levelEditorState.menuBarHeight,
+                        levelEditorState.toolbarHeight,
+                        EditorQuickToolbarVisible(levelEditorState)));
             }
         }
         const editor::LevelEditorViewContext levelEditorView{
@@ -995,7 +1051,16 @@ int Application::Run()
             // Keyboard move, wheel and world pick use this frame's ImGui capture
             // so typing into Inspector and clicking/scrolling panels cannot
             // drive the viewport behind them.
-            const bool mouseCaptured = debugUi.WantsMouseCapture();
+            const bool imguiWantsMouse = debugUi.WantsMouseCapture();
+            editorViewport = MakeLiveEditorContentViewport(
+                static_cast<float>(window.Width()),
+                static_cast<float>(window.Height()),
+                levelEditorState);
+            const bool mouseCaptured = editor::EditorViewportPointerBlocked(
+                editorInput.mouseX,
+                editorInput.mouseY,
+                editorViewport,
+                imguiWantsMouse);
             const bool keyboardCaptured =
                 debugUi.WantsKeyboardCapture() || debugUi.WantsTextInput();
             const bool dragging = levelEditorState.gizmo.dragging;
@@ -1017,12 +1082,11 @@ int Application::Run()
                     levelEditorState.editorCamera, editorInput.dollyWheelDelta);
             }
 
-            const editor::Ray3 ray = editor::ScreenToWorldRay(
+            const editor::Ray3 ray = editor::ScreenToWorldRayFromWindow(
                 cameraView,
                 editorInput.mouseX,
                 editorInput.mouseY,
-                static_cast<float>(window.Width()),
-                static_cast<float>(window.Height()));
+                editorViewport);
 
             bool widgetConsumedPointer = false;
             if (!mouseCaptured && !dragging && editorInput.selectPressed && !editorInput.lookHeld)
@@ -1032,7 +1096,10 @@ int Application::Run()
                         static_cast<float>(window.Width()),
                         static_cast<float>(window.Height()),
                         editor::OrientationWidgetLiveExtraTopInset(
-                            levelEditorState.active, levelEditorState.menuBarHeight));
+                            levelEditorState.active,
+                            levelEditorState.menuBarHeight,
+                            levelEditorState.toolbarHeight,
+                            EditorQuickToolbarVisible(levelEditorState)));
                 const editor::OrientationWidgetAxes widgetAxes =
                     editor::ProjectOrientationWidgetAxes(levelEditorState.editorCamera);
                 const editor::CanonicalEditorView canonical = editor::PickOrientationWidget(
@@ -1354,6 +1421,7 @@ void Application::Initialize()
 #endif
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();
+    levelEditorState.selectedBuildTarget = editor::LoadEditorBuildSelection();
 #endif
     initialized = true;
 }

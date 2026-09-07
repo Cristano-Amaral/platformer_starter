@@ -94,6 +94,16 @@ struct OrientationWidgetOverlay
     core::Vec3 z{};
 };
 
+// Optional 3D sub-rectangle in window pixels (top-left origin). Width/height
+// <= 0 draws into the full framebuffer (gameplay / F2 off).
+struct WorldViewRect
+{
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
 class Renderer
 {
 public:
@@ -143,7 +153,8 @@ public:
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
-        const DebugWorldOverlay& overlay = {});
+        const DebugWorldOverlay& overlay = {},
+        WorldViewRect viewRect = {});
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);
     void DrawEditorPlacementHud(
         bool visible,
