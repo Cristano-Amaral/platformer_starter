@@ -105,8 +105,9 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
     case EditorObjectKind::Ground:
     case EditorObjectKind::MovingPlatform:
     case EditorObjectKind::Goal:
-    case EditorObjectKind::DynamicBox:
         return selection.index == 0;
+    case EditorObjectKind::DynamicBox:
+        return false;
     case EditorObjectKind::ElevatedPlatform:
         return selection.index < level.elevatedPlatforms.size();
     case EditorObjectKind::Slope:

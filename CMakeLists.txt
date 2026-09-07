@@ -514,6 +514,32 @@ if(WIN32)
     target_link_libraries(EditorQuickToolbarTest PRIVATE ole32 shell32 uuid)
 endif()
 
+# Milestone 44: scene-cleanup invariants. No window, raylib, or Jolt.
+add_executable(CanonicalSceneCleanupTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/CanonicalSceneCleanupTest.cpp
+    game/source/editor/EditorHierarchy.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorPlacement.cpp
+    game/source/editor/EditorPlacement.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/render/Renderer.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(CanonicalSceneCleanupTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(CanonicalSceneCleanupTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(CanonicalSceneCleanupTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # Milestone 41 Phase B: owner-side lifecycle requests without ImGui.
 add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/AuthoredLifecycleCommands.cpp

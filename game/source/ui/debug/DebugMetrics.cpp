@@ -136,7 +136,9 @@ void DrawDebugMetrics(
         ImGui::Text("Collectibles: %d", snapshot.levelCollectibleCount);
         ImGui::Text("Goal present: %s", BoolText(snapshot.levelHasGoal));
         ImGui::Text("Moving platform present: %s", BoolText(snapshot.levelHasMovingPlatform));
-        ImGui::Text("Dynamic box present: %s", BoolText(snapshot.levelHasDynamicBox));
+        ImGui::Text(
+            "Dynamic box authored: %s (not instantiated in canonical scene)",
+            BoolText(snapshot.levelHasDynamicBox));
         ImGui::Text(
             "Camera offset: %.4f, %.4f, %.4f",
             snapshot.levelCameraOffset.x,
@@ -209,21 +211,11 @@ void DrawDebugMetrics(
     {
         ImGui::Text("Jolt initialized: %s", BoolText(snapshot.physicsInitialized));
         ImGui::Text("static greybox bodies: %d", snapshot.staticBodyCount);
-        ImGui::Text("dynamic test body valid: %s", BoolText(snapshot.dynamicTestBodyValid));
-        ImGui::Text("dynamic test box X: %.4f", snapshot.physicsTestBoxPosition.x);
-        ImGui::Text("dynamic test box Y: %.4f", snapshot.physicsTestBoxPosition.y);
-        ImGui::Text("dynamic test box Z: %.4f", snapshot.physicsTestBoxPosition.z);
         ImGui::Text(
-            "dynamic test box active: %s",
-            BoolText(snapshot.physicsTestBoxActive));
-        ImGui::Text(
-            "dynamic test box sleeping: %s",
-            BoolText(snapshot.dynamicTestBodyValid && !snapshot.physicsTestBoxActive));
-        ImGui::Text(
-            "dynamic test box velocity: %.4f, %.4f, %.4f",
-            snapshot.physicsTestBoxLinearVelocity.x,
-            snapshot.physicsTestBoxLinearVelocity.y,
-            snapshot.physicsTestBoxLinearVelocity.z);
+            "canonical dynamic probe instantiated: %s",
+            BoolText(snapshot.dynamicTestBodyValid));
+        ImGui::TextWrapped(
+            "M44 does not create the M23 cyan crate body. Level Format still stores dynamic_box.");
     }
 
     if (ImGui::CollapsingHeader("Player Physics / Character", ImGuiTreeNodeFlags_DefaultOpen))
@@ -283,27 +275,24 @@ void DrawDebugMetrics(
 
     if (ImGui::CollapsingHeader("Assets", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::Text("test texture loaded: %s", BoolText(snapshot.testTextureLoaded));
+        ImGui::TextUnformatted("Cooker/staging inventory (not drawn in Level 01):");
         ImGui::Text("logical id: %s", snapshot.testTextureLogicalId);
         ImGui::Text("runtime path: %s", snapshot.testTextureRuntimeRelativePath);
-        ImGui::Text("fallback active: %s", BoolText(snapshot.testTextureFallbackActive));
+        ImGui::Text("canonical scene instance: no");
         ImGui::Separator();
         ImGui::Text("Static Model");
-        ImGui::Text("loaded: %s", BoolText(snapshot.testModelLoaded));
-        ImGui::Text("logical id: %s", snapshot.testModelLogicalId);
-        ImGui::Text("fallback: %s", BoolText(snapshot.testModelFallbackActive));
+        ImGui::Text("id: %s", snapshot.testModelLogicalId);
+        ImGui::Text("canonical scene instance: no");
         ImGui::Separator();
         ImGui::Text("Blender Authored Model");
-        ImGui::Text("loaded: %s", BoolText(snapshot.authoredModelLoaded));
-        ImGui::Text("fallback: %s", BoolText(snapshot.authoredModelFallbackActive));
         ImGui::Text("id: %s", snapshot.authoredModelLogicalId);
+        ImGui::Text("canonical scene instance: no");
         ImGui::Separator();
         ImGui::Text("Textured GLB Model");
-        ImGui::Text("loaded: %s", BoolText(snapshot.texturedModelLoaded));
-        ImGui::Text("fallback: %s", BoolText(snapshot.texturedModelFallbackActive));
         ImGui::Text("id: %s", snapshot.texturedModelLogicalId);
-        ImGui::Text("material count: %d", snapshot.texturedModelMaterialCount);
-        ImGui::Text("albedo texture: %s", BoolText(snapshot.texturedModelHasAlbedoTexture));
+        ImGui::Text("canonical scene instance: no");
+        ImGui::TextWrapped(
+            "loaded/fallback flags stay false because M44 does not load these into the renderer.");
     }
 
     if (ImGui::CollapsingHeader("Respawn / Checkpoint", ImGuiTreeNodeFlags_DefaultOpen))

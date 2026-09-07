@@ -80,7 +80,7 @@ parser and writer accept any valid identifier.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 still uses 6 / 2 / 2 / 2 / 3, but v1 does **not** require those instance counts. Checkpoint / hazard / collectible counts are 0 or more; the parser does **not** impose a small design cap (the old 8/8/16 values were Phase A policy). Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count is additionally limited by the Jolt body allocator leftover (`kMaxElevatedPlatformCount` = 58). Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 still uses 6 / 2 / 2 / 2 / 3, but v1 does **not** require those instance counts. Checkpoint / hazard / collectible counts are 0 or more; the parser does **not** impose a small design cap (the old 8/8/16 values were Phase A policy). Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count is additionally limited by the Jolt body allocator leftover (`kMaxElevatedPlatformCount` = 59). Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -103,13 +103,16 @@ support indices.
 Positive sizes: each component finite and `> 0`.
 Moving platform: size positive, path min `<` path max, speed `> 0`, startX
 inside `[pathMinX, pathMaxX]`.
-Dynamic box mass finite and `> 0`.
+Dynamic box mass finite and `> 0`. Milestone 44 still requires `dynamic_box`
+for parser/writer round-trip; the canonical runtime does not create a Jolt
+body or draw the crate.
+
 Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
 ## Not in the file
 
 Runtime: active checkpoint, respawn position, death count, collected flags,
-completion, TIME, BEST, moving-platform pose/direction, cyan-box pose, BodyIDs,
+completion, TIME, BEST, moving-platform pose/direction, BodyIDs,
 camera smoothed target.
 
 Player/controller policy: accel/decel/speed/gravity/jump/coyote/buffer,

@@ -564,44 +564,53 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
         return false;
     }
 
-    JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
-    JPH::BodyCreationSettings boxSettings(
-        new JPH::BoxShape(ToHalfExtent(impl->dynamicBoxSpec.size)),
-        ToRVec3(impl->dynamicBoxSpec.center),
-        JPH::Quat::sIdentity(),
-        JPH::EMotionType::Dynamic,
-        ObjectLayers::Moving);
-    boxSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-    boxSettings.mMassPropertiesOverride.mMass = impl->dynamicBoxSpec.mass;
-    impl->dynamicBodyId = bodyInterface.CreateAndAddBody(boxSettings, JPH::EActivation::Activate);
-    if (impl->dynamicBodyId.IsInvalid())
+    if (kInstantiateCanonicalDynamicProbeBody)
     {
-        ReportError("failed to create dynamic test box.");
-        Shutdown();
-        return false;
+        JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
+        JPH::BodyCreationSettings boxSettings(
+            new JPH::BoxShape(ToHalfExtent(impl->dynamicBoxSpec.size)),
+            ToRVec3(impl->dynamicBoxSpec.center),
+            JPH::Quat::sIdentity(),
+            JPH::EMotionType::Dynamic,
+            ObjectLayers::Moving);
+        boxSettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        boxSettings.mMassPropertiesOverride.mMass = impl->dynamicBoxSpec.mass;
+        impl->dynamicBodyId =
+            bodyInterface.CreateAndAddBody(boxSettings, JPH::EActivation::Activate);
+        if (impl->dynamicBodyId.IsInvalid())
+        {
+            ReportError("failed to create dynamic test box.");
+            Shutdown();
+            return false;
+        }
+
+        {
+            JPH::BodyLockRead lock(
+                impl->physicsSystem->GetBodyLockInterface(), impl->dynamicBodyId);
+            if (!lock.SucceededAndIsInBroadPhase())
+            {
+                ReportError("failed to inspect dynamic test box mass.");
+                Shutdown();
+                return false;
+            }
+
+            const float inverseMass = lock.GetBody().GetMotionProperties()->GetInverseMass();
+            const float mass = inverseMass > 0.0f ? (1.0f / inverseMass) : 0.0f;
+            if (std::fabs(mass - impl->dynamicBoxSpec.mass) > 0.01f)
+            {
+                std::fprintf(
+                    stderr,
+                    "PhysicsWorld: dynamic test box mass is %.3f kg, expected %.3f kg.\n",
+                    mass,
+                    impl->dynamicBoxSpec.mass);
+                Shutdown();
+                return false;
+            }
+        }
     }
-
+    else
     {
-        JPH::BodyLockRead lock(impl->physicsSystem->GetBodyLockInterface(), impl->dynamicBodyId);
-        if (!lock.SucceededAndIsInBroadPhase())
-        {
-            ReportError("failed to inspect dynamic test box mass.");
-            Shutdown();
-            return false;
-        }
-
-        const float inverseMass = lock.GetBody().GetMotionProperties()->GetInverseMass();
-        const float mass = inverseMass > 0.0f ? (1.0f / inverseMass) : 0.0f;
-        if (std::fabs(mass - impl->dynamicBoxSpec.mass) > 0.01f)
-        {
-            std::fprintf(
-                stderr,
-                "PhysicsWorld: dynamic test box mass is %.3f kg, expected %.3f kg.\n",
-                mass,
-                impl->dynamicBoxSpec.mass);
-            Shutdown();
-            return false;
-        }
+        impl->dynamicBodyId = JPH::BodyID();
     }
 
     if (!impl->CreateMovingPlatform())

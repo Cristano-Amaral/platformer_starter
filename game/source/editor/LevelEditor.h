@@ -160,7 +160,6 @@ struct LevelEditorViewContext
 {
     const char* runtimeLevelPath = "";
     core::Vec3 movingPlatformRuntimeCenter{};
-    core::Vec3 dynamicBoxRuntimeCenter{};
     float viewportWidth = 1280.0f;
     float viewportHeight = 720.0f;
     bool forceDefaultLayout = false;

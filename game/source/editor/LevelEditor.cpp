@@ -329,14 +329,8 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         ReadOnlyVec3("Center", level.goal.center);
         ReadOnlyVec3("Size", level.goal.size);
         break;
-    case EditorObjectKind::DynamicBox:
-        ImGui::TextUnformatted("Read-only in M33.");
-        ReadOnlyVec3("Authored center", level.dynamicBox.center);
-        ReadOnlyVec3("Authored size", level.dynamicBox.size);
-        ReadOnlyFloat("Mass", level.dynamicBox.mass);
-        ReadOnlyVec3("Runtime position", view.dynamicBoxRuntimeCenter);
-        break;
     case EditorObjectKind::None:
+    default:
         break;
     }
 

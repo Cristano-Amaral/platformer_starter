@@ -255,13 +255,8 @@ EditorPickingSet BuildPickingSet(
     }
     AddProxy(
         set, EditorObjectKind::Goal, 0, appliedLevel.goal.center, appliedLevel.goal.size, 0.0f);
-    AddProxy(
-        set,
-        EditorObjectKind::DynamicBox,
-        0,
-        worldState.dynamicBoxCenter,
-        worldState.dynamicBoxSize,
-        0.0f);
+    // M44: DynamicBox is authored Level Format data but is not instantiated
+    // in the canonical scene, so it must not intercept viewport picking.
     return set;
 }
 

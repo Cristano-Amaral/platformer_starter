@@ -73,7 +73,7 @@ CharacterVirtual remains the movement authority (`mMass = 70`, `mMaxStrength = 1
 
 Temporary blocking with no free space is valid. Manual validation: the Player is a physical barrier, can push/drag the 30 kg box, and is no longer permanently trapped.
 
-Status: complete (manually validated). Do not implement Milestone 24 in this section.
+Status: complete (manually validated). Milestone 44 stops instantiating this crate in the canonical scene (no body, no draw, no viewport pick, no Hierarchy/Inspector row) while keeping the Level Format `dynamic_box` record, parser/writer coverage, and Jolt dynamic-body infrastructure. Do not implement Milestone 24 in this section.
 
 ## Shared greybox geometry
 `world::Box` in `GreyboxWorld.h` is the project-owned AABB type. Canonical Level 01 ground and elevated platforms live in `game/assets/source/levels/level_01.level` and are loaded into `LevelDefinition`. Renderer and PhysicsWorld both derive from the active `LevelDefinition`. Ground and platform coordinates are not duplicated inside those systems.
@@ -140,11 +140,9 @@ The M18 Base Color PNG `game/assets/source/textures/test_textured_basecolor.png`
 
 Editable Blender files live in `game/assets/source/blender/`. They are not cooked and are not runtime assets. See `docs/BLENDER_WORKFLOW.md`. The cooker copies exported GLBs unchanged. Blender is not a build or runtime dependency.
 
-The checker appears on a dedicated visual quad at `(0, 1.5, 2.5)`. The Milestone 16 test GLB is drawn at `(2.5, 1.0, 2.5)`. The Blender-authored GLB is drawn at `(-2.5, 1.0, 2.5)`. The Milestone 18 textured GLB is drawn at `(4.0, 1.0, 2.5)`. None of these are greybox geometry and none have collision.
+The checker, Milestone 16 pyramid, Blender-authored model, and textured model remain cooker/staging inventory (`cmake/RuntimeAssets.cmake` and `python tools/cook_assets.py`). Milestone 44 does not load or draw them in the canonical Level 01 scene. They have no GreyboxWorld entries and no Jolt bodies.
 
-The checker, Milestone 16 pyramid, Blender-authored model, and textured model are visual-only technical tests: no GreyboxWorld entries, no Jolt bodies, no mesh collision.
-
-If a required cooked file is missing at CMake configure time, configure fails and tells the developer to run the cooker. If a staged runtime file is missing at load time, the renderer logs the logical id and draws a simple visual fallback. Texture and models are each loaded once after the window/graphics context exists and unloaded before window shutdown.
+If a required cooked file is missing at CMake configure time, configure fails and tells the developer to run the cooker. Milestone 44 no longer loads those test GLBs/PNG into the renderer, so a missing staged probe is a cooker/staging concern rather than a magenta/orange fallback cube in Level 01.
 
 ## Extended traversal / two checkpoints (Milestone 24)
 
@@ -246,7 +244,7 @@ Status: complete (manually approved). Save v1 remains compatible with Milestone 
 
 M30 introduces a project-owned immutable `world::LevelDefinition` for the current single playable level (`level_01`). At M30 the canonical authored values lived in `world/Level01.cpp` (`CreateLevel01Definition()`). Milestone 31 replaced that compiled factory as the live authored source; `LevelDefinition` remains the runtime data model.
 
-Application owns one `LevelDefinition` that is empty until Initialize successfully loads the staged Level 01 file, then passes it read-only to PhysicsWorld (`Initialize(level)`) and Renderer (`DrawWorld(..., level, ...)`). Gameplay meaning (checkpoint activation, hazard death, collectible pickup, goal completion, timer, BEST) stays in Application. Runtime pose for the moving platform and cyan box stays in PhysicsWorld. `collected[]`, `activeCheckpointIndex`, `LevelCompletionState`, timer, and BEST stay outside `LevelDefinition`.
+Application owns one `LevelDefinition` that is empty until Initialize successfully loads the staged Level 01 file, then passes it read-only to PhysicsWorld (`Initialize(level)`) and Renderer (`DrawWorld(..., level, ...)`). Gameplay meaning (checkpoint activation, hazard death, collectible pickup, goal completion, timer, BEST) stays in Application. Runtime pose for the moving platform stays in PhysicsWorld. `collected[]`, `activeCheckpointIndex`, `LevelCompletionState`, timer, and BEST stay outside `LevelDefinition`.
 
 Camera offset `{2, 3.5, 12}` and FOV 40 are level framing (`LevelCameraSpec`). Dead zone X/Y `1.5` / `0.75` and follow sharpness `8` remain `PlatformerCamera` controller policy. Player visual size `{0.8, 1.6, 0.8}` remains character/render configuration (`world::kPlayerVisualSize`), not level authoring. CharacterVirtual max slope remains 50° in PhysicsWorld.
 
@@ -314,7 +312,7 @@ Validate `world::IsWritableLevelDefinition(workingCopy)` and the `level_01` iden
 
 If `Initialize` or `InitializePlayer` fails after `Shutdown`, M32 does not attempt a rollback transaction: it reports the failure on stderr, sets the editor's Apply status to `Error`, and raises `Application::fatalError`, which exits the frame loop through the normal `Shutdown()` path and makes `Run()` return 1. Running on partial physics is not an option.
 
-A successful Apply starts a fresh editor preview run: Player at the authored spawn with movement state cleared, `RespawnState`, `LevelCompletionState`, `CollectibleRunState` and `RunTimerState` reset, moving platform and cyan box reset through the rebuild, and `camera.ApplyLevelFraming` plus `camera.Initialize` so offset and FOV preview immediately. `SessionBestTimeState`, the persisted BEST, the persistence statuses, the loaded level id and the level-loading diagnostics are deliberately untouched — the editor can never write BEST.
+A successful Apply starts a fresh editor preview run: Player at the authored spawn with movement state cleared, `RespawnState`, `LevelCompletionState`, `CollectibleRunState` and `RunTimerState` reset, moving platform reset through the rebuild, and `camera.ApplyLevelFraming` plus `camera.Initialize` so offset and FOV preview immediately. `SessionBestTimeState`, the persisted BEST, the persistence statuses, the loaded level id and the level-loading diagnostics are deliberately untouched — the editor can never write BEST.
 
 `Revert Working Copy` assigns `workingCopy = levelDefinition` and nothing else: no physics rebuild, no camera change, no effect on Dirty, no file access. There is no `Reload Runtime Level` in M32.
 
@@ -382,7 +380,7 @@ M34 is complete and merged. Translation gizmo, pending ghost, persistent layout,
 
 **Ownership.** `editor::GizmoInteractionState` lives on `LevelEditorState`. `GetEditablePosition` writes `workingCopy`. Application copies `GizmoDrawRequest` / `EditorPendingTransformPreview` into `render::DebugWorldOverlay` PODs. Renderer does not own selection, workingCopy, or drag state.
 
-**Draw order (inside `BeginMode3D`).** Normal world (including cooker probes) → active spawn marker → active M33 highlight → Development pending object ghost (checkpoint post/beacon, full hazard, collectible cube) → cyan **wireframe** pending bounds (working geometry; no filled cube, so the object's own bounds do not hide its ghost) → Checkpoint respawn marker → X/Y/Z gizmo. The gizmo uses a depth-tested faint pass then a depth-independent overlay (`rlDisableDepthTest` + `rlDisableDepthMask` + `rlDisableBackfaceCulling`); those three states are restored immediately after the overlay batch flush. ImGui draws after `EndMode3D`, so panels sit over the gizmo.
+**Draw order (inside `BeginMode3D`).** Normal world → active spawn marker → active M33 highlight → Development pending object ghost (checkpoint post/beacon, full hazard, collectible cube) → cyan **wireframe** pending bounds (working geometry; no filled cube, so the object's own bounds do not hide its ghost) → Checkpoint respawn marker → X/Y/Z gizmo. The gizmo uses a depth-tested faint pass then a depth-independent overlay (`rlDisableDepthTest` + `rlDisableDepthMask` + `rlDisableBackfaceCulling`); those three states are restored immediately after the overlay batch flush. ImGui draws after `EndMode3D`, so panels sit over the gizmo.
 
 **Size.** Axis length = `distance * tan(fovY/2) * 0.22`, clamped to `[0.75, 24]`. Visual shaft/head use cylinders/cones (`max(0.038 * length, 0.045)` shaft radius); hit radius remains `0.09 * length` on the world-space shaft (hub skip unchanged).
 
@@ -413,20 +411,16 @@ Live wiring is Phase B. Still out of M35: add/delete/duplicate, rotation, Hierar
 
 ### Hierarchy inventory (M34 / M35)
 
-The Hierarchy lists the 21 authored Level Format v1 records. Visible 3D things that are **not** rows:
+The Hierarchy lists the canonical scene objects (20 rows for Level 01: Spawn, Camera, Ground, 6 Platforms, 2 Slopes, Moving Platform, 2 Checkpoints, 2 Hazards, 3 Collectibles, Goal). Visible 3D things that are **not** rows:
 
 | Visible thing | Classification | Why absent |
 |---|---|---|
 | Runtime Player mesh | runtime-only | Gameplay CharacterVirtual; only **Player Spawn** is authored |
 | XZ `DrawGrid` | technical/demo/render | Renderer debug ground grid, not LevelDefinition |
-| `textures/test_checker.png` quad | technical/demo/render | Cooker pipeline probe in front of spawn |
-| `models/test_static.glb` | technical/demo/render | Cooker GLB probe (right of spawn) |
-| `models/test_authored.glb` | technical/demo/render | Cooker authored-GLB probe (left of spawn) |
-| `models/test_textured.glb` | technical/demo/render | Cooker textured-GLB probe (further right) |
 | Editor spawn marker / highlight / pending ghost / gizmo | editor visualization | Overlay while F2 is active; not extra authored objects |
 | TIME / BEST / COLLECTED HUD | other | 2D overlay, not scene objects |
 
-The four cooker probes plus the Player mesh are the usual “I see it in the viewport but not in Hierarchy” set. Do not add them in M35.
+Milestone 44 removes the four cooker-probe **scene instances** (checker quad, `test_static.glb`, `test_authored.glb`, `test_textured.glb`). Those assets remain in cook/stage inventory and automated tests. They were never Hierarchy rows and must not be added to M41 lifecycle. Authored `dynamic_box` remains a Level Format v1 compatibility record only: it is not a Hierarchy row, not Inspector-selectable, not drawn, and not viewport-picked.
 
 ## Visual level editor v4 (Milestone 35, Phase B)
 
@@ -528,9 +522,9 @@ Phase A generalizes repeatable Level Format v1 categories to variable-length `st
 
 Phase B exposes that helper in the live **Development** editor. There is **no Phase C yet**. Milestone 41 is **not** complete.
 
-**Repeatable (lifecycle):** Platform, Checkpoint, Hazard, Collectible. Stored as `std::vector` in `LevelDefinition`. There is no small design cap of 16/8/8/16. Checkpoint / Hazard / Collectible share the v1 64 KiB / 256-line parser guards. Platform count is additionally limited by leftover Jolt bodies (`kMaxElevatedPlatformCount` = 58). Writer emits one record per element in container order. Still Level Format v1: no count header, no v2.
+**Repeatable (lifecycle):** Platform, Checkpoint, Hazard, Collectible. Stored as `std::vector` in `LevelDefinition`. There is no small design cap of 16/8/8/16. Checkpoint / Hazard / Collectible share the v1 64 KiB / 256-line parser guards. Platform count is additionally limited by leftover Jolt bodies (`kMaxElevatedPlatformCount` = 59). Writer emits one record per element in container order. Still Level Format v1: no count header, no v2.
 
-**Singletons unchanged:** Spawn, Ground, Camera, Goal, slopes (`std::array` of 2), moving platform, dynamic cyan box. The three `support_index_*` fields remain authored singletons; they are 0-based indices into `elevatedPlatforms`, not independently addable objects.
+**Singletons unchanged:** Spawn, Ground, Camera, Goal, slopes (`std::array` of 2), moving platform, authored `dynamic_box` (required v1 record; M44 does not instantiate it). The three `support_index_*` fields remain authored singletons; they are 0-based indices into `elevatedPlatforms`, not independently addable objects.
 
 **Lifecycle helper:** `editor::AuthoredObjectLifecycle` mutates only the supplied `LevelDefinition` (the editor's `workingCopy`). Add/Duplicate are append-only, so existing platform-index references do not shift. Duplicate copies values and adds world +X `1.0`. Delete validates first, then mutates atomically. Platform delete remaps every authored `support_index_*` with `R > D` to `R - 1` (same semantic platform after compaction), leaves `R < D` unchanged, and **rejects** the whole delete when any `R == D` (`ReferencedPlatform`) — no silent retarget to Platform 0 and no nearest-platform guess. Deleting the last platform is rejected (`MinimumCount`; a valid/saveable v1 level needs at least one platform because the three support indices must stay in range). Success clears selection. Failures leave `workingCopy` and the input selection unchanged. `LifecycleEditStatus` distinguishes Success / InvalidSelection / UnsupportedType / AtLimit / ReferencedPlatform / MinimumCount so Phase B can show a reason; `CanDeleteSelected` is a secondary enable guard and must not be the only integrity check. No Apply, Save, or physics.
 
@@ -560,7 +554,7 @@ ImGui emits `LevelEditorRequest` only. `HandleAuthoredLifecycleRequest` (Applica
 
 **Editor visual precedence** for one active object: (1) pending delete (faded + delete outline), (2) pending workingCopy transform/add cyan ghost (selected stronger, unselected softer; persists after deselection), (3) collected authored-only gold wire, (4) normal active runtime visual. Cyan Add/Duplicate/Translate ghosts do not use the delete fade. Non-deleted objects keep their current appearance. No runtime mutation before Apply.
 
-**Authored capacity.** Design capacity is not the same as a parser safety guard. Checkpoint, Hazard, and Collectible have no small gameplay-facing cap; they share the v1 64 KiB / 256-line defensive file bounds. Elevated Platform count is limited by leftover Jolt bodies (`kPhysicsMaxBodies` = 64, six non-platform bodies, `kMaxElevatedPlatformCount` = 58). Edit > Add / Duplicate disable when that real budget is exhausted, not at the old Phase A 16/8/8/16 policy numbers. Future Pi Zero W optimization does not keep those tiny authoring caps.
+**Authored capacity.** Design capacity is not the same as a parser safety guard. Checkpoint, Hazard, and Collectible have no small gameplay-facing cap; they share the v1 64 KiB / 256-line defensive file bounds. Elevated Platform count is limited by leftover Jolt bodies (`kPhysicsMaxBodies` = 64, five non-platform bodies, `kMaxElevatedPlatformCount` = 59). Edit > Add / Duplicate disable when that real budget is exhausted, not at the old Phase A 16/8/8/16 policy numbers. Future Pi Zero W optimization does not keep those tiny authoring caps.
 
 **Add placement.** `AuthoredObjectLifecycle::Add*` takes a camera-region `placementAnchor` and does not read EditorCamera or raylib. Development `HandleAuthoredLifecycleRequest` for Edit > Add receives `EditorAddPlacementAnchor(editorCamera)`: camera position + look-forward * `kEditorAddPlacementDistance` (10). `EditorCameraTarget` is only the 1-unit view look-at and is not used for placement. Authored X/Y come from that camera region. Authored Z is the current Level Format v1 gameplay-lane proxy: `workingCopy.initialSpawnVisualCenter.z` (`spawn.z`). Camera-derived Z is ignored. Spawn X/Y do not affect Add. Category offsets from the hybrid placement are currently `{0,0,0}`; Checkpoint `respawnPosition` stays `center + kDefaultAddedCheckpointRespawnOffset` (`{0,0,0}`). Duplicate remains original +1 world X, preserves the source object's Z, and does not snap to the lane. This is not "place near Spawn." Object Palette confirm uses `Add*At` / `worldCenterPlacement` at the resolved candidate center and does not snap to spawn.z.
 
@@ -592,7 +586,7 @@ Development-only authoring UX on top of M41. No Level Format change, no second l
 
 **Cleanup.** Successful Apply, Revert, and successful Reload clear the candidate and set mode to None. Palette-created pending objects follow M41: Revert drops them with `workingCopy = active`.
 
-Status: Milestone 42 is complete and merged. Milestone 43 is Editor Quick Toolbar.
+Status: Milestone 43 is complete and merged. Milestone 44 is Legacy Prototype Scene Cleanup.
 
 ## Editor Quick Toolbar (Milestone 43)
 
@@ -612,4 +606,18 @@ Development-only compact Quick Toolbar fixed immediately below the F2 menu bar. 
 
 **Orientation / M42.** Widget `extraTopInset` includes toolbar height when visible. Placement rays use the same content viewport. Object Palette is not merged into the toolbar.
 
-Status: Implemented, awaiting manual acceptance. Milestone 44 has not started.
+Status: Milestone 43 is complete and merged.
+
+## Legacy prototype scene cleanup (Milestone 44)
+
+M44 separates cooker/physics **test coverage** from **canonical scene visibility**. It is cleanup, not a level redesign or Level Format v2.
+
+**Removed scene instances (assets kept):** `textures/test_checker.png` quad, `models/test_static.glb` (the spawn-area orange pyramid), `models/test_authored.glb` (plain white/grey cube), `models/test_textured.glb` (larger textured cube). Renderer no longer loads or draws them. `cmake/RuntimeAssets.cmake`, cooker, staging, and Python PNG/GLB tests still require the files.
+
+**Kept in the scene:** slope 0 (30° walkable, `kLevel01WalkableSlopeIndex`), slope 1 (60° steep, `kLevel01SteepSlopeIndex`), kinematic moving platform. M42 placement surfaces remain Ground / Platform / Slope.
+
+**Authored `dynamic_box`:** required v1 parser/writer record. Not a Hierarchy row, not Inspector-selectable, not rendered, not viewport-picked, no Jolt body (`kInstantiateCanonicalDynamicProbeBody = false`). Jolt and dynamic-body infrastructure stay.
+
+**Body budget.** `kPhysicsMaxBodies` remains 64. Non-platform bodies are 5 (ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body). Platform leftover is **59**. Canonical Level 01 static bodies stay 9 (ground + 6 platforms + 2 slopes). No Level Format schema change and no `level_01.level` semantic edit.
+
+Status: Implemented, awaiting manual acceptance. Milestone 45 has not started.

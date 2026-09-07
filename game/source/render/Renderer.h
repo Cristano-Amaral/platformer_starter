@@ -7,7 +7,6 @@
 #include "world/RespawnWorld.h"
 
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 namespace gameplay
@@ -104,6 +103,10 @@ struct WorldViewRect
     int height = 0;
 };
 
+// M44: cooker probes remain in cook/stage inventory but are not drawn or
+// loaded into the canonical Level 01 scene.
+inline constexpr bool kCanonicalSceneInstantiatesCookerProbes = false;
+
 class Renderer
 {
 public:
@@ -118,6 +121,7 @@ public:
     void LoadRuntimeAssets();
     void UnloadRuntimeAssets();
 
+    // Cooker inventory ids. M44 does not load or draw these in the scene.
     bool IsTestTextureLoaded() const;
     bool IsTestTextureFallbackActive() const;
     const char* TestTextureLogicalId() const;
@@ -162,31 +166,5 @@ public:
         bool fallback,
         float topInset);
     void EndFrame();
-
-private:
-    void LoadTestCheckerTexture();
-    void LoadTestStaticModel();
-    void LoadTestAuthoredModel();
-    void LoadTestTexturedModel();
-
-    struct GpuTexture;
-    std::unique_ptr<GpuTexture> testTexture;
-    bool testTextureLoaded = false;
-    bool testTextureFallbackActive = false;
-
-    struct GpuModel;
-    std::unique_ptr<GpuModel> testModel;
-    bool testModelLoaded = false;
-    bool testModelFallbackActive = false;
-
-    std::unique_ptr<GpuModel> authoredModel;
-    bool authoredModelLoaded = false;
-    bool authoredModelFallbackActive = false;
-
-    std::unique_ptr<GpuModel> texturedModel;
-    bool texturedModelLoaded = false;
-    bool texturedModelFallbackActive = false;
-    int texturedModelMaterialCount = 0;
-    bool texturedModelHasAlbedoTexture = false;
 };
 }

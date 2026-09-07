@@ -128,17 +128,36 @@ int main()
         Expect(
             editor::IsEditableSelection({editor::EditorObjectKind::Ground, 0}),
             "ground is editable");
+        Expect(
+            !editor::IsValidSelection(level, {editor::EditorObjectKind::DynamicBox, 0}),
+            "DynamicBox is not a selectable scene object");
+        Expect(
+            !editor::IsEditableSelection({editor::EditorObjectKind::DynamicBox, 0}),
+            "DynamicBox is not inspector-editable");
     }
 
     const std::vector<editor::HierarchyEntry> hierarchy =
         editor::BuildHierarchyEntries(MakeStubLevel());
     const std::size_t expectedHierarchy =
-        6 + static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount)
+        5 + static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount)
         + static_cast<std::size_t>(world::kLevel01SlopeCount)
         + static_cast<std::size_t>(world::kLevel01CheckpointCount)
         + static_cast<std::size_t>(world::kLevel01HazardCount)
         + static_cast<std::size_t>(world::kLevel01CollectibleCount);
-    Expect(hierarchy.size() == expectedHierarchy, "hierarchy lists every stub authored object");
+    Expect(hierarchy.size() == expectedHierarchy, "hierarchy lists every stub authored scene object");
+    bool hierarchyHasDynamicBox = false;
+    bool hierarchyHasGoal = false;
+    for (const editor::HierarchyEntry& entry : hierarchy)
+    {
+        hierarchyHasDynamicBox =
+            hierarchyHasDynamicBox || entry.selection.kind == editor::EditorObjectKind::DynamicBox;
+        hierarchyHasGoal = hierarchyHasGoal || entry.selection.kind == editor::EditorObjectKind::Goal;
+    }
+    Expect(!hierarchyHasDynamicBox, "Hierarchy does not list Dynamic Cyan Box");
+    Expect(hierarchyHasGoal, "Hierarchy lists Goal");
+    Expect(
+        hierarchy.back().selection.kind == editor::EditorObjectKind::Goal,
+        "hierarchy ends with Goal");
     Expect(
         hierarchy[0].selection.kind == editor::EditorObjectKind::Spawn,
         "hierarchy starts with Player Spawn");
@@ -266,8 +285,8 @@ int main()
 
         const editor::Ray3 atCyan{{8.0f, 1.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
         Expect(
-            editor::PickNearest(atCyan, set).kind == editor::EditorObjectKind::DynamicBox,
-            "cyan box picks the visible runtime center");
+            editor::PickNearest(atCyan, set).kind != editor::EditorObjectKind::DynamicBox,
+            "authored dynamic_box is not a viewport pick proxy");
     }
 
     // ---- camera is not a world proxy; spawn is ----
@@ -278,15 +297,21 @@ int main()
         bool sawCamera = false;
         bool sawSpawn = false;
         bool sawPlayerKind = false;
+        bool sawDynamicBox = false;
         for (const editor::PickingProxy& proxy : set.proxies)
         {
             sawCamera = sawCamera || proxy.selection.kind == editor::EditorObjectKind::Camera;
             sawSpawn = sawSpawn || proxy.selection.kind == editor::EditorObjectKind::Spawn;
+            sawDynamicBox =
+                sawDynamicBox || proxy.selection.kind == editor::EditorObjectKind::DynamicBox;
         }
         Expect(!sawCamera, "authored camera has no world picking proxy");
         Expect(sawSpawn, "player spawn has a world picking proxy");
         Expect(!sawPlayerKind, "runtime Player is not a selectable authored object");
-        Expect(set.proxies.size() == 20, "20 world proxies: hierarchy minus Camera");
+        Expect(!sawDynamicBox, "uninstantiated dynamic_box has no world picking proxy");
+        Expect(
+            set.proxies.size() == 19,
+            "19 world proxies: hierarchy minus Camera");
     }
 
     // ---- screen-to-world ray through editor camera view ----

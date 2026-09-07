@@ -29,8 +29,8 @@ inline constexpr int kLevel01SteepSlopeIndex = 1;
 // Minimum platforms so support_index_* can stay in range.
 inline constexpr int kMinElevatedPlatformCount = 1;
 // Physics-derived platform budget (Jolt body allocator minus non-platform
-// bodies). Must match physics::kMaxPhysicsElevatedPlatformCount.
-inline constexpr int kMaxElevatedPlatformCount = 58;
+// bodies). Must match physics::kMaxPhysicsElevatedPlatformCount (64 - 5 = 59).
+inline constexpr int kMaxElevatedPlatformCount = 59;
 
 static_assert(kMinElevatedPlatformCount >= 1);
 static_assert(kLevel01ElevatedPlatformCount <= kMaxElevatedPlatformCount);

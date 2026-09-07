@@ -76,9 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 43 — Editor Quick Toolbar
-(Development Quick Toolbar below the menu bar; awaiting manual acceptance).
-Milestone 42 is complete and merged. Milestone 44 has not started.
+Milestone 44 — Legacy Prototype Scene Cleanup
+(remove obsolete Level 01 scene probes; keep useful cooker/staging tests;
+awaiting manual acceptance).
+Milestone 43 is complete and merged. Milestone 45 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -106,7 +107,8 @@ transactional. StructuralIndexMap is the session active↔working pick map.
 Pending Add/Modify uses the cyan family (selected stronger, unselected softer).
 Pending Delete is faded/desaturated with a delete outline and is not pickable.
 Visible pending workingCopy objects are viewport-pickable. Platform Add follows
-the Jolt leftover body budget (58). Checkpoint/Hazard/Collectible share the v1
+the Jolt leftover body budget (59 after M44 removed the unused dynamic-probe
+body from the canonical scene). Checkpoint/Hazard/Collectible share the v1
 256-line / 64 KiB parser guard. Edit > Add uses camera-region X/Y and spawn.z
 lane. Duplicate is +1 X and does not snap to the lane.
 M42 is complete: Development-only Object Palette and explicit viewport
@@ -119,14 +121,21 @@ they never confirm placement. Surface-hit previews stay bright; camera-fallback
 previews use a quieter wire style. F2 close / successful Apply / Revert /
 successful Reload cancel placement. Debug has no Object Palette. Release has
 no editor.
-M43 adds a Development-only Quick Toolbar fixed below the menu bar:
+M43 is complete: Development-only Quick Toolbar fixed below the menu bar:
 Translate/Resize (canonical TransformMode), Apply/Revert/Save (canonical
 LevelEditorRequest), and a persisted build selector (Debug/Development/Release/All,
 default Development) that Run maps through EditorToolRunner. View > Quick Toolbar
 shares workspace visibility. Reset Editor Layout restores toolbar visibility and
 does not reset the last build selection. The 3D viewport starts below menu+toolbar
-when the toolbar is visible. Do not add Undo/Redo, Cook/Stage/Reload toolbar
-buttons, a command registry, docking, a tool framework, or Milestone 44.
+when the toolbar is visible.
+M44 removes the M15–M19 cooker-probe instances and the M23 cyan dynamic crate
+from the canonical runtime/editor scene. Source/cooked/staged test assets and
+their cooker/staging tests remain. Both authored slopes and the moving platform
+remain. `dynamic_box` stays in Level Format v1 for parser/writer compatibility;
+it is not a Hierarchy/Inspector scene object, not rendered, not picked, and not
+a Jolt body.
+Platform leftover is 59 (`kPhysicsMaxBodies` 64 minus 5 non-platform bodies).
+Do not add Undo/Redo, a probe framework, Level Format v2, or Milestone 45.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -147,4 +156,4 @@ in-process M39 reload. M41 lifecycle edits mutate `workingCopy` only and
 still require Apply Preview, then Save, then Cook, Stage & Reload.
 M42 placement still requires that same Apply / Save / Cook, Stage & Reload
 path. M43 placement and picking use the content viewport below the Quick Toolbar.
-Awaiting manual acceptance.
+M44 is implemented and awaiting manual acceptance.

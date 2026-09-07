@@ -84,7 +84,7 @@ bool ApplyCycle(physics::PhysicsWorld& world, const world::LevelDefinition& leve
     Expect(world.IsInitialized(), tag + ": initialized after Initialize");
     // Ground + 6 elevated platforms + 2 slopes.
     Expect(world.StaticBodyCount() == 9, tag + ": static body count");
-    Expect(world.IsDynamicTestBodyValid(), tag + ": dynamic box valid");
+    Expect(!world.IsDynamicTestBodyValid(), tag + ": canonical dynamic probe is not instantiated");
 
     if (!world.InitializePlayer(level.initialSpawnVisualCenter, world::kPlayerVisualSize))
     {
@@ -103,10 +103,7 @@ bool ApplyCycle(physics::PhysicsWorld& world, const world::LevelDefinition& leve
     Expect(platformAtRebuild.direction == 1.0f, tag + ": moving platform direction reset");
 
     const physics::DynamicTestBox boxAtRebuild = world.GetDynamicTestBox();
-    Expect(boxAtRebuild.valid, tag + ": dynamic box present after rebuild");
-    Expect(
-        boxAtRebuild.position.y == level.dynamicBox.center.y,
-        tag + ": dynamic box reset to authored center");
+    Expect(!boxAtRebuild.valid, tag + ": dynamic box remains uninstantiated after rebuild");
 
     SettleFrames(world, 30);
 
@@ -224,9 +221,7 @@ int main()
         Expect(
             live.GetMovingPlatform().position.x == moved.movingPlatform.startX,
             "TryRebuild resets moving platform to authored start");
-        Expect(
-            live.GetDynamicTestBox().position.y == moved.dynamicBox.center.y,
-            "TryRebuild resets dynamic box to authored center");
+        Expect(!live.GetDynamicTestBox().valid, "TryRebuild does not instantiate the dynamic probe");
 
         physics::PhysicsWorld probe;
         Expect(probe.Initialize(parsed.level), "second world Initialize while live exists");

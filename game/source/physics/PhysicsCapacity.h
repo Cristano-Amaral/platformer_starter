@@ -11,10 +11,18 @@ namespace physics
 // streaming/LOD system.
 inline constexpr unsigned int kPhysicsMaxBodies = 64;
 
-// ground, 2 slopes, kinematic moving platform, dynamic test box,
-// CharacterVirtual inner body. CharacterVirtual itself is not a Jolt body.
-inline constexpr int kPhysicsNonPlatformBodyCount = 6;
+// M44: the M23 cyan dynamic crate is no longer instantiated in the canonical
+// scene. Level Format v1 still stores dynamic_box for round-trip. Do not
+// recreate that body here without updating this count.
+inline constexpr bool kInstantiateCanonicalDynamicProbeBody = false;
+
+// ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body.
+// CharacterVirtual itself is not a Jolt body.
+inline constexpr int kPhysicsNonPlatformBodyCount = 5;
 
 inline constexpr int kMaxPhysicsElevatedPlatformCount =
     static_cast<int>(kPhysicsMaxBodies) - kPhysicsNonPlatformBodyCount;
+
+static_assert(kPhysicsNonPlatformBodyCount == 5);
+static_assert(kMaxPhysicsElevatedPlatformCount == 59);
 }

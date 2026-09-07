@@ -997,7 +997,6 @@ int Application::Run()
         const editor::LevelEditorViewContext levelEditorView{
             runtimeLevelPathDisplay.c_str(),
             movingPlatform.position,
-            testBox.position,
             static_cast<float>(window.Width()),
             static_cast<float>(window.Height()),
             false};

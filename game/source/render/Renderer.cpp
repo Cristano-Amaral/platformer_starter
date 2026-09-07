@@ -20,10 +20,6 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <filesystem>
-#include <memory>
-#include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -39,13 +35,7 @@ constexpr Color kPlayerColor{216, 96, 72, 255};
 constexpr Color kMovingPlatformColor{168, 132, 72, 255};
 constexpr Color kWalkableSlopeColor{132, 148, 92, 255};
 constexpr Color kSteepSlopeColor{148, 92, 84, 255};
-constexpr Color kPhysicsTestBoxColor{64, 176, 196, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
-constexpr Color kMissingTextureFallbackColor{220, 48, 160, 255};
-constexpr Color kTestModelTint{255, 255, 255, 255};
-constexpr Color kMissingModelFallbackColor{235, 115, 46, 255};
-constexpr Color kMissingAuthoredModelFallbackColor{72, 148, 108, 255};
-constexpr Color kMissingTexturedModelFallbackColor{92, 72, 196, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
 constexpr Color kCheckpointFutureBeacon{140, 148, 168, 255};
 constexpr Color kCheckpointCurrentPost{48, 140, 88, 255};
@@ -109,43 +99,8 @@ constexpr Color kGizmoAxisActive{255, 255, 255, 255};
 constexpr int kGridSlices = 20;
 constexpr float kGridSpacing = 1.0f;
 
-// Visual-only cooked-texture probe. Not in GreyboxWorld and not a physics body.
-constexpr core::Vec3 kTestTextureQuadCenter{0.0f, 1.5f, 2.5f};
-constexpr float kTestTextureQuadWidth = 2.0f;
-constexpr float kTestTextureQuadHeight = 2.0f;
+// Inventory path string for Metrics. The texture is not drawn in Level 01.
 constexpr const char* kTestTextureRuntimeRelativePath = "assets/textures/test_checker.png";
-
-// Visual-only cooked GLB probes. Not in GreyboxWorld and not physics bodies.
-constexpr core::Vec3 kTestModelPosition{2.5f, 1.0f, 2.5f};
-constexpr float kTestModelScale = 1.0f;
-constexpr core::Vec3 kTestModelFallbackSize{1.1f, 1.2f, 1.1f};
-constexpr core::Vec3 kAuthoredModelPosition{-2.5f, 1.0f, 2.5f};
-constexpr float kAuthoredModelScale = 1.0f;
-constexpr core::Vec3 kTexturedModelPosition{4.0f, 1.0f, 2.5f};
-constexpr float kTexturedModelScale = 1.0f;
-
-bool ModelHasAlbedoTexture(const Model& model)
-{
-    if (model.materialCount <= 0 || model.materials == nullptr)
-    {
-        return false;
-    }
-
-    for (int index = 0; index < model.materialCount; ++index)
-    {
-        const MaterialMap* maps = model.materials[index].maps;
-        if (maps == nullptr)
-        {
-            continue;
-        }
-        if (IsTextureValid(maps[MATERIAL_MAP_ALBEDO].texture))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 Vector3 ToRaylib(core::Vec3 value)
 {
@@ -828,40 +783,6 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     DrawResizeGizmo(overlay);
 }
 
-void DrawTestTextureQuad(const Texture2D& texture)
-{
-    const float halfWidth = kTestTextureQuadWidth * 0.5f;
-    const float halfHeight = kTestTextureQuadHeight * 0.5f;
-    const float x = kTestTextureQuadCenter.x;
-    const float y = kTestTextureQuadCenter.y;
-    const float z = kTestTextureQuadCenter.z;
-
-    rlSetTexture(texture.id);
-    rlBegin(RL_QUADS);
-    rlColor4ub(255, 255, 255, 255);
-    rlNormal3f(0.0f, 0.0f, 1.0f);
-    rlTexCoord2f(0.0f, 1.0f);
-    rlVertex3f(x - halfWidth, y - halfHeight, z);
-    rlTexCoord2f(1.0f, 1.0f);
-    rlVertex3f(x + halfWidth, y - halfHeight, z);
-    rlTexCoord2f(1.0f, 0.0f);
-    rlVertex3f(x + halfWidth, y + halfHeight, z);
-    rlTexCoord2f(0.0f, 0.0f);
-    rlVertex3f(x - halfWidth, y + halfHeight, z);
-    rlEnd();
-    rlSetTexture(0);
-}
-
-void DrawMissingTextureFallback()
-{
-    DrawCube(
-        ToRaylib(kTestTextureQuadCenter),
-        kTestTextureQuadWidth,
-        kTestTextureQuadHeight,
-        0.05f,
-        kMissingTextureFallbackColor);
-}
-
 void DrawCheckpointMarkerGeometry(
     const world::CheckpointSpec& spec,
     Color postColor,
@@ -954,66 +875,7 @@ void DrawLevelCompleteMessage()
     DrawText(hintText, hintX, hintY, kRestartHintFontSize, kLevelCompleteText);
 }
 
-void DrawMissingModelFallback(core::Vec3 center, Color fill)
-{
-    DrawCube(
-        ToRaylib(center),
-        kTestModelFallbackSize.x,
-        kTestModelFallbackSize.y,
-        kTestModelFallbackSize.z,
-        fill);
-    DrawCubeWires(
-        ToRaylib(center),
-        kTestModelFallbackSize.x,
-        kTestModelFallbackSize.y,
-        kTestModelFallbackSize.z,
-        kWireColor);
 }
-
-bool TryResolveRuntimeAsset(
-    std::string_view logicalId,
-    const char* kind,
-    std::filesystem::path& runtimePath,
-    std::string& runtimePathString)
-{
-    runtimePath = platform::RuntimeAssetPath(logicalId);
-    runtimePathString = runtimePath.lexically_normal().make_preferred().string();
-    if (runtimePath.empty() || !runtimePath.is_absolute())
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Refusing to load cooked %s '%s': runtime path is not absolute. "
-            "Asset lookup uses the executable directory, never the process CWD.",
-            kind,
-            std::string(logicalId).c_str());
-        return false;
-    }
-
-    if (!std::filesystem::exists(runtimePath) || !std::filesystem::is_regular_file(runtimePath))
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Failed to load cooked %s '%s' from runtime path '%s' (file not found). "
-            "Using a visual fallback. Cook assets with: python tools/cook_assets.py",
-            kind,
-            std::string(logicalId).c_str(),
-            runtimePathString.c_str());
-        return false;
-    }
-
-    return true;
-}
-}
-
-struct Renderer::GpuTexture
-{
-    Texture2D texture{};
-};
-
-struct Renderer::GpuModel
-{
-    Model model{};
-};
 
 Renderer::Renderer() = default;
 
@@ -1021,208 +883,20 @@ Renderer::~Renderer() = default;
 
 void Renderer::LoadRuntimeAssets()
 {
-    UnloadRuntimeAssets();
-    LoadTestCheckerTexture();
-    LoadTestStaticModel();
-    LoadTestAuthoredModel();
-    LoadTestTexturedModel();
-}
-
-void Renderer::LoadTestCheckerTexture()
-{
-    std::filesystem::path runtimePath;
-    std::string runtimePathString;
-    if (!TryResolveRuntimeAsset(
-            platform::kTestCheckerLogicalId,
-            "texture",
-            runtimePath,
-            runtimePathString))
-    {
-        testTexture.reset();
-        testTextureLoaded = false;
-        testTextureFallbackActive = true;
-        return;
-    }
-
-    testTexture = std::make_unique<GpuTexture>();
-    testTexture->texture = LoadTexture(runtimePathString.c_str());
-    if (!IsTextureValid(testTexture->texture))
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Failed to load cooked texture '%s' from runtime path '%s'. "
-            "Using a magenta fallback quad. Cook assets with: python tools/cook_assets.py",
-            TestTextureLogicalId(),
-            runtimePathString.c_str());
-        testTexture.reset();
-        testTextureLoaded = false;
-        testTextureFallbackActive = true;
-        return;
-    }
-
-    SetTextureFilter(testTexture->texture, TEXTURE_FILTER_POINT);
-    testTextureLoaded = true;
-    testTextureFallbackActive = false;
-}
-
-void Renderer::LoadTestStaticModel()
-{
-    std::filesystem::path runtimePath;
-    std::string runtimePathString;
-    if (!TryResolveRuntimeAsset(
-            platform::kTestStaticModelLogicalId,
-            "model",
-            runtimePath,
-            runtimePathString))
-    {
-        testModel.reset();
-        testModelLoaded = false;
-        testModelFallbackActive = true;
-        return;
-    }
-
-    testModel = std::make_unique<GpuModel>();
-    testModel->model = LoadModel(runtimePathString.c_str());
-    if (!IsModelValid(testModel->model))
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Failed to load cooked model '%s' from runtime path '%s'. "
-            "Using an orange fallback cube. Cook assets with: python tools/cook_assets.py",
-            TestModelLogicalId(),
-            runtimePathString.c_str());
-        testModel.reset();
-        testModelLoaded = false;
-        testModelFallbackActive = true;
-        return;
-    }
-
-    testModelLoaded = true;
-    testModelFallbackActive = false;
-}
-
-void Renderer::LoadTestAuthoredModel()
-{
-    std::filesystem::path runtimePath;
-    std::string runtimePathString;
-    if (!TryResolveRuntimeAsset(
-            platform::kTestAuthoredModelLogicalId,
-            "model",
-            runtimePath,
-            runtimePathString))
-    {
-        authoredModel.reset();
-        authoredModelLoaded = false;
-        authoredModelFallbackActive = true;
-        return;
-    }
-
-    authoredModel = std::make_unique<GpuModel>();
-    authoredModel->model = LoadModel(runtimePathString.c_str());
-    if (!IsModelValid(authoredModel->model))
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Failed to load cooked model '%s' from runtime path '%s'. "
-            "Using a visual fallback cube. Cook assets with: python tools/cook_assets.py",
-            AuthoredModelLogicalId(),
-            runtimePathString.c_str());
-        authoredModel.reset();
-        authoredModelLoaded = false;
-        authoredModelFallbackActive = true;
-        return;
-    }
-
-    authoredModelLoaded = true;
-    authoredModelFallbackActive = false;
-}
-
-void Renderer::LoadTestTexturedModel()
-{
-    texturedModelMaterialCount = 0;
-    texturedModelHasAlbedoTexture = false;
-
-    std::filesystem::path runtimePath;
-    std::string runtimePathString;
-    if (!TryResolveRuntimeAsset(
-            platform::kTestTexturedModelLogicalId,
-            "model",
-            runtimePath,
-            runtimePathString))
-    {
-        texturedModel.reset();
-        texturedModelLoaded = false;
-        texturedModelFallbackActive = true;
-        return;
-    }
-
-    texturedModel = std::make_unique<GpuModel>();
-    texturedModel->model = LoadModel(runtimePathString.c_str());
-    if (!IsModelValid(texturedModel->model))
-    {
-        TraceLog(
-            LOG_ERROR,
-            "Failed to load cooked model '%s' from runtime path '%s'. "
-            "Using a visual fallback cube. Cook assets with: python tools/cook_assets.py",
-            TexturedModelLogicalId(),
-            runtimePathString.c_str());
-        texturedModel.reset();
-        texturedModelLoaded = false;
-        texturedModelFallbackActive = true;
-        return;
-    }
-
-    texturedModelLoaded = true;
-    texturedModelFallbackActive = false;
-    texturedModelMaterialCount = texturedModel->model.materialCount;
-    texturedModelHasAlbedoTexture = ModelHasAlbedoTexture(texturedModel->model);
 }
 
 void Renderer::UnloadRuntimeAssets()
 {
-    if (testTexture != nullptr && testTextureLoaded)
-    {
-        UnloadTexture(testTexture->texture);
-    }
-    testTexture.reset();
-    testTextureLoaded = false;
-    testTextureFallbackActive = false;
-
-    if (testModel != nullptr && testModelLoaded)
-    {
-        UnloadModel(testModel->model);
-    }
-    testModel.reset();
-    testModelLoaded = false;
-    testModelFallbackActive = false;
-
-    if (authoredModel != nullptr && authoredModelLoaded)
-    {
-        UnloadModel(authoredModel->model);
-    }
-    authoredModel.reset();
-    authoredModelLoaded = false;
-    authoredModelFallbackActive = false;
-
-    if (texturedModel != nullptr && texturedModelLoaded)
-    {
-        UnloadModel(texturedModel->model);
-    }
-    texturedModel.reset();
-    texturedModelLoaded = false;
-    texturedModelFallbackActive = false;
-    texturedModelMaterialCount = 0;
-    texturedModelHasAlbedoTexture = false;
 }
 
 bool Renderer::IsTestTextureLoaded() const
 {
-    return testTextureLoaded;
+    return false;
 }
 
 bool Renderer::IsTestTextureFallbackActive() const
 {
-    return testTextureFallbackActive;
+    return false;
 }
 
 const char* Renderer::TestTextureLogicalId() const
@@ -1237,12 +911,12 @@ const char* Renderer::TestTextureRuntimeRelativePath() const
 
 bool Renderer::IsTestModelLoaded() const
 {
-    return testModelLoaded;
+    return false;
 }
 
 bool Renderer::IsTestModelFallbackActive() const
 {
-    return testModelFallbackActive;
+    return false;
 }
 
 const char* Renderer::TestModelLogicalId() const
@@ -1252,12 +926,12 @@ const char* Renderer::TestModelLogicalId() const
 
 bool Renderer::IsAuthoredModelLoaded() const
 {
-    return authoredModelLoaded;
+    return false;
 }
 
 bool Renderer::IsAuthoredModelFallbackActive() const
 {
-    return authoredModelFallbackActive;
+    return false;
 }
 
 const char* Renderer::AuthoredModelLogicalId() const
@@ -1267,12 +941,12 @@ const char* Renderer::AuthoredModelLogicalId() const
 
 bool Renderer::IsTexturedModelLoaded() const
 {
-    return texturedModelLoaded;
+    return false;
 }
 
 bool Renderer::IsTexturedModelFallbackActive() const
 {
-    return texturedModelFallbackActive;
+    return false;
 }
 
 const char* Renderer::TexturedModelLogicalId() const
@@ -1282,12 +956,12 @@ const char* Renderer::TexturedModelLogicalId() const
 
 int Renderer::TexturedModelMaterialCount() const
 {
-    return texturedModelMaterialCount;
+    return 0;
 }
 
 bool Renderer::TexturedModelHasAlbedoTexture() const
 {
-    return texturedModelHasAlbedoTexture;
+    return false;
 }
 
 void Renderer::BeginFrame()
@@ -1314,6 +988,9 @@ void Renderer::DrawWorld(
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect)
 {
+    (void)physicsTestBoxPosition;
+    (void)physicsTestBoxSize;
+
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
     if (subViewport)
@@ -1378,7 +1055,6 @@ void Renderer::DrawWorld(
         // overlay instead of this runtime cube or the collected gold wire.
     }
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
-    DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
     const std::size_t checkpointCount =
         level.checkpoints.size() < checkpointVisuals.size() ? level.checkpoints.size()
                                                             : checkpointVisuals.size();
@@ -1393,52 +1069,8 @@ void Renderer::DrawWorld(
     }
     DrawLevelGoalMarker(level.goal, levelCompleted);
 
-    if (testTextureLoaded && testTexture != nullptr)
-    {
-        DrawTestTextureQuad(testTexture->texture);
-    }
-    else
-    {
-        DrawMissingTextureFallback();
-    }
-
-    if (testModelLoaded && testModel != nullptr)
-    {
-        DrawModel(testModel->model, ToRaylib(kTestModelPosition), kTestModelScale, kTestModelTint);
-    }
-    else
-    {
-        DrawMissingModelFallback(kTestModelPosition, kMissingModelFallbackColor);
-    }
-
-    if (authoredModelLoaded && authoredModel != nullptr)
-    {
-        DrawModel(
-            authoredModel->model,
-            ToRaylib(kAuthoredModelPosition),
-            kAuthoredModelScale,
-            kTestModelTint);
-    }
-    else
-    {
-        DrawMissingModelFallback(kAuthoredModelPosition, kMissingAuthoredModelFallbackColor);
-    }
-
-    if (texturedModelLoaded && texturedModel != nullptr)
-    {
-        DrawModel(
-            texturedModel->model,
-            ToRaylib(kTexturedModelPosition),
-            kTexturedModelScale,
-            kTestModelTint);
-    }
-    else
-    {
-        DrawMissingModelFallback(kTexturedModelPosition, kMissingTexturedModelFallbackColor);
-    }
-
-    // Editor overlay last in 3D: world + cooker probes, then marker/highlight/
-    // faded pending-delete (depth on), cyan pending ghost, then the
+    // Editor overlay last in 3D: world, then marker/highlight/faded
+    // pending-delete (depth on), cyan pending ghost, then the
     // depth-independent gizmo. ImGui is after EndMode3D.
     DrawWorldOverlay(overlay);
 
