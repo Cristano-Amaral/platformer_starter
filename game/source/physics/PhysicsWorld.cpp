@@ -1,5 +1,6 @@
 #include "physics/PhysicsWorld.h"
 
+#include "physics/PhysicsCapacity.h"
 #include "world/LevelDefinition.h"
 
 #include <Jolt/Jolt.h>
@@ -33,10 +34,12 @@ namespace physics
 namespace
 {
 constexpr float kMaxPhysicsDeltaSeconds = 1.0f / 60.0f;
-constexpr unsigned int kMaxBodies = 32;
 constexpr unsigned int kNumBodyMutexes = 0;
 constexpr unsigned int kMaxBodyPairs = 64;
 constexpr unsigned int kMaxContactConstraints = 64;
+static_assert(
+    kMaxPhysicsElevatedPlatformCount == world::kMaxElevatedPlatformCount,
+    "world platform budget must match the Jolt body allocator leftover");
 constexpr unsigned int kTempAllocatorBytes = 1 * 1024 * 1024;
 constexpr unsigned int kMaxPhysicsJobs = 256;
 
@@ -547,7 +550,7 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
     impl->jobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(kMaxPhysicsJobs);
     impl->physicsSystem = std::make_unique<JPH::PhysicsSystem>();
     impl->physicsSystem->Init(
-        kMaxBodies,
+        kPhysicsMaxBodies,
         kNumBodyMutexes,
         kMaxBodyPairs,
         kMaxContactConstraints,

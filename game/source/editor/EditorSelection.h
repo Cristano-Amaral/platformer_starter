@@ -1,8 +1,8 @@
 #pragma once
 
 // Focused editor selection identity for Level Format v1 categories.
-// Type + index is enough: v1 has fixed ordered arrays and M33 does not
-// create or delete objects. No UUID, registry, or entity system.
+// Type + index remains the identity: M41 keeps it and reconciles after
+// structural working-copy edits. No UUID, registry, or entity system.
 
 #include "world/LevelDefinition.h"
 
@@ -48,6 +48,10 @@ inline EditorSelection ClearSelection()
 }
 
 const char* EditorObjectKindName(EditorObjectKind kind);
+void FormatSelectionDisplayName(
+    EditorSelection selection,
+    char* buffer,
+    std::size_t bufferSize);
 const char* SelectionDisplayName(EditorSelection selection);
 
 // Resolves against the supplied definition's authored counts. Camera and Spawn
@@ -55,7 +59,7 @@ const char* SelectionDisplayName(EditorSelection selection);
 // with a physics body.
 bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selection);
 
-// True for the M32 editable set. Selection is not permission to edit; this
-// only answers Inspector routing.
+// True for Inspector-editable kinds. Selection is not permission to edit; this
+// only answers Inspector routing. M41 adds Checkpoint, Hazard, and Collectible.
 bool IsEditableSelection(EditorSelection selection);
 }

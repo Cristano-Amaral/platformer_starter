@@ -191,7 +191,7 @@ Status: complete (manually approved). Do not implement Milestone 26 in this sect
 
 ## Collectibles / run counter (Milestone 26)
 
-M26 adds the first non-lethal collectible loop: **exactly three** `CollectibleSpec` AABBs authored in the Level 01 file. Identity is the array index. Per-run flags live in `gameplay::CollectibleRunState` (`std::array<bool, world::kCollectibleCount>`); count is derived. Collection is optional and must not gate the goal. The array size remains compile-time coupled to Level 01's three collectibles.
+M26 adds the first non-lethal collectible loop. Canonical Level 01 still authors **three** `CollectibleSpec` AABBs. Identity remains the container index. Per-run flags live in `gameplay::CollectibleRunState` (`std::vector<std::uint8_t>` sized to the active level). Milestone 41 made the count variable; there is no 16-object design cap. Collection is still optional and must not gate the goal.
 
 - Collectible 1 (index 0): right-platform hop `{5.0, 2.5, 0}` size `{1.0, 1.2, 1.0}`
 - Collectible 2 (index 1): left-landing hop `{-4.5, 4.0, 0}` size `{1.0, 1.2, 1.0}`
@@ -199,7 +199,7 @@ M26 adds the first non-lethal collectible loop: **exactly three** `CollectibleSp
 
 Standing on the support does not collect (AABB sits just above standing center). A normal hop does. No Jolt sensor. Ordinary R/Fall/Hazard preserve flags; only Enter `RestartRun` clears them. Collection runs in the no-respawn branch after checkpoint/goal and is skipped when `restartAvailableAtFrameStart && Enter`.
 
-Renderer receives collected flags plus derived count, draws a gold 0.45 cube for available items only, and always draws `COLLECTED N / <level collectible count>` in the upper-right after `EndMode3D`. Debug/Development metrics show Available/Collected, Inside, and Collected this frame.
+Renderer receives collected flags plus derived count, draws a gold 0.45 cube for available items only, and always draws `COLLECTED N / <level collectible count>` in the upper-right after `EndMode3D`. That runtime skip is correct for gameplay. Opening the Development/Debug editor does not reset `CollectibleRunState`. Collected authored items stay in `LevelDefinition` and remain selectable; F2 draws a gold wireframe cube at the **active** authored center only when the runtime cube is hidden. Uncollected items keep the single runtime cube (no second opaque overlay). Debug/Development metrics show Available/Collected, Inside, and Collected this frame.
 
 Status: complete (manually approved). Do not implement Milestone 27 in this section.
 
@@ -340,15 +340,15 @@ Phase B makes the visual editor live on top of the M32 contract. F2 still pauses
 
 **A. Editor camera.** A dedicated `editor::EditorCamera` (position, yaw, pitch, speed, FOV) owned by `LevelEditorState`, not `PlatformerCamera`. Navigation never writes `LevelDefinition.camera`. `Renderer::DrawWorld` consumes a project-owned `render::CameraView` and does not own camera state: gameplay builds it from `PlatformerCamera`; the editor builds it from `EditorCamera`. First F2 seeds from `gameplayTarget + offset` / current FOV; later F2 toggles in the same process keep the pose. Apply Preview may reset the gameplay camera; it does not move the editor camera. On editor exit, `SnapToTarget(Player)` so follow state does not interpolate from a stale pose. Disk persistence: none. RMB look hides the cursor only while held, via `input::SetMouseLookActive` in the input backend.
 
-**B. Selection.** One `editor::EditorSelection { EditorObjectKind kind; size_t index; }` on `LevelEditorState`. The M32 `selectedPlatformIndex` combo is retired. Type + index matches fixed v1 arrays. No UUID. Hierarchy, picking, Inspector and highlight share this identity. Inspector resolves fields against `workingCopy`. Viewport picking and highlight resolve transforms against the **active/applied** `LevelDefinition` plus runtime poses for moving objects. Apply/Revert/Save keep the same identity. Selecting/navigating does not mark Modified or Dirty. Selection survives F2 close/reopen in the same process if still valid.
+**B. Selection.** One `editor::EditorSelection { EditorObjectKind kind; size_t index; }` on `LevelEditorState`. Type + index is still the identity; M41 reconciles it after structural working-copy edits instead of introducing GUIDs. No UUID. Hierarchy, picking, Inspector and highlight share this identity. Inspector resolves fields against `workingCopy` each frame by index. Viewport picking and highlight resolve transforms against the **active/applied** `LevelDefinition` plus runtime poses for moving objects. While a lifecycle category has pending Add/Duplicate/Delete, active-world picks of that category are ignored so an applied index cannot select the wrong workingCopy slot. Apply keeps the selection if it is still valid; Revert reconciles against active; Reload still clears it.
 
-**C. Mouse to object.** `editor::PollEditorInput()` (input backend, not Application/raylib) supplies mouse position, LMB press and RMB hold. `platform::Window::Width/Height` supply the resizable viewport. `ScreenToWorldRay(CameraView, mouse, viewport)` builds a project-owned `Ray3`. `BuildPickingSet(appliedLevel, runtime poses)` emits CPU proxies from the visible world; `PickNearest` takes the smallest positive hit. Ties keep the earlier proxy (hierarchy order). Unapplied Inspector edits do not move pick/highlight. Jolt raycasts are not used.
+**C. Mouse to object.** `editor::PollEditorInput()` (input backend, not Application/raylib) supplies mouse position, LMB press and RMB hold. `platform::Window::Width/Height` supply the resizable viewport. `ScreenToWorldRay(CameraView, mouse, viewport)` builds a project-owned `Ray3`. `BuildPickingSet(appliedLevel, runtime poses)` emits CPU proxies from the visible active world. Visible pending Add/Duplicate/Modify ghosts emit editor-only `PendingPickProxy` volumes from `CollectPendingAuthoringVisuals` (workingCopy index, no physics). `TryResolveEditorViewportPick` prefers the nearest pending hit, then `PickNearest` on the active set mapped through `StructuralIndexMap`. Ties on the active set keep the earlier proxy (hierarchy order); pending ties keep the nearer hit. Unapplied singleton Inspector edits still do not move active pick/highlight. Jolt raycasts are not used.
 
 **D. Synchronization.** Hierarchy click and world pick both assign `state.selection`. Inspector routes on that value. Highlight is an `EditorHighlightRequest` built from the same proxy the picker used; Renderer draws it read-only from `DebugWorldOverlay`.
 
 ### Live UI
 
-Three ImGui windows, no docking: `Hierarchy` (fixed `kHierarchyEntries`, collapsible groups for Platforms/Slopes/Checkpoints/Hazards/Collectibles), `Inspector` (selected object only), `Level Editor` (status, Apply/Revert/Save). None shows "No object selected." Read-only kinds use `Text`, never `InputFloat`.
+Three ImGui windows, no docking: `Hierarchy` (built from `workingCopy` via `BuildHierarchyEntries`, collapsible groups for Platforms/Slopes/Checkpoints/Hazards/Collectibles), `Inspector` (selected object only; stale type+index shows no object), `Level Editor` (status, Apply/Revert/Save). None shows "No object selected." Read-only kinds use `Text`, never `InputFloat`.
 
 ### Picking proxies
 
@@ -356,7 +356,7 @@ Three ImGui windows, no docking: `Hierarchy` (fixed `kHierarchyEntries`, collaps
 |---|---|---|
 | Player Spawn | yes | `kPlayerVisualSize` AABB at **applied** spawn (Debug/Development marker) |
 | Camera | no | framing spec, not a placed object |
-| Ground / Platform 0..5 | yes | **applied** AABB |
+| Ground / Platform N | yes | **applied** AABB |
 | Slope | yes | **applied** oriented local AABB |
 | Moving Platform | yes | **runtime** center/size (visible frozen pose), Inspector stays authored read-only |
 | Checkpoint / Hazard / Goal | yes | **applied** trigger AABB |
@@ -382,7 +382,7 @@ M34 is complete and merged. Translation gizmo, pending ghost, persistent layout,
 
 **Ownership.** `editor::GizmoInteractionState` lives on `LevelEditorState`. `GetEditablePosition` writes `workingCopy`. Application copies `GizmoDrawRequest` / `EditorPendingTransformPreview` into `render::DebugWorldOverlay` PODs. Renderer does not own selection, workingCopy, or drag state.
 
-**Draw order (inside `BeginMode3D`).** Normal world (including cooker probes) → active spawn marker → active M33 highlight → cyan pending ghost (working geometry, depth-tested) → X/Y/Z gizmo. The gizmo uses a depth-tested faint pass then a depth-independent overlay (`rlDisableDepthTest` + `rlDisableDepthMask` + `rlDisableBackfaceCulling`); those three states are restored immediately after the overlay batch flush. ImGui draws after `EndMode3D`, so panels sit over the gizmo.
+**Draw order (inside `BeginMode3D`).** Normal world (including cooker probes) → active spawn marker → active M33 highlight → Development pending object ghost (checkpoint post/beacon, full hazard, collectible cube) → cyan **wireframe** pending bounds (working geometry; no filled cube, so the object's own bounds do not hide its ghost) → Checkpoint respawn marker → X/Y/Z gizmo. The gizmo uses a depth-tested faint pass then a depth-independent overlay (`rlDisableDepthTest` + `rlDisableDepthMask` + `rlDisableBackfaceCulling`); those three states are restored immediately after the overlay batch flush. ImGui draws after `EndMode3D`, so panels sit over the gizmo.
 
 **Size.** Axis length = `distance * tan(fovY/2) * 0.22`, clamped to `[0.75, 24]`. Visual shaft/head use cylinders/cones (`max(0.038 * length, 0.045)` shaft radius); hit radius remains `0.09 * length` on the world-space shaft (hub skip unchanged).
 
@@ -520,4 +520,60 @@ Phase B wires the live Development `Build > Cook, Stage & Reload` item. It is cr
 
 **Status.** Tool Output keeps Cook & Stage 1/2–2/2. Level `lastMessage`: running / failed before Reload / Cook & Stage succeeded but Reload failed + M39 reason / completed. Starting the workflow clears stale Apply/Save/Reload status enums.
 
-Status: Phase B implemented, awaiting Phase C. Milestone 40 is **not** complete. Milestone 41 has not started.
+Status: complete and merged. Milestone 41 Phase B is in progress.
+
+## Authored object lifecycle (Milestone 41, Phase B)
+
+Phase A generalizes repeatable Level Format v1 categories to variable-length `std::vector` storage and adds **pure** working-copy Add / Duplicate / Delete.
+
+Phase B exposes that helper in the live **Development** editor. There is **no Phase C yet**. Milestone 41 is **not** complete.
+
+**Repeatable (lifecycle):** Platform, Checkpoint, Hazard, Collectible. Stored as `std::vector` in `LevelDefinition`. There is no small design cap of 16/8/8/16. Checkpoint / Hazard / Collectible share the v1 64 KiB / 256-line parser guards. Platform count is additionally limited by leftover Jolt bodies (`kMaxElevatedPlatformCount` = 58). Writer emits one record per element in container order. Still Level Format v1: no count header, no v2.
+
+**Singletons unchanged:** Spawn, Ground, Camera, Goal, slopes (`std::array` of 2), moving platform, dynamic cyan box. The three `support_index_*` fields remain authored singletons; they are 0-based indices into `elevatedPlatforms`, not independently addable objects.
+
+**Lifecycle helper:** `editor::AuthoredObjectLifecycle` mutates only the supplied `LevelDefinition` (the editor's `workingCopy`). Add/Duplicate are append-only, so existing platform-index references do not shift. Duplicate copies values and adds world +X `1.0`. Delete validates first, then mutates atomically. Platform delete remaps every authored `support_index_*` with `R > D` to `R - 1` (same semantic platform after compaction), leaves `R < D` unchanged, and **rejects** the whole delete when any `R == D` (`ReferencedPlatform`) — no silent retarget to Platform 0 and no nearest-platform guess. Deleting the last platform is rejected (`MinimumCount`; a valid/saveable v1 level needs at least one platform because the three support indices must stay in range). Success clears selection. Failures leave `workingCopy` and the input selection unchanged. `LifecycleEditStatus` distinguishes Success / InvalidSelection / UnsupportedType / AtLimit / ReferencedPlatform / MinimumCount so Phase B can show a reason; `CanDeleteSelected` is a secondary enable guard and must not be the only integrity check. No Apply, Save, or physics.
+
+**Live Edit menu (Development only).** `PLATFORMER_ENABLE_LEVEL_AUTHORING`. Menu-only; no Ctrl+D / Delete key.
+
+```
+View / Transform / Edit / Level / Build
+Edit
+├ Add
+│  ├ Platform
+│  ├ Checkpoint
+│  ├ Hazard
+│  └ Collectible
+├ Duplicate Selected
+└ Delete Selected
+```
+
+ImGui emits `LevelEditorRequest` only. `HandleAuthoredLifecycleRequest` (Application after present) calls the Phase A helper, updates selection, marks per-category `structuralPending`, clears gizmo transients, and writes `lastMessage`. Debug compiles the visual editor without this menu. Release has no editor.
+
+**Platform-index references.** The only authored fields whose meaning is “index into `LevelDefinition.elevatedPlatforms`” are `checkpoint1PlatformIndex`, `checkpoint2PlatformIndex`, and `goalPlatformIndex` (`support_index_cp1` / `support_index_cp2` / `support_index_goal`). They are validation metadata, not gameplay runtime. Renderer `platformIndex` is a draw-loop color counter. `EditorSelection.index` is editor identity, not a LevelDefinition field. There is no slope / moving-platform / cached gameplay platform index. Remapping those three ints does not change checkpoint/goal object identity, so only the Platform category needs `CategoryStructuralPending` after a successful platform delete. Apply / Save / Cook / Stage / Reload do not repair indices; the lifecycle mutation must already leave a semantically valid `LevelDefinition`. Still Level Format v1: writer emits the remapped ints; parser range-checks the final values.
+
+**Selection.** Type + index stays. After Add/Duplicate the new index is selected. After Delete, selection is cleared and gizmo transients are cleared (`ClearGizmoInteraction`). Apply keeps the selection if it is still in range. Revert assigns `workingCopy = active` then reconciles. Reload still clears selection (M39).
+
+**Pending structural picks.** A session-local `StructuralIndexMap` tracks active index → workingCopy index for Platform / Checkpoint / Hazard / Collectible. It is not a GUID and is not serialized. Add/Duplicate append: existing active objects stay mapped; the new working-only object has no active counterpart until Apply. Delete marks that active object as pending-deleted (`kNoStructuralIndex`) and shifts later working indices. Viewport picking priority is: (1) nearest visible pending workingCopy ghost from `CollectPendingAuthoringVisuals` / `PendingPickProxy` using the working index directly, (2) active-world proxy mapped through `StructuralIndexMap`, (3) empty click clears. Pending Add/Duplicate/Modify Platform, Checkpoint (trigger AABB), Hazard, and Collectible (authored collection bounds) are viewport-pickable. Picks of pending-deleted objects are ignored (no resurrection). Empty clicks still clear. The map resets to identity on Apply, Revert, Reload, and editor open. `CategoryStructuralPending` remains a per-category dirty flag; it no longer blocks the whole category. Authored `support_index_*` remapping is separate from this session map. No GUID framework.
+
+**Hierarchy** is built from `workingCopy`, so pending adds appear and pending deletes disappear before Apply. Labels stay `Platform N` / `Checkpoint N` / … — not editable names. Hierarchy is not filtered by `CollectibleRunState`. The active world and picking set stay on the applied definition. Editor Collectible proxies come from `active` `LevelDefinition` even when the runtime cube is collected/hidden. Newly added platforms, checkpoints, hazards, and collectibles use cyan **wireframe** pending bounds plus, in Development, pending **object** ghosts from `workingCopy`. `CollectPendingAuthoringVisuals` enumerates **all** pending Add/Duplicate/Modify geometry in those four categories, not only the current selection: selected pending uses stronger cyan; unselected pending uses the same geometry at lower intensity so the complete authoring delta stays visible until Apply, Revert, or successful Reload. Checkpoint / Hazard / Collectible also get a Development-only pending object ghost (checkpoint post/beacon, full hazard bar+teeth, collectible visual cube), drawn before the wires so the authored volume does not hide the object. Platform does not get a second cube: its visual is the authored box, so one cyan wire AABB is enough. Pending object ghosts are editor rendering only: not physics, not gameplay. Visible pending Add/Duplicate/Modify ghosts are viewport-pickable via `PendingPickProxy` volumes derived from the same preview records; selection uses the workingCopy index directly. Viewport picking stays ImGui-capture-gated and below gizmo drag. Pending deletes stay visible in the active world until Apply. Identity is the session map (active index with no working counterpart), not geometry matching. Development draws the same authored geometry faded/desaturated with reduced alpha (world depth test on; not a through-wall overlay) plus a subtle dusty-red delete outline. Platform uses the same box; Checkpoint uses a faded editor post/beacon plus trigger outline (gameplay marker is skipped for that active index so it does not stay fully lit); Hazard uses the full bar+teeth; Collectible uses the full visual cube. Pending-delete style wins over cyan pending Add/Modify and over collected authored gold wire. Pending-deleted objects are not pickable into workingCopy. No tombstones. Object Palette / Object Browser remains future editor UX.
+
+**Editor visual precedence** for one active object: (1) pending delete (faded + delete outline), (2) pending workingCopy transform/add cyan ghost (selected stronger, unselected softer; persists after deselection), (3) collected authored-only gold wire, (4) normal active runtime visual. Cyan Add/Duplicate/Translate ghosts do not use the delete fade. Non-deleted objects keep their current appearance. No runtime mutation before Apply.
+
+**Authored capacity.** Design capacity is not the same as a parser safety guard. Checkpoint, Hazard, and Collectible have no small gameplay-facing cap; they share the v1 64 KiB / 256-line defensive file bounds. Elevated Platform count is limited by leftover Jolt bodies (`kPhysicsMaxBodies` = 64, six non-platform bodies, `kMaxElevatedPlatformCount` = 58). Edit > Add / Duplicate disable when that real budget is exhausted, not at the old Phase A 16/8/8/16 policy numbers. Future Pi Zero W optimization does not keep those tiny authoring caps.
+
+**Add placement.** `AuthoredObjectLifecycle::Add*` takes a camera-region `placementAnchor` and does not read EditorCamera or raylib. Development `HandleAuthoredLifecycleRequest` receives `EditorAddPlacementAnchor(editorCamera)`: camera position + look-forward * `kEditorAddPlacementDistance` (10). `EditorCameraTarget` is only the 1-unit view look-at and is not used for placement. Authored X/Y come from that camera region. Authored Z is the current Level Format v1 gameplay-lane proxy: `workingCopy.initialSpawnVisualCenter.z` (`spawn.z`). Camera-derived Z is ignored. Spawn X/Y do not affect Add. Category offsets from the hybrid placement are currently `{0,0,0}`; Checkpoint `respawnPosition` stays `center + kDefaultAddedCheckpointRespawnOffset` (`{0,0,0}`). Duplicate remains original +1 world X, preserves the source object's Z, and does not snap to the lane. This is not "place near Spawn." A future milestone may add an explicit placement plane, lane snapping, surface placement, or viewport rays if multi-lane levels need it. A future Object Palette should reuse the same Add + hybrid placement path.
+
+**Inspector.** Lookup-by-index each frame. Platform keeps Translate/Resize numerics. Checkpoint edits Trigger Center, Trigger Size, and Respawn Position as independent authored fields. Hazard and Collectible edit `center` and `size`. A collected authored Collectible remains a valid selection; Inspector still shows `workingCopy` center/size. No runtime uncollect.
+
+**Gizmo.** Translate: Spawn, Ground, Platform, Checkpoint, Hazard, Collectible. Resize: Ground and Platform only. Checkpoint Translate is an assembly move: `SetCheckpointAssemblyCenter` applies one delta to `center` and `respawnPosition` so `respawnPosition - center` is preserved. Inspector field edits do not use that helper. No respawn gizmo.
+
+**Checkpoint editor overlay.** A selected Checkpoint draws the existing trigger AABB (highlight/pending ghost from trigger `center`/`size`) plus an editor-only magenta wire marker at `workingCopy.respawnPosition`. A thin connector is drawn when the two points differ. When the checkpoint assembly differs from `active`, Development also draws a translucent pending post/beacon from `workingCopy` using `MakeCheckpointMarkerLayout` (same shape as the runtime marker). The active runtime marker stays at `active` until Apply. Both overlay values come from `workingCopy`, never mixed with `active`. Hierarchy/picking still treat Checkpoint as one object. Add Checkpoint defaults `respawnPosition = center` (canonical Level 01 identity offset). Duplicate already offsets both by +1 X.
+
+**Runtime.** `PhysicsWorld::TryRebuild` remains the only Apply/reload rebuild. Checkpoint progression uses container order. Collectible flags resize on load / Apply / Reload / RestartRun. HUD `COLLECTED N / count` uses the active level size. F2 editor visualization does not reset collected flags, collected count, timer, checkpoint progression, or BEST.
+
+**Gating.** Enable helpers require `PLATFORMER_ENABLE_LEVEL_AUTHORING` (Development). Dirty and Modified do not disable lifecycle. No automatic Apply/Save. Pending object ghosts and pending-delete faded visuals are Development-only (`PLATFORMER_ENABLE_LEVEL_AUTHORING`); Debug keeps the cyan bounds overlay without those extras. Release has no editor overlay.
+
+**Delete key.** Development Delete (not Backspace, not Ctrl+D) emits the same `DeleteSelected` request as Edit > Delete Selected, after ImGui `WantCaptureKeyboard` / `WantTextInput`. Disabled cases do nothing: invalid/unsupported selection, gizmo drag, referenced Platform, last remaining Platform. Platforms are deletable when count > 1 and the selected Platform is not referenced by `support_index_cp1` / `support_index_cp2` / `support_index_goal`.
+
+Status: Phase B implemented, awaiting Phase C. Milestone 41 is **not** complete. Milestone 42 has not started.

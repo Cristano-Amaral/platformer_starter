@@ -1,5 +1,6 @@
 #include "editor/EditorGizmo.h"
 
+#include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorMath.h"
 #include "world/RespawnWorld.h"
 
@@ -17,10 +18,14 @@ core::Vec3 Add(core::Vec3 a, core::Vec3 b)
     return {a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
+bool Vec3Differs(core::Vec3 a, core::Vec3 b)
+{
+    return a.x != b.x || a.y != b.y || a.z != b.z;
+}
+
 bool BoxDiffers(const world::Box& a, const world::Box& b)
 {
-    return a.center.x != b.center.x || a.center.y != b.center.y || a.center.z != b.center.z
-        || a.size.x != b.size.x || a.size.y != b.size.y || a.size.z != b.size.z;
+    return Vec3Differs(a.center, b.center) || Vec3Differs(a.size, b.size);
 }
 
 core::Vec3 ViewForward(const render::CameraView& view)
@@ -212,7 +217,10 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Ground:
         return selection.index == 0;
     case EditorObjectKind::ElevatedPlatform:
-        return selection.index < world::kLevel01ElevatedPlatformCount;
+    case EditorObjectKind::Checkpoint:
+    case EditorObjectKind::Hazard:
+    case EditorObjectKind::Collectible:
+        return true;
     default:
         return false;
     }
@@ -225,7 +233,7 @@ bool IsResizeSelection(EditorSelection selection)
     case EditorObjectKind::Ground:
         return selection.index == 0;
     case EditorObjectKind::ElevatedPlatform:
-        return selection.index < world::kLevel01ElevatedPlatformCount;
+        return true;
     default:
         return false;
     }
@@ -251,6 +259,24 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.elevatedPlatforms.size())
         {
             return &level.elevatedPlatforms[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Checkpoint:
+        if (selection.index < level.checkpoints.size())
+        {
+            return &level.checkpoints[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Hazard:
+        if (selection.index < level.hazards.size())
+        {
+            return &level.hazards[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Collectible:
+        if (selection.index < level.collectibles.size())
+        {
+            return &level.collectibles[selection.index].center;
         }
         break;
     default:
@@ -281,6 +307,24 @@ const core::Vec3* GetEditablePosition(
         if (selection.index < level.elevatedPlatforms.size())
         {
             return &level.elevatedPlatforms[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Checkpoint:
+        if (selection.index < level.checkpoints.size())
+        {
+            return &level.checkpoints[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Hazard:
+        if (selection.index < level.hazards.size())
+        {
+            return &level.hazards[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Collectible:
+        if (selection.index < level.collectibles.size())
+        {
+            return &level.collectibles[selection.index].center;
         }
         break;
     default:
@@ -385,6 +429,33 @@ bool GetGizmoPreviewBox(
             return true;
         }
         break;
+    case EditorObjectKind::Checkpoint:
+        if (selection.index < workingCopy.checkpoints.size())
+        {
+            const world::CheckpointSpec& checkpoint = workingCopy.checkpoints[selection.index];
+            center = checkpoint.center;
+            size = checkpoint.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::Hazard:
+        if (selection.index < workingCopy.hazards.size())
+        {
+            const world::HazardSpec& hazard = workingCopy.hazards[selection.index];
+            center = hazard.center;
+            size = hazard.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::Collectible:
+        if (selection.index < workingCopy.collectibles.size())
+        {
+            const world::CollectibleSpec& collectible = workingCopy.collectibles[selection.index];
+            center = collectible.center;
+            size = collectible.size;
+            return true;
+        }
+        break;
     default:
         break;
     }
@@ -454,6 +525,17 @@ bool AuthoredGeometryDiffers(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection)
 {
+    StructuralIndexMap identity{};
+    ResetStructuralIndexMap(identity, active);
+    return AuthoredGeometryDiffers(active, workingCopy, selection, identity);
+}
+
+bool AuthoredGeometryDiffers(
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    const StructuralIndexMap& map)
+{
     switch (selection.kind)
     {
     case EditorObjectKind::Spawn:
@@ -464,10 +546,80 @@ bool AuthoredGeometryDiffers(
     case EditorObjectKind::Ground:
         return selection.index == 0 && BoxDiffers(active.ground, workingCopy.ground);
     case EditorObjectKind::ElevatedPlatform:
-        return selection.index < active.elevatedPlatforms.size()
-            && BoxDiffers(
-                   active.elevatedPlatforms[selection.index],
-                   workingCopy.elevatedPlatforms[selection.index]);
+    {
+        if (selection.index >= workingCopy.elevatedPlatforms.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::ElevatedPlatform, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.elevatedPlatforms.size())
+        {
+            return true;
+        }
+        return BoxDiffers(
+            active.elevatedPlatforms[static_cast<std::size_t>(activeIndex)],
+            workingCopy.elevatedPlatforms[selection.index]);
+    }
+    case EditorObjectKind::Checkpoint:
+    {
+        if (selection.index >= workingCopy.checkpoints.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::Checkpoint, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.checkpoints.size())
+        {
+            return true;
+        }
+        const world::CheckpointSpec& activeCheckpoint =
+            active.checkpoints[static_cast<std::size_t>(activeIndex)];
+        const world::CheckpointSpec& workingCheckpoint = workingCopy.checkpoints[selection.index];
+        return Vec3Differs(activeCheckpoint.center, workingCheckpoint.center)
+            || Vec3Differs(activeCheckpoint.size, workingCheckpoint.size)
+            || Vec3Differs(activeCheckpoint.respawnPosition, workingCheckpoint.respawnPosition);
+    }
+    case EditorObjectKind::Hazard:
+    {
+        if (selection.index >= workingCopy.hazards.size())
+        {
+            return false;
+        }
+        const int activeIndex = MappedActiveIndex(map, EditorObjectKind::Hazard, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.hazards.size())
+        {
+            return true;
+        }
+        const world::HazardSpec& activeHazard =
+            active.hazards[static_cast<std::size_t>(activeIndex)];
+        const world::HazardSpec& workingHazard = workingCopy.hazards[selection.index];
+        return Vec3Differs(activeHazard.center, workingHazard.center)
+            || Vec3Differs(activeHazard.size, workingHazard.size);
+    }
+    case EditorObjectKind::Collectible:
+    {
+        if (selection.index >= workingCopy.collectibles.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::Collectible, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.collectibles.size())
+        {
+            return true;
+        }
+        const world::CollectibleSpec& activeCollectible =
+            active.collectibles[static_cast<std::size_t>(activeIndex)];
+        const world::CollectibleSpec& workingCollectible =
+            workingCopy.collectibles[selection.index];
+        return Vec3Differs(activeCollectible.center, workingCollectible.center)
+            || Vec3Differs(activeCollectible.size, workingCollectible.size);
+    }
     default:
         return false;
     }
@@ -478,8 +630,19 @@ EditorPendingTransformPreview MakePendingTransformPreview(
     const world::LevelDefinition& active,
     const world::LevelDefinition& workingCopy)
 {
+    StructuralIndexMap identity{};
+    ResetStructuralIndexMap(identity, active);
+    return MakePendingTransformPreview(selection, active, workingCopy, identity);
+}
+
+EditorPendingTransformPreview MakePendingTransformPreview(
+    EditorSelection selection,
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map)
+{
     EditorPendingTransformPreview preview{};
-    if (!AuthoredGeometryDiffers(active, workingCopy, selection))
+    if (!AuthoredGeometryDiffers(active, workingCopy, selection, map))
     {
         return preview;
     }
@@ -489,6 +652,262 @@ EditorPendingTransformPreview MakePendingTransformPreview(
     }
     preview.visible = true;
     return preview;
+}
+
+bool SetCheckpointAssemblyCenter(
+    world::LevelDefinition& workingCopy,
+    std::size_t index,
+    core::Vec3 newCenter)
+{
+    if (index >= workingCopy.checkpoints.size() || !IsFiniteVec3(newCenter))
+    {
+        return false;
+    }
+
+    world::CheckpointSpec& checkpoint = workingCopy.checkpoints[index];
+    const core::Vec3 delta = Sub(newCenter, checkpoint.center);
+    const core::Vec3 newRespawn = Add(checkpoint.respawnPosition, delta);
+    if (!IsFiniteVec3(newRespawn))
+    {
+        return false;
+    }
+
+    checkpoint.center = newCenter;
+    checkpoint.respawnPosition = newRespawn;
+    return true;
+}
+
+CheckpointEditorOverlay MakeCheckpointEditorOverlay(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy)
+{
+    CheckpointEditorOverlay overlay{};
+    if (selection.kind != EditorObjectKind::Checkpoint
+        || selection.index >= workingCopy.checkpoints.size())
+    {
+        return overlay;
+    }
+
+    const world::CheckpointSpec& checkpoint = workingCopy.checkpoints[selection.index];
+    overlay.visible = true;
+    overlay.triggerCenter = checkpoint.center;
+    overlay.triggerSize = checkpoint.size;
+    overlay.respawnPosition = checkpoint.respawnPosition;
+    return overlay;
+}
+
+EditorPendingObjectVisual MakePendingObjectVisual(
+    EditorSelection selection,
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy)
+{
+    StructuralIndexMap identity{};
+    ResetStructuralIndexMap(identity, active);
+    return MakePendingObjectVisual(selection, active, workingCopy, identity);
+}
+
+EditorPendingObjectVisual MakePendingObjectVisual(
+    EditorSelection selection,
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map)
+{
+    EditorPendingObjectVisual visual{};
+    if (!HasDistinctPendingObjectVisual(selection.kind))
+    {
+        return visual;
+    }
+
+    switch (selection.kind)
+    {
+    case EditorObjectKind::Checkpoint:
+        if (selection.index >= workingCopy.checkpoints.size())
+        {
+            return visual;
+        }
+        {
+            const int activeIndex =
+                MappedActiveIndex(map, EditorObjectKind::Checkpoint, selection.index);
+            if (activeIndex >= 0
+                && static_cast<std::size_t>(activeIndex) < active.checkpoints.size())
+            {
+                const world::CheckpointSpec& activeCheckpoint =
+                    active.checkpoints[static_cast<std::size_t>(activeIndex)];
+                const world::CheckpointSpec& workingCheckpoint =
+                    workingCopy.checkpoints[selection.index];
+                if (!Vec3Differs(activeCheckpoint.center, workingCheckpoint.center)
+                    && !Vec3Differs(
+                        activeCheckpoint.respawnPosition, workingCheckpoint.respawnPosition))
+                {
+                    return visual;
+                }
+            }
+        }
+        visual.visible = true;
+        visual.kind = PendingObjectVisualKind::Checkpoint;
+        visual.checkpoint = workingCopy.checkpoints[selection.index];
+        return visual;
+    case EditorObjectKind::Hazard:
+        if (selection.index >= workingCopy.hazards.size())
+        {
+            return visual;
+        }
+        {
+            const int activeIndex =
+                MappedActiveIndex(map, EditorObjectKind::Hazard, selection.index);
+            if (activeIndex >= 0
+                && static_cast<std::size_t>(activeIndex) < active.hazards.size())
+            {
+                const world::HazardSpec& activeHazard =
+                    active.hazards[static_cast<std::size_t>(activeIndex)];
+                const world::HazardSpec& workingHazard = workingCopy.hazards[selection.index];
+                if (!Vec3Differs(activeHazard.center, workingHazard.center)
+                    && !Vec3Differs(activeHazard.size, workingHazard.size))
+                {
+                    return visual;
+                }
+            }
+        }
+        visual.visible = true;
+        visual.kind = PendingObjectVisualKind::Hazard;
+        visual.hazard = workingCopy.hazards[selection.index];
+        return visual;
+    case EditorObjectKind::Collectible:
+        if (selection.index >= workingCopy.collectibles.size())
+        {
+            return visual;
+        }
+        {
+            const int activeIndex =
+                MappedActiveIndex(map, EditorObjectKind::Collectible, selection.index);
+            if (activeIndex >= 0
+                && static_cast<std::size_t>(activeIndex) < active.collectibles.size())
+            {
+                const world::CollectibleSpec& activeCollectible =
+                    active.collectibles[static_cast<std::size_t>(activeIndex)];
+                const world::CollectibleSpec& workingCollectible =
+                    workingCopy.collectibles[selection.index];
+                if (!Vec3Differs(activeCollectible.center, workingCollectible.center))
+                {
+                    return visual;
+                }
+            }
+        }
+        visual.visible = true;
+        visual.kind = PendingObjectVisualKind::Collectible;
+        visual.collectible = workingCopy.collectibles[selection.index];
+        return visual;
+    default:
+        break;
+    }
+    return visual;
+}
+
+std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map,
+    EditorSelection selection)
+{
+    std::vector<PendingAuthoringVisual> visuals;
+    const EditorObjectKind kinds[] = {
+        EditorObjectKind::ElevatedPlatform,
+        EditorObjectKind::Checkpoint,
+        EditorObjectKind::Hazard,
+        EditorObjectKind::Collectible};
+    for (const EditorObjectKind kind : kinds)
+    {
+        const std::size_t count = [&]() -> std::size_t {
+            switch (kind)
+            {
+            case EditorObjectKind::ElevatedPlatform:
+                return workingCopy.elevatedPlatforms.size();
+            case EditorObjectKind::Checkpoint:
+                return workingCopy.checkpoints.size();
+            case EditorObjectKind::Hazard:
+                return workingCopy.hazards.size();
+            case EditorObjectKind::Collectible:
+                return workingCopy.collectibles.size();
+            default:
+                return 0;
+            }
+        }();
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const EditorSelection item{kind, index};
+            if (!AuthoredGeometryDiffers(active, workingCopy, item, map))
+            {
+                continue;
+            }
+            PendingAuthoringVisual visual{};
+            visual.kind = kind;
+            visual.workingIndex = index;
+            visual.selected = selection.kind == kind && selection.index == index;
+            if (!GetGizmoPreviewBox(
+                    workingCopy, item, visual.boundsCenter, visual.boundsSize))
+            {
+                continue;
+            }
+            const EditorPendingObjectVisual objectVisual =
+                MakePendingObjectVisual(item, active, workingCopy, map);
+            visual.hasObjectVisual = objectVisual.visible;
+            if (kind == EditorObjectKind::Checkpoint)
+            {
+                visual.checkpoint = workingCopy.checkpoints[index];
+            }
+            else
+            {
+                visual.checkpoint = objectVisual.checkpoint;
+            }
+            visual.hazard = objectVisual.hazard;
+            visual.collectible = objectVisual.collectible;
+            if (kind == EditorObjectKind::Hazard)
+            {
+                visual.hazard = workingCopy.hazards[index];
+            }
+            if (kind == EditorObjectKind::Collectible)
+            {
+                visual.collectible = workingCopy.collectibles[index];
+            }
+            visuals.push_back(visual);
+        }
+    }
+    return visuals;
+}
+
+int CollectEditorAuthoredCollectibleCenters(
+    const world::LevelDefinition& active,
+    const std::uint8_t* collected,
+    std::size_t collectedCount,
+    core::Vec3* outCenters,
+    int maxCenters,
+    const StructuralIndexMap* pendingDeleteMap)
+{
+    // Read-only vs CollectibleRunState: never writes collected flags.
+    if (outCenters == nullptr || maxCenters <= 0)
+    {
+        return 0;
+    }
+
+    int count = 0;
+    const std::size_t limit = active.collectibles.size() < collectedCount
+        ? active.collectibles.size()
+        : collectedCount;
+    for (std::size_t index = 0; index < limit && count < maxCenters; ++index)
+    {
+        const std::uint8_t flag = collected == nullptr ? 0 : collected[index];
+        const bool pendingDelete = pendingDeleteMap != nullptr
+            && IsPendingDeleteActiveIndex(
+                *pendingDeleteMap, EditorObjectKind::Collectible, index);
+        if (ResolveCollectibleEditorVisualMode(pendingDelete, flag)
+            != CollectibleEditorVisualMode::CollectedAuthored)
+        {
+            continue;
+        }
+        outCenters[count] = active.collectibles[index].center;
+        ++count;
+    }
+    return count;
 }
 
 EditorAxis PickGizmoHandle(Ray3 ray, core::Vec3 origin, float axisLength, float hitRadius)
@@ -838,7 +1257,19 @@ bool UpdateGizmoInteraction(
             return true;
         }
 
-        *position = GizmoDragPosition(state, mouseRay, view);
+        const core::Vec3 newCenter = GizmoDragPosition(state, mouseRay, view);
+        if (state.dragTarget.kind == EditorObjectKind::Checkpoint)
+        {
+            if (!SetCheckpointAssemblyCenter(workingCopy, state.dragTarget.index, newCenter))
+            {
+                ClearGizmoInteraction(state);
+                return true;
+            }
+        }
+        else
+        {
+            *position = newCenter;
+        }
         state.hovered = state.active;
         return true;
     }

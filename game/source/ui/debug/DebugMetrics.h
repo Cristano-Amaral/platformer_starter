@@ -3,7 +3,8 @@
 #include "core/Vec3.h"
 #include "world/CollectibleWorld.h"
 
-#include <array>
+#include <cstdint>
+#include <vector>
 
 namespace ui
 {
@@ -113,8 +114,8 @@ struct DebugMetricsSnapshot
     bool hazardContactThisFrame = false;
 
     int collectedCount = 0;
-    std::array<bool, world::kCollectibleCount> collectibleCollected{};
-    std::array<bool, world::kCollectibleCount> collectibleInside{};
+    std::vector<std::uint8_t> collectibleCollected{};
+    std::vector<std::uint8_t> collectibleInside{};
     const char* collectedThisFrameLabel = "None";
 
     bool levelCompleted = false;

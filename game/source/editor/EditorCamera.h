@@ -31,10 +31,15 @@ inline constexpr float kEditorCameraFastMultiplier = 2.0f;
 inline constexpr float kEditorCameraWheelSpeedStep = 1.0f;
 inline constexpr float kEditorCameraDollyWheelScale = 0.35f;
 inline constexpr float kEditorCameraDollyMaxStep = 8.0f;
+// Add camera region is position + look-forward * 10. Lifecycle uses only
+// X/Y from this anchor; authored Z is workingCopy spawn.z (gameplay lane).
+// EditorCameraTarget is only 1 unit ahead (view look-at), not a scene pivot.
+inline constexpr float kEditorAddPlacementDistance = 10.0f;
 
 core::Vec3 EditorCameraForward(const EditorCamera& camera);
 core::Vec3 EditorCameraRight(const EditorCamera& camera);
 core::Vec3 EditorCameraTarget(const EditorCamera& camera);
+core::Vec3 EditorAddPlacementAnchor(const EditorCamera& camera);
 render::CameraView MakeCameraView(const EditorCamera& camera);
 
 void ClampEditorCamera(EditorCamera& camera);

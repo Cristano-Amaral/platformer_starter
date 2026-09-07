@@ -44,6 +44,10 @@ add_executable(Platformer3D
     game/source/core/Vec3.h
     game/source/editor/AuthoringPaths.cpp
     game/source/editor/AuthoringPaths.h
+    game/source/editor/AuthoredLifecycleCommands.cpp
+    game/source/editor/AuthoredLifecycleCommands.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/CookStageReloadWorkflow.cpp
     game/source/editor/CookStageReloadWorkflow.h
     game/source/editor/EditorCamera.cpp
@@ -86,6 +90,7 @@ add_executable(Platformer3D
     game/source/input/Input.cpp
     game/source/input/Input.h
     game/source/input/InputState.h
+    game/source/physics/PhysicsCapacity.h
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
     game/source/persistence/BestTimeSave.cpp
@@ -229,6 +234,8 @@ add_custom_command(TARGET Platformer3D POST_BUILD
 # instead of duplicating ReplaceFileW/MoveFileExW. M39 reload prepare/reconcile
 # lives here so candidate parse can be tested without the game.
 add_executable(LevelFileTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/RuntimeLevelReload.cpp
@@ -264,6 +271,11 @@ target_compile_definitions(LevelFileTest PRIVATE
 # Links Jolt because that is exactly what is being validated; no raylib/ImGui.
 # It only reads the canonical level and never writes a file.
 add_executable(PhysicsRebuildTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/physics/PhysicsCapacity.h
     game/source/physics/PhysicsRebuildTest.cpp
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
@@ -287,11 +299,15 @@ target_compile_definitions(PhysicsRebuildTest PRIVATE
 # Jolt, or ImGui: the editor must pick authored proxies with project-owned CPU
 # math rather than Jolt raycasts.
 add_executable(EditorPickingTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorCamera.cpp
     game/source/editor/EditorCamera.h
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorInput.h
     game/source/editor/EditorMath.h
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPickingTest.cpp
@@ -311,6 +327,8 @@ endif()
 # Milestone 34 translation-gizmo math and editor-layout path. No window, raylib,
 # Jolt, or ImGui: live drag/render is exercised by Platformer3D, not this test.
 add_executable(EditorGizmoTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorGizmoTest.cpp
@@ -399,6 +417,49 @@ if(MSVC)
     target_compile_options(EditorWorkspaceTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(EditorWorkspaceTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 41 Phase A: pure working-copy Add/Duplicate/Delete. No ImGui.
+add_executable(AuthoredObjectLifecycleTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoredObjectLifecycleTest.cpp
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(AuthoredObjectLifecycleTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(AuthoredObjectLifecycleTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(AuthoredObjectLifecycleTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 41 Phase B: owner-side lifecycle requests without ImGui.
+add_executable(AuthoredLifecycleIntegrationTest
+    game/source/editor/AuthoredLifecycleCommands.cpp
+    game/source/editor/AuthoredLifecycleCommands.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoredLifecycleIntegrationTest.cpp
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorHierarchy.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/LevelEditor.cpp
+    game/source/editor/LevelEditor.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(AuthoredLifecycleIntegrationTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(AuthoredLifecycleIntegrationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(AuthoredLifecycleIntegrationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or

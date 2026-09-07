@@ -9,6 +9,8 @@
 // Jolt Factory / RegisterTypes lifecycle survives repeated teardown, so this
 // exercises it directly. Not shipped, and it never writes any file.
 
+#include "editor/AuthoredObjectLifecycle.h"
+#include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "world/GreyboxWorld.h"
 #include "world/LevelDefinition.h"
@@ -238,6 +240,106 @@ int main()
         Expect(
             live.GetPlayerPhysicsState().characterInitialized,
             "live CharacterVirtual survives the other world's Shutdown");
+    }
+
+    {
+        physics::PhysicsWorld countWorld;
+        Expect(countWorld.Initialize(parsed.level), "count Initialize");
+        Expect(
+            countWorld.InitializePlayer(
+                parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "count InitializePlayer");
+        Expect(countWorld.StaticBodyCount() == 9, "canonical 6 platforms -> 9 static");
+
+        world::LevelDefinition fewer = parsed.level;
+        fewer.elevatedPlatforms.pop_back();
+        fewer.goalPlatformIndex = 4;
+        Expect(
+            countWorld.TryRebuild(
+                fewer, fewer.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "TryRebuild fewer platforms");
+        Expect(countWorld.IsInitialized(), "fewer platforms leaves world initialized");
+        Expect(countWorld.StaticBodyCount() == 8, "5 platforms -> 8 static");
+
+        world::LevelDefinition more = parsed.level;
+        more.elevatedPlatforms.push_back({{30.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        Expect(
+            countWorld.TryRebuild(
+                more, more.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "TryRebuild more platforms");
+        Expect(countWorld.StaticBodyCount() == 10, "7 platforms -> 10 static");
+    }
+
+    {
+        physics::PhysicsWorld applyWorld;
+        Expect(applyWorld.Initialize(parsed.level), "apply Initialize");
+        Expect(
+            applyWorld.InitializePlayer(
+                parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "apply InitializePlayer");
+        world::LevelDefinition added = parsed.level;
+        Expect(
+            editor::AddPlatform(added, {4.0f, 1.0f, 0.0f}).succeeded, "lifecycle Add before Apply");
+        Expect(
+            applyWorld.TryRebuild(
+                added, added.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "Apply after Add rebuilds");
+        Expect(applyWorld.StaticBodyCount() == 10, "Apply after Add body count");
+        Expect(added.checkpoint1PlatformIndex == parsed.level.checkpoint1PlatformIndex, "Add keeps support indices");
+
+        world::LevelDefinition deleted = parsed.level;
+        Expect(
+            editor::DeleteSelected(deleted, {editor::EditorObjectKind::ElevatedPlatform, 1}).succeeded,
+            "lifecycle Delete before Apply");
+        Expect(deleted.elevatedPlatforms.size() == 5, "delete unreferenced platform");
+        Expect(deleted.checkpoint1PlatformIndex == 1, "cp1 remapped 2 -> 1");
+        Expect(deleted.checkpoint2PlatformIndex == 3, "cp2 remapped 4 -> 3");
+        Expect(deleted.goalPlatformIndex == 4, "goal remapped 5 -> 4");
+        Expect(
+            applyWorld.TryRebuild(
+                deleted, deleted.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "Apply after Delete rebuilds");
+        Expect(applyWorld.StaticBodyCount() == 8, "Apply after Delete body count");
+    }
+
+    {
+        physics::PhysicsWorld capacityWorld;
+        Expect(capacityWorld.Initialize(parsed.level), "capacity Initialize");
+        Expect(
+            capacityWorld.InitializePlayer(
+                parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "capacity InitializePlayer");
+        world::LevelDefinition seventeen = parsed.level;
+        while (seventeen.elevatedPlatforms.size() < 17)
+        {
+            const float x = 40.0f + static_cast<float>(seventeen.elevatedPlatforms.size());
+            seventeen.elevatedPlatforms.push_back({{x, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        }
+        Expect(
+            capacityWorld.TryRebuild(
+                seventeen, seventeen.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "17 platforms rebuild succeeds");
+        Expect(
+            capacityWorld.StaticBodyCount() == 1 + 17 + world::kLevel01SlopeCount,
+            "17 platforms static body count");
+
+        world::LevelDefinition atBudget = parsed.level;
+        atBudget.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxPhysicsElevatedPlatformCount),
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        Expect(
+            capacityWorld.TryRebuild(
+                atBudget, atBudget.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "physics platform budget rebuild succeeds");
+
+        world::LevelDefinition overBudget = atBudget;
+        overBudget.elevatedPlatforms.push_back({{90.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        physics::PhysicsWorld rejected;
+        Expect(
+            !rejected.Initialize(overBudget)
+                || !rejected.InitializePlayer(
+                    overBudget.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "over-budget platform count is rejected by physics");
     }
 
     if (gFailures != 0)

@@ -16,8 +16,9 @@ inline constexpr float kNudgePrecisionStep = 0.01f;
 float NudgeStep(bool precision);
 core::Vec3 NudgeWorldDelta(EditorAxis axis, float sign, bool precision);
 
-// Writes workingCopy position only. Returns false for unsupported selections,
-// non-finite results, or when mode is not Translate.
+// Writes workingCopy Translate pose. Checkpoint also moves respawnPosition by
+// the same delta (assembly translate). Returns false for unsupported
+// selections, non-finite results, or when mode is not Translate.
 bool ApplyNudge(
     world::LevelDefinition& workingCopy,
     EditorSelection selection,

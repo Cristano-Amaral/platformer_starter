@@ -6,13 +6,11 @@
 
 #include "core/Vec3.h"
 
-#include <array>
-
 namespace world
 {
 inline constexpr core::Vec3 kPlayerVisualSize{0.8f, 1.6f, 0.8f};
 
-inline constexpr int kCheckpointCount = 2;
+inline constexpr int kLevel01CheckpointCount = 2;
 inline constexpr int kNoActiveCheckpointIndex = -1;
 
 struct CheckpointSpec
@@ -56,9 +54,9 @@ constexpr bool PointInsideCheckpoint(const CheckpointSpec& spec, core::Vec3 visu
     return PointInsideAabb(spec.center, spec.size, visualCenter);
 }
 
-constexpr bool IsValidCheckpointIndex(int index)
+constexpr bool IsValidCheckpointIndex(int index, int checkpointCount)
 {
-    return index >= 0 && index < kCheckpointCount;
+    return index >= 0 && index < checkpointCount;
 }
 
 constexpr int NextExpectedCheckpointIndex(int activeCheckpointIndex)
@@ -66,11 +64,23 @@ constexpr int NextExpectedCheckpointIndex(int activeCheckpointIndex)
     return activeCheckpointIndex + 1;
 }
 
+// If Apply/Reload shrinks the authored list, an old active index must not be
+// kept. Count 0 or an out-of-range index returns none.
+constexpr int ReconcileActiveCheckpointIndex(int activeCheckpointIndex, int checkpointCount)
+{
+    if (!IsValidCheckpointIndex(activeCheckpointIndex, checkpointCount))
+    {
+        return kNoActiveCheckpointIndex;
+    }
+    return activeCheckpointIndex;
+}
+
 constexpr CheckpointVisualState CheckpointVisualStateForIndex(
     int checkpointIndex,
-    int activeCheckpointIndex)
+    int activeCheckpointIndex,
+    int checkpointCount)
 {
-    if (!IsValidCheckpointIndex(checkpointIndex) || activeCheckpointIndex < 0)
+    if (!IsValidCheckpointIndex(checkpointIndex, checkpointCount) || activeCheckpointIndex < 0)
     {
         return CheckpointVisualState::Future;
     }
@@ -85,9 +95,46 @@ constexpr CheckpointVisualState CheckpointVisualStateForIndex(
     return CheckpointVisualState::Future;
 }
 
+// Shared by active runtime markers and the Development pending ghost so both
+// follow the same post/beacon assembly (trigger XZ + respawn Y).
+inline constexpr float kCheckpointMarkerPostWidth = 0.18f;
+inline constexpr float kCheckpointMarkerPostHeight = 1.6f;
+inline constexpr float kCheckpointMarkerBeaconSize = 0.36f;
+inline constexpr float kCheckpointMarkerZOffset = -0.95f;
+
+struct CheckpointMarkerLayout
+{
+    core::Vec3 postCenter{};
+    core::Vec3 postSize{};
+    core::Vec3 beaconCenter{};
+    core::Vec3 beaconSize{};
+};
+
+inline CheckpointMarkerLayout MakeCheckpointMarkerLayout(const CheckpointSpec& spec)
+{
+    CheckpointMarkerLayout layout{};
+    const float supportTopY = spec.respawnPosition.y - kPlayerVisualSize.y * 0.5f;
+    layout.postCenter = {
+        spec.center.x,
+        supportTopY + kCheckpointMarkerPostHeight * 0.5f,
+        spec.center.z + kCheckpointMarkerZOffset};
+    layout.postSize = {
+        kCheckpointMarkerPostWidth, kCheckpointMarkerPostHeight, kCheckpointMarkerPostWidth};
+    layout.beaconSize = {
+        kCheckpointMarkerBeaconSize, kCheckpointMarkerBeaconSize, kCheckpointMarkerBeaconSize};
+    layout.beaconCenter = {
+        layout.postCenter.x,
+        layout.postCenter.y + kCheckpointMarkerPostHeight * 0.5f
+            + kCheckpointMarkerBeaconSize * 0.5f,
+        layout.postCenter.z};
+    return layout;
+}
+
 static_assert(kNoActiveCheckpointIndex + 1 == 0);
 static_assert(NextExpectedCheckpointIndex(kNoActiveCheckpointIndex) == 0);
 static_assert(NextExpectedCheckpointIndex(0) == 1);
 static_assert(NextExpectedCheckpointIndex(1) == 2);
-static_assert(!IsValidCheckpointIndex(NextExpectedCheckpointIndex(1)));
+static_assert(!IsValidCheckpointIndex(NextExpectedCheckpointIndex(1), kLevel01CheckpointCount));
+static_assert(ReconcileActiveCheckpointIndex(1, 1) == kNoActiveCheckpointIndex);
+static_assert(ReconcileActiveCheckpointIndex(0, 1) == 0);
 }

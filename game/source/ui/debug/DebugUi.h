@@ -29,6 +29,7 @@ public:
     // the editor toggle while the user is typing a value.
     bool WantsKeyboardCapture() const;
     bool WantsMouseCapture() const;
+    bool WantsTextInput() const;
 
 private:
     DebugUiBackend backend;

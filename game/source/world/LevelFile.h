@@ -5,6 +5,7 @@
 
 #include "world/LevelDefinition.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -14,6 +15,21 @@ namespace world
 inline constexpr std::string_view kLevelFileMagic = "PLATFORMER_LEVEL";
 inline constexpr int kLevelFileVersion = 1;
 inline constexpr std::string_view kLevel01RuntimeLogicalId = "levels/level_01.level";
+
+// Parser/runtime corruption guards. Not gameplay design caps.
+inline constexpr std::uintmax_t kMaxLevelFileBytes = 65536;
+inline constexpr std::size_t kMaxLevelLineLength = 512;
+inline constexpr std::size_t kMaxLevelLines = 256;
+// header + id + spawn + kill_plane + ground + 3 support indices + 2 slopes +
+// moving_platform + goal + dynamic_box + camera.
+inline constexpr int kLevelV1FixedRecordLineCount = 14;
+
+inline int CountLevelV1RecordLines(const LevelDefinition& level)
+{
+    return kLevelV1FixedRecordLineCount + static_cast<int>(level.elevatedPlatforms.size())
+        + static_cast<int>(level.checkpoints.size()) + static_cast<int>(level.hazards.size())
+        + static_cast<int>(level.collectibles.size());
+}
 
 enum class LoadLevelFileStatus
 {

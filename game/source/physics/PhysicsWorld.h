@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "physics/PhysicsCapacity.h"
 
 #include <memory>
 

@@ -28,6 +28,7 @@ public:
     // Same boundary for the mouse: clicks, drags and wheel on an ImGui panel
     // must not look, pick, or dolly the editor world behind it.
     bool WantsMouseCapture() const;
+    bool WantsTextInput() const;
 
 private:
     bool initialized = false;

@@ -36,6 +36,15 @@ core::Vec3 EditorCameraTarget(const EditorCamera& camera)
     return camera.position + EditorCameraForward(camera);
 }
 
+core::Vec3 EditorAddPlacementAnchor(const EditorCamera& camera)
+{
+    const core::Vec3 forward = EditorCameraForward(camera);
+    return {
+        camera.position.x + forward.x * kEditorAddPlacementDistance,
+        camera.position.y + forward.y * kEditorAddPlacementDistance,
+        camera.position.z + forward.z * kEditorAddPlacementDistance};
+}
+
 render::CameraView MakeCameraView(const EditorCamera& camera)
 {
     render::CameraView view{};

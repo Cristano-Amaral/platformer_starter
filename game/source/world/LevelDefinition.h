@@ -15,18 +15,25 @@
 #include <array>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace world
 {
 inline constexpr std::string_view kLevel01Id = "level_01";
+// Canonical Level 01 instance counts. Variable-count v1 files may differ.
 inline constexpr int kLevel01ElevatedPlatformCount = 6;
 inline constexpr int kLevel01SlopeCount = 2;
 inline constexpr int kLevel01WalkableSlopeIndex = 0;
 inline constexpr int kLevel01SteepSlopeIndex = 1;
 
-static_assert(kCheckpointCount == 2);
-static_assert(kHazardCount == 2);
-static_assert(kCollectibleCount == 3);
+// Minimum platforms so support_index_* can stay in range.
+inline constexpr int kMinElevatedPlatformCount = 1;
+// Physics-derived platform budget (Jolt body allocator minus non-platform
+// bodies). Must match physics::kMaxPhysicsElevatedPlatformCount.
+inline constexpr int kMaxElevatedPlatformCount = 58;
+
+static_assert(kMinElevatedPlatformCount >= 1);
+static_assert(kLevel01ElevatedPlatformCount <= kMaxElevatedPlatformCount);
 
 struct DynamicBoxSpec
 {
@@ -50,16 +57,19 @@ struct LevelDefinition
     float killPlaneY = 0.0f;
 
     Box ground{};
-    std::array<Box, kLevel01ElevatedPlatformCount> elevatedPlatforms{};
+    std::vector<Box> elevatedPlatforms{};
+    // Authored v1 support_index_* metadata. 0-based indices into
+    // elevatedPlatforms. Not gameplay runtime state. Platform delete remaps
+    // R > D and rejects R == D; Add/Duplicate append so existing indices stay.
     int checkpoint1PlatformIndex = 0;
     int checkpoint2PlatformIndex = 0;
     int goalPlatformIndex = 0;
 
     std::array<SlopeSpec, kLevel01SlopeCount> slopes{};
     MovingPlatformSpec movingPlatform{};
-    std::array<CheckpointSpec, kCheckpointCount> checkpoints{};
-    std::array<HazardSpec, kHazardCount> hazards{};
-    std::array<CollectibleSpec, kCollectibleCount> collectibles{};
+    std::vector<CheckpointSpec> checkpoints{};
+    std::vector<HazardSpec> hazards{};
+    std::vector<CollectibleSpec> collectibles{};
     LevelGoalSpec goal{};
     DynamicBoxSpec dynamicBox{};
     LevelCameraSpec camera{};

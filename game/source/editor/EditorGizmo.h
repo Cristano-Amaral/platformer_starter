@@ -10,9 +10,12 @@
 #include "world/LevelDefinition.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace editor
 {
+struct StructuralIndexMap;
 enum class EditorAxis
 {
     None,
@@ -67,6 +70,48 @@ struct EditorPendingTransformPreview
     core::Vec3 size{};
 };
 
+// Selected Checkpoint editor overlay. Always from workingCopy so pending
+// trigger and respawn cannot mix active/working identities.
+struct CheckpointEditorOverlay
+{
+    bool visible = false;
+    core::Vec3 triggerCenter{};
+    core::Vec3 triggerSize{};
+    core::Vec3 respawnPosition{};
+};
+
+enum class PendingObjectVisualKind
+{
+    None,
+    Checkpoint,
+    Hazard,
+    Collectible,
+};
+
+// Distinct gameplay-object ghost. Platform/Ground/Spawn use bounds only because
+// their visual is the authored box (or spawn marker size).
+struct EditorPendingObjectVisual
+{
+    bool visible = false;
+    PendingObjectVisualKind kind = PendingObjectVisualKind::None;
+    world::CheckpointSpec checkpoint{};
+    world::HazardSpec hazard{};
+    world::CollectibleSpec collectible{};
+};
+
+inline bool HasDistinctPendingObjectVisual(EditorObjectKind kind)
+{
+    switch (kind)
+    {
+    case EditorObjectKind::Checkpoint:
+    case EditorObjectKind::Hazard:
+    case EditorObjectKind::Collectible:
+        return true;
+    default:
+        return false;
+    }
+}
+
 // Visual shaft is thin; hit radius is larger so axes are clickable without
 // swallowing the whole scene. Units are fractions of axisLength.
 inline constexpr float kGizmoViewHeightFraction = 0.22f;
@@ -93,8 +138,8 @@ void ClearGizmoInteraction(GizmoInteractionState& state);
 bool IsGizmoSelection(EditorSelection selection);
 bool IsResizeSelection(EditorSelection selection);
 
-// Mutable authored position in workingCopy. Null for Camera and all M33
-// read-only kinds. Does not allocate.
+// Mutable authored position in workingCopy. Null for Camera and remaining
+// read-only kinds. Checkpoint, Hazard, and Collectible are Translate-only.
 core::Vec3* GetEditablePosition(
     world::LevelDefinition& level,
     EditorSelection selection);
@@ -134,11 +179,131 @@ bool AuthoredGeometryDiffers(
     const world::LevelDefinition& active,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection);
+bool AuthoredGeometryDiffers(
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    const StructuralIndexMap& map);
 
 EditorPendingTransformPreview MakePendingTransformPreview(
     EditorSelection selection,
     const world::LevelDefinition& active,
     const world::LevelDefinition& workingCopy);
+EditorPendingTransformPreview MakePendingTransformPreview(
+    EditorSelection selection,
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map);
+
+// World-gizmo / Translate-nudge assembly move: center and respawnPosition
+// share one delta so their authored relative offset is preserved. Inspector
+// field edits must not call this.
+bool SetCheckpointAssemblyCenter(
+    world::LevelDefinition& workingCopy,
+    std::size_t index,
+    core::Vec3 newCenter);
+
+CheckpointEditorOverlay MakeCheckpointEditorOverlay(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy);
+
+EditorPendingObjectVisual MakePendingObjectVisual(
+    EditorSelection selection,
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy);
+EditorPendingObjectVisual MakePendingObjectVisual(
+    EditorSelection selection,
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map);
+
+// Complete pending Add/Modify preview for M41 categories. Not selection-only.
+// Pending-deleted active objects are not included (delete fade is separate).
+struct PendingAuthoringVisual
+{
+    EditorObjectKind kind = EditorObjectKind::None;
+    std::size_t workingIndex = 0;
+    bool selected = false;
+    core::Vec3 boundsCenter{};
+    core::Vec3 boundsSize{};
+    bool hasObjectVisual = false;
+    world::CheckpointSpec checkpoint{};
+    world::HazardSpec hazard{};
+    world::CollectibleSpec collectible{};
+};
+
+std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map,
+    EditorSelection selection);
+
+inline bool PendingAuthoringContains(
+    const std::vector<PendingAuthoringVisual>& visuals,
+    EditorObjectKind kind,
+    std::size_t workingIndex)
+{
+    for (const PendingAuthoringVisual& visual : visuals)
+    {
+        if (visual.kind == kind && visual.workingIndex == workingIndex)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline const PendingAuthoringVisual* FindPendingAuthoringVisual(
+    const std::vector<PendingAuthoringVisual>& visuals,
+    EditorObjectKind kind,
+    std::size_t workingIndex)
+{
+    for (const PendingAuthoringVisual& visual : visuals)
+    {
+        if (visual.kind == kind && visual.workingIndex == workingIndex)
+        {
+            return &visual;
+        }
+    }
+    return nullptr;
+}
+
+inline std::vector<PendingPickProxy> BuildPendingPickProxies(
+    const std::vector<PendingAuthoringVisual>& visuals)
+{
+    std::vector<PendingPickProxy> proxies;
+    proxies.reserve(visuals.size());
+    for (const PendingAuthoringVisual& visual : visuals)
+    {
+        if (!(visual.boundsSize.x > 0.0f) || !(visual.boundsSize.y > 0.0f)
+            || !(visual.boundsSize.z > 0.0f))
+        {
+            continue;
+        }
+        PendingPickProxy proxy{};
+        proxy.selection = {visual.kind, visual.workingIndex};
+        proxy.center = visual.boundsCenter;
+        proxy.size = visual.boundsSize;
+        proxies.push_back(proxy);
+    }
+    return proxies;
+}
+
+// Gameplay hides collected cubes. Editor overlay draws those authored
+// Collectibles only. Uncollected keep the runtime visual (no second cube).
+// Pending-delete collected items skip this gold wire; faded delete wins.
+inline bool ShouldDrawEditorAuthoredCollectible(std::uint8_t collectedFlag)
+{
+    return collectedFlag != 0;
+}
+
+int CollectEditorAuthoredCollectibleCenters(
+    const world::LevelDefinition& active,
+    const std::uint8_t* collected,
+    std::size_t collectedCount,
+    core::Vec3* outCenters,
+    int maxCenters,
+    const StructuralIndexMap* pendingDeleteMap = nullptr);
 
 EditorAxis PickGizmoHandle(
     Ray3 ray,

@@ -23,10 +23,8 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <vector>
 
-static_assert(world::kHazardCount == 2);
-static_assert(world::kCollectibleCount == 3);
-static_assert(gameplay::CollectedCount(gameplay::CollectibleRunState{}) == 0);
 static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
@@ -41,6 +39,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
+#include "editor/AuthoredLifecycleCommands.h"
 #include "editor/RuntimeLevelReload.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
@@ -52,13 +51,18 @@ namespace core
 {
 namespace
 {
-std::array<world::CheckpointVisualState, world::kCheckpointCount> MakeCheckpointVisuals(
-    int activeCheckpointIndex)
+std::vector<world::CheckpointVisualState> MakeCheckpointVisuals(
+    int activeCheckpointIndex,
+    std::size_t checkpointCount)
 {
-    return {
-        world::CheckpointVisualStateForIndex(0, activeCheckpointIndex),
-        world::CheckpointVisualStateForIndex(1, activeCheckpointIndex),
-    };
+    std::vector<world::CheckpointVisualState> visuals(checkpointCount);
+    const int count = static_cast<int>(checkpointCount);
+    for (std::size_t index = 0; index < checkpointCount; ++index)
+    {
+        visuals[index] = world::CheckpointVisualStateForIndex(
+            static_cast<int>(index), activeCheckpointIndex, count);
+    }
+    return visuals;
 }
 
 render::CameraView MakeGameplayCameraView(const gameplay::PlatformerCamera& camera)
@@ -305,15 +309,13 @@ const char* RespawnReasonName(gameplay::RespawnReason reason)
 
 const char* ActiveCheckpointLabel(int activeCheckpointIndex)
 {
-    switch (activeCheckpointIndex)
+    static char buffer[16];
+    if (activeCheckpointIndex < 0)
     {
-    case 0:
-        return "1";
-    case 1:
-        return "2";
-    default:
         return "None";
     }
+    std::snprintf(buffer, sizeof(buffer), "%d", activeCheckpointIndex + 1);
+    return buffer;
 }
 
 const char* CheckpointVisualStateName(world::CheckpointVisualState state)
@@ -331,30 +333,24 @@ const char* CheckpointVisualStateName(world::CheckpointVisualState state)
 
 const char* HazardIndexLabel(int hazardIndex)
 {
-    switch (hazardIndex)
+    static char buffer[16];
+    if (hazardIndex < 0)
     {
-    case 0:
-        return "1";
-    case 1:
-        return "2";
-    default:
         return "None";
     }
+    std::snprintf(buffer, sizeof(buffer), "%d", hazardIndex + 1);
+    return buffer;
 }
 
 const char* CollectibleIndexLabel(int collectibleIndex)
 {
-    switch (collectibleIndex)
+    static char buffer[16];
+    if (collectibleIndex < 0)
     {
-    case 0:
-        return "1";
-    case 1:
-        return "2";
-    case 2:
-        return "3";
-    default:
         return "None";
     }
+    std::snprintf(buffer, sizeof(buffer), "%d", collectibleIndex + 1);
+    return buffer;
 }
 }
 
@@ -473,14 +469,30 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.deathCount = respawnState.deathCount;
     snapshot.lastRespawnReason = RespawnReasonName(respawnState.lastRespawnReason);
     snapshot.activeCheckpointLabel = ActiveCheckpointLabel(respawnState.activeCheckpointIndex);
-    snapshot.checkpoint1Inside =
-        world::PointInsideCheckpoint(level.checkpoints[0], player.Position());
-    snapshot.checkpoint1VisualState = CheckpointVisualStateName(
-        world::CheckpointVisualStateForIndex(0, respawnState.activeCheckpointIndex));
-    snapshot.checkpoint2Inside =
-        world::PointInsideCheckpoint(level.checkpoints[1], player.Position());
-    snapshot.checkpoint2VisualState = CheckpointVisualStateName(
-        world::CheckpointVisualStateForIndex(1, respawnState.activeCheckpointIndex));
+    snapshot.checkpoint1Inside = false;
+    snapshot.checkpoint1VisualState = "Future";
+    snapshot.checkpoint2Inside = false;
+    snapshot.checkpoint2VisualState = "Future";
+    if (!level.checkpoints.empty())
+    {
+        snapshot.checkpoint1Inside =
+            world::PointInsideCheckpoint(level.checkpoints[0], player.Position());
+        snapshot.checkpoint1VisualState = CheckpointVisualStateName(
+            world::CheckpointVisualStateForIndex(
+                0,
+                respawnState.activeCheckpointIndex,
+                static_cast<int>(level.checkpoints.size())));
+    }
+    if (level.checkpoints.size() > 1)
+    {
+        snapshot.checkpoint2Inside =
+            world::PointInsideCheckpoint(level.checkpoints[1], player.Position());
+        snapshot.checkpoint2VisualState = CheckpointVisualStateName(
+            world::CheckpointVisualStateForIndex(
+                1,
+                respawnState.activeCheckpointIndex,
+                static_cast<int>(level.checkpoints.size())));
+    }
 
     snapshot.insideHazardLabel = HazardIndexLabel(
         world::FindHazardIndexContaining(player.Position(), level.hazards));
@@ -488,14 +500,12 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
 
     snapshot.collectedCount = gameplay::CollectedCount(collectibleRunState);
     snapshot.collectedThisFrameLabel = CollectibleIndexLabel(collectedThisFrameIndex);
-    for (int index = 0; index < world::kCollectibleCount; ++index)
+    snapshot.collectibleCollected = collectibleRunState.collected;
+    snapshot.collectibleInside.assign(level.collectibles.size(), 0);
+    for (std::size_t index = 0; index < level.collectibles.size(); ++index)
     {
-        snapshot.collectibleCollected[static_cast<std::size_t>(index)] =
-            collectibleRunState.collected[static_cast<std::size_t>(index)];
-        snapshot.collectibleInside[static_cast<std::size_t>(index)] =
-            world::PointInsideCollectible(
-                level.collectibles[static_cast<std::size_t>(index)],
-                player.Position());
+        snapshot.collectibleInside[index] =
+            world::PointInsideCollectible(level.collectibles[index], player.Position()) ? 1 : 0;
     }
 
     snapshot.runTimeSeconds = runTimerState.elapsedSeconds;
@@ -605,9 +615,10 @@ int Application::Run()
             }
             else
             {
+                const int checkpointCount = static_cast<int>(levelDefinition.checkpoints.size());
                 const int expectedIndex =
                     world::NextExpectedCheckpointIndex(respawnState.activeCheckpointIndex);
-                if (world::IsValidCheckpointIndex(expectedIndex)
+                if (world::IsValidCheckpointIndex(expectedIndex, checkpointCount)
                     && world::PointInsideCheckpoint(
                            levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)],
                            player.Position()))
@@ -697,21 +708,109 @@ int Application::Run()
                 testBox.position,
                 testBox.size};
             const editor::EditorHighlightRequest highlight = editor::MakeHighlightRequest(
-                levelEditorState.selection,
+                editor::HighlightSelectionFromWorking(
+                    levelEditorState.selection, levelEditorState.structuralMap),
                 editor::BuildPickingSet(levelDefinition, pickingWorld));
             overlay.drawHighlight = highlight.visible;
             overlay.highlightCenter = highlight.center;
             overlay.highlightSize = highlight.size;
             overlay.highlightRotationZDegrees = highlight.rotationZDegrees;
 
-            const editor::EditorPendingTransformPreview pending =
-                editor::MakePendingTransformPreview(
-                    levelEditorState.selection,
+            overlay.collectedAuthoredCollectibleCenters.resize(
+                levelDefinition.collectibles.size());
+            const int collectedAuthoredCount = editor::CollectEditorAuthoredCollectibleCenters(
+                levelDefinition,
+                collectibleRunState.collected.empty() ? nullptr
+                                                      : collectibleRunState.collected.data(),
+                collectibleRunState.collected.size(),
+                overlay.collectedAuthoredCollectibleCenters.empty()
+                    ? nullptr
+                    : overlay.collectedAuthoredCollectibleCenters.data(),
+                static_cast<int>(overlay.collectedAuthoredCollectibleCenters.size()),
+                &levelEditorState.structuralMap);
+            overlay.collectedAuthoredCollectibleCenters.resize(
+                collectedAuthoredCount < 0 ? 0 : static_cast<std::size_t>(collectedAuthoredCount));
+
+            const std::vector<editor::PendingAuthoringVisual> pendingAuthoring =
+                editor::CollectPendingAuthoringVisuals(
                     levelDefinition,
-                    levelEditorState.workingCopy);
-            overlay.drawPendingPreview = pending.visible;
-            overlay.pendingPreviewCenter = pending.center;
-            overlay.pendingPreviewSize = pending.size;
+                    levelEditorState.workingCopy,
+                    levelEditorState.structuralMap,
+                    levelEditorState.selection);
+            overlay.pendingAuthoring.clear();
+            overlay.pendingAuthoring.reserve(pendingAuthoring.size());
+            for (const editor::PendingAuthoringVisual& visual : pendingAuthoring)
+            {
+                render::DebugWorldOverlay::PendingAuthoringOverlayItem item{};
+                switch (visual.kind)
+                {
+                case editor::EditorObjectKind::ElevatedPlatform:
+                    item.kind = 0;
+                    break;
+                case editor::EditorObjectKind::Checkpoint:
+                    item.kind = 1;
+                    break;
+                case editor::EditorObjectKind::Hazard:
+                    item.kind = 2;
+                    break;
+                case editor::EditorObjectKind::Collectible:
+                    item.kind = 3;
+                    break;
+                default:
+                    continue;
+                }
+                item.selected = visual.selected;
+                item.boundsCenter = visual.boundsCenter;
+                item.boundsSize = visual.boundsSize;
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+                item.drawObjectVisual = visual.hasObjectVisual;
+#else
+                item.drawObjectVisual = false;
+#endif
+                item.checkpoint = visual.checkpoint;
+                item.hazard = visual.hazard;
+                item.collectible = visual.collectible;
+                overlay.pendingAuthoring.push_back(item);
+            }
+
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+            const editor::PendingDeleteVisuals pendingDelete =
+                editor::MakePendingDeleteVisuals(
+                    levelDefinition, levelEditorState.structuralMap);
+            overlay.pendingDeletePlatformIndices = pendingDelete.platformIndices;
+            overlay.pendingDeletePlatformCenters.clear();
+            overlay.pendingDeletePlatformSizes.clear();
+            overlay.pendingDeletePlatformCenters.reserve(pendingDelete.platforms.size());
+            overlay.pendingDeletePlatformSizes.reserve(pendingDelete.platforms.size());
+            for (const world::Box& platform : pendingDelete.platforms)
+            {
+                overlay.pendingDeletePlatformCenters.push_back(platform.center);
+                overlay.pendingDeletePlatformSizes.push_back(platform.size);
+            }
+            overlay.pendingDeleteCheckpointIndices = pendingDelete.checkpointIndices;
+            overlay.pendingDeleteCheckpoints = pendingDelete.checkpoints;
+            overlay.pendingDeleteHazardIndices = pendingDelete.hazardIndices;
+            overlay.pendingDeleteHazards = pendingDelete.hazards;
+            overlay.pendingDeleteCollectibleIndices = pendingDelete.collectibleIndices;
+            overlay.pendingDeleteCollectibleCenters = pendingDelete.collectibleCenters;
+#endif
+
+            const editor::CheckpointEditorOverlay checkpointOverlay =
+                editor::MakeCheckpointEditorOverlay(
+                    levelEditorState.selection, levelEditorState.workingCopy);
+            overlay.drawCheckpointRespawnMarker = checkpointOverlay.visible;
+            overlay.checkpointRespawnMarker = checkpointOverlay.respawnPosition;
+            overlay.checkpointTriggerCenter = checkpointOverlay.triggerCenter;
+            if (checkpointOverlay.visible)
+            {
+                const float dx =
+                    checkpointOverlay.respawnPosition.x - checkpointOverlay.triggerCenter.x;
+                const float dy =
+                    checkpointOverlay.respawnPosition.y - checkpointOverlay.triggerCenter.y;
+                const float dz =
+                    checkpointOverlay.respawnPosition.z - checkpointOverlay.triggerCenter.z;
+                overlay.drawCheckpointRespawnConnector = (dx * dx + dy * dy + dz * dz) > 1.0e-6f;
+            }
 
             const editor::GizmoDrawRequest gizmo =
                 levelEditorState.transformMode == editor::EditorTransformMode::Resize
@@ -752,7 +851,8 @@ int Application::Run()
             testBox.size,
             movingPlatform.position,
             movingPlatform.size,
-            MakeCheckpointVisuals(respawnState.activeCheckpointIndex),
+            MakeCheckpointVisuals(
+                respawnState.activeCheckpointIndex, levelDefinition.checkpoints.size()),
             levelCompletionState.completed,
             collectibleRunState.collected,
             gameplay::CollectedCount(collectibleRunState),
@@ -804,7 +904,7 @@ int Application::Run()
                     "See Tool Output for Cook/Stage details.";
             }
         }
-        const editor::LevelEditorRequest editorRequest = debugUi.Draw(
+        editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
                 camera,
@@ -838,7 +938,8 @@ int Application::Run()
             // so typing into Inspector and clicking/scrolling panels cannot
             // drive the viewport behind them.
             const bool mouseCaptured = debugUi.WantsMouseCapture();
-            const bool keyboardCaptured = debugUi.WantsKeyboardCapture();
+            const bool keyboardCaptured =
+                debugUi.WantsKeyboardCapture() || debugUi.WantsTextInput();
             const bool dragging = levelEditorState.gizmo.dragging;
             const editor::EditorWheelIntent wheelIntent = editor::ResolveEditorWheel(
                 mouseCaptured,
@@ -919,16 +1020,34 @@ int Application::Run()
                     editorInput.selectHeld,
                     editorInput.selectReleased);
             }
-            if (!mouseCaptured && editorInput.selectPressed && !editorInput.lookHeld
-                && !widgetConsumedPointer && !gizmoConsumedPointer)
+            if (editor::ShouldAttemptEditorViewportPick(
+                    editorInput.selectPressed,
+                    mouseCaptured,
+                    editorInput.lookHeld,
+                    widgetConsumedPointer,
+                    gizmoConsumedPointer))
             {
                 const editor::EditorPickingWorldState pickingWorld{
                     movingPlatform.position,
                     movingPlatform.size,
                     testBox.position,
                     testBox.size};
-                levelEditorState.selection = editor::PickNearest(
-                    ray, editor::BuildPickingSet(levelDefinition, pickingWorld));
+                const std::vector<editor::PendingPickProxy> pendingProxies =
+                    editor::BuildPendingPickProxies(editor::CollectPendingAuthoringVisuals(
+                        levelDefinition,
+                        levelEditorState.workingCopy,
+                        levelEditorState.structuralMap,
+                        levelEditorState.selection));
+                editor::EditorSelection workingPick{};
+                if (editor::TryResolveEditorViewportPick(
+                        ray,
+                        editor::BuildPickingSet(levelDefinition, pickingWorld),
+                        pendingProxies,
+                        levelEditorState.structuralMap,
+                        workingPick))
+                {
+                    levelEditorState.selection = workingPick;
+                }
             }
 
             if (editor::NudgeAllowed(
@@ -964,6 +1083,17 @@ int Application::Run()
                         editorInput.nudgePrecision,
                         levelEditorState.transformMode);
                 }
+            }
+            if (editorRequest == editor::LevelEditorRequest::None
+                && editor::ShouldEmitDeleteSelectedRequest(
+                    editorInput.deletePressed,
+                    keyboardCaptured,
+                    editor::IsLevelAuthoringAvailable(),
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection,
+                    levelEditorState.gizmo.dragging))
+            {
+                editorRequest = editor::LevelEditorRequest::DeleteSelected;
             }
         }
 #endif
@@ -1036,6 +1166,8 @@ void Application::Initialize()
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
+    collectibleRunState =
+        gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
 
     renderer.LoadRuntimeAssets();
 
@@ -1128,7 +1260,8 @@ void Application::RestartRun()
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState.completed = false;
-    collectibleRunState = gameplay::CollectibleRunState{};
+    collectibleRunState =
+        gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
 }
@@ -1143,6 +1276,8 @@ void Application::SetLevelEditorActive(bool active)
         // previous session are discarded so the toggle stays deterministic.
         levelEditorState.workingCopy = levelDefinition;
         levelEditorState.modified = false;
+        editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+        editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage.clear();
         editor::SeedEditorCameraFromGameplay(
@@ -1176,6 +1311,10 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
     case editor::LevelEditorRequest::RevertWorkingCopy:
         levelEditorState.workingCopy = levelDefinition;
         levelEditorState.modified = false;
+        editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+        editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
+        levelEditorState.selection =
+            editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage = "Working copy reverted to the applied level.";
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
@@ -1188,6 +1327,19 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         return ReloadRuntimeLevelFromStaged();
     case editor::LevelEditorRequest::CookStageAndReload:
         return StartCookStageAndReload();
+    case editor::LevelEditorRequest::AddPlatform:
+    case editor::LevelEditorRequest::AddCheckpoint:
+    case editor::LevelEditorRequest::AddHazard:
+    case editor::LevelEditorRequest::AddCollectible:
+    case editor::LevelEditorRequest::DuplicateSelected:
+    case editor::LevelEditorRequest::DeleteSelected:
+        editor::HandleAuthoredLifecycleRequest(
+            levelEditorState,
+            levelDefinition,
+            request,
+            editor::IsLevelAuthoringAvailable(),
+            editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
+        return true;
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         break;
@@ -1234,6 +1386,10 @@ bool Application::ApplyLevelEditorPreview()
     // diagnostics are intentionally untouched.
     levelEditorState.workingCopy = levelDefinition;
     levelEditorState.modified = false;
+    editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+    editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
+    levelEditorState.selection =
+        editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
     levelEditorState.lastMessage =
@@ -1326,6 +1482,8 @@ bool Application::ReloadRuntimeLevelFromStaged()
     levelEditorState.modified = reconciled.modified;
     levelEditorState.dirty = reconciled.dirty;
     levelEditorState.selection = reconciled.selection;
+    editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+    editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     editor::ClearGizmoInteraction(levelEditorState.gizmo);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Reloaded;
@@ -1437,7 +1595,8 @@ void Application::ResetGameplayAfterCommittedLevel()
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
-    collectibleRunState = gameplay::CollectibleRunState{};
+    collectibleRunState =
+        gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     runTimerState = gameplay::RunTimerState{};
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);

@@ -58,6 +58,11 @@ bool ApplyNudge(
         return false;
     }
 
+    if (selection.kind == EditorObjectKind::Checkpoint)
+    {
+        return SetCheckpointAssemblyCenter(workingCopy, selection.index, next);
+    }
+
     *position = next;
     return true;
 }

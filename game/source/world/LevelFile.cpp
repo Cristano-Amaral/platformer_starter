@@ -14,10 +14,6 @@ namespace world
 {
 namespace
 {
-constexpr std::uintmax_t kMaxLevelFileBytes = 65536;
-constexpr std::size_t kMaxLevelLineLength = 512;
-constexpr std::size_t kMaxLevelLines = 256;
-
 ParseLevelFileResult MakeStatus(
     LoadLevelFileStatus status,
     int line,
@@ -375,6 +371,13 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid platform");
             }
+            if (state.platforms.size() >= static_cast<std::size_t>(kMaxElevatedPlatformCount))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid,
+                    lineNumber,
+                    "platform count exceeds physics body capacity");
+            }
             state.platforms.push_back(platform);
             continue;
         }
@@ -560,35 +563,19 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     {
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "missing required record");
     }
-    if (state.platforms.size() != static_cast<std::size_t>(kLevel01ElevatedPlatformCount)
-        || state.slopes.size() != static_cast<std::size_t>(kLevel01SlopeCount)
-        || state.checkpoints.size() != static_cast<std::size_t>(kCheckpointCount)
-        || state.hazards.size() != static_cast<std::size_t>(kHazardCount)
-        || state.collectibles.size() != static_cast<std::size_t>(kCollectibleCount))
+    if (state.slopes.size() != static_cast<std::size_t>(kLevel01SlopeCount))
     {
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong record count");
     }
 
-    for (std::size_t index = 0; index < state.platforms.size(); ++index)
-    {
-        loaded.level.elevatedPlatforms[index] = state.platforms[index];
-    }
+    loaded.level.elevatedPlatforms = std::move(state.platforms);
     for (std::size_t index = 0; index < state.slopes.size(); ++index)
     {
         loaded.level.slopes[index] = state.slopes[index];
     }
-    for (std::size_t index = 0; index < state.checkpoints.size(); ++index)
-    {
-        loaded.level.checkpoints[index] = state.checkpoints[index];
-    }
-    for (std::size_t index = 0; index < state.hazards.size(); ++index)
-    {
-        loaded.level.hazards[index] = state.hazards[index];
-    }
-    for (std::size_t index = 0; index < state.collectibles.size(); ++index)
-    {
-        loaded.level.collectibles[index] = state.collectibles[index];
-    }
+    loaded.level.checkpoints = std::move(state.checkpoints);
+    loaded.level.hazards = std::move(state.hazards);
+    loaded.level.collectibles = std::move(state.collectibles);
 
     if (!LevelDefinitionHasRequiredAuthoredContent(loaded.level))
     {

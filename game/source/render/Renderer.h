@@ -6,8 +6,9 @@
 #include "world/LevelDefinition.h"
 #include "world/RespawnWorld.h"
 
-#include <array>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace gameplay
 {
@@ -27,11 +28,39 @@ struct DebugWorldOverlay
     core::Vec3 highlightCenter{};
     core::Vec3 highlightSize{};
     float highlightRotationZDegrees = 0.0f;
-    // Working-copy ghost. Distinct from the active highlight. Renderer does
-    // not own selection or workingCopy.
-    bool drawPendingPreview = false;
-    core::Vec3 pendingPreviewCenter{};
-    core::Vec3 pendingPreviewSize{};
+    // Editor-only Checkpoint respawn marker. Distinct from the trigger AABB.
+    bool drawCheckpointRespawnMarker = false;
+    core::Vec3 checkpointRespawnMarker{};
+    core::Vec3 checkpointTriggerCenter{};
+    bool drawCheckpointRespawnConnector = false;
+    // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
+    struct PendingAuthoringOverlayItem
+    {
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible
+        bool selected = false;
+        core::Vec3 boundsCenter{};
+        core::Vec3 boundsSize{};
+        bool drawObjectVisual = false;
+        world::CheckpointSpec checkpoint{};
+        world::HazardSpec hazard{};
+        world::CollectibleSpec collectible{};
+    };
+    std::vector<PendingAuthoringOverlayItem> pendingAuthoring;
+    // Editor-only placeholders for collected authored Collectibles (active).
+    std::vector<core::Vec3> collectedAuthoredCollectibleCenters;
+    // Development-only pending-delete markers from active objects that
+    // workingCopy has already removed. Indices skip the opaque DrawWorld
+    // path so the overlay can draw a faded copy with world depth. Not
+    // pickable as working selections.
+    std::vector<int> pendingDeletePlatformIndices;
+    std::vector<core::Vec3> pendingDeletePlatformCenters;
+    std::vector<core::Vec3> pendingDeletePlatformSizes;
+    std::vector<int> pendingDeleteCheckpointIndices;
+    std::vector<world::CheckpointSpec> pendingDeleteCheckpoints;
+    std::vector<int> pendingDeleteHazardIndices;
+    std::vector<world::HazardSpec> pendingDeleteHazards;
+    std::vector<int> pendingDeleteCollectibleIndices;
+    std::vector<core::Vec3> pendingDeleteCollectibleCenters;
     // Translation gizmo at the working-copy origin. hovered/active: 0 none,
     // 1 X, 2 Y, 3 Z (matches editor::EditorAxis).
     bool drawTranslationGizmo = false;
@@ -99,9 +128,9 @@ public:
         core::Vec3 physicsTestBoxSize,
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
-        std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
+        const std::vector<world::CheckpointVisualState>& checkpointVisuals,
         bool levelCompleted,
-        const std::array<bool, world::kCollectibleCount>& collectibleCollected,
+        const std::vector<std::uint8_t>& collectibleCollected,
         int collectedCount,
         double elapsedSeconds,
         bool hasBestTime,

@@ -127,6 +127,7 @@ EditorInputState PollEditorInput()
     {
         state.dollyWheelDelta = state.wheelDelta;
     }
+    state.deletePressed = IsKeyPressed(KEY_DELETE);
     return state;
 }
 }

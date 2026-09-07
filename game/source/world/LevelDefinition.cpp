@@ -1,4 +1,5 @@
 #include "world/LevelDefinition.h"
+#include "world/LevelFile.h"
 
 #include <cmath>
 #include <cstddef>
@@ -59,12 +60,19 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     {
         return false;
     }
-    if (level.checkpoint1PlatformIndex < 0
-        || level.checkpoint1PlatformIndex >= kLevel01ElevatedPlatformCount
-        || level.checkpoint2PlatformIndex < 0
-        || level.checkpoint2PlatformIndex >= kLevel01ElevatedPlatformCount
-        || level.goalPlatformIndex < 0
-        || level.goalPlatformIndex >= kLevel01ElevatedPlatformCount)
+    const int platformCount = static_cast<int>(level.elevatedPlatforms.size());
+    if (level.elevatedPlatforms.size() > static_cast<std::size_t>(kMaxElevatedPlatformCount))
+    {
+        return false;
+    }
+    if (CountLevelV1RecordLines(level) > static_cast<int>(kMaxLevelLines))
+    {
+        return false;
+    }
+    if (platformCount < kMinElevatedPlatformCount
+        || level.checkpoint1PlatformIndex < 0 || level.checkpoint1PlatformIndex >= platformCount
+        || level.checkpoint2PlatformIndex < 0 || level.checkpoint2PlatformIndex >= platformCount
+        || level.goalPlatformIndex < 0 || level.goalPlatformIndex >= platformCount)
     {
         return false;
     }
@@ -117,6 +125,14 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.checkpoint1PlatformIndex != b.checkpoint1PlatformIndex
         || a.checkpoint2PlatformIndex != b.checkpoint2PlatformIndex
         || a.goalPlatformIndex != b.goalPlatformIndex)
+    {
+        return false;
+    }
+
+    if (a.elevatedPlatforms.size() != b.elevatedPlatforms.size()
+        || a.checkpoints.size() != b.checkpoints.size()
+        || a.hazards.size() != b.hazards.size()
+        || a.collectibles.size() != b.collectibles.size())
     {
         return false;
     }

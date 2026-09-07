@@ -76,19 +76,19 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 40 — Cook, Stage & Reload Workflow
-(Phase B live Build menu; awaiting Phase C). Milestone 39 is
-complete and merged. Milestone 41 has not started. See `docs/MILESTONES.md`
+Milestone 41 — Authored Object Add / Delete / Duplicate
+(Phase B live Development Edit menu; awaiting Phase C). Milestone 40 is
+complete and merged. Milestone 42 has not started. See `docs/MILESTONES.md`
 and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
 working copy, and uses Apply Preview / Revert / Save Level Source. Viewport
 pick/highlight use the active/applied world; Inspector and the translation
-gizmo edit `workingCopy`. Editable set is unchanged. Debug compiles the visual
-editor but cannot author. Release has no editor.
+gizmo edit `workingCopy`. Debug compiles the visual editor but cannot author.
+Release has no editor.
 
 M34 added world-space X/Y/Z translation for Spawn, Ground, and Elevated
-Platform 0..5, a pending ghost, persistent Dear ImGui layout, and a
+Platforms, a pending ghost, persistent Dear ImGui layout, and a
 depth-independent gizmo overlay. M35 is complete (resize, orientation widget,
 Translate-only nudge, Alt+wheel dolly). M36 is complete (F2 Dear ImGui menu
 bar: View / Transform / Level). M37 is complete: Development-only Build menu
@@ -97,10 +97,37 @@ M38 is complete: Development `Build > Stage Runtime Assets` and
 `Build > Cook & Stage` use `cmake -P cmake/StageRuntimeAssets.cmake`.
 Cook Assets remains cook-only. M39 is complete: Development
 `Level > Reload Runtime Level` reloads staged Level Format v1 in-process.
-M40 Phase B adds Development `Build > Cook, Stage & Reload`
+M40 is complete: Development `Build > Cook, Stage & Reload`
 (canonical Cook & Stage, then one in-process M39 reload).
-Do not add automatic Apply/Save, file watching, general hot reload,
-Add/Delete, docking, or Milestone 41.
+M41 Phase A makes Platform / Checkpoint / Hazard / Collectible
+variable-count `std::vector` storage and adds testable workingCopy-only
+Add / Duplicate / Delete. Add/Duplicate append. Platform delete remaps
+`support_index_*` (R > D) and rejects referenced or last-platform deletes.
+There is a live Development Edit menu (Add / Duplicate / Delete) for those
+categories. Debug has the visual editor without that lifecycle menu.
+Checkpoint world Translate moves trigger `center` and `respawnPosition` by
+the same delta; Inspector Trigger Center / Respawn Position stay independent.
+Pending visualization is cyan wireframe bounds plus, in Development, object
+ghosts for Checkpoint / Hazard / Collectible from workingCopy. Pending
+Add/Modify ghosts persist after deselection; selected uses stronger cyan,
+unselected uses softer cyan. Platform uses one cyan wire AABB. Pending deletes
+stay in the active world until Apply and are drawn faded/desaturated with a
+subtle delete outline (world depth on). Pending-delete wins over cyan pending
+Add/Modify and over collected authored Collectible style. Viewport picking
+prefers visible pending workingCopy ghosts (working index directly), then
+active-world hits mapped through StructuralIndexMap. Pending-deleted active
+objects remain non-pickable. Add uses
+editor-camera X/Y and gameplay-lane Z (`workingCopy` spawn.z). Duplicate
+remains +1 X and does not snap to the lane. A session-local active↔working map
+remaps surviving same-category viewport picks; pending-deleted picks are
+ignored. Development Delete key follows Edit > Delete Selected and is blocked
+while ImGui wants keyboard. Collected runtime cubes stay hidden in gameplay;
+F2 still shows an authored editor representation without mutating
+CollectibleRunState. Platform Add is limited by the Jolt body budget (58
+elevated platforms); Checkpoint/Hazard/Collectible have no small design cap
+and share the v1 256-line / 64 KiB parser guard.
+Do not add automatic cook/build/stage/reload chains, file watching,
+general hot reload, docking, Object Palette, or Milestone 42.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -117,4 +144,6 @@ change M37 Cook Assets / Build Development meanings. M39 Development
 `Level > Reload Runtime Level` reloads the staged runtime level in-process.
 It does not Save, Cook, Stage, or restart. M40 Development
 `Build > Cook, Stage & Reload` runs canonical Cook & Stage then one
-in-process M39 reload. Awaiting Phase C.
+in-process M39 reload. M41 lifecycle edits mutate `workingCopy` only and
+still require Apply Preview, then Save, then Cook, Stage & Reload.
+Awaiting Phase C.

@@ -36,6 +36,7 @@ struct EditorInputState
     int nudgeZ = 0;
     bool nudgePrecision = false;
     float dollyWheelDelta = 0.0f;
+    bool deletePressed = false;
 };
 
 EditorInputState PollEditorInput();

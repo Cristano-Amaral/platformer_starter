@@ -1,5 +1,7 @@
 #include "editor/EditorSelection.h"
 
+#include <cstdio>
+
 namespace editor
 {
 const char* EditorObjectKindName(EditorObjectKind kind)
@@ -34,66 +36,66 @@ const char* EditorObjectKindName(EditorObjectKind kind)
     return "None";
 }
 
-const char* SelectionDisplayName(EditorSelection selection)
+void FormatSelectionDisplayName(
+    EditorSelection selection,
+    char* buffer,
+    std::size_t bufferSize)
 {
+    if (buffer == nullptr || bufferSize == 0)
+    {
+        return;
+    }
+
     switch (selection.kind)
     {
     case EditorObjectKind::None:
-        return "(none)";
+        std::snprintf(buffer, bufferSize, "(none)");
+        return;
     case EditorObjectKind::Spawn:
-        return "Player Spawn";
+        std::snprintf(buffer, bufferSize, "Player Spawn");
+        return;
     case EditorObjectKind::Camera:
-        return "Camera";
+        std::snprintf(buffer, bufferSize, "Camera");
+        return;
     case EditorObjectKind::Ground:
-        return "Ground";
+        std::snprintf(buffer, bufferSize, "Ground");
+        return;
     case EditorObjectKind::ElevatedPlatform:
-        switch (selection.index)
-        {
-        case 0:
-            return "Platform 0";
-        case 1:
-            return "Platform 1";
-        case 2:
-            return "Platform 2";
-        case 3:
-            return "Platform 3";
-        case 4:
-            return "Platform 4";
-        case 5:
-            return "Platform 5";
-        default:
-            return "Platform";
-        }
+        std::snprintf(buffer, bufferSize, "Platform %zu", selection.index);
+        return;
     case EditorObjectKind::Slope:
-        return selection.index == 0 ? "Slope 0" : (selection.index == 1 ? "Slope 1" : "Slope");
+        std::snprintf(buffer, bufferSize, "Slope %zu", selection.index);
+        return;
     case EditorObjectKind::MovingPlatform:
-        return "Moving Platform";
+        std::snprintf(buffer, bufferSize, "Moving Platform");
+        return;
     case EditorObjectKind::Checkpoint:
-        return selection.index == 0 ? "Checkpoint 0"
-                                    : (selection.index == 1 ? "Checkpoint 1" : "Checkpoint");
+        std::snprintf(buffer, bufferSize, "Checkpoint %zu", selection.index);
+        return;
     case EditorObjectKind::Hazard:
-        return selection.index == 0 ? "Hazard 0" : (selection.index == 1 ? "Hazard 1" : "Hazard");
+        std::snprintf(buffer, bufferSize, "Hazard %zu", selection.index);
+        return;
     case EditorObjectKind::Collectible:
-        switch (selection.index)
-        {
-        case 0:
-            return "Collectible 0";
-        case 1:
-            return "Collectible 1";
-        case 2:
-            return "Collectible 2";
-        default:
-            return "Collectible";
-        }
+        std::snprintf(buffer, bufferSize, "Collectible %zu", selection.index);
+        return;
     case EditorObjectKind::Goal:
-        return "Goal";
+        std::snprintf(buffer, bufferSize, "Goal");
+        return;
     case EditorObjectKind::DynamicBox:
-        return "Dynamic Cyan Box";
+        std::snprintf(buffer, bufferSize, "Dynamic Cyan Box");
+        return;
     }
-    return "(none)";
+    std::snprintf(buffer, bufferSize, "(none)");
 }
 
-bool IsValidSelection(const world::LevelDefinition&, EditorSelection selection)
+const char* SelectionDisplayName(EditorSelection selection)
+{
+    static char buffer[64];
+    FormatSelectionDisplayName(selection, buffer, sizeof(buffer));
+    return buffer;
+}
+
+bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selection)
 {
     switch (selection.kind)
     {
@@ -106,15 +108,15 @@ bool IsValidSelection(const world::LevelDefinition&, EditorSelection selection)
     case EditorObjectKind::DynamicBox:
         return selection.index == 0;
     case EditorObjectKind::ElevatedPlatform:
-        return selection.index < world::kLevel01ElevatedPlatformCount;
+        return selection.index < level.elevatedPlatforms.size();
     case EditorObjectKind::Slope:
-        return selection.index < world::kLevel01SlopeCount;
+        return selection.index < level.slopes.size();
     case EditorObjectKind::Checkpoint:
-        return selection.index < static_cast<std::size_t>(world::kCheckpointCount);
+        return selection.index < level.checkpoints.size();
     case EditorObjectKind::Hazard:
-        return selection.index < static_cast<std::size_t>(world::kHazardCount);
+        return selection.index < level.hazards.size();
     case EditorObjectKind::Collectible:
-        return selection.index < static_cast<std::size_t>(world::kCollectibleCount);
+        return selection.index < level.collectibles.size();
     }
     return false;
 }
@@ -127,6 +129,9 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::Camera:
     case EditorObjectKind::Ground:
     case EditorObjectKind::ElevatedPlatform:
+    case EditorObjectKind::Checkpoint:
+    case EditorObjectKind::Hazard:
+    case EditorObjectKind::Collectible:
         return true;
     default:
         return false;

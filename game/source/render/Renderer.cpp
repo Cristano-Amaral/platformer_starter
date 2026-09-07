@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace render
 {
@@ -69,8 +70,26 @@ constexpr int kBestHudGap = 4;
 constexpr Color kTimerHudText{240, 240, 244, 255};
 constexpr Color kSpawnMarkerFill{240, 200, 64, 255};
 constexpr Color kSelectionHighlightColor{255, 236, 64, 255};
-constexpr Color kPendingPreviewFill{48, 196, 220, 48};
 constexpr Color kPendingPreviewWire{72, 220, 236, 255};
+constexpr Color kPendingPreviewWireUnselected{72, 220, 236, 130};
+constexpr Color kCheckpointRespawnMarkerWire{220, 64, 196, 255};
+constexpr Color kCheckpointRespawnConnector{196, 96, 180, 255};
+constexpr float kCheckpointRespawnMarkerSize = 0.28f;
+constexpr Color kPendingCheckpointPost{64, 188, 204, 96};
+constexpr Color kPendingCheckpointBeacon{96, 228, 240, 140};
+constexpr Color kPendingCheckpointPostUnselected{64, 188, 204, 48};
+constexpr Color kPendingCheckpointBeaconUnselected{96, 228, 240, 70};
+constexpr Color kPendingHazardTooth{255, 168, 72, 140};
+constexpr Color kPendingHazardBar{196, 48, 36, 72};
+constexpr Color kPendingHazardToothUnselected{255, 168, 72, 72};
+constexpr Color kPendingHazardBarUnselected{196, 48, 36, 40};
+constexpr Color kPendingCollectibleFill{255, 212, 64, 72};
+constexpr Color kPendingCollectibleWire{72, 220, 236, 255};
+constexpr Color kPendingCollectibleFillUnselected{255, 212, 64, 40};
+constexpr Color kPendingCollectibleWireUnselected{72, 220, 236, 130};
+constexpr Color kEditorCollectedCollectibleWire{220, 188, 72, 255};
+constexpr Color kPendingDeleteWire{176, 70, 82, 200};
+constexpr unsigned char kPendingDeleteFillAlpha = 118;
 constexpr Color kGizmoAxisX{220, 72, 72, 255};
 constexpr Color kGizmoAxisY{72, 196, 88, 255};
 constexpr Color kGizmoAxisZ{72, 128, 232, 255};
@@ -129,12 +148,73 @@ void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
 }
 
+void DrawGhostBox(core::Vec3 center, core::Vec3 size, Color fill, Color wire)
+{
+    const Vector3 position = ToRaylib(center);
+    DrawCube(position, size.x, size.y, size.z, fill);
+    DrawCubeWires(position, size.x, size.y, size.z, wire);
+}
+
+void DrawPendingDeleteWires(core::Vec3 center, core::Vec3 size)
+{
+    if (size.x <= 0.0f || size.y <= 0.0f || size.z <= 0.0f)
+    {
+        return;
+    }
+    DrawCubeWires(ToRaylib(center), size.x, size.y, size.z, kPendingDeleteWire);
+}
+
+Color FadePendingDelete(Color source, unsigned char alpha)
+{
+    return Color{
+        static_cast<unsigned char>((static_cast<int>(source.r) + 210) / 2),
+        static_cast<unsigned char>((static_cast<int>(source.g) + 208) / 2),
+        static_cast<unsigned char>((static_cast<int>(source.b) + 206) / 2),
+        alpha};
+}
+
+void DrawPendingDeleteSolid(
+    core::Vec3 center,
+    core::Vec3 size,
+    Color sourceFill,
+    unsigned char alpha = kPendingDeleteFillAlpha)
+{
+    if (size.x <= 0.0f || size.y <= 0.0f || size.z <= 0.0f)
+    {
+        return;
+    }
+    DrawCube(ToRaylib(center), size.x, size.y, size.z, FadePendingDelete(sourceFill, alpha));
+    DrawPendingDeleteWires(center, size);
+}
+
+bool OverlayMarksPendingDelete(const std::vector<int>& indices, std::size_t query)
+{
+    const int queryIndex = static_cast<int>(query);
+    for (int index : indices)
+    {
+        if (index == queryIndex)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void DrawCheckpointMarkerGeometry(
+    const world::CheckpointSpec& spec,
+    Color postColor,
+    Color beaconColor,
+    bool ghost,
+    Color ghostWire);
+
 // Visual-only: lethal AABB is the bar. Three teeth sit on the top face, inside
 // the XZ footprint, so the drawn volume is slightly taller than the lethal box.
-void DrawHazard(const world::HazardSpec& spec)
+void DrawHazardTeeth(
+    const world::HazardSpec& spec,
+    Color toothColor,
+    bool ghost,
+    Color ghostWire)
 {
-    DrawGreyboxBox(spec.center, spec.size, kHazardBarColor);
-
     constexpr int kToothCount = 3;
     constexpr float kToothHeight = 0.35f;
     const float toothSizeX = spec.size.x * 0.22f;
@@ -145,11 +225,40 @@ void DrawHazard(const world::HazardSpec& spec)
     for (int toothIndex = 0; toothIndex < kToothCount; ++toothIndex)
     {
         const float xOffset = -xSpan + static_cast<float>(toothIndex) * xSpan;
-        DrawGreyboxBox(
-            {spec.center.x + xOffset, toothCenterY, spec.center.z},
-            toothSize,
-            kHazardToothColor);
+        const core::Vec3 toothCenter{spec.center.x + xOffset, toothCenterY, spec.center.z};
+        if (ghost)
+        {
+            DrawGhostBox(toothCenter, toothSize, toothColor, ghostWire);
+        }
+        else
+        {
+            DrawGreyboxBox(toothCenter, toothSize, toothColor);
+        }
     }
+}
+
+void DrawHazard(const world::HazardSpec& spec)
+{
+    DrawGreyboxBox(spec.center, spec.size, kHazardBarColor);
+    DrawHazardTeeth(spec, kHazardToothColor, false, kPendingPreviewWire);
+}
+
+void DrawPendingDeleteHazard(const world::HazardSpec& spec)
+{
+    DrawPendingDeleteSolid(spec.center, spec.size, kHazardBarColor);
+    DrawHazardTeeth(
+        spec,
+        FadePendingDelete(kHazardToothColor, kPendingDeleteFillAlpha),
+        true,
+        kPendingDeleteWire);
+}
+
+void DrawPendingDeleteCheckpoint(const world::CheckpointSpec& spec)
+{
+    DrawPendingDeleteWires(spec.center, spec.size);
+    const world::CheckpointMarkerLayout layout = world::MakeCheckpointMarkerLayout(spec);
+    DrawPendingDeleteSolid(layout.postCenter, layout.postSize, kCheckpointFuturePost);
+    DrawPendingDeleteSolid(layout.beaconCenter, layout.beaconSize, kCheckpointFutureBeacon);
 }
 
 void DrawCollectible(const world::CollectibleSpec& spec)
@@ -437,22 +546,139 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
                 kSelectionHighlightColor);
         }
     }
-    if (overlay.drawPendingPreview
-        && overlay.pendingPreviewSize.x > 0.0f && overlay.pendingPreviewSize.y > 0.0f
-        && overlay.pendingPreviewSize.z > 0.0f)
+    if (!overlay.collectedAuthoredCollectibleCenters.empty())
     {
-        DrawCube(
-            ToRaylib(overlay.pendingPreviewCenter),
-            overlay.pendingPreviewSize.x,
-            overlay.pendingPreviewSize.y,
-            overlay.pendingPreviewSize.z,
-            kPendingPreviewFill);
+        const float size = world::kCollectibleVisualSize;
+        for (const core::Vec3& center : overlay.collectedAuthoredCollectibleCenters)
+        {
+            DrawCubeWires(ToRaylib(center), size, size, size, kEditorCollectedCollectibleWire);
+        }
+    }
+    // Pending-delete faded solids use the same 3D depth test as the world.
+    // They replace the skipped opaque DrawWorld geometry. Gizmo overlay later
+    // disables depth; this pass does not.
+    {
+        const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
+        for (std::size_t index = 0; index < overlay.pendingDeletePlatformCenters.size(); ++index)
+        {
+            const int platformIndex = overlay.pendingDeletePlatformIndices[index];
+            const Color source = platformColors[(platformIndex < 0 ? 0 : platformIndex) % 2];
+            DrawPendingDeleteSolid(
+                overlay.pendingDeletePlatformCenters[index],
+                overlay.pendingDeletePlatformSizes[index],
+                source);
+        }
+    }
+    for (const world::CheckpointSpec& checkpoint : overlay.pendingDeleteCheckpoints)
+    {
+        DrawPendingDeleteCheckpoint(checkpoint);
+    }
+    for (const world::HazardSpec& hazard : overlay.pendingDeleteHazards)
+    {
+        DrawPendingDeleteHazard(hazard);
+    }
+    {
+        const core::Vec3 visualSize{
+            world::kCollectibleVisualSize,
+            world::kCollectibleVisualSize,
+            world::kCollectibleVisualSize};
+        for (const core::Vec3& center : overlay.pendingDeleteCollectibleCenters)
+        {
+            DrawPendingDeleteSolid(center, visualSize, kCollectibleFill);
+        }
+    }
+    const auto drawPendingAuthoring = [&](bool selectedPass) {
+        for (const DebugWorldOverlay::PendingAuthoringOverlayItem& item : overlay.pendingAuthoring)
+        {
+            if (item.selected != selectedPass)
+            {
+                continue;
+            }
+            const Color boundsWire =
+                selectedPass ? kPendingPreviewWire : kPendingPreviewWireUnselected;
+            if (item.drawObjectVisual)
+            {
+                if (item.kind == 1)
+                {
+                    DrawCheckpointMarkerGeometry(
+                        item.checkpoint,
+                        selectedPass ? kPendingCheckpointPost : kPendingCheckpointPostUnselected,
+                        selectedPass ? kPendingCheckpointBeacon
+                                     : kPendingCheckpointBeaconUnselected,
+                        true,
+                        boundsWire);
+                }
+                else if (item.kind == 2)
+                {
+                    DrawGhostBox(
+                        item.hazard.center,
+                        item.hazard.size,
+                        selectedPass ? kPendingHazardBar : kPendingHazardBarUnselected,
+                        boundsWire);
+                    DrawHazardTeeth(
+                        item.hazard,
+                        selectedPass ? kPendingHazardTooth : kPendingHazardToothUnselected,
+                        true,
+                        boundsWire);
+                }
+                else if (item.kind == 3)
+                {
+                    const core::Vec3 visualSize{
+                        world::kCollectibleVisualSize,
+                        world::kCollectibleVisualSize,
+                        world::kCollectibleVisualSize};
+                    DrawGhostBox(
+                        item.collectible.center,
+                        visualSize,
+                        selectedPass ? kPendingCollectibleFill : kPendingCollectibleFillUnselected,
+                        selectedPass ? kPendingCollectibleWire
+                                     : kPendingCollectibleWireUnselected);
+                }
+            }
+            if (item.boundsSize.x > 0.0f && item.boundsSize.y > 0.0f && item.boundsSize.z > 0.0f)
+            {
+                DrawCubeWires(
+                    ToRaylib(item.boundsCenter),
+                    item.boundsSize.x,
+                    item.boundsSize.y,
+                    item.boundsSize.z,
+                    boundsWire);
+            }
+            if (item.kind == 1)
+            {
+                DrawCubeWires(
+                    ToRaylib(item.checkpoint.respawnPosition),
+                    kCheckpointRespawnMarkerSize,
+                    kCheckpointRespawnMarkerSize,
+                    kCheckpointRespawnMarkerSize,
+                    boundsWire);
+            }
+        }
+    };
+    drawPendingAuthoring(false);
+    drawPendingAuthoring(true);
+    if (overlay.drawCheckpointRespawnMarker)
+    {
+        const Vector3 respawn = ToRaylib(overlay.checkpointRespawnMarker);
         DrawCubeWires(
-            ToRaylib(overlay.pendingPreviewCenter),
-            overlay.pendingPreviewSize.x,
-            overlay.pendingPreviewSize.y,
-            overlay.pendingPreviewSize.z,
-            kPendingPreviewWire);
+            respawn,
+            kCheckpointRespawnMarkerSize,
+            kCheckpointRespawnMarkerSize,
+            kCheckpointRespawnMarkerSize,
+            kCheckpointRespawnMarkerWire);
+        DrawCubeWires(
+            respawn,
+            kCheckpointRespawnMarkerSize * 0.45f,
+            kCheckpointRespawnMarkerSize * 1.8f,
+            kCheckpointRespawnMarkerSize * 0.45f,
+            kCheckpointRespawnMarkerWire);
+        if (overlay.drawCheckpointRespawnConnector)
+        {
+            DrawLine3D(
+                ToRaylib(overlay.checkpointTriggerCenter),
+                respawn,
+                kCheckpointRespawnConnector);
+        }
     }
     DrawTranslationGizmo(overlay);
     DrawResizeGizmo(overlay);
@@ -492,15 +718,29 @@ void DrawMissingTextureFallback()
         kMissingTextureFallbackColor);
 }
 
+void DrawCheckpointMarkerGeometry(
+    const world::CheckpointSpec& spec,
+    Color postColor,
+    Color beaconColor,
+    bool ghost,
+    Color ghostWire)
+{
+    const world::CheckpointMarkerLayout layout = world::MakeCheckpointMarkerLayout(spec);
+    if (ghost)
+    {
+        DrawGhostBox(layout.postCenter, layout.postSize, postColor, ghostWire);
+        DrawGhostBox(layout.beaconCenter, layout.beaconSize, beaconColor, ghostWire);
+        return;
+    }
+
+    DrawGreyboxBox(layout.postCenter, layout.postSize, postColor);
+    DrawGreyboxBox(layout.beaconCenter, layout.beaconSize, beaconColor);
+}
+
 void DrawCheckpointMarker(
     const world::CheckpointSpec& spec,
     world::CheckpointVisualState visualState)
 {
-    constexpr float postWidth = 0.18f;
-    constexpr float postHeight = 1.6f;
-    constexpr float beaconSize = 0.36f;
-    constexpr float zOffset = -0.95f;
-
     Color postColor = kCheckpointFuturePost;
     Color beaconColor = kCheckpointFutureBeacon;
     switch (visualState)
@@ -517,20 +757,7 @@ void DrawCheckpointMarker(
         break;
     }
 
-    const float supportTopY = spec.respawnPosition.y - world::kPlayerVisualSize.y * 0.5f;
-    const core::Vec3 postCenter{
-        spec.center.x,
-        supportTopY + postHeight * 0.5f,
-        spec.center.z + zOffset};
-    const core::Vec3 postSize{postWidth, postHeight, postWidth};
-    const core::Vec3 beaconCenter{
-        postCenter.x,
-        postCenter.y + postHeight * 0.5f + beaconSize * 0.5f,
-        postCenter.z};
-    const core::Vec3 beaconSizeVec{beaconSize, beaconSize, beaconSize};
-
-    DrawGreyboxBox(postCenter, postSize, postColor);
-    DrawGreyboxBox(beaconCenter, beaconSizeVec, beaconColor);
+    DrawCheckpointMarkerGeometry(spec, postColor, beaconColor, false, kPendingPreviewWire);
 }
 
 void DrawLevelGoalMarker(const world::LevelGoalSpec& goal, bool levelCompleted)
@@ -933,9 +1160,9 @@ void Renderer::DrawWorld(
     core::Vec3 physicsTestBoxSize,
     core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
-        std::array<world::CheckpointVisualState, world::kCheckpointCount> checkpointVisuals,
+        const std::vector<world::CheckpointVisualState>& checkpointVisuals,
         bool levelCompleted,
-        const std::array<bool, world::kCollectibleCount>& collectibleCollected,
+        const std::vector<std::uint8_t>& collectibleCollected,
         int collectedCount,
         double elapsedSeconds,
         bool hasBestTime,
@@ -952,10 +1179,14 @@ void Renderer::DrawWorld(
     int platformIndex = 0;
     for (const world::Box& platform : level.elevatedPlatforms)
     {
-        DrawGreyboxBox(
-            platform.center,
-            platform.size,
-            platformColors[platformIndex % 2]);
+        if (!OverlayMarksPendingDelete(
+                overlay.pendingDeletePlatformIndices, static_cast<std::size_t>(platformIndex)))
+        {
+            DrawGreyboxBox(
+                platform.center,
+                platform.size,
+                platformColors[platformIndex % 2]);
+        }
         ++platformIndex;
     }
 
@@ -966,24 +1197,46 @@ void Renderer::DrawWorld(
     DrawOrientedGreyboxBox(
         level.slopes[static_cast<std::size_t>(world::kLevel01SteepSlopeIndex)],
         kSteepSlopeColor);
-    for (const world::HazardSpec& hazard : level.hazards)
+    for (std::size_t hazardIndex = 0; hazardIndex < level.hazards.size(); ++hazardIndex)
     {
-        DrawHazard(hazard);
-    }
-    for (int collectibleIndex = 0; collectibleIndex < world::kCollectibleCount; ++collectibleIndex)
-    {
-        if (!collectibleCollected[static_cast<std::size_t>(collectibleIndex)])
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteHazardIndices, hazardIndex))
         {
-            DrawCollectible(level.collectibles[static_cast<std::size_t>(collectibleIndex)]);
+            continue;
         }
+        DrawHazard(level.hazards[hazardIndex]);
+    }
+    const std::size_t collectibleCount =
+        level.collectibles.size() < collectibleCollected.size() ? level.collectibles.size()
+                                                                : collectibleCollected.size();
+    for (std::size_t collectibleIndex = 0; collectibleIndex < collectibleCount; ++collectibleIndex)
+    {
+        if (OverlayMarksPendingDelete(
+                overlay.pendingDeleteCollectibleIndices, collectibleIndex))
+        {
+            continue;
+        }
+        if (collectibleCollected[collectibleIndex] == 0)
+        {
+            DrawCollectible(level.collectibles[collectibleIndex]);
+        }
+        // Collected cubes stay hidden here. Editor F2 draws an authored
+        // wireframe placeholder from DebugWorldOverlay instead of mutating
+        // CollectibleRunState. Pending-delete collectibles use the faded
+        // overlay instead of this runtime cube or the collected gold wire.
     }
     DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
     DrawGreyboxBox(physicsTestBoxPosition, physicsTestBoxSize, kPhysicsTestBoxColor);
-    for (int checkpointIndex = 0; checkpointIndex < world::kCheckpointCount; ++checkpointIndex)
+    const std::size_t checkpointCount =
+        level.checkpoints.size() < checkpointVisuals.size() ? level.checkpoints.size()
+                                                            : checkpointVisuals.size();
+    for (std::size_t checkpointIndex = 0; checkpointIndex < checkpointCount; ++checkpointIndex)
     {
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteCheckpointIndices, checkpointIndex))
+        {
+            continue;
+        }
         DrawCheckpointMarker(
-            level.checkpoints[static_cast<std::size_t>(checkpointIndex)],
-            checkpointVisuals[static_cast<std::size_t>(checkpointIndex)]);
+            level.checkpoints[checkpointIndex], checkpointVisuals[checkpointIndex]);
     }
     DrawLevelGoalMarker(level.goal, levelCompleted);
 
@@ -1032,7 +1285,8 @@ void Renderer::DrawWorld(
     }
 
     // Editor overlay last in 3D: world + cooker probes, then marker/highlight/
-    // pending ghost, then the depth-independent gizmo. ImGui is after EndMode3D.
+    // faded pending-delete (depth on), cyan pending ghost, then the
+    // depth-independent gizmo. ImGui is after EndMode3D.
     DrawWorldOverlay(overlay);
 
     EndMode3D();

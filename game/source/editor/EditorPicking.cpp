@@ -1,5 +1,6 @@
 #include "editor/EditorPicking.h"
 
+#include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorMath.h"
 #include "world/RespawnWorld.h"
 
@@ -21,17 +22,12 @@ void AddProxy(
     core::Vec3 size,
     float rotationZDegrees)
 {
-    if (set.count >= kMaxPickingProxies)
-    {
-        return;
-    }
-
-    PickingProxy& proxy = set.proxies[static_cast<std::size_t>(set.count)];
+    PickingProxy proxy{};
     proxy.selection = {kind, index};
     proxy.center = center;
     proxy.size = size;
     proxy.rotationZDegrees = rotationZDegrees;
-    ++set.count;
+    set.proxies.push_back(proxy);
 }
 
 RayHit IntersectProxy(Ray3 ray, const PickingProxy& proxy)
@@ -231,6 +227,9 @@ EditorPickingSet BuildPickingSet(
             appliedLevel.hazards[index].size,
             0.0f);
     }
+    // Authored Collectibles stay pickable even when CollectibleRunState has
+    // already hidden the runtime cube. Editor picking uses LevelDefinition,
+    // not transient collected flags.
     for (std::size_t index = 0; index < appliedLevel.collectibles.size(); ++index)
     {
         AddProxy(
@@ -258,9 +257,9 @@ EditorSelection PickNearest(Ray3 ray, const EditorPickingSet& set)
     EditorSelection best = ClearSelection();
     float bestDistance = std::numeric_limits<float>::infinity();
 
-    for (int index = 0; index < set.count; ++index)
+    for (std::size_t index = 0; index < set.proxies.size(); ++index)
     {
-        const RayHit hit = IntersectProxy(ray, set.proxies[static_cast<std::size_t>(index)]);
+        const RayHit hit = IntersectProxy(ray, set.proxies[index]);
         if (!hit.hit)
         {
             continue;
@@ -269,7 +268,7 @@ EditorSelection PickNearest(Ray3 ray, const EditorPickingSet& set)
         if (hit.distance + kTieEpsilon < bestDistance)
         {
             bestDistance = hit.distance;
-            best = set.proxies[static_cast<std::size_t>(index)].selection;
+            best = set.proxies[index].selection;
         }
     }
 
@@ -286,9 +285,8 @@ EditorHighlightRequest MakeHighlightRequest(
         return request;
     }
 
-    for (int index = 0; index < set.count; ++index)
+    for (const PickingProxy& proxy : set.proxies)
     {
-        const PickingProxy& proxy = set.proxies[static_cast<std::size_t>(index)];
         if (proxy.selection == selection)
         {
             request.visible = true;
@@ -299,5 +297,44 @@ EditorHighlightRequest MakeHighlightRequest(
         }
     }
     return request;
+}
+
+EditorSelection PickNearestPending(Ray3 ray, const std::vector<PendingPickProxy>& proxies)
+{
+    EditorSelection best = ClearSelection();
+    float bestDistance = std::numeric_limits<float>::infinity();
+
+    for (const PendingPickProxy& proxy : proxies)
+    {
+        const RayHit hit = IntersectRayAabb(ray, proxy.center, proxy.size);
+        if (!hit.hit)
+        {
+            continue;
+        }
+        if (hit.distance + kTieEpsilon < bestDistance)
+        {
+            bestDistance = hit.distance;
+            best = proxy.selection;
+        }
+    }
+
+    return best;
+}
+
+bool TryResolveEditorViewportPick(
+    Ray3 ray,
+    const EditorPickingSet& activeSet,
+    const std::vector<PendingPickProxy>& pendingProxies,
+    const StructuralIndexMap& map,
+    EditorSelection& outWorkingSelection)
+{
+    const EditorSelection pendingHit = PickNearestPending(ray, pendingProxies);
+    if (pendingHit.kind != EditorObjectKind::None)
+    {
+        outWorkingSelection = pendingHit;
+        return true;
+    }
+    const EditorSelection activePick = PickNearest(ray, activeSet);
+    return TryMapActiveWorldPick(activePick, map, outWorkingSelection);
 }
 }

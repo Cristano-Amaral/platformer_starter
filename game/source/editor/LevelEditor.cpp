@@ -1,5 +1,6 @@
 #include "editor/LevelEditor.h"
 
+#include "editor/AuthoredLifecycleCommands.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorSelection.h"
 
@@ -178,11 +179,11 @@ void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
     }
     RecoverEditorWindowIfNeeded(kHierarchyWindowName, view);
 
+    const std::vector<HierarchyEntry> entries = BuildHierarchyEntries(state.workingCopy);
     const char* openGroup = nullptr;
     bool groupVisible = true;
-    for (std::size_t index = 0; index < kHierarchyEntryCount; ++index)
+    for (const HierarchyEntry& entry : entries)
     {
-        const HierarchyEntry& entry = kHierarchyEntries[index];
         const bool grouped = entry.group[0] != '\0';
         if (grouped)
         {
@@ -210,8 +211,10 @@ void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
             groupVisible = true;
         }
 
+        char label[64];
+        FormatSelectionDisplayName(entry.selection, label, sizeof(label));
         const bool selected = state.selection == entry.selection;
-        if (ImGui::Selectable(entry.label, selected) && !state.gizmo.dragging)
+        if (ImGui::Selectable(label, selected) && !state.gizmo.dragging)
         {
             state.selection = entry.selection;
         }
@@ -238,7 +241,8 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
     ImGui::Text("Editor nav speed: %.1f (session only)", state.editorCamera.movementSpeed);
     ImGui::Separator();
 
-    if (state.selection.kind == EditorObjectKind::None)
+    if (state.selection.kind == EditorObjectKind::None
+        || !IsValidSelection(state.workingCopy, state.selection))
     {
         ImGui::TextUnformatted("No object selected.");
         ImGui::End();
@@ -295,29 +299,28 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         ReadOnlyVec3("Runtime position", view.movingPlatformRuntimeCenter);
         break;
     case EditorObjectKind::Checkpoint:
-        ImGui::TextUnformatted("Read-only in M33.");
         if (state.selection.index < level.checkpoints.size())
         {
-            const world::CheckpointSpec& checkpoint = level.checkpoints[state.selection.index];
-            ReadOnlyVec3("Trigger center", checkpoint.center);
-            ReadOnlyVec3("Trigger size", checkpoint.size);
-            ReadOnlyVec3("Respawn position", checkpoint.respawnPosition);
+            world::CheckpointSpec& checkpoint = level.checkpoints[state.selection.index];
+            EditVec3("Trigger Center", checkpoint.center);
+            EditVec3("Trigger Size", checkpoint.size);
+            EditVec3("Respawn Position", checkpoint.respawnPosition);
         }
         break;
     case EditorObjectKind::Hazard:
-        ImGui::TextUnformatted("Read-only in M33.");
         if (state.selection.index < level.hazards.size())
         {
-            const world::HazardSpec& hazard = level.hazards[state.selection.index];
-            ReadOnlyVec3("Center", hazard.center);
-            ReadOnlyVec3("Size", hazard.size);
+            world::HazardSpec& hazard = level.hazards[state.selection.index];
+            EditVec3("Center X Y Z", hazard.center);
+            EditVec3("Size X Y Z", hazard.size);
         }
         break;
     case EditorObjectKind::Collectible:
-        ImGui::TextUnformatted("Read-only in M33.");
         if (state.selection.index < level.collectibles.size())
         {
-            ReadOnlyVec3("Authored position", level.collectibles[state.selection.index].center);
+            world::CollectibleSpec& collectible = level.collectibles[state.selection.index];
+            EditVec3("Center X Y Z", collectible.center);
+            EditVec3("Size X Y Z", collectible.size);
         }
         break;
     case EditorObjectKind::Goal:
@@ -612,6 +615,101 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::EndDisabled();
         ImGui::EndMenu();
     }
+
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (ImGui::BeginMenu("Edit"))
+    {
+        const bool authoringAvailable = IsLevelAuthoringAvailable();
+        const bool gizmoDragging = state.gizmo.dragging;
+        if (ImGui::BeginMenu("Add"))
+        {
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    LevelEditorRequest::AddPlatform));
+            if (ImGui::MenuItem("Platform"))
+            {
+                request = LevelEditorRequest::AddPlatform;
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    LevelEditorRequest::AddCheckpoint));
+            if (ImGui::MenuItem("Checkpoint"))
+            {
+                request = LevelEditorRequest::AddCheckpoint;
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    LevelEditorRequest::AddHazard));
+            if (ImGui::MenuItem("Hazard"))
+            {
+                request = LevelEditorRequest::AddHazard;
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    LevelEditorRequest::AddCollectible));
+            if (ImGui::MenuItem("Collectible"))
+            {
+                request = LevelEditorRequest::AddCollectible;
+            }
+            ImGui::EndDisabled();
+            ImGui::EndMenu();
+        }
+
+        ImGui::BeginDisabled(
+            !CanIssueAuthoredLifecycleRequest(
+                authoringAvailable,
+                state.workingCopy,
+                state.selection,
+                gizmoDragging,
+                LevelEditorRequest::DuplicateSelected));
+        if (ImGui::MenuItem("Duplicate Selected"))
+        {
+            request = LevelEditorRequest::DuplicateSelected;
+        }
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(
+            !CanIssueAuthoredLifecycleRequest(
+                authoringAvailable,
+                state.workingCopy,
+                state.selection,
+                gizmoDragging,
+                LevelEditorRequest::DeleteSelected));
+        if (ImGui::MenuItem("Delete Selected", "Delete"))
+        {
+            request = LevelEditorRequest::DeleteSelected;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            const char* reason = DeleteSelectedDisableReason(
+                authoringAvailable, state.workingCopy, state.selection, gizmoDragging);
+            if (reason != nullptr)
+            {
+                ImGui::SetTooltip("%s", reason);
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::EndMenu();
+    }
+#endif
 
     if (ImGui::BeginMenu("Level"))
     {

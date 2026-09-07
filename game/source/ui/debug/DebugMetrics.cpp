@@ -7,6 +7,7 @@
 #include "editor/EditorLayoutUi.h"
 #include "imgui.h"
 
+#include <cstddef>
 #include <filesystem>
 
 namespace ui
@@ -337,19 +338,21 @@ void DrawDebugMetrics(
 
     if (ImGui::CollapsingHeader("Collectibles", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::Text("Collectibles: %d / %d", snapshot.collectedCount, world::kCollectibleCount);
-        for (int index = 0; index < world::kCollectibleCount; ++index)
+        ImGui::Text(
+            "Collectibles: %d / %d",
+            snapshot.collectedCount,
+            snapshot.levelCollectibleCount);
+        for (int index = 0; index < snapshot.levelCollectibleCount; ++index)
         {
+            const std::size_t item = static_cast<std::size_t>(index);
             ImGui::Separator();
             ImGui::Text("Collectible %d", index + 1);
-            ImGui::Text(
-                "State: %s",
-                snapshot.collectibleCollected[static_cast<std::size_t>(index)]
-                    ? "Collected"
-                    : "Available");
-            ImGui::Text(
-                "Inside: %s",
-                BoolText(snapshot.collectibleInside[static_cast<std::size_t>(index)]));
+            const bool collected =
+                item < snapshot.collectibleCollected.size() && snapshot.collectibleCollected[item] != 0;
+            ImGui::Text("State: %s", collected ? "Collected" : "Available");
+            const bool inside =
+                item < snapshot.collectibleInside.size() && snapshot.collectibleInside[item] != 0;
+            ImGui::Text("Inside: %s", BoolText(inside));
         }
         ImGui::Separator();
         ImGui::Text("Collected this frame: %s", snapshot.collectedThisFrameLabel);

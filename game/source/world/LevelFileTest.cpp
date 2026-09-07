@@ -1,7 +1,10 @@
+#include "editor/AuthoredObjectLifecycle.h"
 #include "editor/RuntimeLevelReload.h"
+#include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/LevelWriter.h"
+#include "world/RespawnWorld.h"
 
 #include <array>
 #include <cstddef>
@@ -45,6 +48,8 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && BoxEqual(level.ground, {{0.0f, -0.25f, 0.0f}, {56.0f, 0.5f, 8.0f}})
         && level.checkpoint1PlatformIndex == 2 && level.checkpoint2PlatformIndex == 4
         && level.goalPlatformIndex == 5
+        && level.elevatedPlatforms.size()
+            == static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount)
         && Vec3Equal(level.elevatedPlatforms[0].center, {5.0f, 0.75f, 0.0f})
         && Vec3Equal(level.elevatedPlatforms[1].center, {-4.5f, 2.25f, 0.0f})
         && Vec3Equal(level.elevatedPlatforms[2].center, {16.5f, 0.75f, 0.0f})
@@ -55,10 +60,13 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && level.slopes[0].rotationZDegrees == 30.0f
         && Vec3Equal(level.slopes[1].center, {25.60f, 0.9660f, 0.0f})
         && level.movingPlatform.speed == 2.5f && level.movingPlatform.startX == 0.0f
+        && level.checkpoints.size() == static_cast<std::size_t>(world::kLevel01CheckpointCount)
         && Vec3Equal(level.checkpoints[0].center, {16.5f, 1.8f, 0.0f})
         && Vec3Equal(level.checkpoints[1].center, {-15.5f, 2.8f, 0.0f})
+        && level.hazards.size() == static_cast<std::size_t>(world::kLevel01HazardCount)
         && Vec3Equal(level.hazards[0].center, {11.5f, 0.5f, 0.0f})
         && Vec3Equal(level.hazards[1].center, {-18.5f, 0.5f, 0.0f})
+        && level.collectibles.size() == static_cast<std::size_t>(world::kLevel01CollectibleCount)
         && Vec3Equal(level.collectibles[0].center, {5.0f, 2.5f, 0.0f})
         && Vec3Equal(level.collectibles[1].center, {-4.5f, 4.0f, 0.0f})
         && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
@@ -284,9 +292,15 @@ int main()
 
     ExpectInvalid("missing required record", ReplaceFirstLineStartingWith(canonical, "goal ", ""));
     ExpectInvalid("duplicate spawn", InsertAfterHeader(canonical, "spawn 0 0.8 0"));
-    ExpectInvalid(
-        "wrong platform count",
-        canonical + "platform 0 1 0 1 1 1\n");
+    {
+        const world::ParseLevelFileResult extraPlatform =
+            world::ParseLevelText(canonical + "platform 0 1 0 1 1 1\n");
+        Expect(extraPlatform.status == world::LoadLevelFileStatus::Loaded, "extra platform still v1");
+        Expect(
+            extraPlatform.level.elevatedPlatforms.size()
+                == static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount + 1),
+            "extra platform increases count");
+    }
     ExpectInvalid("malformed number", ReplaceFirstLineStartingWith(canonical, "kill_plane ", "kill_plane abc"));
     ExpectInvalid("overflow", ReplaceFirstLineStartingWith(canonical, "kill_plane ", "kill_plane 1e1000"));
     ExpectInvalid("nan", ReplaceFirstLineStartingWith(canonical, "kill_plane ", "kill_plane nan"));
@@ -313,6 +327,25 @@ int main()
         "invalid FOV",
         ReplaceFirstLineStartingWith(canonical, "camera ", "camera 2 3.5 12 0"));
     ExpectInvalid("trailing malformed", canonical + "not_a_record 1\n");
+    ExpectInvalid(
+        "support index out of range",
+        ReplaceFirstLineStartingWith(canonical, "support_index_goal ", "support_index_goal 6"));
+    ExpectInvalid(
+        "negative support index",
+        ReplaceFirstLineStartingWith(canonical, "support_index_cp1 ", "support_index_cp1 -1"));
+    {
+        std::string zeroPlatforms = canonical;
+        for (;;)
+        {
+            const std::string next = ReplaceFirstLineStartingWith(zeroPlatforms, "platform ", "");
+            if (next == zeroPlatforms)
+            {
+                break;
+            }
+            zeroPlatforms = next;
+        }
+        ExpectInvalid("zero platforms", zeroPlatforms);
+    }
 
     {
         const std::filesystem::path tempDir = std::filesystem::temp_directory_path();
@@ -362,10 +395,10 @@ int main()
     Expect(CountRecords(written, "support_index_goal") == 1, "writer support_index_goal count");
     Expect(CountRecords(written, "slope") == world::kLevel01SlopeCount, "writer slope count");
     Expect(CountRecords(written, "moving_platform") == 1, "writer moving_platform count");
-    Expect(CountRecords(written, "checkpoint") == world::kCheckpointCount, "writer checkpoint count");
-    Expect(CountRecords(written, "hazard") == world::kHazardCount, "writer hazard count");
+    Expect(CountRecords(written, "checkpoint") == world::kLevel01CheckpointCount, "writer checkpoint count");
+    Expect(CountRecords(written, "hazard") == world::kLevel01HazardCount, "writer hazard count");
     Expect(
-        CountRecords(written, "collectible") == world::kCollectibleCount,
+        CountRecords(written, "collectible") == world::kLevel01CollectibleCount,
         "writer collectible count");
     Expect(CountRecords(written, "goal") == 1, "writer goal count");
     Expect(CountRecords(written, "dynamic_box") == 1, "writer dynamic_box count");
@@ -563,6 +596,12 @@ int main()
         Expect(
             !world::AuthoredLevelDataEqual(parsed.level, idEdit),
             "authored equality detects id change");
+
+        world::LevelDefinition countEdit = parsed.level;
+        countEdit.elevatedPlatforms.push_back(countEdit.elevatedPlatforms.back());
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, countEdit),
+            "authored equality detects platform count change");
     }
 
     // ---- Milestone 39 staged reload core (no ImGui, no tools) ----
@@ -659,6 +698,147 @@ int main()
         Expect(!dirtyStaged.modified, "Dirty-but-not-Modified: Modified false");
         Expect(dirtyStaged.dirty, "Dirty true when staged active differs from saved source");
 
+        std::filesystem::remove_all(reloadDir, cleanupError);
+    }
+
+    // ---- Milestone 41 variable-count v1 (in-memory; canonical file untouched) ----
+    {
+        auto RoundTrip = [](world::LevelDefinition level, const char* name) {
+            const std::string text = world::SerializeLevelText(level);
+            Expect(!text.empty(), name);
+            const world::ParseLevelFileResult again = world::ParseLevelText(text);
+            Expect(again.status == world::LoadLevelFileStatus::Loaded, name);
+            Expect(world::AuthoredLevelDataEqual(level, again.level), name);
+            Expect(world::SerializeLevelText(again.level) == text, name);
+            return again.level;
+        };
+
+        world::LevelDefinition extraPlatform = parsed.level;
+        extraPlatform.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {1.0f, 0.5f, 1.0f}});
+        Expect(extraPlatform.elevatedPlatforms.size() == 7, "variable platform count +1");
+        const world::LevelDefinition extraPlatformRound = RoundTrip(extraPlatform, "platform round trip");
+        Expect(extraPlatformRound.elevatedPlatforms.size() == 7, "platform count preserved");
+        Expect(
+            extraPlatformRound.elevatedPlatforms[6].center.x == 0.0f, "appended platform order");
+
+        world::LevelDefinition fewerPlatforms = parsed.level;
+        fewerPlatforms.elevatedPlatforms.pop_back();
+        fewerPlatforms.goalPlatformIndex = 4;
+        Expect(fewerPlatforms.elevatedPlatforms.size() == 5, "variable platform count -1");
+        RoundTrip(fewerPlatforms, "fewer platforms round trip");
+
+        {
+            world::LevelDefinition remapped = parsed.level;
+            const world::Box formerCp1 = remapped.elevatedPlatforms[2];
+            const world::Box formerCp2 = remapped.elevatedPlatforms[4];
+            const world::Box formerGoal = remapped.elevatedPlatforms[5];
+            const editor::LifecycleEditResult deleted = editor::DeleteSelected(
+                remapped, {editor::EditorObjectKind::ElevatedPlatform, 1});
+            Expect(deleted.succeeded, "delete-before-reference for writer");
+            Expect(remapped.checkpoint1PlatformIndex == 1, "writer remap cp1");
+            Expect(remapped.checkpoint2PlatformIndex == 3, "writer remap cp2");
+            Expect(remapped.goalPlatformIndex == 4, "writer remap goal");
+            Expect(
+                remapped.elevatedPlatforms[1].center.x == formerCp1.center.x, "semantic cp1 target");
+            Expect(
+                remapped.elevatedPlatforms[3].center.x == formerCp2.center.x, "semantic cp2 target");
+            Expect(
+                remapped.elevatedPlatforms[4].center.x == formerGoal.center.x,
+                "semantic goal target");
+            const std::string remappedText = world::SerializeLevelText(remapped);
+            Expect(!remappedText.empty(), "remapped writer produces v1");
+            const world::ParseLevelFileResult remappedParsed = world::ParseLevelText(remappedText);
+            Expect(
+                remappedParsed.status == world::LoadLevelFileStatus::Loaded, "remapped parse Loaded");
+            Expect(
+                world::AuthoredLevelDataEqual(remapped, remappedParsed.level),
+                "remapped round trip equal");
+            Expect(
+                world::SerializeLevelText(remappedParsed.level) == remappedText,
+                "remapped writer deterministic");
+            Expect(remappedParsed.level.checkpoint1PlatformIndex == 1, "parsed remapped cp1");
+            Expect(
+                remappedParsed.level.elevatedPlatforms[1].center.x == formerCp1.center.x,
+                "parsed remapped semantic target");
+        }
+
+        world::LevelDefinition extraCheckpoint = parsed.level;
+        extraCheckpoint.checkpoints.push_back(
+            {{0.0f, 2.0f, 0.0f}, {2.4f, 1.6f, 2.0f}, {0.0f, 2.0f, 0.0f}});
+        RoundTrip(extraCheckpoint, "checkpoint round trip");
+        Expect(extraCheckpoint.checkpoints.size() == 3, "checkpoint count +1");
+
+        world::LevelDefinition extraHazard = parsed.level;
+        extraHazard.hazards.push_back({{0.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        RoundTrip(extraHazard, "hazard round trip");
+
+        world::LevelDefinition extraCollectible = parsed.level;
+        extraCollectible.collectibles.push_back({{1.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        RoundTrip(extraCollectible, "collectible round trip");
+        Expect(extraCollectible.collectibles.size() == 4, "collectible count +1");
+
+        world::LevelDefinition manyCollectibles = parsed.level;
+        while (manyCollectibles.collectibles.size() < 17)
+        {
+            const float x = static_cast<float>(manyCollectibles.collectibles.size());
+            manyCollectibles.collectibles.push_back({{x, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        }
+        RoundTrip(manyCollectibles, "17 collectibles round trip");
+        Expect(manyCollectibles.collectibles.size() == 17, "17 collectibles remain authored");
+
+        world::LevelDefinition manyCheckpoints = parsed.level;
+        while (manyCheckpoints.checkpoints.size() < 9)
+        {
+            const float x = static_cast<float>(manyCheckpoints.checkpoints.size());
+            manyCheckpoints.checkpoints.push_back(
+                {{x, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {x, 1.8f, 0.0f}});
+        }
+        RoundTrip(manyCheckpoints, "9 checkpoints round trip");
+        Expect(world::ReconcileActiveCheckpointIndex(8, 9) == 8, "checkpoint progression at 9");
+
+        world::LevelDefinition manyHazards = parsed.level;
+        while (manyHazards.hazards.size() < 9)
+        {
+            const float x = static_cast<float>(manyHazards.hazards.size()) * 2.0f;
+            manyHazards.hazards.push_back({{x, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        }
+        RoundTrip(manyHazards, "9 hazards round trip");
+        Expect(
+            world::FindHazardIndexContaining(manyHazards.hazards.back().center, manyHazards.hazards)
+                == static_cast<int>(manyHazards.hazards.size() - 1),
+            "hazard overlap iteration at 9");
+
+        world::LevelDefinition manyPlatforms = parsed.level;
+        while (manyPlatforms.elevatedPlatforms.size() < 17)
+        {
+            const float x = 40.0f + static_cast<float>(manyPlatforms.elevatedPlatforms.size());
+            manyPlatforms.elevatedPlatforms.push_back({{x, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        }
+        RoundTrip(manyPlatforms, "17 platforms round trip");
+
+        std::string tooManyPlatforms = canonical;
+        const int extras = world::kMaxElevatedPlatformCount - world::kLevel01ElevatedPlatformCount + 1;
+        for (int extra = 0; extra < extras; ++extra)
+        {
+            tooManyPlatforms += "platform 0 1 0 1 1 1\n";
+        }
+        ExpectInvalid("platform count exceeds physics body capacity", tooManyPlatforms);
+
+        std::error_code cleanupError;
+        const std::filesystem::path reloadDir =
+            std::filesystem::temp_directory_path() / "platformer3d_m41_reload_counts";
+        std::filesystem::remove_all(reloadDir, cleanupError);
+        std::filesystem::create_directories(reloadDir / "assets" / "levels", cleanupError);
+        const std::filesystem::path stagedPath = reloadDir / "assets" / "levels" / "level_01.level";
+        WriteAll(stagedPath, world::SerializeLevelText(extraPlatform));
+        const editor::RuntimeLevelReloadPrepareResult readyCounts =
+            editor::PrepareRuntimeLevelReload(stagedPath, false);
+        Expect(readyCounts.status == editor::RuntimeLevelReloadStatus::Ready, "M39 ready variable count");
+        Expect(readyCounts.candidate.elevatedPlatforms.size() == 7, "M39 candidate platform count");
+        const editor::RuntimeLevelReloadReconcileResult reconciledCounts =
+            editor::ReconcileAfterRuntimeLevelReload(readyCounts.candidate, parsed.level);
+        Expect(reconciledCounts.selection.kind == editor::EditorObjectKind::None, "M39 still clears selection");
+        Expect(reconciledCounts.workingCopy.elevatedPlatforms.size() == 7, "M39 working matches active");
         std::filesystem::remove_all(reloadDir, cleanupError);
     }
 

@@ -78,14 +78,16 @@ camera <ox> <oy> <oz> <fovY>
 (do not infer it from the filename). Application requires `level_01`; the
 parser and writer accept any valid identifier.
 
-### Required repeated records (fixed M30 Level 01 counts)
+### Required repeated records
+
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 still uses 6 / 2 / 2 / 2 / 3, but v1 does **not** require those instance counts. Checkpoint / hazard / collectible counts are 0 or more; the parser does **not** impose a small design cap (the old 8/8/16 values were Phase A policy). Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count is additionally limited by the Jolt body allocator leftover (`kMaxElevatedPlatformCount` = 58). Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names.
 
 ```
-platform <cx> <cy> <cz> <sx> <sy> <sz>     # exactly 6
+platform <cx> <cy> <cz> <sx> <sy> <sz>
 slope <cx> <cy> <cz> <sx> <sy> <sz> <rotZ> # exactly 2
-checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>  # exactly 2
-hazard <cx> <cy> <cz> <sx> <sy> <sz>       # exactly 2
-collectible <cx> <cy> <cz> <sx> <sy> <sz>  # exactly 3
+checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
+hazard <cx> <cy> <cz> <sx> <sy> <sz>
+collectible <cx> <cy> <cz> <sx> <sy> <sz>
 ```
 
 `support_index_*` are 0-based indices into the `platform` array (M30
@@ -173,15 +175,15 @@ id
 spawn
 kill_plane
 ground
-platform            x6, elevatedPlatforms index order
+platform            variable, elevatedPlatforms index order
 support_index_cp1
 support_index_cp2
 support_index_goal
 slope               x2, slopes index order
 moving_platform
-checkpoint          x2, checkpoints index order
-hazard              x2, hazards index order
-collectible         x3, collectibles index order
+checkpoint          variable, checkpoints index order
+hazard              variable, hazards index order
+collectible         variable, collectibles index order
 goal
 dynamic_box
 camera

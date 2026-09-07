@@ -13,6 +13,7 @@
 #include "world/LevelDefinition.h"
 
 #include "core/Vec3.h"
+#include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSelection.h"
@@ -26,7 +27,6 @@ namespace editor
 inline constexpr int kEditableSpawnCount = 1;
 inline constexpr int kEditableCameraCount = 2;
 inline constexpr int kEditableGroundCount = 1;
-inline constexpr int kEditableElevatedPlatformCount = 6;
 
 enum class LevelEditorApplyStatus
 {
@@ -64,6 +64,12 @@ enum class LevelEditorRequest
     SaveLevelSource,
     ReloadRuntimeLevel,
     CookStageAndReload,
+    AddPlatform,
+    AddCheckpoint,
+    AddHazard,
+    AddCollectible,
+    DuplicateSelected,
+    DeleteSelected,
 };
 
 const char* LevelEditorApplyStatusName(LevelEditorApplyStatus status);
@@ -93,6 +99,8 @@ struct LevelEditorState
     // Single selection shared by Hierarchy, world picking, Inspector, and
     // highlight. Not persisted. Survives F2 close/reopen in this process.
     EditorSelection selection{};
+    CategoryStructuralPending structuralPending{};
+    StructuralIndexMap structuralMap{};
     EditorCamera editorCamera{};
     GizmoInteractionState gizmo{};
     EditorTransformMode transformMode = EditorTransformMode::Translate;
@@ -152,9 +160,11 @@ void ResetEditorWorkspaceLayout(
     float viewportWidth,
     float viewportHeight);
 
-// F2-only Dear ImGui main menu bar (View / Transform / Level, plus Build in
-// Development). Development Level includes Reload Runtime Level. Development
-// Build includes Cook, Stage & Reload (intent only; Application orchestrates).
+// F2-only Dear ImGui main menu bar (View / Transform / Level, plus Development
+// Edit and Build). The Edit menu emits lifecycle intents only; Application
+// mutates workingCopy through HandleAuthoredLifecycleRequest. Development
+// Level includes Reload Runtime Level. Development Build includes Cook, Stage
+// & Reload (intent only; Application orchestrates).
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,

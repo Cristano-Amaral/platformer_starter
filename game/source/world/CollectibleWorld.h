@@ -3,8 +3,8 @@
 #include "core/Vec3.h"
 #include "world/RespawnWorld.h"
 
-#include <array>
 #include <cstddef>
+#include <span>
 
 namespace world
 {
@@ -14,7 +14,7 @@ struct CollectibleSpec
     core::Vec3 size;
 };
 
-inline constexpr int kCollectibleCount = 3;
+inline constexpr int kLevel01CollectibleCount = 3;
 inline constexpr int kNoCollectibleIndex = -1;
 // Visual/picking cube. Shared so editor proxies match what Renderer draws.
 inline constexpr float kCollectibleVisualSize = 0.45f;
@@ -24,15 +24,15 @@ constexpr bool PointInsideCollectible(const CollectibleSpec& spec, core::Vec3 vi
     return PointInsideAabb(spec.center, spec.size, visualCenter);
 }
 
-constexpr int FindCollectibleIndexContaining(
+inline int FindCollectibleIndexContaining(
     core::Vec3 visualCenter,
-    const std::array<CollectibleSpec, kCollectibleCount>& collectibles)
+    std::span<const CollectibleSpec> collectibles)
 {
-    for (int index = 0; index < kCollectibleCount; ++index)
+    for (std::size_t index = 0; index < collectibles.size(); ++index)
     {
-        if (PointInsideCollectible(collectibles[static_cast<std::size_t>(index)], visualCenter))
+        if (PointInsideCollectible(collectibles[index], visualCenter))
         {
-            return index;
+            return static_cast<int>(index);
         }
     }
     return kNoCollectibleIndex;

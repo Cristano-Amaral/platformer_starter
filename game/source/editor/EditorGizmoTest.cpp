@@ -1,15 +1,19 @@
 #include "editor/EditorGizmo.h"
+#include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
 #include "world/LevelDefinition.h"
 
+#include <cstdint>
+
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -41,10 +45,9 @@ world::LevelDefinition MakeStubLevel()
     level.id = "level_01";
     level.initialSpawnVisualCenter = {0.0f, 0.8f, 0.0f};
     level.ground = {{0.0f, -0.25f, 0.0f}, {10.0f, 0.5f, 8.0f}};
-    for (world::Box& platform : level.elevatedPlatforms)
-    {
-        platform = {{0.0f, 1.0f, 0.0f}, {1.0f, 0.5f, 1.0f}};
-    }
+    level.elevatedPlatforms.assign(
+        static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount),
+        world::Box{{0.0f, 1.0f, 0.0f}, {1.0f, 0.5f, 1.0f}});
     level.elevatedPlatforms[0] = {{5.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}};
     level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
     return level;
@@ -87,17 +90,21 @@ int main()
             editor::IsGizmoSelection({EditorObjectKind::ElevatedPlatform, 5}),
             "platform 5 is gizmo");
         Expect(
-            !editor::IsGizmoSelection({EditorObjectKind::ElevatedPlatform, 6}),
-            "platform 6 is not gizmo");
+            editor::IsGizmoSelection({EditorObjectKind::ElevatedPlatform, 6}),
+            "platform kind remains gizmo; index is resolved against the definition");
+        Expect(
+            editor::GetEditablePosition(MakeStubLevel(), {EditorObjectKind::ElevatedPlatform, 6})
+                == nullptr,
+            "out-of-range platform has no gizmo origin");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Camera, 0}), "camera has no gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Slope, 0}), "slope has no gizmo");
         Expect(
             !editor::IsGizmoSelection({EditorObjectKind::MovingPlatform, 0}),
             "moving platform has no gizmo");
-        Expect(!editor::IsGizmoSelection({EditorObjectKind::Checkpoint, 0}), "checkpoint no gizmo");
-        Expect(!editor::IsGizmoSelection({EditorObjectKind::Hazard, 0}), "hazard no gizmo");
-        Expect(!editor::IsGizmoSelection({EditorObjectKind::Collectible, 0}), "collectible no gizmo");
-        Expect(!editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal no gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::Checkpoint, 0}), "checkpoint translate gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::Hazard, 0}), "hazard translate gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::Collectible, 0}), "collectible translate gizmo");
+        Expect(!editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal has no gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::DynamicBox, 0}), "cyan box no gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::None, 0}), "none is not gizmo");
     }
@@ -120,6 +127,21 @@ int main()
         Expect(
             editor::GetEditablePosition(level, {EditorObjectKind::Slope, 0}) == nullptr,
             "slope has no mutable gizmo position");
+        level.checkpoints.push_back({{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}});
+        level.hazards.push_back({{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        level.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        Expect(
+            editor::GetEditablePosition(level, {EditorObjectKind::Checkpoint, 0}) != nullptr,
+            "checkpoint has translate origin");
+        Expect(
+            editor::GetEditablePosition(level, {EditorObjectKind::Hazard, 0}) != nullptr,
+            "hazard has translate origin");
+        Expect(
+            editor::GetEditablePosition(level, {EditorObjectKind::Collectible, 0}) != nullptr,
+            "collectible has translate origin");
+        Expect(
+            editor::GetEditableSize(level, {EditorObjectKind::Checkpoint, 0}) == nullptr,
+            "checkpoint has no resize gizmo size");
     }
 
     // ---- X/Y/Z constrained drag ----
@@ -497,6 +519,9 @@ int main()
         Expect(
             !editor::IsResizeSelection({EditorObjectKind::Camera, 0}), "camera is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Slope, 0}), "slope is not resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Checkpoint, 0}), "checkpoint is not resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Hazard, 0}), "hazard is not resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Collectible, 0}), "collectible is not resize");
         world::LevelDefinition level = MakeStubLevel();
         Expect(
             editor::GetEditableSize(level, {EditorObjectKind::Spawn, 0}) == nullptr,
@@ -774,6 +799,545 @@ int main()
         Expect(
             editor::PickResizeHandle(miss, origin, length, hitRadius).axis == EditorAxis::None,
             "missed resize handle");
+    }
+
+    // ---- Checkpoint gizmo Translate preserves trigger/respawn offset ----
+    {
+        world::LevelDefinition working{};
+        const core::Vec3 center{16.5f, 1.8f, 0.0f};
+        const core::Vec3 respawn{18.0f, 0.8f, 1.25f};
+        const core::Vec3 delta{2.0f, -0.5f, 3.0f};
+        working.checkpoints.push_back({center, {2.4f, 1.6f, 2.0f}, respawn});
+        Expect(
+            editor::SetCheckpointAssemblyCenter(
+                working, 0, {center.x + delta.x, center.y + delta.y, center.z + delta.z}),
+            "checkpoint assembly translate");
+        const world::CheckpointSpec& moved = working.checkpoints[0];
+        Expect(Vec3Near(moved.center, {center.x + delta.x, center.y + delta.y, center.z + delta.z}),
+            "new center is C + D");
+        Expect(
+            Vec3Near(
+                moved.respawnPosition,
+                {respawn.x + delta.x, respawn.y + delta.y, respawn.z + delta.z}),
+            "new respawn is R + D");
+        Expect(
+            Vec3Near(
+                editor::Sub(moved.respawnPosition, moved.center),
+                editor::Sub(respawn, center)),
+            "gizmo translate preserves respawn-center offset");
+    }
+
+    {
+        world::LevelDefinition working{};
+        const core::Vec3 center{4.0f, 2.0f, -1.0f};
+        const core::Vec3 respawn{4.5f, 1.0f, -1.0f};
+        working.checkpoints.push_back({center, {2.4f, 1.6f, 2.0f}, respawn});
+        Expect(
+            editor::ApplyNudge(
+                working,
+                {EditorObjectKind::Checkpoint, 0},
+                EditorAxis::X,
+                1.0f,
+                false),
+            "nudge checkpoint +X");
+        Expect(NearlyEqual(working.checkpoints[0].center.x, center.x + editor::kNudgeStep),
+            "nudge moves trigger center");
+        Expect(
+            NearlyEqual(working.checkpoints[0].respawnPosition.x, respawn.x + editor::kNudgeStep),
+            "nudge moves respawn by the same delta");
+        Expect(
+            NearlyEqual(
+                working.checkpoints[0].respawnPosition.y - working.checkpoints[0].center.y,
+                respawn.y - center.y),
+            "nudge preserves Y offset");
+    }
+
+    // ---- Inspector-style center edit does not rewrite respawn ----
+    {
+        world::LevelDefinition working{};
+        const core::Vec3 center{10.0f, 1.8f, 0.0f};
+        const core::Vec3 respawn{12.0f, 0.8f, 2.0f};
+        working.checkpoints.push_back({center, {2.4f, 1.6f, 2.0f}, respawn});
+        core::Vec3* position =
+            editor::GetEditablePosition(working, {EditorObjectKind::Checkpoint, 0});
+        Expect(position != nullptr, "inspector can bind trigger center");
+        if (position != nullptr)
+        {
+            *position = {11.0f, 2.5f, -0.5f};
+        }
+        Expect(Vec3Near(working.checkpoints[0].center, {11.0f, 2.5f, -0.5f}), "center write sticks");
+        Expect(Vec3Near(working.checkpoints[0].respawnPosition, respawn),
+            "direct center edit leaves respawn unchanged");
+    }
+
+    // ---- pending Checkpoint overlay reads workingCopy respawn, not active ----
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        active.checkpoints.push_back(
+            {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}});
+        working.checkpoints.push_back(
+            {{20.0f, 2.2f, 1.0f}, {2.4f, 1.6f, 2.0f}, {21.5f, 0.9f, 2.0f}});
+        const editor::CheckpointEditorOverlay overlay = editor::MakeCheckpointEditorOverlay(
+            {EditorObjectKind::Checkpoint, 0}, working);
+        Expect(overlay.visible, "selected checkpoint overlay is visible");
+        Expect(Vec3Near(overlay.triggerCenter, working.checkpoints[0].center),
+            "overlay trigger from workingCopy");
+        Expect(Vec3Near(overlay.triggerSize, working.checkpoints[0].size),
+            "overlay size from workingCopy");
+        Expect(Vec3Near(overlay.respawnPosition, working.checkpoints[0].respawnPosition),
+            "overlay respawn from workingCopy");
+        Expect(
+            !Vec3Near(overlay.respawnPosition, active.checkpoints[0].respawnPosition),
+            "overlay respawn is not active");
+        const editor::CheckpointEditorOverlay hidden = editor::MakeCheckpointEditorOverlay(
+            {EditorObjectKind::Hazard, 0}, working);
+        Expect(!hidden.visible, "non-checkpoint selection has no overlay");
+    }
+
+    // ---- pending object visuals: workingCopy authority, no Platform duplicate ----
+    {
+        Expect(
+            !editor::HasDistinctPendingObjectVisual(EditorObjectKind::ElevatedPlatform),
+            "platform visual == bounds; no second object ghost");
+        Expect(
+            !editor::HasDistinctPendingObjectVisual(EditorObjectKind::Ground),
+            "ground has no distinct object visual");
+        Expect(
+            editor::HasDistinctPendingObjectVisual(EditorObjectKind::Checkpoint),
+            "checkpoint has distinct object visual");
+        Expect(
+            editor::HasDistinctPendingObjectVisual(EditorObjectKind::Hazard),
+            "hazard has distinct object visual");
+        Expect(
+            editor::HasDistinctPendingObjectVisual(EditorObjectKind::Collectible),
+            "collectible has distinct object visual");
+    }
+
+    {
+        world::LevelDefinition active = MakeStubLevel();
+        world::LevelDefinition working = active;
+        working.elevatedPlatforms[0].center.x = 9.0f;
+        const EditorSelection platform0{EditorObjectKind::ElevatedPlatform, 0};
+        const editor::EditorPendingTransformPreview bounds =
+            editor::MakePendingTransformPreview(platform0, active, working);
+        const editor::EditorPendingObjectVisual objectVisual =
+            editor::MakePendingObjectVisual(platform0, active, working);
+        Expect(bounds.visible, "platform pending bounds remain");
+        Expect(!objectVisual.visible, "platform does not get a redundant object ghost");
+        Expect(NearlyEqual(active.elevatedPlatforms[0].center.x, 5.0f), "platform active unchanged");
+    }
+
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        active.checkpoints.push_back(
+            {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}});
+        working = active;
+        working.checkpoints[0].center = {20.0f, 2.2f, 1.0f};
+        working.checkpoints[0].respawnPosition = {21.5f, 0.9f, 2.0f};
+        const EditorSelection checkpoint0{EditorObjectKind::Checkpoint, 0};
+        const editor::EditorPendingObjectVisual visual =
+            editor::MakePendingObjectVisual(checkpoint0, active, working);
+        Expect(visual.visible, "moved checkpoint has object ghost");
+        Expect(visual.kind == editor::PendingObjectVisualKind::Checkpoint, "checkpoint visual kind");
+        Expect(Vec3Near(visual.checkpoint.center, working.checkpoints[0].center),
+            "checkpoint visual center from workingCopy");
+        Expect(
+            Vec3Near(visual.checkpoint.respawnPosition, working.checkpoints[0].respawnPosition),
+            "checkpoint visual respawn from workingCopy");
+        Expect(
+            !Vec3Near(visual.checkpoint.center, active.checkpoints[0].center),
+            "checkpoint visual is not active center");
+        Expect(Vec3Near(active.checkpoints[0].center, {16.5f, 1.8f, 0.0f}),
+            "active checkpoint unchanged after workingCopy move");
+        const world::CheckpointMarkerLayout pendingLayout =
+            world::MakeCheckpointMarkerLayout(visual.checkpoint);
+        const world::CheckpointMarkerLayout activeLayout =
+            world::MakeCheckpointMarkerLayout(active.checkpoints[0]);
+        Expect(!Vec3Near(pendingLayout.postCenter, activeLayout.postCenter),
+            "pending checkpoint marker follows workingCopy, not active");
+        Expect(
+            NearlyEqual(pendingLayout.postCenter.x, working.checkpoints[0].center.x),
+            "pending post X follows workingCopy trigger center");
+    }
+
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        active.checkpoints.push_back(
+            {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}});
+        working = active;
+        working.checkpoints[0].size = {3.0f, 2.0f, 2.5f};
+        const EditorSelection checkpoint0{EditorObjectKind::Checkpoint, 0};
+        Expect(
+            editor::MakePendingTransformPreview(checkpoint0, active, working).visible,
+            "checkpoint size edit still shows bounds");
+        Expect(
+            !editor::MakePendingObjectVisual(checkpoint0, active, working).visible,
+            "checkpoint marker does not scale with trigger size");
+    }
+
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        working.checkpoints.push_back(
+            {{2.0f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {2.0f, 1.8f, 0.0f}});
+        const EditorSelection added{EditorObjectKind::Checkpoint, 0};
+        const editor::EditorPendingTransformPreview bounds =
+            editor::MakePendingTransformPreview(added, active, working);
+        const editor::EditorPendingObjectVisual visual =
+            editor::MakePendingObjectVisual(added, active, working);
+        Expect(bounds.visible, "added checkpoint has pending bounds");
+        Expect(visual.visible, "added checkpoint has pending object visual");
+        Expect(Vec3Near(visual.checkpoint.center, working.checkpoints[0].center),
+            "add preview uses workingCopy checkpoint");
+        Expect(active.checkpoints.empty(), "add preview has no active counterpart");
+    }
+
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        active.checkpoints.push_back(
+            {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {18.0f, 0.8f, 1.0f}});
+        working = active;
+        world::CheckpointSpec copy = working.checkpoints[0];
+        copy.center.x += 1.0f;
+        copy.respawnPosition.x += 1.0f;
+        working.checkpoints.push_back(copy);
+        const EditorSelection duplicate{EditorObjectKind::Checkpoint, 1};
+        const editor::EditorPendingObjectVisual visual =
+            editor::MakePendingObjectVisual(duplicate, active, working);
+        Expect(visual.visible, "duplicate checkpoint has object visual");
+        Expect(Vec3Near(visual.checkpoint.center, working.checkpoints[1].center),
+            "duplicate visual at workingCopy transform");
+        Expect(Vec3Near(active.checkpoints[0].center, {16.5f, 1.8f, 0.0f}),
+            "duplicate leaves original active unchanged");
+        Expect(active.checkpoints.size() == 1, "duplicate has no active counterpart");
+    }
+
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        active.hazards.push_back({{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        working = active;
+        working.hazards[0].center.x = 14.0f;
+        const EditorSelection hazard0{EditorObjectKind::Hazard, 0};
+        const editor::EditorPendingObjectVisual visual =
+            editor::MakePendingObjectVisual(hazard0, active, working);
+        Expect(visual.visible, "moved hazard has object ghost");
+        Expect(visual.kind == editor::PendingObjectVisualKind::Hazard, "hazard visual kind");
+        Expect(Vec3Near(visual.hazard.center, working.hazards[0].center),
+            "hazard visual from workingCopy");
+        Expect(NearlyEqual(active.hazards[0].center.x, 11.5f), "active hazard unchanged");
+        world::LevelDefinition noHazards{};
+        world::LevelDefinition addedOnly{};
+        addedOnly.hazards.push_back({{3.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        const editor::EditorPendingObjectVisual added =
+            editor::MakePendingObjectVisual({EditorObjectKind::Hazard, 0}, noHazards, addedOnly);
+        Expect(added.visible, "added hazard has pending object visual");
+        Expect(Vec3Near(added.hazard.center, addedOnly.hazards[0].center),
+            "added hazard visual from workingCopy");
+        Expect(noHazards.hazards.empty(), "added hazard has no active counterpart");
+    }
+
+    {
+        world::LevelDefinition active{};
+        world::LevelDefinition working{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        working = active;
+        working.collectibles[0].center.x = 8.0f;
+        const EditorSelection collectible0{EditorObjectKind::Collectible, 0};
+        const editor::EditorPendingObjectVisual visual =
+            editor::MakePendingObjectVisual(collectible0, active, working);
+        Expect(visual.visible, "moved collectible has object ghost");
+        Expect(visual.kind == editor::PendingObjectVisualKind::Collectible, "collectible visual kind");
+        Expect(Vec3Near(visual.collectible.center, working.collectibles[0].center),
+            "collectible visual from workingCopy");
+        Expect(NearlyEqual(active.collectibles[0].center.x, 5.0f), "active collectible unchanged");
+        working.collectibles[0].center = active.collectibles[0].center;
+        working.collectibles[0].size.x = 2.0f;
+        Expect(
+            editor::MakePendingTransformPreview(collectible0, active, working).visible,
+            "collectible size edit shows bounds");
+        Expect(
+            !editor::MakePendingObjectVisual(collectible0, active, working).visible,
+            "collectible cube does not scale with authored size");
+        world::LevelDefinition noCollectibles{};
+        world::LevelDefinition addedOnly{};
+        addedOnly.collectibles.push_back({{1.0f, 2.0f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        const editor::EditorPendingObjectVisual added = editor::MakePendingObjectVisual(
+            {EditorObjectKind::Collectible, 0}, noCollectibles, addedOnly);
+        Expect(added.visible, "added collectible has pending object visual");
+        Expect(Vec3Near(added.collectible.center, addedOnly.collectibles[0].center),
+            "added collectible visual from workingCopy");
+        Expect(noCollectibles.collectibles.empty(), "added collectible has no active counterpart");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        active.collectibles.push_back({{8.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        std::uint8_t collected[2] = {1, 0};
+        Expect(editor::ShouldDrawEditorAuthoredCollectible(collected[0]),
+            "collected flag requests editor authored visual");
+        Expect(!editor::ShouldDrawEditorAuthoredCollectible(collected[1]),
+            "uncollected uses runtime visual only");
+        core::Vec3 centers[8]{};
+        const int drawn = editor::CollectEditorAuthoredCollectibleCenters(
+            active, collected, 2, centers, 8);
+        Expect(drawn == 1, "only collected authored collectibles get editor cubes");
+        Expect(Vec3Near(centers[0], active.collectibles[0].center),
+            "editor authored visual uses active center");
+        Expect(collected[0] == 1 && collected[1] == 0, "visualization helper does not mutate collected flags");
+
+        std::uint8_t allAvailable[2] = {0, 0};
+        const int uncollectedDrawn = editor::CollectEditorAuthoredCollectibleCenters(
+            active, allAvailable, 2, centers, 8);
+        Expect(uncollectedDrawn == 0,
+            "uncollected policy: no second opaque cube at the runtime visual");
+
+        Expect(
+            editor::IsValidSelection(active, {EditorObjectKind::Collectible, 0}),
+            "collected authored collectible is a valid selection");
+        Expect(
+            editor::GetEditablePosition(active, {EditorObjectKind::Collectible, 0}) != nullptr,
+            "Inspector can still read collected collectible center");
+        const core::Vec3* inspectorCenter =
+            editor::GetEditablePosition(active, {EditorObjectKind::Collectible, 0});
+        Expect(
+            inspectorCenter != nullptr && inspectorCenter->x == active.collectibles[0].center.x,
+            "Inspector center is workingCopy/active authored center");
+        Expect(active.collectibles[0].size.x > 0.0f, "Inspector size remains in authored spec");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        active.collectibles.push_back({{8.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        std::uint8_t collected[2] = {1, 1};
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::Collectible, 0}).succeeded,
+            "delete collected collectible");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, true, 0);
+        core::Vec3 centers[8]{};
+        const int drawn = editor::CollectEditorAuthoredCollectibleCenters(
+            active, collected, 2, centers, 8, &map);
+        Expect(drawn == 1, "pending-delete collected collectible is not gold authored wire");
+        Expect(Vec3Near(centers[0], active.collectibles[1].center),
+            "surviving collected collectible keeps authored collected visual");
+        Expect(
+            editor::ResolveCollectibleEditorVisualMode(
+                editor::IsPendingDeleteActiveIndex(map, EditorObjectKind::Collectible, 0),
+                collected[0])
+                == editor::CollectibleEditorVisualMode::PendingDelete,
+            "collected+pending-delete precedence");
+        Expect(
+            editor::ResolveCollectibleEditorVisualMode(
+                editor::IsPendingDeleteActiveIndex(map, EditorObjectKind::Collectible, 1),
+                collected[1])
+                == editor::CollectibleEditorVisualMode::CollectedAuthored,
+            "surviving collected keeps collected authored style");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::AddCollectible(working, {1.0f, 4.0f, 0.0f}).succeeded, "add ghost regression");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, false, 0);
+        const editor::EditorPendingObjectVisual added = editor::MakePendingObjectVisual(
+            {EditorObjectKind::Collectible, 1}, active, working, map);
+        Expect(added.visible && added.kind == editor::PendingObjectVisualKind::Collectible,
+            "pending Add still uses cyan pending object visual");
+        Expect(editor::MakePendingDeleteVisuals(active, map).collectibleCenters.empty(),
+            "pending Add is not faded pending-delete");
+        Expect(
+            editor::ResolveAuthoredEditorVisualMode(
+                editor::IsPendingDeleteActiveIndex(map, EditorObjectKind::Collectible, 0))
+                == editor::AuthoredEditorVisualMode::Normal,
+            "existing collectible stays normal after Add");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.checkpoints.push_back(
+            {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {18.0f, 0.8f, 1.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(
+            editor::DuplicateSelected(working, {EditorObjectKind::Checkpoint, 0}).succeeded,
+            "duplicate ghost regression");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Checkpoint, false, 0);
+        const editor::EditorPendingObjectVisual visual = editor::MakePendingObjectVisual(
+            {EditorObjectKind::Checkpoint, 1}, active, working, map);
+        Expect(visual.visible && visual.kind == editor::PendingObjectVisualKind::Checkpoint,
+            "pending Duplicate still uses cyan pending object visual");
+        Expect(editor::MakePendingDeleteVisuals(active, map).checkpoints.empty(),
+            "pending Duplicate is not faded pending-delete");
+        Expect(
+            editor::ResolveAuthoredEditorVisualMode(
+                editor::IsPendingDeleteActiveIndex(map, EditorObjectKind::Checkpoint, 0))
+                == editor::AuthoredEditorVisualMode::Normal,
+            "original checkpoint stays normal after Duplicate");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.elevatedPlatforms.push_back({{0.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        active.checkpoints.push_back(
+            {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {18.0f, 0.8f, 1.0f}});
+        active.hazards.push_back({{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::AddPlatform(working, {2.0f, 4.0f, 0.0f}).succeeded, "persist add platform");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::ElevatedPlatform, false, 0);
+        Expect(editor::AddCollectible(working, {1.0f, 4.0f, 0.0f}).succeeded, "persist add collectible");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, false, 0);
+        Expect(editor::AddCheckpoint(working, {3.0f, 4.0f, 0.0f}).succeeded, "persist add checkpoint");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Checkpoint, false, 0);
+        Expect(editor::AddHazard(working, {4.0f, 4.0f, 0.0f}).succeeded, "persist add hazard");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Hazard, false, 0);
+
+        const editor::EditorSelection other{EditorObjectKind::ElevatedPlatform, 0};
+        const std::vector<editor::PendingAuthoringVisual> afterDeselect =
+            editor::CollectPendingAuthoringVisuals(active, working, map, other);
+        Expect(
+            editor::PendingAuthoringContains(
+                afterDeselect, EditorObjectKind::ElevatedPlatform, 1),
+            "pending Add Platform remains after deselect");
+        Expect(
+            editor::PendingAuthoringContains(afterDeselect, EditorObjectKind::Collectible, 1),
+            "pending Add Collectible remains after deselect");
+        Expect(
+            editor::PendingAuthoringContains(afterDeselect, EditorObjectKind::Checkpoint, 1),
+            "pending Add Checkpoint remains after deselect");
+        Expect(
+            editor::PendingAuthoringContains(afterDeselect, EditorObjectKind::Hazard, 1),
+            "pending Add Hazard remains after deselect");
+        const editor::PendingAuthoringVisual* selected =
+            editor::FindPendingAuthoringVisual(
+                afterDeselect, EditorObjectKind::ElevatedPlatform, 0);
+        Expect(selected == nullptr, "unmodified original platform is not pending");
+        const editor::PendingAuthoringVisual* addedPlatform =
+            editor::FindPendingAuthoringVisual(
+                afterDeselect, EditorObjectKind::ElevatedPlatform, 1);
+        Expect(
+            addedPlatform != nullptr && !addedPlatform->selected,
+            "unselected pending Add uses unselected emphasis");
+        const std::vector<editor::PendingAuthoringVisual> selectedAdd =
+            editor::CollectPendingAuthoringVisuals(
+                active, working, map, {EditorObjectKind::Collectible, 1});
+        const editor::PendingAuthoringVisual* selectedCollectible =
+            editor::FindPendingAuthoringVisual(
+                selectedAdd, EditorObjectKind::Collectible, 1);
+        Expect(
+            selectedCollectible != nullptr && selectedCollectible->selected,
+            "selected pending Add uses selected emphasis");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(
+            editor::DuplicateSelected(working, {EditorObjectKind::Collectible, 0}).succeeded,
+            "persist duplicate");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, false, 0);
+        const std::vector<editor::PendingAuthoringVisual> visuals =
+            editor::CollectPendingAuthoringVisuals(
+                active, working, map, {EditorObjectKind::Collectible, 0});
+        Expect(
+            editor::PendingAuthoringContains(visuals, EditorObjectKind::Collectible, 1),
+            "pending Duplicate remains after selecting original");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.hazards.push_back({{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        working.hazards[0].center.x = 14.0f;
+        const std::vector<editor::PendingAuthoringVisual> visuals =
+            editor::CollectPendingAuthoringVisuals(
+                active, working, map, {EditorObjectKind::ElevatedPlatform, 0});
+        Expect(
+            editor::PendingAuthoringContains(visuals, EditorObjectKind::Hazard, 0),
+            "pending Modify remains after deselect");
+        const editor::PendingAuthoringVisual* modified =
+            editor::FindPendingAuthoringVisual(visuals, EditorObjectKind::Hazard, 0);
+        Expect(modified != nullptr && !modified->selected, "unselected pending Modify");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{0.0f, 2.0f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        active.collectibles.push_back({{1.0f, 2.0f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::Collectible, 0}).succeeded,
+            "delete for precedence");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, true, 0);
+        const std::vector<editor::PendingAuthoringVisual> visuals =
+            editor::CollectPendingAuthoringVisuals(active, working, map, {});
+        Expect(
+            !editor::PendingAuthoringContains(visuals, EditorObjectKind::Collectible, 0),
+            "pending-deleted object is not a cyan pending Add/Modify");
+        Expect(
+            editor::IsPendingDeleteActiveIndex(map, EditorObjectKind::Collectible, 0),
+            "pending-delete identity remains");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::AddCollectible(working, {1.0f, 4.0f, 0.0f}).succeeded, "add then apply");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, false, 0);
+        Expect(
+            !editor::CollectPendingAuthoringVisuals(active, working, map, {}).empty(),
+            "pending Add visible before Apply");
+        active = working;
+        editor::ResetStructuralIndexMap(map, active);
+        Expect(
+            editor::CollectPendingAuthoringVisuals(active, working, map, {}).empty(),
+            "Apply clears pending authoring visuals");
+        Expect(editor::MakePendingDeleteVisuals(active, map).collectibleCenters.empty(),
+            "Apply clears pending-delete visuals");
+    }
+
+    {
+        world::LevelDefinition active{};
+        active.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::AddCollectible(working, {1.0f, 4.0f, 0.0f}).succeeded, "add then revert");
+        editor::ApplyLifecycleToStructuralMap(map, EditorObjectKind::Collectible, false, 0);
+        working.collectibles[0].center.x = 9.0f;
+        Expect(
+            !editor::CollectPendingAuthoringVisuals(active, working, map, {}).empty(),
+            "pending Add/Modify visible before Revert");
+        working = active;
+        editor::ResetStructuralIndexMap(map, active);
+        Expect(
+            editor::CollectPendingAuthoringVisuals(active, working, map, {}).empty(),
+            "Revert clears pending Add/Modify visuals");
+        Expect(editor::MakePendingDeleteVisuals(active, map).collectibleCenters.empty(),
+            "Revert clears pending-delete visuals");
     }
 
     if (gFailures != 0)

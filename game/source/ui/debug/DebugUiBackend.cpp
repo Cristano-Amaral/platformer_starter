@@ -91,6 +91,16 @@ bool DebugUiBackend::WantsMouseCapture() const
     return ImGui::GetIO().WantCaptureMouse;
 }
 
+bool DebugUiBackend::WantsTextInput() const
+{
+    if (!initialized)
+    {
+        return false;
+    }
+
+    return ImGui::GetIO().WantTextInput;
+}
+
 void DebugUiBackend::BeginFrame()
 {
     if (!initialized)
@@ -131,6 +141,10 @@ bool DebugUiBackend::WantsKeyboardCapture() const
     return false;
 }
 bool DebugUiBackend::WantsMouseCapture() const
+{
+    return false;
+}
+bool DebugUiBackend::WantsTextInput() const
 {
     return false;
 }

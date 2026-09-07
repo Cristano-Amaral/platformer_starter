@@ -90,4 +90,9 @@ bool DebugUi::WantsMouseCapture() const
 {
     return backend.WantsMouseCapture();
 }
+
+bool DebugUi::WantsTextInput() const
+{
+    return backend.WantsTextInput();
+}
 }

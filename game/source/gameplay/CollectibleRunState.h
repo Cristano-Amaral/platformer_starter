@@ -2,24 +2,33 @@
 
 #include "world/CollectibleWorld.h"
 
-#include <array>
 #include <cstddef>
+#include <cstdint>
+#include <span>
+#include <vector>
 
 namespace gameplay
 {
-// Application-owned per-run collection flags. Array size is compile-time
-// coupled to world::kCollectibleCount (Level 01 has exactly 3 collectibles).
+// Application-owned per-run collection flags. Sized to the active level's
+// collectible count on load / Apply / Reload / RestartRun.
 struct CollectibleRunState
 {
-    std::array<bool, world::kCollectibleCount> collected{};
+    std::vector<std::uint8_t> collected{};
 };
 
-constexpr int CollectedCount(const CollectibleRunState& state)
+inline CollectibleRunState MakeClearedCollectibleRunState(std::size_t count)
+{
+    CollectibleRunState state{};
+    state.collected.assign(count, 0);
+    return state;
+}
+
+inline int CollectedCount(const CollectibleRunState& state)
 {
     int count = 0;
-    for (bool collected : state.collected)
+    for (std::uint8_t collected : state.collected)
     {
-        if (collected)
+        if (collected != 0)
         {
             ++count;
         }
@@ -27,25 +36,24 @@ constexpr int CollectedCount(const CollectibleRunState& state)
     return count;
 }
 
-constexpr int FindAvailableCollectibleIndexContaining(
+inline int FindAvailableCollectibleIndexContaining(
     core::Vec3 visualCenter,
     const CollectibleRunState& state,
-    const std::array<world::CollectibleSpec, world::kCollectibleCount>& collectibles)
+    std::span<const world::CollectibleSpec> collectibles)
 {
-    for (int index = 0; index < world::kCollectibleCount; ++index)
+    const std::size_t count =
+        state.collected.size() < collectibles.size() ? state.collected.size() : collectibles.size();
+    for (std::size_t index = 0; index < count; ++index)
     {
-        if (state.collected[static_cast<std::size_t>(index)])
+        if (state.collected[index] != 0)
         {
             continue;
         }
-        if (world::PointInsideCollectible(
-                collectibles[static_cast<std::size_t>(index)], visualCenter))
+        if (world::PointInsideCollectible(collectibles[index], visualCenter))
         {
-            return index;
+            return static_cast<int>(index);
         }
     }
     return world::kNoCollectibleIndex;
 }
-
-static_assert(CollectedCount(CollectibleRunState{}) == 0);
 }

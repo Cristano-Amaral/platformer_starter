@@ -179,6 +179,21 @@ int main()
             "zero wheel is none");
     }
 
+    {
+        editor::EditorCamera camera{};
+        camera.position = {2.0f, 4.0f, 12.0f};
+        camera.yawDegrees = 0.0f;
+        camera.pitchDegrees = 0.0f;
+        const core::Vec3 anchor = editor::EditorAddPlacementAnchor(camera);
+        Expect(NearlyEqual(anchor.x, 2.0f), "placement anchor X follows camera");
+        Expect(NearlyEqual(anchor.y, 4.0f), "placement anchor preserves camera Y");
+        Expect(
+            NearlyEqual(anchor.z, 12.0f - editor::kEditorAddPlacementDistance),
+            "placement uses look-forward authoring distance, not 1-unit view target");
+        const core::Vec3 viewTarget = editor::EditorCameraTarget(camera);
+        Expect(!NearlyEqual(anchor.z, viewTarget.z), "placement is not the 1-unit look-at");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor orientation test(s) failed.\n", gFailures);
