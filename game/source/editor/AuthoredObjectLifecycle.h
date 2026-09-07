@@ -195,6 +195,7 @@ EditorSelection ReconcileSelection(
 // Camera-local X/Y, gameplay-lane Z. Camera-anchor Z is ignored.
 core::Vec3 MakeAuthoredAddPlacement(core::Vec3 cameraAnchor, float gameplayLaneZ);
 
+// Edit > Add: camera-region X/Y, gameplay-lane Z from spawn.z.
 LifecycleEditResult AddPlatform(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor);
@@ -207,6 +208,35 @@ LifecycleEditResult AddHazard(
 LifecycleEditResult AddCollectible(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor);
+
+// Object Palette confirm: authored center is worldCenter. Does not snap to spawn.z.
+LifecycleEditResult AddPlatformAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
+LifecycleEditResult AddCheckpointAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
+LifecycleEditResult AddHazardAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
+LifecycleEditResult AddCollectibleAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
+
+inline const char* CategoryCapacityReason(EditorObjectKind kind)
+{
+    switch (kind)
+    {
+    case EditorObjectKind::ElevatedPlatform:
+        return "Physics body capacity reached.";
+    case EditorObjectKind::Checkpoint:
+    case EditorObjectKind::Hazard:
+    case EditorObjectKind::Collectible:
+        return "Level file record limit reached.";
+    default:
+        return "Technical capacity reached.";
+    }
+}
 
 LifecycleEditResult DuplicateSelected(
     world::LevelDefinition& workingCopy,

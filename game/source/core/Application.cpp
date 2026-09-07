@@ -36,6 +36,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/EditorNudge.h"
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
+#include "editor/EditorPlacement.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
@@ -686,6 +687,9 @@ int Application::Run()
         if (levelEditorState.active)
         {
             editorInput = editor::PollEditorInput();
+            window.SetEscapeClosesWindow(
+                !editor::IsLevelAuthoringAvailable()
+                || !editor::PlacementModeIsActive(levelEditorState.placementMode));
             const bool applyLook =
                 !debugUi.WantsMouseCapture() && !levelEditorState.gizmo.dragging;
             editor::UpdateEditorCamera(
@@ -774,6 +778,49 @@ int Application::Run()
             }
 
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+            if (editor::PlacementModeIsActive(levelEditorState.placementMode))
+            {
+                const editor::Ray3 previewRay = editor::ScreenToWorldRay(
+                    cameraView,
+                    editorInput.mouseX,
+                    editorInput.mouseY,
+                    static_cast<float>(window.Width()),
+                    static_cast<float>(window.Height()));
+                const editor::PlacementCandidate candidate = editor::ResolvePlacementCandidate(
+                    levelEditorState.placementMode,
+                    previewRay,
+                    editor::BuildPickingSet(levelDefinition, pickingWorld),
+                    editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
+                overlay.drawPlacementCandidate = candidate.visible;
+                overlay.placementCandidateFallback =
+                    candidate.source == editor::PlacementCandidateSource::CameraFallback;
+                switch (candidate.kind)
+                {
+                case editor::EditorObjectKind::ElevatedPlatform:
+                    overlay.placementCandidateKind = 0;
+                    break;
+                case editor::EditorObjectKind::Checkpoint:
+                    overlay.placementCandidateKind = 1;
+                    break;
+                case editor::EditorObjectKind::Hazard:
+                    overlay.placementCandidateKind = 2;
+                    break;
+                case editor::EditorObjectKind::Collectible:
+                    overlay.placementCandidateKind = 3;
+                    break;
+                default:
+                    overlay.placementCandidateKind = 0;
+                    break;
+                }
+                overlay.placementCandidateCenter = candidate.center;
+                overlay.placementCandidateSize = candidate.size;
+                overlay.placementCandidateCheckpoint = candidate.checkpoint;
+                overlay.placementCandidateHazard = candidate.hazard;
+                overlay.placementCandidateCollectible = candidate.collectible;
+            }
+#endif
+
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
             const editor::PendingDeleteVisuals pendingDelete =
                 editor::MakePendingDeleteVisuals(
                     levelDefinition, levelEditorState.structuralMap);
@@ -840,6 +887,7 @@ int Application::Run()
         else
         {
             input::SetMouseLookActive(false);
+            window.SetEscapeClosesWindow(true);
         }
 #endif
         renderer.BeginFrame();
@@ -879,6 +927,16 @@ int Application::Run()
                 widgetAxes.x,
                 widgetAxes.y,
                 widgetAxes.z});
+            if (editor::IsLevelAuthoringAvailable()
+                && editor::PlacementModeIsActive(levelEditorState.placementMode))
+            {
+                renderer.DrawEditorPlacementHud(
+                    true,
+                    editor::PlacementModeName(levelEditorState.placementMode),
+                    overlay.placementCandidateFallback,
+                    editor::OrientationWidgetLiveExtraTopInset(
+                        levelEditorState.active, levelEditorState.menuBarHeight));
+            }
         }
         const editor::LevelEditorViewContext levelEditorView{
             runtimeLevelPathDisplay.c_str(),
@@ -1020,7 +1078,68 @@ int Application::Run()
                     editorInput.selectHeld,
                     editorInput.selectReleased);
             }
-            if (editor::ShouldAttemptEditorViewportPick(
+            if (editor::ShouldCancelPlacementMode(
+                    levelEditorState.placementMode,
+                    editorInput.escapePressed,
+                    keyboardCaptured))
+            {
+                editor::CancelPlacementSession(
+                    levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+                window.SetEscapeClosesWindow(true);
+            }
+
+            const bool gizmoHoveredOnPress =
+                editorInput.selectPressed
+                && levelEditorState.gizmo.hovered != editor::EditorAxis::None;
+            const bool pointerClaimed = editor::PlacementInteractionClaimsPointer(
+                mouseCaptured,
+                editorInput.lookHeld,
+                widgetConsumedPointer,
+                gizmoConsumedPointer,
+                levelEditorState.gizmo.dragging,
+                gizmoHoveredOnPress);
+            editor::UpdatePlacementPointerBlock(
+                levelEditorState.placementPointerBlocked,
+                editorInput.selectPressed,
+                editorInput.selectHeld,
+                editorInput.selectReleased,
+                pointerClaimed);
+
+            const bool placing =
+                editor::IsLevelAuthoringAvailable()
+                && editor::PlacementModeIsActive(levelEditorState.placementMode);
+            if (placing
+                && editor::ShouldConfirmPlacement(
+                    levelEditorState.placementMode,
+                    editorInput.selectPressed,
+                    mouseCaptured,
+                    editorInput.lookHeld,
+                    widgetConsumedPointer,
+                    gizmoConsumedPointer,
+                    levelEditorState.placementPointerBlocked,
+                    true))
+            {
+                const editor::PlacementCandidate candidate = editor::ResolvePlacementCandidate(
+                    levelEditorState.placementMode,
+                    ray,
+                    editor::BuildPickingSet(
+                        levelDefinition,
+                        editor::EditorPickingWorldState{
+                            movingPlatform.position,
+                            movingPlatform.size,
+                            testBox.position,
+                            testBox.size}),
+                    editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
+                editor::HandleAuthoredLifecycleRequest(
+                    levelEditorState,
+                    levelDefinition,
+                    editor::PlacementAddRequest(levelEditorState.placementMode),
+                    true,
+                    candidate.center,
+                    true);
+            }
+            if (!placing
+                && editor::ShouldAttemptEditorViewportPick(
                     editorInput.selectPressed,
                     mouseCaptured,
                     editorInput.lookHeld,
@@ -1048,6 +1167,11 @@ int Application::Run()
                 {
                     levelEditorState.selection = workingPick;
                 }
+            }
+
+            if (editorInput.selectReleased || !editorInput.selectHeld)
+            {
+                editor::ClearPlacementPointerBlock(levelEditorState.placementPointerBlocked);
             }
 
             if (editor::NudgeAllowed(
@@ -1291,12 +1415,17 @@ void Application::SetLevelEditorActive(bool active)
             levelEditorState.selection = editor::ClearSelection();
         }
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        editor::CancelPlacementSession(
+            levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
     }
     if (!active && levelEditorState.active)
     {
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        editor::CancelPlacementSession(
+            levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
+        window.SetEscapeClosesWindow(true);
     }
 
     levelEditorState.active = active;
@@ -1313,6 +1442,8 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         levelEditorState.modified = false;
         editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
         editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
+        editor::CancelPlacementSession(
+            levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
         levelEditorState.selection =
             editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
         editor::ResetLevelActionStatuses(levelEditorState);
@@ -1394,6 +1525,8 @@ bool Application::ApplyLevelEditorPreview()
     levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
     levelEditorState.lastMessage =
         "Applied. Rendering and collision were rebuilt from the same authored data.";
+    editor::CancelPlacementSession(
+        levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
     return true;
 }
 
@@ -1485,6 +1618,8 @@ bool Application::ReloadRuntimeLevelFromStaged()
     editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     editor::ClearGizmoInteraction(levelEditorState.gizmo);
+    editor::CancelPlacementSession(
+        levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Reloaded;
     levelEditorState.lastMessage =

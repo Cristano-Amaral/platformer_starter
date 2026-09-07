@@ -87,6 +87,15 @@ constexpr Color kPendingCollectibleFill{255, 212, 64, 72};
 constexpr Color kPendingCollectibleWire{72, 220, 236, 255};
 constexpr Color kPendingCollectibleFillUnselected{255, 212, 64, 40};
 constexpr Color kPendingCollectibleWireUnselected{72, 220, 236, 130};
+constexpr Color kPlacementCandidateWire{196, 255, 255, 255};
+constexpr Color kPlacementCandidatePost{96, 232, 244, 140};
+constexpr Color kPlacementCandidateBeacon{160, 255, 255, 200};
+constexpr Color kPlacementCandidateHazardBar{220, 72, 56, 96};
+constexpr Color kPlacementCandidateHazardTooth{255, 196, 96, 180};
+constexpr Color kPlacementCandidateCollectibleFill{255, 228, 96, 96};
+constexpr Color kPlacementFallbackWire{196, 255, 255, 150};
+constexpr Color kPlacementHudText{210, 255, 255, 230};
+constexpr Color kPlacementHudMuted{196, 220, 228, 200};
 constexpr Color kEditorCollectedCollectibleWire{220, 188, 72, 255};
 constexpr Color kPendingDeleteWire{176, 70, 82, 200};
 constexpr unsigned char kPendingDeleteFillAlpha = 118;
@@ -657,6 +666,87 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     };
     drawPendingAuthoring(false);
     drawPendingAuthoring(true);
+    if (overlay.drawPlacementCandidate)
+    {
+        const bool fallback = overlay.placementCandidateFallback;
+        const Color boundsWire = fallback ? kPlacementFallbackWire : kPlacementCandidateWire;
+        if (!fallback)
+        {
+            if (overlay.placementCandidateKind == 1)
+            {
+                DrawCheckpointMarkerGeometry(
+                    overlay.placementCandidateCheckpoint,
+                    kPlacementCandidatePost,
+                    kPlacementCandidateBeacon,
+                    true,
+                    boundsWire);
+                DrawCubeWires(
+                    ToRaylib(overlay.placementCandidateCheckpoint.respawnPosition),
+                    kCheckpointRespawnMarkerSize,
+                    kCheckpointRespawnMarkerSize,
+                    kCheckpointRespawnMarkerSize,
+                    boundsWire);
+            }
+            else if (overlay.placementCandidateKind == 2)
+            {
+                DrawGhostBox(
+                    overlay.placementCandidateHazard.center,
+                    overlay.placementCandidateHazard.size,
+                    kPlacementCandidateHazardBar,
+                    boundsWire);
+                DrawHazardTeeth(
+                    overlay.placementCandidateHazard,
+                    kPlacementCandidateHazardTooth,
+                    true,
+                    boundsWire);
+            }
+            else if (overlay.placementCandidateKind == 3)
+            {
+                const core::Vec3 visualSize{
+                    world::kCollectibleVisualSize,
+                    world::kCollectibleVisualSize,
+                    world::kCollectibleVisualSize};
+                DrawGhostBox(
+                    overlay.placementCandidateCollectible.center,
+                    visualSize,
+                    kPlacementCandidateCollectibleFill,
+                    boundsWire);
+            }
+        }
+        else if (overlay.placementCandidateKind == 1)
+        {
+            DrawCubeWires(
+                ToRaylib(overlay.placementCandidateCheckpoint.respawnPosition),
+                kCheckpointRespawnMarkerSize,
+                kCheckpointRespawnMarkerSize,
+                kCheckpointRespawnMarkerSize,
+                boundsWire);
+        }
+        if (overlay.placementCandidateSize.x > 0.0f && overlay.placementCandidateSize.y > 0.0f
+            && overlay.placementCandidateSize.z > 0.0f)
+        {
+            DrawCubeWires(
+                ToRaylib(overlay.placementCandidateCenter),
+                overlay.placementCandidateSize.x,
+                overlay.placementCandidateSize.y,
+                overlay.placementCandidateSize.z,
+                boundsWire);
+            const Vector3 sit{
+                overlay.placementCandidateCenter.x,
+                overlay.placementCandidateCenter.y - overlay.placementCandidateSize.y * 0.5f,
+                overlay.placementCandidateCenter.z};
+            DrawCubeWires(sit, fallback ? 0.36f : 0.28f, 0.06f, fallback ? 0.36f : 0.28f, boundsWire);
+            if (fallback)
+            {
+                DrawCubeWires(
+                    ToRaylib(overlay.placementCandidateCenter),
+                    overlay.placementCandidateSize.x * 0.92f,
+                    overlay.placementCandidateSize.y * 0.92f,
+                    overlay.placementCandidateSize.z * 0.92f,
+                    boundsWire);
+            }
+        }
+    }
     if (overlay.drawCheckpointRespawnMarker)
     {
         const Vector3 respawn = ToRaylib(overlay.checkpointRespawnMarker);
@@ -1360,6 +1450,42 @@ void Renderer::DrawOrientationWidget(const OrientationWidgetOverlay& overlay)
             static_cast<int>(posY) - 6,
             12,
             axis.color);
+    }
+}
+
+void Renderer::DrawEditorPlacementHud(
+    bool visible,
+    const char* category,
+    bool fallback,
+    float topInset)
+{
+    if (!visible || category == nullptr || category[0] == '\0')
+    {
+        return;
+    }
+
+    const int font = 16;
+    const char* line1 = TextFormat("Placing: %s", category);
+    const char* line2 = "LMB place | Esc cancel";
+    const char* line3 = fallback ? "No surface hit" : nullptr;
+    const int width1 = MeasureText(line1, font);
+    const int width2 = MeasureText(line2, font);
+    const int width3 = line3 != nullptr ? MeasureText(line3, font) : 0;
+    const int maxWidth = width1 > width2 ? width1 : width2;
+    const int boxWidth = (maxWidth > width3 ? maxWidth : width3) + 16;
+    const int lineCount = line3 != nullptr ? 3 : 2;
+    const int boxHeight = 8 + lineCount * (font + 2);
+    const int x = (GetScreenWidth() - boxWidth) / 2;
+    const int y = static_cast<int>(topInset > 0.0f ? topInset : 8.0f) + 6;
+    DrawRectangle(x, y, boxWidth, boxHeight, Color{18, 24, 32, 150});
+    const int textX1 = (GetScreenWidth() - width1) / 2;
+    const int textX2 = (GetScreenWidth() - width2) / 2;
+    DrawText(line1, textX1, y + 4, font, kPlacementHudText);
+    DrawText(line2, textX2, y + 4 + font + 2, font, kPlacementHudMuted);
+    if (line3 != nullptr)
+    {
+        const int textX3 = (GetScreenWidth() - width3) / 2;
+        DrawText(line3, textX3, y + 4 + 2 * (font + 2), font, kPlacementHudMuted);
     }
 }
 

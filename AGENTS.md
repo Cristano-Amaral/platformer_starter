@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 41 — Authored Object Add / Delete / Duplicate
-(Phase B live Development Edit menu; awaiting Phase C). Milestone 40 is
-complete and merged. Milestone 42 has not started. See `docs/MILESTONES.md`
-and `docs/ARCHITECTURE.md`.
+Milestone 42 — Object Palette & Placement Workflow
+(Development Object Palette + viewport placement; awaiting manual acceptance).
+Milestone 41 is complete and merged. Milestone 43 has not started.
+See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
 working copy, and uses Apply Preview / Revert / Save Level Source. Viewport
@@ -97,37 +97,29 @@ M38 is complete: Development `Build > Stage Runtime Assets` and
 `Build > Cook & Stage` use `cmake -P cmake/StageRuntimeAssets.cmake`.
 Cook Assets remains cook-only. M39 is complete: Development
 `Level > Reload Runtime Level` reloads staged Level Format v1 in-process.
-M40 is complete: Development `Build > Cook, Stage & Reload`
+It does not Save, Cook, Stage, or restart. M40 is complete: Development
+`Build > Cook, Stage & Reload`
 (canonical Cook & Stage, then one in-process M39 reload).
-M41 Phase A makes Platform / Checkpoint / Hazard / Collectible
-variable-count `std::vector` storage and adds testable workingCopy-only
-Add / Duplicate / Delete. Add/Duplicate append. Platform delete remaps
-`support_index_*` (R > D) and rejects referenced or last-platform deletes.
-There is a live Development Edit menu (Add / Duplicate / Delete) for those
-categories. Debug has the visual editor without that lifecycle menu.
-Checkpoint world Translate moves trigger `center` and `respawnPosition` by
-the same delta; Inspector Trigger Center / Respawn Position stay independent.
-Pending visualization is cyan wireframe bounds plus, in Development, object
-ghosts for Checkpoint / Hazard / Collectible from workingCopy. Pending
-Add/Modify ghosts persist after deselection; selected uses stronger cyan,
-unselected uses softer cyan. Platform uses one cyan wire AABB. Pending deletes
-stay in the active world until Apply and are drawn faded/desaturated with a
-subtle delete outline (world depth on). Pending-delete wins over cyan pending
-Add/Modify and over collected authored Collectible style. Viewport picking
-prefers visible pending workingCopy ghosts (working index directly), then
-active-world hits mapped through StructuralIndexMap. Pending-deleted active
-objects remain non-pickable. Add uses
-editor-camera X/Y and gameplay-lane Z (`workingCopy` spawn.z). Duplicate
-remains +1 X and does not snap to the lane. A session-local active↔working map
-remaps surviving same-category viewport picks; pending-deleted picks are
-ignored. Development Delete key follows Edit > Delete Selected and is blocked
-while ImGui wants keyboard. Collected runtime cubes stay hidden in gameplay;
-F2 still shows an authored editor representation without mutating
-CollectibleRunState. Platform Add is limited by the Jolt body budget (58
-elevated platforms); Checkpoint/Hazard/Collectible have no small design cap
-and share the v1 256-line / 64 KiB parser guard.
-Do not add automatic cook/build/stage/reload chains, file watching,
-general hot reload, docking, Object Palette, or Milestone 42.
+M41 is complete: Development Edit menu Add / Duplicate / Delete for Platform,
+Checkpoint, Hazard, and Collectible mutates `workingCopy` only. Apply remains
+transactional. StructuralIndexMap is the session active↔working pick map.
+Pending Add/Modify uses the cyan family (selected stronger, unselected softer).
+Pending Delete is faded/desaturated with a delete outline and is not pickable.
+Visible pending workingCopy objects are viewport-pickable. Platform Add follows
+the Jolt leftover body budget (58). Checkpoint/Hazard/Collectible share the v1
+256-line / 64 KiB parser guard. Edit > Add uses camera-region X/Y and spawn.z
+lane. Duplicate is +1 X and does not snap to the lane.
+M42 adds a Development-only Object Palette and explicit viewport placement
+mode for those four categories. Palette entries are tool toggles: the same
+category again, or Esc, exits placement. Active category is highlighted with
+status text. Placement mode itself does not mutate workingCopy. Confirm reuses
+M41 Add at the resolved world center. Repeated clicks stay in the same mode.
+Gizmo/widget/ImGui/RMB gestures consume the pointer for the whole LMB hold so
+they never confirm placement. Surface-hit previews stay bright; camera-fallback
+previews use a quieter wire style. F2 close / successful Apply / Revert /
+successful Reload cancel placement. Debug has no Object Palette. Release has
+no editor. Do not add automatic cook/build/stage/reload chains, file watching,
+general hot reload, docking, a tool framework, or Milestone 43.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -146,4 +138,5 @@ It does not Save, Cook, Stage, or restart. M40 Development
 `Build > Cook, Stage & Reload` runs canonical Cook & Stage then one
 in-process M39 reload. M41 lifecycle edits mutate `workingCopy` only and
 still require Apply Preview, then Save, then Cook, Stage & Reload.
-Awaiting Phase C.
+M42 placement still requires that same Apply / Save / Cook, Stage & Reload
+path. Awaiting manual acceptance.

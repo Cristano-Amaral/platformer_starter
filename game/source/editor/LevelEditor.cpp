@@ -12,6 +12,7 @@
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
+#include "editor/EditorPlacement.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorToolRunner.h"
 #include "imgui.h"
@@ -342,6 +343,61 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
     ImGui::End();
 }
 
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& view)
+{
+    ApplyEditorWindowPlacement(kObjectPaletteWindowName, view);
+    if (!ImGui::Begin(kObjectPaletteWindowName, &state.workspace.showObjectPalette))
+    {
+        ImGui::End();
+        return;
+    }
+    RecoverEditorWindowIfNeeded(kObjectPaletteWindowName, view);
+
+    const bool authoringAvailable = IsLevelAuthoringAvailable();
+    const bool gizmoDragging = state.gizmo.dragging;
+    ImGui::TextUnformatted("Choose a category, then click in the viewport to place.");
+    ImGui::TextWrapped("Click the same category again or press Esc to stop. Edit > Add still uses camera-region + spawn.z.");
+
+    const auto paletteButton = [&](const char* label, PlacementMode mode, LevelEditorRequest addRequest) {
+        const EditorObjectKind kind = KindFromPlacementMode(mode);
+        const bool canAdd = CanIssueAuthoredLifecycleRequest(
+            authoringAvailable, state.workingCopy, state.selection, gizmoDragging, addRequest);
+        const bool selected = PaletteCategoryIsActive(state.placementMode, mode);
+        ImGui::BeginDisabled(!canAdd);
+        if (ImGui::Selectable(label, selected))
+        {
+            ApplyPaletteCategoryClick(state.placementMode, mode);
+        }
+        ImGui::EndDisabled();
+        if (!canAdd)
+        {
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", CategoryCapacityReason(kind));
+        }
+    };
+
+    paletteButton("Platform", PlacementMode::Platform, LevelEditorRequest::AddPlatform);
+    paletteButton("Checkpoint", PlacementMode::Checkpoint, LevelEditorRequest::AddCheckpoint);
+    paletteButton("Hazard", PlacementMode::Hazard, LevelEditorRequest::AddHazard);
+    paletteButton("Collectible", PlacementMode::Collectible, LevelEditorRequest::AddCollectible);
+
+    ImGui::Separator();
+    if (PlacementModeIsActive(state.placementMode))
+    {
+        ImGui::Text("Placement active: %s", PlacementModeName(state.placementMode));
+        ImGui::TextUnformatted(PlacementStopHintText());
+        ImGui::TextUnformatted(PlacementViewportActionHintText());
+    }
+    else
+    {
+        ImGui::TextUnformatted("Placement inactive");
+    }
+
+    ImGui::End();
+}
+#endif
+
 LevelEditorRequest DrawLevelControls(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
@@ -506,8 +562,9 @@ LevelEditorRequest DrawLevelControls(
             ResetEditorWorkspaceLayout(state, view.viewportWidth, view.viewportHeight);
         }
         ImGui::TextWrapped(
-            "Reset Editor Layout restores Metrics, Hierarchy, Inspector, and Level Editor "
-            "positions and shows all four panels. It does not change the level, selection, or camera.");
+            "Reset Editor Layout restores Metrics, Hierarchy, Inspector, Level Editor, "
+            "Object Palette, and Tool Output positions and shows those panels. "
+            "It does not change the level, selection, or camera.");
     }
 
     if (ImGui::CollapsingHeader("Information", ImGuiTreeNodeFlags_DefaultOpen))
@@ -587,6 +644,9 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::MenuItem("Hierarchy", nullptr, &state.workspace.showHierarchy);
         ImGui::MenuItem("Inspector", nullptr, &state.workspace.showInspector);
         ImGui::MenuItem("Level Editor", nullptr, &state.workspace.showLevelEditor);
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        ImGui::MenuItem("Object Palette", nullptr, &state.workspace.showObjectPalette);
+#endif
 #if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
         ImGui::MenuItem("Tool Output", nullptr, &state.workspace.showToolOutput);
 #endif
@@ -922,6 +982,12 @@ LevelEditorRequest DrawLevelEditor(
     {
         DrawInspector(state, view);
     }
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (state.workspace.showObjectPalette)
+    {
+        DrawObjectPalette(state, view);
+    }
+#endif
     if (!state.workspace.showLevelEditor)
     {
         return LevelEditorRequest::None;

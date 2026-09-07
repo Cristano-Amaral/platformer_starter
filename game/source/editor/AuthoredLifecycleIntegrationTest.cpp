@@ -3,6 +3,7 @@
 #include "editor/EditorGizmo.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorPicking.h"
+#include "editor/EditorPlacement.h"
 #include "editor/EditorSelection.h"
 #include "gameplay/CollectibleRunState.h"
 #include "world/LevelDefinition.h"
@@ -619,6 +620,118 @@ int main()
             editor::IsPendingDeleteActiveIndex(
                 state.structuralMap, EditorObjectKind::Collectible, 0),
             "mixed: pending Delete uses delete identity");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.placementMode = editor::PlacementMode::Collectible;
+        const core::Vec3 world{8.0f, 3.0f, 4.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::LevelEditorRequest::AddCollectible,
+                true,
+                world,
+                true),
+            "palette confirm reuses Handle Add");
+        Expect(state.workingCopy.collectibles.size() == active.collectibles.size() + 1,
+            "palette confirm appends one");
+        Expect(
+            state.workingCopy.collectibles.back().center.x == world.x
+                && state.workingCopy.collectibles.back().center.y == world.y
+                && state.workingCopy.collectibles.back().center.z == world.z,
+            "palette confirm uses world center, not spawn.z");
+        Expect(
+            state.selection.kind == EditorObjectKind::Collectible
+                && state.selection.index == state.workingCopy.collectibles.size() - 1,
+            "palette confirm selects the new object");
+        Expect(
+            state.placementMode == editor::PlacementMode::Collectible,
+            "Handle does not exit placement mode");
+        Expect(
+            HierarchyKindCount(state.workingCopy, EditorObjectKind::Collectible)
+                == state.workingCopy.collectibles.size(),
+            "new Collectible is in Hierarchy");
+        Expect(
+            editor::MappedWorkingIndex(
+                state.structuralMap,
+                EditorObjectKind::Collectible,
+                0)
+                == 0,
+            "StructuralIndexMap keeps existing Collectible identity");
+
+        const core::Vec3 second{9.0f, 3.0f, 4.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::LevelEditorRequest::AddCollectible,
+                true,
+                second,
+                true),
+            "repeated placement second click");
+        Expect(state.workingCopy.collectibles.size() == active.collectibles.size() + 2,
+            "repeated placement appends second");
+        Expect(
+            state.selection.index == state.workingCopy.collectibles.size() - 1,
+            "latest repeated placement is selected");
+        const std::vector<editor::PendingAuthoringVisual> pending =
+            editor::CollectPendingAuthoringVisuals(
+                active, state.workingCopy, state.structuralMap, state.selection);
+        Expect(
+            editor::PendingAuthoringContains(
+                pending,
+                EditorObjectKind::Collectible,
+                state.workingCopy.collectibles.size() - 2),
+            "previous pending Collectible remains visible");
+        editor::EditorSelection picked{};
+        const core::Vec3 firstCenter = state.workingCopy.collectibles[state.workingCopy.collectibles.size() - 2].center;
+        Expect(
+            editor::TryResolveEditorViewportPick(
+                editor::Ray3{{firstCenter.x, firstCenter.y, firstCenter.z + 8.0f}, {0.0f, 0.0f, -1.0f}},
+                editor::BuildPickingSet(active, editor::AuthoredPickingWorldState(active)),
+                editor::BuildPendingPickProxies(pending),
+                state.structuralMap,
+                picked),
+            "pending Collectible is viewport-pickable after palette placement");
+        Expect(
+            picked.kind == EditorObjectKind::Collectible
+                && picked.index == state.workingCopy.collectibles.size() - 2,
+            "pending pick uses working index");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        const float spawnZ = state.workingCopy.initialSpawnVisualCenter.z;
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::LevelEditorRequest::AddPlatform,
+                true,
+                {12.0f, 6.0f, 9.0f},
+                false),
+            "Edit > Add still uses lane placement");
+        Expect(
+            state.workingCopy.elevatedPlatforms.back().center.z == spawnZ,
+            "Edit > Add regression: spawn.z lane");
+        Expect(
+            state.workingCopy.elevatedPlatforms.back().center.x == 12.0f,
+            "Edit > Add regression: camera X");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.placementMode = editor::PlacementMode::Hazard;
+        editor::ClearPlacementMode(state.placementMode);
+        Expect(state.placementMode == editor::PlacementMode::None, "Apply/Revert/Reload cancel helper");
     }
 
     if (gFailures != 0)

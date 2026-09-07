@@ -46,6 +46,14 @@ struct DebugWorldOverlay
         world::CollectibleSpec collectible{};
     };
     std::vector<PendingAuthoringOverlayItem> pendingAuthoring;
+    bool drawPlacementCandidate = false;
+    bool placementCandidateFallback = false;
+    int placementCandidateKind = 0;
+    core::Vec3 placementCandidateCenter{};
+    core::Vec3 placementCandidateSize{};
+    world::CheckpointSpec placementCandidateCheckpoint{};
+    world::HazardSpec placementCandidateHazard{};
+    world::CollectibleSpec placementCandidateCollectible{};
     // Editor-only placeholders for collected authored Collectibles (active).
     std::vector<core::Vec3> collectedAuthoredCollectibleCenters;
     // Development-only pending-delete markers from active objects that
@@ -137,6 +145,11 @@ public:
         double bestSeconds,
         const DebugWorldOverlay& overlay = {});
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);
+    void DrawEditorPlacementHud(
+        bool visible,
+        const char* category,
+        bool fallback,
+        float topInset);
     void EndFrame();
 
 private:

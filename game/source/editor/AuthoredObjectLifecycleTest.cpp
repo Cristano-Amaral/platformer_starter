@@ -274,6 +274,18 @@ int main()
 
     {
         world::LevelDefinition working = MakeBaseLevel();
+        const core::Vec3 world{9.0f, 4.0f, 2.5f};
+        Expect(editor::AddPlatformAt(working, world).succeeded, "AddPlatformAt");
+        Expect(Vec3Near(working.elevatedPlatforms.back().center, world), "AddPlatformAt uses world XYZ");
+        Expect(
+            !NearlyEqual(working.elevatedPlatforms.back().center.z, working.initialSpawnVisualCenter.z),
+            "AddPlatformAt does not snap to spawn.z");
+        Expect(editor::AddCollectibleAt(working, world).succeeded, "AddCollectibleAt");
+        Expect(Vec3Near(working.collectibles.back().center, world), "AddCollectibleAt uses world XYZ");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
         const editor::LifecycleEditResult added = editor::AddCheckpoint(working, kTestPlacementB);
         const core::Vec3 expected = editor::MakeAuthoredAddPlacement(
             kTestPlacementB, working.initialSpawnVisualCenter.z);

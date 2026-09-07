@@ -77,18 +77,23 @@ LifecycleEditResult RunLifecycleMutation(
     world::LevelDefinition& workingCopy,
     EditorSelection selection,
     LevelEditorRequest request,
-    core::Vec3 placementAnchor)
+    core::Vec3 placementAnchor,
+    bool worldCenterPlacement)
 {
     switch (request)
     {
     case LevelEditorRequest::AddPlatform:
-        return AddPlatform(workingCopy, placementAnchor);
+        return worldCenterPlacement ? AddPlatformAt(workingCopy, placementAnchor)
+                                    : AddPlatform(workingCopy, placementAnchor);
     case LevelEditorRequest::AddCheckpoint:
-        return AddCheckpoint(workingCopy, placementAnchor);
+        return worldCenterPlacement ? AddCheckpointAt(workingCopy, placementAnchor)
+                                    : AddCheckpoint(workingCopy, placementAnchor);
     case LevelEditorRequest::AddHazard:
-        return AddHazard(workingCopy, placementAnchor);
+        return worldCenterPlacement ? AddHazardAt(workingCopy, placementAnchor)
+                                    : AddHazard(workingCopy, placementAnchor);
     case LevelEditorRequest::AddCollectible:
-        return AddCollectible(workingCopy, placementAnchor);
+        return worldCenterPlacement ? AddCollectibleAt(workingCopy, placementAnchor)
+                                    : AddCollectible(workingCopy, placementAnchor);
     case LevelEditorRequest::DuplicateSelected:
         return DuplicateSelected(workingCopy, selection);
     case LevelEditorRequest::DeleteSelected:
@@ -171,7 +176,8 @@ bool HandleAuthoredLifecycleRequest(
     const world::LevelDefinition& activeLevel,
     LevelEditorRequest request,
     bool authoringAvailable,
-    core::Vec3 placementAnchor)
+    core::Vec3 placementAnchor,
+    bool worldCenterPlacement)
 {
     if (!IsAuthoredLifecycleRequest(request))
     {
@@ -245,8 +251,8 @@ bool HandleAuthoredLifecycleRequest(
     }
 
     EnsureStructuralIndexMap(state.structuralMap, activeLevel);
-    const LifecycleEditResult result =
-        RunLifecycleMutation(state.workingCopy, previousSelection, request, placementAnchor);
+    const LifecycleEditResult result = RunLifecycleMutation(
+        state.workingCopy, previousSelection, request, placementAnchor, worldCenterPlacement);
     if (!result.succeeded)
     {
         state.selection = previousSelection;

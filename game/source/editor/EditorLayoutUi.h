@@ -62,6 +62,7 @@ inline void SnapKnownEditorWindowsToDefaults(float viewportWidth, float viewport
         &defaults.hierarchy,
         &defaults.inspector,
         &defaults.levelEditor,
+        &defaults.objectPalette,
         &defaults.toolOutput};
     for (const EditorWindowPlacement* placement : windows)
     {

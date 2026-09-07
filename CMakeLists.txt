@@ -66,6 +66,8 @@ add_executable(Platformer3D
     game/source/editor/EditorOrientation.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
+    game/source/editor/EditorPlacement.cpp
+    game/source/editor/EditorPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorToolCommands.cpp
@@ -436,6 +438,29 @@ else()
     target_compile_options(AuthoredObjectLifecycleTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 42: Object Palette placement mode and candidate resolution. No ImGui.
+add_executable(EditorPlacementTest
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorPlacement.cpp
+    game/source/editor/EditorPlacement.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorPlacementTest.cpp
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(EditorPlacementTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorPlacementTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorPlacementTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # Milestone 41 Phase B: owner-side lifecycle requests without ImGui.
 add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/AuthoredLifecycleCommands.cpp
@@ -448,6 +473,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
+    game/source/editor/EditorPlacement.cpp
+    game/source/editor/EditorPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/LevelEditor.cpp

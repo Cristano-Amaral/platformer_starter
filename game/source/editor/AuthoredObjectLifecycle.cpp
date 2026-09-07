@@ -51,6 +51,23 @@ core::Vec3 ApplyPlacementAnchor(
     const core::Vec3 base = MakeAuthoredAddPlacement(cameraAnchor, gameplayLaneZ);
     return {base.x + offset.x, base.y + offset.y, base.z + offset.z};
 }
+
+core::Vec3 ApplyWorldCenter(core::Vec3 worldCenter, core::Vec3 offset)
+{
+    if (!std::isfinite(worldCenter.x))
+    {
+        worldCenter.x = 0.0f;
+    }
+    if (!std::isfinite(worldCenter.y))
+    {
+        worldCenter.y = 0.0f;
+    }
+    if (!std::isfinite(worldCenter.z))
+    {
+        worldCenter.z = 0.0f;
+    }
+    return {worldCenter.x + offset.x, worldCenter.y + offset.y, worldCenter.z + offset.z};
+}
 }
 
 core::Vec3 MakeAuthoredAddPlacement(core::Vec3 cameraAnchor, float gameplayLaneZ)
@@ -455,9 +472,9 @@ EditorSelection ReconcileSelection(
     return selection;
 }
 
-LifecycleEditResult AddPlatform(
+LifecycleEditResult AddPlatformAt(
     world::LevelDefinition& workingCopy,
-    core::Vec3 placementAnchor)
+    core::Vec3 worldCenter)
 {
     if (CategoryAtCountLimit(workingCopy, EditorObjectKind::ElevatedPlatform))
     {
@@ -465,19 +482,16 @@ LifecycleEditResult AddPlatform(
     }
 
     world::Box platform{};
-    platform.center = ApplyPlacementAnchor(
-        placementAnchor,
-        kDefaultAddedPlatformOffset,
-        workingCopy.initialSpawnVisualCenter.z);
+    platform.center = ApplyWorldCenter(worldCenter, {});
     platform.size = kDefaultAddedPlatformSize;
     workingCopy.elevatedPlatforms.push_back(platform);
     return Ok(
         {EditorObjectKind::ElevatedPlatform, workingCopy.elevatedPlatforms.size() - 1});
 }
 
-LifecycleEditResult AddCheckpoint(
+LifecycleEditResult AddCheckpointAt(
     world::LevelDefinition& workingCopy,
-    core::Vec3 placementAnchor)
+    core::Vec3 worldCenter)
 {
     if (CategoryAtCountLimit(workingCopy, EditorObjectKind::Checkpoint))
     {
@@ -485,10 +499,7 @@ LifecycleEditResult AddCheckpoint(
     }
 
     world::CheckpointSpec checkpoint{};
-    checkpoint.center = ApplyPlacementAnchor(
-        placementAnchor,
-        kDefaultAddedCheckpointOffset,
-        workingCopy.initialSpawnVisualCenter.z);
+    checkpoint.center = ApplyWorldCenter(worldCenter, {});
     checkpoint.size = kDefaultAddedCheckpointSize;
     checkpoint.respawnPosition = {
         checkpoint.center.x + kDefaultAddedCheckpointRespawnOffset.x,
@@ -498,9 +509,9 @@ LifecycleEditResult AddCheckpoint(
     return Ok({EditorObjectKind::Checkpoint, workingCopy.checkpoints.size() - 1});
 }
 
-LifecycleEditResult AddHazard(
+LifecycleEditResult AddHazardAt(
     world::LevelDefinition& workingCopy,
-    core::Vec3 placementAnchor)
+    core::Vec3 worldCenter)
 {
     if (CategoryAtCountLimit(workingCopy, EditorObjectKind::Hazard))
     {
@@ -508,18 +519,15 @@ LifecycleEditResult AddHazard(
     }
 
     world::HazardSpec hazard{};
-    hazard.center = ApplyPlacementAnchor(
-        placementAnchor,
-        kDefaultAddedHazardOffset,
-        workingCopy.initialSpawnVisualCenter.z);
+    hazard.center = ApplyWorldCenter(worldCenter, {});
     hazard.size = kDefaultAddedHazardSize;
     workingCopy.hazards.push_back(hazard);
     return Ok({EditorObjectKind::Hazard, workingCopy.hazards.size() - 1});
 }
 
-LifecycleEditResult AddCollectible(
+LifecycleEditResult AddCollectibleAt(
     world::LevelDefinition& workingCopy,
-    core::Vec3 placementAnchor)
+    core::Vec3 worldCenter)
 {
     if (CategoryAtCountLimit(workingCopy, EditorObjectKind::Collectible))
     {
@@ -527,13 +535,58 @@ LifecycleEditResult AddCollectible(
     }
 
     world::CollectibleSpec collectible{};
-    collectible.center = ApplyPlacementAnchor(
-        placementAnchor,
-        kDefaultAddedCollectibleOffset,
-        workingCopy.initialSpawnVisualCenter.z);
+    collectible.center = ApplyWorldCenter(worldCenter, {});
     collectible.size = kDefaultAddedCollectibleSize;
     workingCopy.collectibles.push_back(collectible);
     return Ok({EditorObjectKind::Collectible, workingCopy.collectibles.size() - 1});
+}
+
+LifecycleEditResult AddPlatform(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddPlatformAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedPlatformOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddCheckpoint(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddCheckpointAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedCheckpointOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddHazard(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddHazardAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedHazardOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddCollectible(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddCollectibleAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedCollectibleOffset,
+            workingCopy.initialSpawnVisualCenter.z));
 }
 
 LifecycleEditResult DuplicateSelected(

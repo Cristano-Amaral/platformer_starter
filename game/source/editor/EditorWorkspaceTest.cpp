@@ -25,11 +25,11 @@ int main()
 
     {
         EditorWorkspaceState workspace{};
-        Expect(editor::AllEditorPanelsVisible(workspace), "defaults: all five visible");
+        Expect(editor::AllEditorPanelsVisible(workspace), "defaults: all default panels visible");
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(!workspace.showMetrics, "Metrics toggle hides Metrics");
         Expect(workspace.showHierarchy && workspace.showInspector && workspace.showLevelEditor
-                && workspace.showToolOutput,
+                && workspace.showToolOutput && workspace.showObjectPalette,
             "Metrics toggle leaves other panels");
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(workspace.showMetrics, "Metrics toggle restores Metrics");
@@ -42,9 +42,10 @@ int main()
         workspace.showInspector = false;
         workspace.showLevelEditor = false;
         workspace.showToolOutput = false;
+        workspace.showObjectPalette = false;
         const EditorTransformMode mode = EditorTransformMode::Resize;
         editor::ResetEditorWorkspaceVisibility(workspace);
-        Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all five visible");
+        Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all default panels visible");
         Expect(mode == EditorTransformMode::Resize, "Reset does not change transform mode");
     }
 

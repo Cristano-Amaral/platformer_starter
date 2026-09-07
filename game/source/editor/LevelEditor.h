@@ -17,6 +17,7 @@
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorPlacement.h"
 #include "editor/EditorWorkspace.h"
 
 #include <string>
@@ -105,6 +106,10 @@ struct LevelEditorState
     GizmoInteractionState gizmo{};
     EditorTransformMode transformMode = EditorTransformMode::Translate;
     EditorWorkspaceState workspace{};
+    PlacementMode placementMode = PlacementMode::None;
+    // True from a claimed LMB press (gizmo/widget/ImGui/look) until release.
+    // Prevents gizmo drag-release from confirming placement.
+    bool placementPointerBlocked = false;
     // Last BeginMainMenuBar frame height. 0 until the first F2 menu frame.
     // Used only for orientation-widget top inset; not authored or persisted.
     float menuBarHeight = 0.0f;

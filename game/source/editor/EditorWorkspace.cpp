@@ -9,6 +9,7 @@ void ResetEditorWorkspaceVisibility(EditorWorkspaceState& workspace)
     workspace.showInspector = true;
     workspace.showLevelEditor = true;
     workspace.showToolOutput = true;
+    workspace.showObjectPalette = true;
 }
 
 void ToggleEditorWorkspaceMetrics(EditorWorkspaceState& workspace)
@@ -19,7 +20,7 @@ void ToggleEditorWorkspaceMetrics(EditorWorkspaceState& workspace)
 bool AllEditorPanelsVisible(const EditorWorkspaceState& workspace)
 {
     return workspace.showMetrics && workspace.showHierarchy && workspace.showInspector
-        && workspace.showLevelEditor && workspace.showToolOutput;
+        && workspace.showLevelEditor && workspace.showToolOutput && workspace.showObjectPalette;
 }
 
 float OrientationWidgetMenuBarTopInset(float menuBarHeight)

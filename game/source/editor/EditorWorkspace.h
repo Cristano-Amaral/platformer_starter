@@ -15,6 +15,7 @@ struct EditorWorkspaceState
     bool showInspector = true;
     bool showLevelEditor = true;
     bool showToolOutput = true;
+    bool showObjectPalette = true;
 };
 
 inline constexpr float kEditorMainMenuBarNominalHeight = 24.0f;

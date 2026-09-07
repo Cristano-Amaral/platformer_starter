@@ -57,4 +57,13 @@ int Window::Height() const
 {
     return initialized ? GetScreenHeight() : 0;
 }
+
+void Window::SetEscapeClosesWindow(bool enabled)
+{
+    if (!initialized)
+    {
+        return;
+    }
+    SetExitKey(enabled ? KEY_ESCAPE : KEY_NULL);
+}
 }

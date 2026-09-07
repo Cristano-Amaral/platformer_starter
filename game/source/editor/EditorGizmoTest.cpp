@@ -378,6 +378,11 @@ int main()
         Expect(
             std::strcmp(defaults.toolOutput.name, editor::kToolOutputWindowName) == 0,
             "tool output name");
+        Expect(
+            std::strcmp(defaults.objectPalette.name, editor::kObjectPaletteWindowName) == 0,
+            "object palette name");
+        Expect(editor::FindDefaultPlacement(defaults, editor::kObjectPaletteWindowName) != nullptr,
+            "object palette has a default placement");
         Expect(defaults.inspector.x > defaults.metrics.x, "inspector is on the right");
         Expect(defaults.hierarchy.y > defaults.metrics.y, "hierarchy sits below metrics");
         Expect(defaults.toolOutput.y > defaults.inspector.y, "tool output sits lower than Inspector");

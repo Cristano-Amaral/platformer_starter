@@ -20,8 +20,10 @@ bool CanIssueAuthoredLifecycleRequest(
     LevelEditorRequest request);
 
 // Mutates workingCopy, selection, structuralPending, structuralMap, gizmo,
-// derived Modified/Dirty. placementAnchor is used only by Add: camera-region
-// X/Y, with authored Z from workingCopy spawn.z. Duplicate/Delete ignore it.
+// derived Modified/Dirty. Duplicate/Delete ignore placementAnchor.
+// When worldCenterPlacement is false (Edit > Add), Add uses camera-region X/Y
+// and authored Z from workingCopy spawn.z. When true (Object Palette confirm),
+// placementAnchor is the resolved world center and is not snapped to spawn.z.
 // Returns true when the request was a lifecycle intent (handled, whether it
 // succeeded or was rejected).
 bool HandleAuthoredLifecycleRequest(
@@ -29,5 +31,6 @@ bool HandleAuthoredLifecycleRequest(
     const world::LevelDefinition& activeLevel,
     LevelEditorRequest request,
     bool authoringAvailable,
-    core::Vec3 placementAnchor = {});
+    core::Vec3 placementAnchor = {},
+    bool worldCenterPlacement = false);
 }
