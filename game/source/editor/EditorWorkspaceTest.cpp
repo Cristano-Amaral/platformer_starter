@@ -30,7 +30,8 @@ int main()
         Expect(!workspace.showMetrics, "Metrics toggle hides Metrics");
         Expect(workspace.showHierarchy && workspace.showInspector && workspace.showLevelEditor
                 && workspace.showToolOutput && workspace.showObjectPalette
-                && workspace.showContentBrowser && workspace.showQuickToolbar,
+                && workspace.showContentBrowser && workspace.showModelPreview
+                && workspace.showQuickToolbar,
             "Metrics toggle leaves other panels");
         editor::ToggleEditorWorkspaceMetrics(workspace);
         Expect(workspace.showMetrics, "Metrics toggle restores Metrics");
@@ -45,6 +46,7 @@ int main()
         workspace.showToolOutput = false;
         workspace.showObjectPalette = false;
         workspace.showContentBrowser = false;
+        workspace.showModelPreview = false;
         workspace.showQuickToolbar = false;
         const EditorTransformMode mode = EditorTransformMode::Resize;
         editor::ResetEditorWorkspaceVisibility(workspace);

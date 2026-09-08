@@ -49,6 +49,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/RuntimeLevelReload.h"
 #include "platform/OpenFileDialog.h"
 #include "render/StaticModelThumbnail.h"
+#include "render/StaticModelPreview.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
 
@@ -1081,6 +1082,20 @@ int Application::Run()
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         thumbnailStore.BeginFrame();
         levelEditorView.thumbnails = &thumbnailStore;
+        {
+            const std::string& identity = levelEditorState.contentBrowser.selectedIdentity;
+            const std::filesystem::path sourceRoot = editor::AuthoringSourceRoot();
+            const std::filesystem::path sourcePath =
+                identity.empty() || sourceRoot.empty()
+                ? std::filesystem::path{}
+                : sourceRoot / identity;
+            modelPreview.Sync(identity, sourcePath);
+            if (identity.empty())
+            {
+                levelEditorState.modelPreviewFramedIdentity.clear();
+            }
+        }
+        levelEditorView.modelPreview = &modelPreview;
 #endif
         // Cook, Stage & Reload observation lives in Application::Run, not in
         // ImGui Draw, so F2 hide and panel visibility cannot cancel it.
@@ -1697,6 +1712,8 @@ void Application::DeleteContentBrowserAsset()
         editor::ClearContentBrowserSelection(levelEditorState.contentBrowser);
         thumbnailStore.Forget(identity);
         editor::RemoveThumbnailCacheEntry(identity, editor::ThumbnailCacheRoot());
+        modelPreview.Clear();
+        levelEditorState.modelPreviewFramedIdentity.clear();
     }
     levelEditorState.contentBrowser.statusMessage = deleted.message;
     editorToolRunner.ReportLocalResult(
@@ -2051,6 +2068,7 @@ void Application::Shutdown()
     editorToolRunner.Shutdown();
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
     thumbnailStore.Shutdown();
+    modelPreview.Shutdown();
 #endif
     debugUi.Shutdown();
 #endif

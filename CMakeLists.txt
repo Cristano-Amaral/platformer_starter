@@ -66,6 +66,8 @@ add_executable(Platformer3D
     game/source/editor/ContentBrowserView.h
     game/source/editor/StaticModelThumbnailCache.cpp
     game/source/editor/StaticModelThumbnailCache.h
+    game/source/editor/StaticModelFraming.cpp
+    game/source/editor/StaticModelFraming.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorHierarchy.h
@@ -126,6 +128,8 @@ add_executable(Platformer3D
     game/source/render/CameraView.h
     game/source/render/StaticModelThumbnail.cpp
     game/source/render/StaticModelThumbnail.h
+    game/source/render/StaticModelPreview.cpp
+    game/source/render/StaticModelPreview.h
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
@@ -327,6 +331,8 @@ add_executable(ContentBrowserThumbnailTest
     game/source/editor/EditorSelection.h
     game/source/editor/StaticModelThumbnailCache.cpp
     game/source/editor/StaticModelThumbnailCache.h
+    game/source/editor/StaticModelFraming.cpp
+    game/source/editor/StaticModelFraming.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/world/LevelDefinition.cpp
@@ -347,6 +353,56 @@ if(WIN32)
     target_link_libraries(ContentBrowserThumbnailTest PRIVATE ole32 shell32 uuid)
 endif()
 target_compile_definitions(ContentBrowserThumbnailTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+)
+
+# Milestone 48.2: Model Preview selection/load/orbit/framing math. Not ImGui/raylib.
+add_executable(StaticModelPreviewTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticGlbImport.cpp
+    game/source/assets/StaticGlbImport.h
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
+    game/source/assets/StaticModelDelete.cpp
+    game/source/assets/StaticModelDelete.h
+    game/source/editor/ContentBrowser.cpp
+    game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserView.cpp
+    game/source/editor/ContentBrowserView.h
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/StaticModelFraming.cpp
+    game/source/editor/StaticModelFraming.h
+    game/source/editor/StaticModelPreviewTest.cpp
+    game/source/editor/StaticModelThumbnailCache.cpp
+    game/source/editor/StaticModelThumbnailCache.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/CameraView.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+if(WIN32)
+    target_sources(StaticModelPreviewTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(StaticModelPreviewTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(StaticModelPreviewTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(StaticModelPreviewTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(StaticModelPreviewTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(StaticModelPreviewTest PRIVATE ole32 shell32 uuid)
+endif()
+target_compile_definitions(StaticModelPreviewTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
 

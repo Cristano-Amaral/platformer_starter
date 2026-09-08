@@ -76,11 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 48.1 — Content Browser Thumbnails
-(Development Content Browser visual thumbnails over the M47/M48 static-model
-catalog: Thumbnail grid default, List mode, local derived PNG cache,
-deterministic framing, awaiting manual acceptance).
-Milestone 48 is complete. Milestone 49 has not started.
+Milestone 48.2 — Interactive Static Model Preview
+(Development Model Preview of the Content Browser selected static GLB:
+real-model orbit/zoom, bounds framing, independent of thumbnail cache;
+awaiting manual acceptance).
+Milestone 48.1 is complete. Milestone 49 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -177,5 +177,7 @@ copies). Browser selection is not scene selection and does not instantiate
 a level object. M48.1 adds Development Content Browser thumbnails: default
 Thumbnails grid, optional List mode, local derived cache under
 `%LOCALAPPDATA%\Platformer3D\thumbnails\`, and Reset Editor Layout restoring
-Thumbnails. Debug has the visual editor but cannot author. Release has
+Thumbnails. M48.2 adds a Development Model Preview window that renders the
+real selected static GLB (orbit/zoom/Reset View) without instantiating it.
+Debug has the visual editor but cannot author. Release has
 no editor.

@@ -2,11 +2,10 @@
 
 #include "assets/StaticGlb.h"
 #include "editor/EditorLayout.h"
-#include "editor/EditorMath.h"
+#include "editor/StaticModelFraming.h"
 #include "platform/RuntimePaths.h"
 
 #include <cctype>
-#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <system_error>
@@ -17,8 +16,6 @@ namespace
 {
 constexpr std::uint64_t kFnvOffset = 14695981039346656037ull;
 constexpr std::uint64_t kFnvPrime = 1099511628211ull;
-constexpr float kMinExtent = 1.0e-4f;
-constexpr float kMinRadius = 0.05f;
 
 bool IsHexCacheKey(std::string_view key)
 {
@@ -331,70 +328,6 @@ ThumbnailEnsureDecision ClassifyThumbnailEnsure(
 
 ThumbnailCameraFrame MakeThumbnailCameraFrame(const ThumbnailModelBounds& bounds)
 {
-    core::Vec3 min = bounds.min;
-    core::Vec3 max = bounds.max;
-    if (!(max.x >= min.x) || !(max.y >= min.y) || !(max.z >= min.z)
-        || !std::isfinite(min.x) || !std::isfinite(min.y) || !std::isfinite(min.z)
-        || !std::isfinite(max.x) || !std::isfinite(max.y) || !std::isfinite(max.z))
-    {
-        min = {-0.5f, -0.5f, -0.5f};
-        max = {0.5f, 0.5f, 0.5f};
-    }
-
-    core::Vec3 extent{max.x - min.x, max.y - min.y, max.z - min.z};
-    if (extent.x < kMinExtent && extent.y < kMinExtent && extent.z < kMinExtent)
-    {
-        min = {-0.5f, -0.5f, -0.5f};
-        max = {0.5f, 0.5f, 0.5f};
-        extent = {1.0f, 1.0f, 1.0f};
-    }
-    else
-    {
-        if (extent.x < kMinExtent)
-        {
-            extent.x = kMinExtent;
-        }
-        if (extent.y < kMinExtent)
-        {
-            extent.y = kMinExtent;
-        }
-        if (extent.z < kMinExtent)
-        {
-            extent.z = kMinExtent;
-        }
-    }
-
-    const core::Vec3 center{
-        (min.x + max.x) * 0.5f,
-        (min.y + max.y) * 0.5f,
-        (min.z + max.z) * 0.5f};
-    const float radius = Length(Scale(extent, 0.5f));
-    const float paddedRadius =
-        (radius > kMinRadius ? radius : kMinRadius) * kStaticModelThumbnailBoundsPadding;
-    const float halfFov = kStaticModelThumbnailFieldOfViewY * 0.5f * kDegreesToRadians;
-    const float tangent = std::tan(halfFov);
-    float distance = paddedRadius / (tangent > 1.0e-4f ? tangent : 1.0e-4f);
-    if (!std::isfinite(distance) || distance < paddedRadius * 1.5f)
-    {
-        distance = paddedRadius * 2.5f;
-    }
-
-    const core::Vec3 direction = NormalizeOr({1.0f, 0.85f, 1.0f}, {0.0f, 0.0f, 1.0f});
-    ThumbnailCameraFrame frame{};
-    frame.target = center;
-    frame.position = center + Scale(direction, distance);
-    frame.up = {0.0f, 1.0f, 0.0f};
-    frame.fieldOfViewY = kStaticModelThumbnailFieldOfViewY;
-    frame.nearPlane = distance - paddedRadius * 1.25f;
-    if (!(frame.nearPlane > 0.01f) || !std::isfinite(frame.nearPlane))
-    {
-        frame.nearPlane = 0.05f;
-    }
-    frame.farPlane = distance + paddedRadius * 3.0f;
-    if (!(frame.farPlane > frame.nearPlane + 0.1f) || !std::isfinite(frame.farPlane))
-    {
-        frame.farPlane = frame.nearPlane + paddedRadius * 8.0f + 10.0f;
-    }
-    return frame;
+    return MakeDefaultStaticModelCameraFrame(bounds);
 }
 }

@@ -21,12 +21,14 @@
 #include "editor/ContentBrowser.h"
 #include "editor/EditorPlacement.h"
 #include "editor/EditorWorkspace.h"
+#include "editor/StaticModelFraming.h"
 
 #include <string>
 
 namespace render
 {
 class StaticModelThumbnailStore;
+class StaticModelPreviewRenderer;
 }
 
 namespace editor
@@ -133,6 +135,8 @@ struct LevelEditorState
     EditorSelection selection{};
     // Catalog/asset selection. Not scene selection and not persisted.
     ContentBrowserState contentBrowser{};
+    StaticModelPreviewOrbit modelPreviewOrbit{};
+    std::string modelPreviewFramedIdentity;
     CategoryStructuralPending structuralPending{};
     StructuralIndexMap structuralMap{};
     EditorCamera editorCamera{};
@@ -181,6 +185,7 @@ struct LevelEditorViewContext
     bool forceDefaultLayout = false;
     bool recoverOffscreenLayout = false;
     render::StaticModelThumbnailStore* thumbnails = nullptr;
+    render::StaticModelPreviewRenderer* modelPreview = nullptr;
 };
 
 class EditorToolRunner;

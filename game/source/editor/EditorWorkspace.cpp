@@ -11,6 +11,7 @@ void ResetEditorWorkspaceVisibility(EditorWorkspaceState& workspace)
     workspace.showToolOutput = true;
     workspace.showObjectPalette = true;
     workspace.showContentBrowser = true;
+    workspace.showModelPreview = true;
     workspace.showQuickToolbar = true;
 }
 
@@ -23,7 +24,7 @@ bool AllEditorPanelsVisible(const EditorWorkspaceState& workspace)
 {
     return workspace.showMetrics && workspace.showHierarchy && workspace.showInspector
         && workspace.showLevelEditor && workspace.showToolOutput && workspace.showObjectPalette
-        && workspace.showContentBrowser && workspace.showQuickToolbar;
+        && workspace.showContentBrowser && workspace.showModelPreview && workspace.showQuickToolbar;
 }
 
 float ResolveEditorMenuBarHeight(float lastMenuBarHeight)

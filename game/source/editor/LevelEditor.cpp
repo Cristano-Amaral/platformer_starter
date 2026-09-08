@@ -20,7 +20,9 @@
 #include "imgui.h"
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "editor/StaticModelThumbnailCache.h"
+#include "editor/StaticModelFraming.h"
 #include "render/StaticModelThumbnail.h"
+#include "render/StaticModelPreview.h"
 #endif
 
 #include <algorithm>
@@ -29,6 +31,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <string>
 #include <vector>
 #endif
 
@@ -448,6 +451,10 @@ LevelEditorRequest DrawContentBrowser(
         {
             view.thumbnails->AllowRetryAll();
         }
+        if (view.modelPreview != nullptr)
+        {
+            view.modelPreview->AllowRetry();
+        }
         state.contentBrowser.statusMessage = "Catalog refreshed from canonical source models.";
     }
     ImGui::SameLine();
@@ -660,6 +667,136 @@ LevelEditorRequest DrawContentBrowser(
 
     ImGui::End();
     return request;
+}
+
+void DrawModelPreview(LevelEditorState& state, const LevelEditorViewContext& view)
+{
+    ApplyEditorWindowPlacement(kModelPreviewWindowName, view);
+    if (!ImGui::Begin(kModelPreviewWindowName, &state.workspace.showModelPreview))
+    {
+        ImGui::End();
+        return;
+    }
+    RecoverEditorWindowIfNeeded(kModelPreviewWindowName, view);
+
+    ImGui::TextUnformatted("Interactive view of the Content Browser selection. Not a level object.");
+    render::StaticModelPreviewRenderer* preview = view.modelPreview;
+    const std::string& identity = state.contentBrowser.selectedIdentity;
+    if (preview != nullptr && preview->HasModel()
+        && state.modelPreviewFramedIdentity != preview->LoadedIdentity())
+    {
+        ResetStaticModelPreviewOrbit(state.modelPreviewOrbit, preview->Bounds());
+        state.modelPreviewFramedIdentity = preview->LoadedIdentity();
+    }
+    else if (preview != nullptr && preview->IsFailed())
+    {
+        state.modelPreviewFramedIdentity = preview->LoadedIdentity();
+    }
+    else if (preview == nullptr || (!preview->HasModel() && !preview->IsFailed()))
+    {
+        state.modelPreviewFramedIdentity.clear();
+    }
+
+    const bool canFrame = preview != nullptr && preview->HasModel();
+    ImGui::BeginDisabled(!canFrame);
+    if (ImGui::Button("Reset View"))
+    {
+        if (canFrame)
+        {
+            ResetStaticModelPreviewOrbit(state.modelPreviewOrbit, preview->Bounds());
+        }
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("LMB orbit  |  Wheel zoom");
+
+    if (identity.empty())
+    {
+        ImGui::Spacing();
+        ImGui::TextWrapped("No static model is selected. Choose an asset in the Content Browser.");
+        ImGui::End();
+        return;
+    }
+
+    const assets::StaticModelCatalogEntry* entry =
+        state.contentBrowser.catalog.Find(identity);
+    if (preview != nullptr && preview->IsFailed())
+    {
+        ImGui::TextWrapped("Preview failed to load this model. Refresh or reselect to retry.");
+    }
+    else
+    {
+        // Reserve one collapsed header row so details stay below the canvas
+        // without permanently shrinking the Preview for the expanded body.
+        const float detailsReserve = ImGui::GetFrameHeightWithSpacing();
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+        const float previewHeight = avail.y - detailsReserve;
+        const editor::PreviewRenderSize size = ResolvePreviewRenderSize(avail.x, previewHeight);
+        if (size.valid)
+        {
+            const ImVec2 canvas(static_cast<float>(size.width), static_cast<float>(size.height));
+            const ImVec2 screen = ImGui::GetCursorScreenPos();
+            unsigned int gpuId = 0;
+            if (preview != nullptr
+                && preview->Render(size.width, size.height, state.modelPreviewOrbit))
+            {
+                gpuId = preview->TextureGpuId();
+            }
+            if (gpuId != 0)
+            {
+                ImGui::Image(
+                    ImTextureRef(static_cast<ImTextureID>(static_cast<intptr_t>(gpuId))),
+                    canvas,
+                    ImVec2(0.0f, 1.0f),
+                    ImVec2(1.0f, 0.0f));
+            }
+            else
+            {
+                ImGui::Dummy(canvas);
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    screen,
+                    ImVec2(screen.x + canvas.x, screen.y + canvas.y),
+                    IM_COL32(48, 52, 62, 255));
+            }
+            ImGui::SetCursorScreenPos(screen);
+            ImGui::InvisibleButton("model-preview-orbit", canvas);
+            const bool hovered = ImGui::IsItemHovered();
+            const bool held = ImGui::IsItemActive();
+            const ImGuiIO& io = ImGui::GetIO();
+            if (held && preview != nullptr && preview->HasModel())
+            {
+                ApplyStaticModelPreviewOrbit(
+                    state.modelPreviewOrbit, io.MouseDelta.x, io.MouseDelta.y);
+            }
+            if (hovered && preview != nullptr && preview->HasModel())
+            {
+                ApplyStaticModelPreviewDolly(state.modelPreviewOrbit, io.MouseWheel);
+            }
+        }
+    }
+
+    // Collapsed by default (no DefaultOpen). Open state may persist with the
+    // existing ImGui ini; no dedicated preferences file.
+    if (ImGui::CollapsingHeader("Asset Details"))
+    {
+        ImGui::Text("Name: %s", entry != nullptr ? entry->displayName.c_str() : identity.c_str());
+        ImGui::Text("Type: %s", entry != nullptr ? entry->assetType.c_str() : "static_glb");
+        ImGui::TextUnformatted(identity.c_str());
+        if (preview != nullptr && preview->HasModel())
+        {
+            const editor::ThumbnailModelBounds bounds = preview->Bounds();
+            ImGui::Text(
+                "Bounds: %.3f %.3f %.3f  ..  %.3f %.3f %.3f",
+                bounds.min.x,
+                bounds.min.y,
+                bounds.min.z,
+                bounds.max.x,
+                bounds.max.y,
+                bounds.max.z);
+        }
+    }
+
+    ImGui::End();
 }
 #endif
 
@@ -914,6 +1051,7 @@ LevelEditorRequest DrawEditorMenuBar(
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         ImGui::MenuItem("Object Palette", nullptr, &state.workspace.showObjectPalette);
         ImGui::MenuItem("Content Browser", nullptr, &state.workspace.showContentBrowser);
+        ImGui::MenuItem("Model Preview", nullptr, &state.workspace.showModelPreview);
         ImGui::MenuItem("Quick Toolbar", nullptr, &state.workspace.showQuickToolbar);
 #endif
 #if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
@@ -1459,6 +1597,10 @@ LevelEditorRequest DrawLevelEditor(
     if (state.workspace.showContentBrowser)
     {
         request = DrawContentBrowser(state, view, toolRunner, cookStageReloadPending);
+    }
+    if (state.workspace.showModelPreview)
+    {
+        DrawModelPreview(state, view);
     }
 #endif
     if (!state.workspace.showLevelEditor)

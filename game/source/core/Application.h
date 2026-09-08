@@ -22,6 +22,7 @@
 #endif
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "render/StaticModelThumbnail.h"
+#include "render/StaticModelPreview.h"
 #endif
 
 #include <string>
@@ -78,6 +79,7 @@ private:
 #endif
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
     render::StaticModelThumbnailStore thumbnailStore;
+    render::StaticModelPreviewRenderer modelPreview;
 #endif
     bool initialized = false;
     // Set only when an editor physics rebuild fails. Normal gameplay never

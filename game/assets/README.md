@@ -71,3 +71,12 @@ Milestone 48.1 Content Browser thumbnails:
 - generation is lazy and synchronous (at most one GLB per editor frame)
 - Delete Asset also removes that asset's mapped thumbnail cache entry
 - cancellation of Delete does not touch thumbnail cache
+
+Milestone 48.2 Model Preview:
+- Development window over the Content Browser selected identity; not a second selection
+- renders the real source GLB (`LoadModel`); does not use thumbnail PNG/cache
+- default visible (same convention as Content Browser / Object Palette)
+- LMB orbit, wheel zoom, Reset View; pan is not implemented
+- Name/type/identity/bounds are in a collapsed-by-default Asset Details header below the preview
+- model lifetime is independent of render-target size
+- delete cancel leaves preview; successful delete of the selection clears it

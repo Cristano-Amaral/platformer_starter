@@ -406,6 +406,8 @@ int main()
             "object palette has a default placement");
         Expect(editor::FindDefaultPlacement(defaults, editor::kContentBrowserWindowName) != nullptr,
             "content browser has a default placement");
+        Expect(editor::FindDefaultPlacement(defaults, editor::kModelPreviewWindowName) != nullptr,
+            "model preview has a default placement");
         Expect(defaults.contentBrowser.y > defaults.hierarchy.y, "content browser sits below hierarchy");
         Expect(defaults.toolOutput.y > defaults.contentBrowser.y, "tool output sits below content browser");
         Expect(defaults.inspector.x > defaults.metrics.x, "inspector is on the right");

@@ -21,6 +21,7 @@ constexpr float kLevelEditorHeight = 260.0f;
 constexpr float kToolOutputHeight = 160.0f;
 constexpr float kObjectPaletteHeight = 200.0f;
 constexpr float kContentBrowserHeight = 180.0f;
+constexpr float kModelPreviewHeight = 220.0f;
 
 float Clamped(float value, float minimum, float maximum)
 {
@@ -111,6 +112,21 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         defaults.toolOutput.y - contentHeight - kMargin,
         panelWidth,
         contentHeight};
+    const float previewHeight = std::min(kModelPreviewHeight, height * 0.32f);
+    const float previewWidth = std::min(
+        panelWidth + 40.0f,
+        std::max(240.0f, defaults.inspector.x - kMargin * 2.0f - panelWidth));
+    float previewY = defaults.contentBrowser.y + contentHeight - previewHeight;
+    if (previewY < kMargin)
+    {
+        previewY = defaults.contentBrowser.y;
+    }
+    defaults.modelPreview = {
+        kModelPreviewWindowName,
+        defaults.contentBrowser.x + defaults.contentBrowser.width + kMargin,
+        previewY,
+        previewWidth,
+        previewHeight};
     const float hierarchyTop = defaults.metrics.y + defaults.metrics.height + kMargin;
     defaults.hierarchy = {
         kHierarchyWindowName,
@@ -125,6 +141,7 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
     defaults.levelEditor = ClampEditorWindowPlacement(defaults.levelEditor, width, height);
     defaults.objectPalette = ClampEditorWindowPlacement(defaults.objectPalette, width, height);
     defaults.contentBrowser = ClampEditorWindowPlacement(defaults.contentBrowser, width, height);
+    defaults.modelPreview = ClampEditorWindowPlacement(defaults.modelPreview, width, height);
     defaults.toolOutput = ClampEditorWindowPlacement(defaults.toolOutput, width, height);
     return defaults;
 }
@@ -185,6 +202,10 @@ const EditorWindowPlacement* FindDefaultPlacement(
     if (std::strcmp(windowName, kContentBrowserWindowName) == 0)
     {
         return &defaults.contentBrowser;
+    }
+    if (std::strcmp(windowName, kModelPreviewWindowName) == 0)
+    {
+        return &defaults.modelPreview;
     }
     if (std::strcmp(windowName, kToolOutputWindowName) == 0)
     {
