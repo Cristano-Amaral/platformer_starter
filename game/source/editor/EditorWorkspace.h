@@ -1,9 +1,10 @@
 #pragma once
 
 // Milestone 36 workspace visibility plus Milestone 43 Quick Toolbar chrome.
-// showToolOutput owns the Development Tool Output window. showQuickToolbar is
-// Development authoring chrome, not a floating panel. Debug keeps the M36
-// editor without Build and without the Quick Toolbar.
+// showToolOutput owns the Development Tool Output window. showContentBrowser
+// owns the Development Content Browser. showQuickToolbar is Development
+// authoring chrome, not a floating panel. Debug keeps the M36 editor without
+// Build, without the Quick Toolbar, and without the Content Browser.
 
 #include "editor/EditorGizmo.h"
 
@@ -17,6 +18,7 @@ struct EditorWorkspaceState
     bool showLevelEditor = true;
     bool showToolOutput = true;
     bool showObjectPalette = true;
+    bool showContentBrowser = true;
     bool showQuickToolbar = true;
 };
 

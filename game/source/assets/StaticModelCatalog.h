@@ -16,6 +16,7 @@ struct StaticModelCatalogEntry
 {
     std::string canonicalIdentity;
     std::string assetType;
+    std::string displayName;
 };
 
 class StaticModelCatalog

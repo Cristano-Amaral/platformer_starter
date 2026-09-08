@@ -2,6 +2,7 @@
 
 #include <string>
 #include <system_error>
+#include <vector>
 
 namespace editor
 {
@@ -100,13 +101,34 @@ std::filesystem::path StageRuntimeAssetsScriptPath(const std::filesystem::path& 
     return (repositoryRoot / std::string(kStageRuntimeAssetsScriptRelative)).lexically_normal();
 }
 
-std::filesystem::path DevelopmentRuntimeAssetsDirectory(const std::filesystem::path& repositoryRoot)
+std::filesystem::path ConfigRuntimeAssetsDirectory(
+    const std::filesystem::path& repositoryRoot,
+    std::string_view configDirectoryName)
 {
     return (repositoryRoot / std::string(kCMakeBinaryDirRelative)
                 / std::string(kRuntimeOutputBinRelative)
-                / std::string(kDevelopmentConfigDirectoryName)
+                / std::string(configDirectoryName)
                 / std::string(kRuntimeAssetsDirectoryName))
         .lexically_normal();
+}
+
+std::filesystem::path DevelopmentRuntimeAssetsDirectory(const std::filesystem::path& repositoryRoot)
+{
+    return ConfigRuntimeAssetsDirectory(repositoryRoot, kDevelopmentConfigDirectoryName);
+}
+
+std::vector<std::filesystem::path> AuthorizedStaticModelStagedRoots(
+    const std::filesystem::path& repositoryRoot)
+{
+    if (repositoryRoot.empty() || !repositoryRoot.is_absolute())
+    {
+        return {};
+    }
+    return {
+        ConfigRuntimeAssetsDirectory(repositoryRoot, kDebugConfigDirectoryName),
+        ConfigRuntimeAssetsDirectory(repositoryRoot, kDevelopmentConfigDirectoryName),
+        ConfigRuntimeAssetsDirectory(repositoryRoot, kReleaseConfigDirectoryName),
+    };
 }
 
 bool IsCookedAssetsRoot(const std::filesystem::path& cookedRoot)
@@ -212,6 +234,8 @@ const char* EditorToolKindName(EditorToolKind kind)
         return "Build All";
     case EditorToolKind::ImportStaticGlb:
         return "Import Static GLB";
+    case EditorToolKind::DeleteStaticModel:
+        return "Delete Static Model";
     }
     return "Cook Assets";
 }

@@ -14,12 +14,13 @@ namespace
 constexpr float kMargin = 8.0f;
 constexpr float kMinVisible = 48.0f;
 constexpr float kDefaultPanelWidth = 340.0f;
-constexpr float kMetricsHeight = 280.0f;
+constexpr float kMetricsHeight = 200.0f;
 constexpr float kHierarchyHeight = 400.0f;
 constexpr float kInspectorHeight = 360.0f;
 constexpr float kLevelEditorHeight = 260.0f;
-constexpr float kToolOutputHeight = 180.0f;
+constexpr float kToolOutputHeight = 160.0f;
 constexpr float kObjectPaletteHeight = 200.0f;
+constexpr float kContentBrowserHeight = 180.0f;
 
 float Clamped(float value, float minimum, float maximum)
 {
@@ -77,13 +78,7 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         kMargin,
         kMargin,
         panelWidth,
-        std::min(kMetricsHeight, height * 0.40f)};
-    defaults.hierarchy = {
-        kHierarchyWindowName,
-        kMargin,
-        defaults.metrics.y + defaults.metrics.height + kMargin,
-        panelWidth,
-        std::min(kHierarchyHeight, height - defaults.metrics.height - kMargin * 3.0f)};
+        std::min(kMetricsHeight, height * 0.28f)};
     defaults.inspector = {
         kInspectorWindowName,
         width - panelWidth - kMargin,
@@ -102,19 +97,34 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         defaults.levelEditor.y + defaults.levelEditor.height + kMargin,
         panelWidth,
         std::min(kObjectPaletteHeight, height * 0.30f)};
-    const float toolHeight = std::min(kToolOutputHeight, height * 0.28f);
+    const float toolHeight = std::min(kToolOutputHeight, height * 0.22f);
     defaults.toolOutput = {
         kToolOutputWindowName,
         kMargin,
         height - toolHeight - kMargin,
         width - kMargin * 2.0f,
         toolHeight};
+    const float contentHeight = std::min(kContentBrowserHeight, height * 0.26f);
+    defaults.contentBrowser = {
+        kContentBrowserWindowName,
+        kMargin,
+        defaults.toolOutput.y - contentHeight - kMargin,
+        panelWidth,
+        contentHeight};
+    const float hierarchyTop = defaults.metrics.y + defaults.metrics.height + kMargin;
+    defaults.hierarchy = {
+        kHierarchyWindowName,
+        kMargin,
+        hierarchyTop,
+        panelWidth,
+        std::min(kHierarchyHeight, defaults.contentBrowser.y - hierarchyTop - kMargin)};
 
     defaults.metrics = ClampEditorWindowPlacement(defaults.metrics, width, height);
     defaults.hierarchy = ClampEditorWindowPlacement(defaults.hierarchy, width, height);
     defaults.inspector = ClampEditorWindowPlacement(defaults.inspector, width, height);
     defaults.levelEditor = ClampEditorWindowPlacement(defaults.levelEditor, width, height);
     defaults.objectPalette = ClampEditorWindowPlacement(defaults.objectPalette, width, height);
+    defaults.contentBrowser = ClampEditorWindowPlacement(defaults.contentBrowser, width, height);
     defaults.toolOutput = ClampEditorWindowPlacement(defaults.toolOutput, width, height);
     return defaults;
 }
@@ -171,6 +181,10 @@ const EditorWindowPlacement* FindDefaultPlacement(
     if (std::strcmp(windowName, kObjectPaletteWindowName) == 0)
     {
         return &defaults.objectPalette;
+    }
+    if (std::strcmp(windowName, kContentBrowserWindowName) == 0)
+    {
+        return &defaults.contentBrowser;
     }
     if (std::strcmp(windowName, kToolOutputWindowName) == 0)
     {

@@ -18,6 +18,7 @@
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSelection.h"
+#include "editor/ContentBrowser.h"
 #include "editor/EditorPlacement.h"
 #include "editor/EditorWorkspace.h"
 
@@ -67,6 +68,7 @@ enum class LevelEditorRequest
     ReloadRuntimeLevel,
     CookStageAndReload,
     ImportStaticGlb,
+    DeleteContentBrowserAsset,
     AddPlatform,
     AddCheckpoint,
     AddHazard,
@@ -90,6 +92,11 @@ inline LevelEditorRequest QuickToolbarRevertWorkingCopyRequest()
 inline LevelEditorRequest QuickToolbarSaveLevelSourceRequest()
 {
     return LevelEditorRequest::SaveLevelSource;
+}
+
+inline LevelEditorRequest ContentBrowserImportRequest()
+{
+    return LevelEditorRequest::ImportStaticGlb;
 }
 
 const char* LevelEditorApplyStatusName(LevelEditorApplyStatus status);
@@ -119,6 +126,8 @@ struct LevelEditorState
     // Single selection shared by Hierarchy, world picking, Inspector, and
     // highlight. Not persisted. Survives F2 close/reopen in this process.
     EditorSelection selection{};
+    // Catalog/asset selection. Not scene selection and not persisted.
+    ContentBrowserState contentBrowser{};
     CategoryStructuralPending structuralPending{};
     StructuralIndexMap structuralMap{};
     EditorCamera editorCamera{};
@@ -191,7 +200,9 @@ void ResetEditorWorkspaceLayout(
 // Edit, Assets, and Build). The Edit menu emits lifecycle intents only;
 // Application mutates workingCopy through HandleAuthoredLifecycleRequest.
 // Development Assets > Import Static GLB copies a compatible GLB into source
-// and does not mutate authored level state. Development Level includes Reload
+// and does not mutate authored level state. Development Content Browser is a
+// view over StaticModelCatalog and can dispatch that same import request.
+// Development Level includes Reload
 // Runtime Level. Development Build includes Cook, Stage & Reload (intent only;
 // Application orchestrates).
 LevelEditorRequest DrawEditorMenuBar(

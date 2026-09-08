@@ -50,6 +50,8 @@ add_executable(Platformer3D
     game/source/assets/StaticGlbImport.h
     game/source/assets/StaticModelCatalog.cpp
     game/source/assets/StaticModelCatalog.h
+    game/source/assets/StaticModelDelete.cpp
+    game/source/assets/StaticModelDelete.h
     game/source/editor/AuthoredLifecycleCommands.cpp
     game/source/editor/AuthoredLifecycleCommands.h
     game/source/editor/AuthoredObjectLifecycle.cpp
@@ -58,6 +60,8 @@ add_executable(Platformer3D
     game/source/editor/CookStageReloadWorkflow.h
     game/source/editor/EditorCamera.cpp
     game/source/editor/EditorCamera.h
+    game/source/editor/ContentBrowser.cpp
+    game/source/editor/ContentBrowser.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorHierarchy.h
@@ -264,6 +268,33 @@ file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/models/test_static.glb"
     PLATFORMER_TEST_STATIC_GLB)
 target_compile_definitions(StaticGlbImportTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+)
+
+# Milestone 48: Content Browser query/filter/delete authority. Not ImGui.
+# Uses a temporary source/cooked/staged tree so canonical assets are not modified.
+add_executable(ContentBrowserTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticGlbImport.cpp
+    game/source/assets/StaticGlbImport.h
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
+    game/source/assets/StaticModelDelete.cpp
+    game/source/assets/StaticModelDelete.h
+    game/source/editor/ContentBrowser.cpp
+    game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserTest.cpp
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+target_include_directories(ContentBrowserTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ContentBrowserTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ContentBrowserTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(ContentBrowserTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
 
@@ -593,6 +624,7 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorSelection.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
+    game/source/editor/ContentBrowser.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/world/LevelDefinition.cpp

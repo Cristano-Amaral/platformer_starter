@@ -50,3 +50,13 @@ Milestone 47 imported static models:
 - collision: existing destination fails; never overwrite
 - cook/stage: extra models are cooked as `copy` and staged from cooked `models/*.glb`
 - import does not instantiate a level object
+
+Milestone 48 Content Browser / Delete Asset:
+- browser is a view over the M47 catalog; it is not a second registry
+- asset selection is not scene/Hierarchy selection and does not mutate Level 01
+- Delete Asset is confirmed, identity-based, and limited to authorized source/cooked/staged roots
+- successful delete removes canonical source plus matching cooked/staged copies when present
+- missing cooked/staged counterparts do not block source deletion
+- generated copies are removed first; source last, so a failed generated cleanup is retry-safe
+- cancellation makes no filesystem changes
+- delete is not Cook/Stage, not a recycle bin, and not a level edit

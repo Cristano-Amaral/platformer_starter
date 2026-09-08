@@ -63,6 +63,7 @@ int main()
         workspace.showQuickToolbar = false;
         Expect(!editor::AllEditorPanelsVisible(workspace), "View toggle hides toolbar independently");
         Expect(workspace.showObjectPalette, "hiding toolbar leaves Object Palette");
+        Expect(workspace.showContentBrowser, "hiding toolbar leaves Content Browser");
         workspace.showQuickToolbar = true;
         Expect(workspace.showQuickToolbar, "View toggle shows toolbar");
         workspace.showQuickToolbar = false;

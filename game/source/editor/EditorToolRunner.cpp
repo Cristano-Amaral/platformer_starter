@@ -238,6 +238,12 @@ bool EditorToolRunner::TryStart(
             requestedKind,
             "error: Import Static GLB is a local file copy, not an external tool job.\n");
     }
+    else if (requestedKind == EditorToolKind::DeleteStaticModel)
+    {
+        return BeginFailed(
+            requestedKind,
+            "error: Delete Static Model is a local filesystem operation, not an external tool job.\n");
+    }
     else
     {
         if (!IsCMakeBuildTreeConfigured(repositoryRoot))

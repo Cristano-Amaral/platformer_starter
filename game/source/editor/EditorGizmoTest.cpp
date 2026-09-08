@@ -399,8 +399,15 @@ int main()
         Expect(
             std::strcmp(defaults.objectPalette.name, editor::kObjectPaletteWindowName) == 0,
             "object palette name");
+        Expect(
+            std::strcmp(defaults.contentBrowser.name, editor::kContentBrowserWindowName) == 0,
+            "content browser name");
         Expect(editor::FindDefaultPlacement(defaults, editor::kObjectPaletteWindowName) != nullptr,
             "object palette has a default placement");
+        Expect(editor::FindDefaultPlacement(defaults, editor::kContentBrowserWindowName) != nullptr,
+            "content browser has a default placement");
+        Expect(defaults.contentBrowser.y > defaults.hierarchy.y, "content browser sits below hierarchy");
+        Expect(defaults.toolOutput.y > defaults.contentBrowser.y, "tool output sits below content browser");
         Expect(defaults.inspector.x > defaults.metrics.x, "inspector is on the right");
         Expect(defaults.hierarchy.y > defaults.metrics.y, "hierarchy sits below metrics");
         Expect(defaults.toolOutput.y > defaults.inspector.y, "tool output sits lower than Inspector");

@@ -69,6 +69,7 @@ void StaticModelCatalog::Refresh(const std::filesystem::path& sourceRoot)
         StaticModelCatalogEntry entry{};
         entry.canonicalIdentity = CanonicalStaticModelIdentity(fileName);
         entry.assetType = std::string(kStaticGlbAssetType);
+        entry.displayName = fileName;
         entries.push_back(std::move(entry));
     }
 

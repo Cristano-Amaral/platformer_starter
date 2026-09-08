@@ -611,6 +611,17 @@ int main()
         Expect(failed.state == editor::EditorToolJobState::Failed, "local failure state");
         Expect(failed.hasExitCode && failed.exitCode == 1, "local failure exit 1");
         Expect(failed.log.find("destination already exists") != std::string::npos, "local failure log");
+        Expect(
+            std::string(editor::EditorToolKindName(editor::EditorToolKind::DeleteStaticModel))
+                == "Delete Static Model",
+            "Delete Static Model display name");
+        Expect(
+            runner.ReportLocalResult(
+                editor::EditorToolKind::DeleteStaticModel, true, "Deleted static GLB: models/crate.glb"),
+            "local delete success reports");
+        const editor::EditorToolJobSnapshot deleted = runner.Snapshot();
+        Expect(deleted.kind == editor::EditorToolKind::DeleteStaticModel, "local delete job kind");
+        Expect(deleted.state == editor::EditorToolJobState::Succeeded, "local delete success state");
     }
 
     if (gFailures != 0)

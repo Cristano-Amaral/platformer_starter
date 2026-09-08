@@ -45,6 +45,7 @@ private:
     bool StartCookStageAndReload();
     void FinishCookStageAndReloadIfReady();
     void ImportStaticGlbAsset();
+    void DeleteContentBrowserAsset();
     void ResetGameplayAfterCommittedLevel();
     void SaveLevelEditorSource();
 #endif

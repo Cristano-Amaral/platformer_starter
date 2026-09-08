@@ -10,6 +10,7 @@
 #endif
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "editor/ContentBrowser.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
 #include "editor/EditorPlacement.h"
@@ -18,7 +19,10 @@
 #include "imgui.h"
 
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <vector>
 #endif
 
 namespace editor
@@ -400,6 +404,149 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
 
     ImGui::End();
 }
+
+LevelEditorRequest DrawContentBrowser(
+    LevelEditorState& state,
+    const LevelEditorViewContext& view,
+    EditorToolRunner& toolRunner,
+    bool cookStageReloadPending)
+{
+    LevelEditorRequest request = LevelEditorRequest::None;
+    ApplyEditorWindowPlacement(kContentBrowserWindowName, view);
+    if (!ImGui::Begin(kContentBrowserWindowName, &state.workspace.showContentBrowser))
+    {
+        ImGui::End();
+        return request;
+    }
+    RecoverEditorWindowIfNeeded(kContentBrowserWindowName, view);
+
+    const bool authoringAvailable = IsLevelAuthoringAvailable();
+    const bool toolsBusy = toolRunner.IsRunning() || cookStageReloadPending;
+    const std::filesystem::path sourceRoot = AuthoringSourceRoot();
+
+    ImGui::TextUnformatted("Registered static GLB assets. Selection is not a level object.");
+    ImGui::TextWrapped("Import copies canonical source only. Delete removes source plus matching cooked/staged copies. Neither operation edits the level.");
+
+    char query[256];
+    std::snprintf(query, sizeof(query), "%s", state.contentBrowser.filterQuery.c_str());
+    if (ImGui::InputText("Search", query, sizeof(query)))
+    {
+        state.contentBrowser.filterQuery = query;
+    }
+
+    if (ImGui::Button("Refresh"))
+    {
+        RefreshContentBrowser(state.contentBrowser, sourceRoot);
+        state.contentBrowser.statusMessage = "Catalog refreshed from canonical source models.";
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!authoringAvailable || toolsBusy);
+    if (ImGui::Button("Import Static GLB"))
+    {
+        request = ContentBrowserImportRequest();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    const bool hasSelection = !state.contentBrowser.selectedIdentity.empty();
+    ImGui::BeginDisabled(!authoringAvailable || toolsBusy || !hasSelection);
+    if (ImGui::Button("Delete Selected Asset"))
+    {
+        state.contentBrowser.deleteConfirmOpen = true;
+    }
+    ImGui::EndDisabled();
+
+    const std::vector<assets::StaticModelCatalogEntry> visible =
+        FilterContentBrowserEntries(state.contentBrowser.catalog, state.contentBrowser.filterQuery);
+    if (state.contentBrowser.catalog.Count() == 0)
+    {
+        ImGui::Spacing();
+        ImGui::TextWrapped(
+            "No static models are registered. Use Import Static GLB to copy a compatible .glb "
+            "into game/assets/source/models/. Import does not place the asset in the level.");
+    }
+    else if (visible.empty())
+    {
+        ImGui::Spacing();
+        ImGui::TextWrapped("No static models match the current search.");
+    }
+    else if (ImGui::BeginTable(
+                 "content-browser-assets",
+                 3,
+                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY
+                     | ImGuiTableFlags_Resizable))
+    {
+        ImGui::TableSetupColumn("Name");
+        ImGui::TableSetupColumn("Type");
+        ImGui::TableSetupColumn("Path");
+        ImGui::TableHeadersRow();
+        for (const assets::StaticModelCatalogEntry& entry : visible)
+        {
+            ImGui::PushID(entry.canonicalIdentity.c_str());
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            const bool selected = state.contentBrowser.selectedIdentity == entry.canonicalIdentity;
+            if (ImGui::Selectable(
+                    entry.displayName.c_str(),
+                    selected,
+                    ImGuiSelectableFlags_SpanAllColumns))
+            {
+                SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
+            }
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(entry.assetType.c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextUnformatted(entry.canonicalIdentity.c_str());
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+
+    if (!state.contentBrowser.selectedIdentity.empty())
+    {
+        ImGui::Text("Selected asset: %s", state.contentBrowser.selectedIdentity.c_str());
+    }
+    else
+    {
+        ImGui::TextUnformatted("Selected asset: none");
+    }
+    if (!state.contentBrowser.statusMessage.empty())
+    {
+        ImGui::TextWrapped("%s", state.contentBrowser.statusMessage.c_str());
+    }
+
+    if (state.contentBrowser.deleteConfirmOpen)
+    {
+        ImGui::OpenPopup("Delete Static Model");
+    }
+    if (ImGui::BeginPopupModal("Delete Static Model", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextUnformatted("Delete this registered static model?");
+        ImGui::TextUnformatted(state.contentBrowser.selectedIdentity.c_str());
+        ImGui::TextWrapped(
+            "This removes the canonical source file and any matching cooked/staged copies. "
+            "It does not edit the level. Cancel makes no filesystem changes.");
+        if (ImGui::Button("Delete"))
+        {
+            if (ContentBrowserDeleteConfirmed(true))
+            {
+                request = LevelEditorRequest::DeleteContentBrowserAsset;
+            }
+            state.contentBrowser.deleteConfirmOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            (void)ContentBrowserDeleteConfirmed(false);
+            state.contentBrowser.deleteConfirmOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::End();
+    return request;
+}
 #endif
 
 LevelEditorRequest DrawLevelControls(
@@ -650,6 +797,7 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::MenuItem("Level Editor", nullptr, &state.workspace.showLevelEditor);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         ImGui::MenuItem("Object Palette", nullptr, &state.workspace.showObjectPalette);
+        ImGui::MenuItem("Content Browser", nullptr, &state.workspace.showContentBrowser);
         ImGui::MenuItem("Quick Toolbar", nullptr, &state.workspace.showQuickToolbar);
 #endif
 #if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
@@ -1190,12 +1338,20 @@ LevelEditorRequest DrawLevelEditor(
         DrawObjectPalette(state, view);
     }
 #endif
+    LevelEditorRequest request = LevelEditorRequest::None;
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (state.workspace.showContentBrowser)
+    {
+        request = DrawContentBrowser(state, view, toolRunner, cookStageReloadPending);
+    }
+#endif
     if (!state.workspace.showLevelEditor)
     {
-        return LevelEditorRequest::None;
+        return request;
     }
-    return DrawLevelControls(
+    const LevelEditorRequest controls = DrawLevelControls(
         state, activeLevel, view, toolRunner, cookStageReloadPending);
+    return request != LevelEditorRequest::None ? request : controls;
 }
 
 #else

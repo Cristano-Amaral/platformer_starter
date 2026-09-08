@@ -39,6 +39,11 @@ struct StaticGlbValidation
 bool HasStaticGlbExtension(std::string_view fileName);
 bool IsSafeStaticGlbFileName(std::string_view fileName, std::string* reason = nullptr);
 std::string CanonicalStaticModelIdentity(std::string_view fileName);
+bool TryParseStaticModelIdentity(
+    std::string_view canonicalIdentity,
+    std::string& fileName,
+    std::string* reason = nullptr);
+std::string StaticModelDisplayName(std::string_view canonicalIdentity);
 
 StaticGlbValidation ValidateStaticGlbBytes(std::span<const std::uint8_t> data);
 StaticGlbValidation ValidateStaticGlbFile(const std::filesystem::path& path);

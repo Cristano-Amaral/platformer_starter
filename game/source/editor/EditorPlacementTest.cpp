@@ -57,11 +57,13 @@ int main()
     {
         editor::EditorWorkspaceState workspace{};
         Expect(workspace.showObjectPalette, "Object Palette default visible");
+        Expect(workspace.showContentBrowser, "Content Browser default visible");
         Expect(editor::AllEditorPanelsVisible(workspace), "defaults include Object Palette");
         workspace.showObjectPalette = false;
         Expect(!editor::AllEditorPanelsVisible(workspace), "hiding Object Palette is independent");
         editor::ResetEditorWorkspaceVisibility(workspace);
         Expect(workspace.showObjectPalette, "Reset restores Object Palette");
+        Expect(workspace.showContentBrowser, "Reset restores Content Browser");
         Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all default panels");
     }
 

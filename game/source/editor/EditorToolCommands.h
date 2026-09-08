@@ -21,6 +21,7 @@ enum class EditorToolKind
     BuildRelease,
     BuildAll,
     ImportStaticGlb,
+    DeleteStaticModel,
 };
 
 enum class EditorSelfBuildPolicy
@@ -55,6 +56,8 @@ inline constexpr std::string_view kStageRuntimeAssetsScriptRelative =
     "cmake/StageRuntimeAssets.cmake";
 inline constexpr std::string_view kRuntimeOutputBinRelative = "bin";
 inline constexpr std::string_view kDevelopmentConfigDirectoryName = "Development";
+inline constexpr std::string_view kDebugConfigDirectoryName = "Debug";
+inline constexpr std::string_view kReleaseConfigDirectoryName = "Release";
 inline constexpr std::string_view kRuntimeAssetsDirectoryName = "assets";
 inline constexpr std::string_view kCMakeConfigurePreset = "windows-vs2022";
 inline constexpr std::string_view kCMakeDebugBuildPreset = "windows-debug";
@@ -78,6 +81,11 @@ bool CanStageRuntimeAssets(const std::filesystem::path& repositoryRoot);
 std::filesystem::path CookedAssetsRoot(const std::filesystem::path& repositoryRoot);
 std::filesystem::path StageRuntimeAssetsScriptPath(const std::filesystem::path& repositoryRoot);
 std::filesystem::path DevelopmentRuntimeAssetsDirectory(
+    const std::filesystem::path& repositoryRoot);
+std::filesystem::path ConfigRuntimeAssetsDirectory(
+    const std::filesystem::path& repositoryRoot,
+    std::string_view configDirectoryName);
+std::vector<std::filesystem::path> AuthorizedStaticModelStagedRoots(
     const std::filesystem::path& repositoryRoot);
 
 EditorToolCommand MakeCookAssetsCommand(const std::filesystem::path& repositoryRoot);

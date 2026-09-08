@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <fstream>
+#include <string>
 #include <system_error>
 #include <vector>
 
@@ -479,6 +480,56 @@ std::string CanonicalStaticModelIdentity(std::string_view fileName)
     identity.push_back('/');
     identity.append(fileName);
     return identity;
+}
+
+bool TryParseStaticModelIdentity(
+    std::string_view canonicalIdentity,
+    std::string& fileName,
+    std::string* reason)
+{
+    fileName.clear();
+    const auto fail = [&](const char* text) {
+        if (reason != nullptr)
+        {
+            *reason = text;
+        }
+        return false;
+    };
+    if (canonicalIdentity.empty())
+    {
+        return fail("canonical identity is empty");
+    }
+    if (canonicalIdentity.find('\\') != std::string_view::npos)
+    {
+        return fail("canonical identity must use posix separators");
+    }
+    const std::string prefix = std::string(kStaticModelsLogicalDirectory) + "/";
+    if (!canonicalIdentity.starts_with(prefix))
+    {
+        return fail("canonical identity must be models/<filename>.glb");
+    }
+    const std::string_view remainder = canonicalIdentity.substr(prefix.size());
+    std::string nameReason;
+    if (!IsSafeStaticGlbFileName(remainder, &nameReason))
+    {
+        return fail(nameReason.empty() ? "canonical identity file name is unsafe" : nameReason.c_str());
+    }
+    if (CanonicalStaticModelIdentity(remainder) != canonicalIdentity)
+    {
+        return fail("canonical identity is not normalized");
+    }
+    fileName = std::string(remainder);
+    return true;
+}
+
+std::string StaticModelDisplayName(std::string_view canonicalIdentity)
+{
+    std::string fileName;
+    if (!TryParseStaticModelIdentity(canonicalIdentity, fileName, nullptr))
+    {
+        return {};
+    }
+    return fileName;
 }
 
 StaticGlbValidation ValidateStaticGlbBytes(std::span<const std::uint8_t> data)

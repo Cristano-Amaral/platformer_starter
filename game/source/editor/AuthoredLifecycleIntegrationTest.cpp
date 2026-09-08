@@ -85,6 +85,12 @@ int main()
         !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ImportStaticGlb),
         "Import Static GLB is not lifecycle");
     Expect(
+        !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::DeleteContentBrowserAsset),
+        "Content Browser delete is not lifecycle");
+    Expect(
+        editor::ContentBrowserImportRequest() == LevelEditorRequest::ImportStaticGlb,
+        "Content Browser import reuses M47 ImportStaticGlb");
+    Expect(
         editor::EditAddMenuRequest(EditorObjectKind::ElevatedPlatform) == LevelEditorRequest::AddPlatform,
         "Edit > Add > Platform maps to AddPlatform");
     Expect(

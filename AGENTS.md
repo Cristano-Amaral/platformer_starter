@@ -76,11 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 47 — Static GLB Asset Import & Registry
-(Development import of already-supported static `.glb` files into
-`game/assets/source/models/`, derived catalog identity, cook/stage
-discovery of extra models; awaiting manual acceptance).
-Milestone 46 is complete and merged. Milestone 48 has not started.
+Milestone 48 — Content Browser / Asset Browser v1
+(Development Content Browser over the M47 static-model catalog:
+visualize/find, search, refresh, Import Static GLB, confirmed Delete
+Asset with source/cooked/staged cleanup; awaiting manual acceptance).
+Milestone 47 is complete and merged. Milestone 49 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -140,8 +140,8 @@ M46 recovers each active Dynamic Box whose runtime Jolt body center Y is
 strictly below `active.killPlane` back to its currently applied authored
 transform, with identity orientation and zero linear/angular velocity. Recovery
 is per body and does not rebuild PhysicsWorld or mutate authoring state.
-Do not add Undo/Redo, a probe framework, Level Format v2, a Content
-Browser, Static Props, or Milestone 48.
+Do not add Undo/Redo, a probe framework, Level Format v2, Static Props,
+or Milestone 49.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -170,5 +170,9 @@ for those boxes without mutating authored state. M47 adds Development
 `game/assets/source/models/<filename>.glb` with project-relative identity
 `models/<filename>.glb`. Collision never overwrites. Import does not edit
 the level, cook, or stage; the next step is the existing Cook / Stage
-workflow. Debug has the visual editor but cannot author. Release has no
-editor.
+workflow. M48 adds a Development Content Browser over that derived
+catalog (search/filter, refresh, the same import request, and confirmed
+Delete Asset that removes canonical source plus matching cooked/staged
+copies). Browser selection is not scene selection and does not instantiate
+a level object. Debug has the visual editor but cannot author. Release has
+no editor.

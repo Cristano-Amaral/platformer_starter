@@ -30,7 +30,9 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "assets/StaticGlbImport.h"
+#include "assets/StaticModelDelete.h"
 #include "editor/AuthoringPaths.h"
+#include "editor/ContentBrowser.h"
 #include "editor/CookStageReloadWorkflow.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
@@ -1550,6 +1552,10 @@ void Application::SetLevelEditorActive(bool active)
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         editor::CancelPlacementSession(
             levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        editor::RefreshContentBrowser(
+            levelEditorState.contentBrowser, editor::AuthoringSourceRoot());
+#endif
     }
     if (!active && levelEditorState.active)
     {
@@ -1623,13 +1629,70 @@ void Application::ImportStaticGlbAsset()
         return;
     }
 
-    assets::StaticModelCatalog catalog;
-    const assets::StaticGlbImportResult imported =
-        assets::ImportStaticGlb(selected.path, sourceRoot, &catalog);
+    const assets::StaticGlbImportResult imported = assets::ImportStaticGlb(
+        selected.path, sourceRoot, &levelEditorState.contentBrowser.catalog);
+    if (assets::StaticGlbImportSucceeded(imported.status))
+    {
+        editor::SelectContentBrowserIdentity(
+            levelEditorState.contentBrowser, imported.canonicalIdentity);
+        levelEditorState.contentBrowser.statusMessage = imported.message;
+    }
     editorToolRunner.ReportLocalResult(
         editor::EditorToolKind::ImportStaticGlb,
         assets::StaticGlbImportSucceeded(imported.status),
         imported.message);
+    levelEditorState.workspace.showToolOutput = true;
+#endif
+}
+
+void Application::DeleteContentBrowserAsset()
+{
+    if (editorToolRunner.IsRunning() || cookStageReload.IsPending())
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::DeleteStaticModel,
+            false,
+            "error: a tool job is already running.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    editorToolRunner.ReportLocalResult(
+        editor::EditorToolKind::DeleteStaticModel,
+        false,
+        "error: static-model delete is unavailable in this configuration.");
+    levelEditorState.workspace.showToolOutput = true;
+#else
+    const std::filesystem::path sourceRoot = editor::AuthoringSourceRoot();
+    const std::filesystem::path repositoryRoot = editor::RepositoryRoot();
+    if (sourceRoot.empty() || repositoryRoot.empty())
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::DeleteStaticModel,
+            false,
+            "error: authoring source root or repository root is unavailable.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+    assets::StaticModelDeleteRoots roots{};
+    roots.sourceRoot = sourceRoot;
+    roots.cookedRoot = editor::CookedAssetsRoot(repositoryRoot);
+    roots.stagedRoots = editor::AuthorizedStaticModelStagedRoots(repositoryRoot);
+    const std::string identity = levelEditorState.contentBrowser.selectedIdentity;
+    const assets::StaticModelDeleteResult deleted =
+        assets::DeleteStaticModel(identity, roots, &levelEditorState.contentBrowser.catalog);
+    editor::RefreshContentBrowser(levelEditorState.contentBrowser, sourceRoot);
+    if (assets::StaticModelDeleteSucceeded(deleted.status))
+    {
+        editor::ClearContentBrowserSelection(levelEditorState.contentBrowser);
+    }
+    levelEditorState.contentBrowser.statusMessage = deleted.message;
+    editorToolRunner.ReportLocalResult(
+        editor::EditorToolKind::DeleteStaticModel,
+        assets::StaticModelDeleteSucceeded(deleted.status),
+        deleted.message);
     levelEditorState.workspace.showToolOutput = true;
 #endif
 }
@@ -1676,6 +1739,9 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         return StartCookStageAndReload();
     case editor::LevelEditorRequest::ImportStaticGlb:
         ImportStaticGlbAsset();
+        return true;
+    case editor::LevelEditorRequest::DeleteContentBrowserAsset:
+        DeleteContentBrowserAsset();
         return true;
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
