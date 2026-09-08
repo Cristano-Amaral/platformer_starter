@@ -210,6 +210,8 @@ const char* EditorToolKindName(EditorToolKind kind)
         return "Build Release";
     case EditorToolKind::BuildAll:
         return "Build All";
+    case EditorToolKind::ImportStaticGlb:
+        return "Import Static GLB";
     }
     return "Cook Assets";
 }

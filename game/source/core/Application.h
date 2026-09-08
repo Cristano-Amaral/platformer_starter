@@ -44,6 +44,7 @@ private:
     bool ReloadRuntimeLevelFromStaged();
     bool StartCookStageAndReload();
     void FinishCookStageAndReloadIfReady();
+    void ImportStaticGlbAsset();
     void ResetGameplayAfterCommittedLevel();
     void SaveLevelEditorSource();
 #endif

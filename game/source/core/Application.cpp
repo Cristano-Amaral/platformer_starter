@@ -29,6 +29,7 @@ static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "assets/StaticGlbImport.h"
 #include "editor/AuthoringPaths.h"
 #include "editor/CookStageReloadWorkflow.h"
 #include "editor/EditorCamera.h"
@@ -42,6 +43,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/LevelEditor.h"
 #include "editor/AuthoredLifecycleCommands.h"
 #include "editor/RuntimeLevelReload.h"
+#include "platform/OpenFileDialog.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
 
@@ -1562,6 +1564,76 @@ void Application::SetLevelEditorActive(bool active)
     levelEditorState.active = active;
 }
 
+void Application::ImportStaticGlbAsset()
+{
+    // Import copies canonical source content. It must not touch workingCopy,
+    // active, savedSourceBaseline, Modified, Dirty, or Save status.
+    if (editorToolRunner.IsRunning() || cookStageReload.IsPending())
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportStaticGlb,
+            false,
+            "error: a tool job is already running.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    editorToolRunner.ReportLocalResult(
+        editor::EditorToolKind::ImportStaticGlb,
+        false,
+        "error: static GLB import is unavailable in this configuration.");
+    levelEditorState.workspace.showToolOutput = true;
+#else
+    const std::filesystem::path sourceRoot = editor::AuthoringSourceRoot();
+    if (sourceRoot.empty())
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportStaticGlb,
+            false,
+            "error: authoring source root is unavailable.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+    platform::OpenFileDialogRequest dialogRequest{};
+    dialogRequest.title = "Import Static GLB";
+    dialogRequest.filters.push_back({"Static GLB", "*.glb"});
+    const platform::OpenFileDialogResult selected = platform::OpenSingleFileDialog(dialogRequest);
+    if (selected.status == platform::OpenFileDialogStatus::Cancelled)
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportStaticGlb,
+            true,
+            "Import Static GLB cancelled. Canonical source was not changed.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+    if (selected.status != platform::OpenFileDialogStatus::Succeeded)
+    {
+        std::string message = "error: file selection failed.";
+        if (!selected.message.empty())
+        {
+            message += " ";
+            message += selected.message;
+        }
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportStaticGlb, false, message);
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+    assets::StaticModelCatalog catalog;
+    const assets::StaticGlbImportResult imported =
+        assets::ImportStaticGlb(selected.path, sourceRoot, &catalog);
+    editorToolRunner.ReportLocalResult(
+        editor::EditorToolKind::ImportStaticGlb,
+        assets::StaticGlbImportSucceeded(imported.status),
+        imported.message);
+    levelEditorState.workspace.showToolOutput = true;
+#endif
+}
+
 bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
 {
     // Edit > Add / Duplicate / Delete share this set. Listing cases here
@@ -1602,6 +1674,9 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         return ReloadRuntimeLevelFromStaged();
     case editor::LevelEditorRequest::CookStageAndReload:
         return StartCookStageAndReload();
+    case editor::LevelEditorRequest::ImportStaticGlb:
+        ImportStaticGlbAsset();
+        return true;
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         break;

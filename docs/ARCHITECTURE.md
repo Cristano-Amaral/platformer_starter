@@ -117,7 +117,7 @@ Cook from the repository root:
 
     python tools/cook_assets.py
 
-The cooker uses the Python standard library plus cooker-only **Pillow 12.3.0** (`python -m pip install -r tools/requirements.txt`; not a CMake or game runtime dependency). It processes known authored assets by explicit `KNOWN_ASSETS` identity, identifies content with SHA-256, skips rewriting an identical cooked file, and writes `game/assets/cooked/manifest.json` with portable relative paths (no absolute paths, timestamps, or machine names). Assets are not auto-discovered: a PNG under `source/textures/` is a runtime texture only if it is listed. Blender authoring PNGs (for example `test_textured_basecolor.png`) stay out of the cooker.
+The cooker uses the Python standard library plus cooker-only **Pillow 12.3.0** (`python -m pip install -r tools/requirements.txt`; not a CMake or game runtime dependency). Required assets remain the explicit `KNOWN_ASSETS` list. Milestone 47 additionally discovers valid `source/models/*.glb` files, cooks them as opaque `copy` after the same static-GLB compatibility checks used by Development import, and writes portable relative paths into `game/assets/cooked/manifest.json` (no absolute paths, timestamps, or machine names). PNGs under `source/textures/` stay explicit-list only. Blender authoring PNGs (for example `test_textured_basecolor.png`) stay out of the cooker.
 
 Standalone runtime PNGs (`kind: runtime_png`) use recipe `runtime_png.max512.lanczos.v1`: maximum dimension **512 px**, aspect ratio preserved, no upscale, no crop, Pillow `LANCZOS` when downscaling. Sources already within the limit are copied byte-for-byte. GLBs remain opaque byte copies; images embedded in `models/test_textured.glb` are not resized. Changing the recipe (max dimension, filter, or encoding) recooks even if source bytes are unchanged. See `tools/README.md`.
 
@@ -139,6 +139,8 @@ Logical identities:
 - Milestone 31 Level 01: `levels/level_01.level` (required; missing/invalid is fatal)
 
 The M18 Base Color PNG `game/assets/source/textures/test_textured_basecolor.png` is Blender authoring input only. It is not cooked or staged. The exported GLB must embed the image. See `docs/BLENDER_WORKFLOW.md`.
+
+Development `Assets > Import Static GLB` copies a compatible self-contained static `.glb` into `game/assets/source/models/<filename>.glb`. Canonical identity is the project-relative path `models/<filename>.glb`. The original external absolute path is import input only. Collision never overwrites. Import does not cook, stage, or mutate `workingCopy` / `active` / `savedSourceBaseline`. A derived `assets::StaticModelCatalog` discovers valid `source/models/*.glb` files (non-recursive, sorted by identity). It is not persisted and is not a level/scene object list. After import, the existing Cook Assets then Stage Runtime Assets path processes extra cooked `models/*.glb` files. Staging's required inventory remains `cmake/RuntimeAssets.cmake`; extra cooked models are discovered at staging time. Debug has no import UI. Release consumes only staged runtime assets.
 
 Editable Blender files live in `game/assets/source/blender/`. They are not cooked and are not runtime assets. See `docs/BLENDER_WORKFLOW.md`. The cooker copies exported GLBs unchanged. Blender is not a build or runtime dependency.
 
@@ -623,4 +625,4 @@ M44 separates cooker/physics **test coverage** from **canonical scene visibility
 
 **Body budget.** `kPhysicsMaxBodies` remains 64. Fixed bodies are 5 (ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body). Authored leftover is **59**, shared by elevated Platforms and Dynamic Boxes: `fixed + platforms + dynamicBoxes <= 64`. Canonical Level 01 static bodies stay 9 (ground + 6 platforms + 2 slopes) with 0 Dynamic Boxes.
 
-Status: Milestone 44 is CLOSED and merged. Milestone 45 is CLOSED and merged. Milestone 46 is implemented, awaiting manual acceptance. Milestone 47 has not started.
+Status: Milestone 44 is CLOSED and merged. Milestone 45 is CLOSED and merged. Milestone 46 is CLOSED and merged. Milestone 47 is implemented, awaiting manual acceptance. Milestone 48 has not started.

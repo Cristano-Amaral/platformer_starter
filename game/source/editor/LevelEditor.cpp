@@ -788,6 +788,20 @@ LevelEditorRequest DrawEditorMenuBar(
     }
 #endif
 
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (ImGui::BeginMenu("Assets"))
+    {
+        const bool toolsBusy = toolRunner.IsRunning() || cookStageReloadPending;
+        ImGui::BeginDisabled(!IsLevelAuthoringAvailable() || toolsBusy);
+        if (ImGui::MenuItem("Import Static GLB"))
+        {
+            request = LevelEditorRequest::ImportStaticGlb;
+        }
+        ImGui::EndDisabled();
+        ImGui::EndMenu();
+    }
+#endif
+
     if (ImGui::BeginMenu("Level"))
     {
         const bool authoringAvailable = IsLevelAuthoringAvailable();

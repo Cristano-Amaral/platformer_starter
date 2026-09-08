@@ -42,3 +42,11 @@ Milestone 18 textured model:
 - cooker kind: `copy` (opaque GLB; embedded images are not resized in Milestone 19)
 - visual-only; model collision is not supported
 - see `docs/BLENDER_WORKFLOW.md`
+
+Milestone 47 imported static models:
+- destination: `game/assets/source/models/<filename>.glb` (external filename preserved)
+- identity: `models/<filename>.glb` (project-relative; never an absolute path)
+- catalog: derived from valid `source/models/*.glb`; not a persistent database
+- collision: existing destination fails; never overwrite
+- cook/stage: extra models are cooked as `copy` and staged from cooked `models/*.glb`
+- import does not instantiate a level object

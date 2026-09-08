@@ -232,6 +232,12 @@ bool EditorToolRunner::TryStart(
         }
         sequence = {MakeBuildDevelopmentCommand(repositoryRoot)};
     }
+    else if (requestedKind == EditorToolKind::ImportStaticGlb)
+    {
+        return BeginFailed(
+            requestedKind,
+            "error: Import Static GLB is a local file copy, not an external tool job.\n");
+    }
     else
     {
         if (!IsCMakeBuildTreeConfigured(repositoryRoot))
@@ -252,6 +258,35 @@ bool EditorToolRunner::TryStart(
     {
         RefreshElapsed(elapsedSeconds, startTime);
         return true;
+    }
+    return true;
+}
+
+bool EditorToolRunner::ReportLocalResult(
+    EditorToolKind requestedKind,
+    bool succeeded,
+    std::string_view message)
+{
+    if (IsRunning())
+    {
+        return false;
+    }
+
+    process.Shutdown();
+    sequence.clear();
+    sequenceIndex = 0;
+    kind = requestedKind;
+    displayLabel = EditorToolKindName(requestedKind);
+    state = succeeded ? EditorToolJobState::Succeeded : EditorToolJobState::Failed;
+    hasExitCode = true;
+    exitCode = succeeded ? 0 : 1;
+    startTime = std::chrono::steady_clock::now();
+    elapsedSeconds = 0.0;
+    log.clear();
+    AppendOutput(message);
+    if (!message.empty() && message.back() != '\n')
+    {
+        AppendOutput("\n");
     }
     return true;
 }

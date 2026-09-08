@@ -585,6 +585,34 @@ int main()
     }
 #endif
 
+    Expect(
+        std::string(editor::EditorToolKindName(editor::EditorToolKind::ImportStaticGlb))
+            == "Import Static GLB",
+        "Import Static GLB display name");
+    {
+        editor::EditorToolRunner runner;
+        Expect(
+            runner.ReportLocalResult(
+                editor::EditorToolKind::ImportStaticGlb, true, "Imported static GLB: models/crate.glb"),
+            "local import success reports");
+        const editor::EditorToolJobSnapshot snapshot = runner.Snapshot();
+        Expect(snapshot.kind == editor::EditorToolKind::ImportStaticGlb, "local job kind");
+        Expect(snapshot.displayLabel == "Import Static GLB", "local job label");
+        Expect(snapshot.state == editor::EditorToolJobState::Succeeded, "local success state");
+        Expect(snapshot.hasExitCode && snapshot.exitCode == 0, "local success exit 0");
+        Expect(
+            snapshot.log.find("Imported static GLB: models/crate.glb") != std::string::npos,
+            "local success log");
+        Expect(
+            runner.ReportLocalResult(
+                editor::EditorToolKind::ImportStaticGlb, false, "destination already exists"),
+            "local import failure reports");
+        const editor::EditorToolJobSnapshot failed = runner.Snapshot();
+        Expect(failed.state == editor::EditorToolJobState::Failed, "local failure state");
+        Expect(failed.hasExitCode && failed.exitCode == 1, "local failure exit 1");
+        Expect(failed.log.find("destination already exists") != std::string::npos, "local failure log");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor tool runner test(s) failed.\n", gFailures);

@@ -44,6 +44,12 @@ add_executable(Platformer3D
     game/source/core/Vec3.h
     game/source/editor/AuthoringPaths.cpp
     game/source/editor/AuthoringPaths.h
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticGlbImport.cpp
+    game/source/assets/StaticGlbImport.h
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
     game/source/editor/AuthoredLifecycleCommands.cpp
     game/source/editor/AuthoredLifecycleCommands.h
     game/source/editor/AuthoredObjectLifecycle.cpp
@@ -135,12 +141,16 @@ if(WIN32)
     target_sources(Platformer3D PRIVATE
         game/source/platform/FileReplaceWindows.cpp
         game/source/platform/RuntimePathsWindows.cpp
+        game/source/platform/OpenFileDialog.h
         $<$<CONFIG:Development>:game/source/platform/WindowsHostProcess.cpp>
-        $<$<NOT:$<CONFIG:Development>>:game/source/platform/HostProcessStub.cpp>)
+        $<$<CONFIG:Development>:game/source/platform/WindowsOpenFileDialog.cpp>
+        $<$<NOT:$<CONFIG:Development>>:game/source/platform/HostProcessStub.cpp>
+        $<$<NOT:$<CONFIG:Development>>:game/source/platform/OpenFileDialogStub.cpp>)
 else()
     target_sources(Platformer3D PRIVATE
         game/source/platform/FileReplacePosix.cpp
         game/source/platform/HostProcessStub.cpp
+        game/source/platform/OpenFileDialogStub.cpp
         game/source/platform/RuntimePathsPosix.cpp)
 endif()
 
@@ -230,6 +240,31 @@ add_custom_command(TARGET Platformer3D POST_BUILD
         "-DPLATFORMER_STAGE_DEST=$<TARGET_FILE_DIR:Platformer3D>/assets"
         -P "${CMAKE_SOURCE_DIR}/cmake/StageRuntimeAssets.cmake"
     COMMENT "Staging cooked runtime assets next to the executable"
+)
+
+# Milestone 47: static GLB import, catalog discovery, and path-safety. Not shipped.
+# No window, raylib, Jolt, or ImGui. Uses a temporary source root so canonical
+# assets are not modified.
+add_executable(StaticGlbImportTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticGlbImport.cpp
+    game/source/assets/StaticGlbImport.h
+    game/source/assets/StaticGlbImportTest.cpp
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
+)
+target_include_directories(StaticGlbImportTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(StaticGlbImportTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(StaticGlbImportTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/test_static.glb"
+    PLATFORMER_TEST_STATIC_GLB)
+target_compile_definitions(StaticGlbImportTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
 
 # Level Format v1 parser/writer/reload-core test binary. Not shipped. Does not link

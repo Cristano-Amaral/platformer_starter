@@ -82,6 +82,9 @@ int main()
     Expect(!editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ApplyPreview), "Apply is not lifecycle");
     Expect(!editor::IsAuthoredLifecycleRequest(LevelEditorRequest::SaveLevelSource), "Save is not lifecycle");
     Expect(
+        !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ImportStaticGlb),
+        "Import Static GLB is not lifecycle");
+    Expect(
         editor::EditAddMenuRequest(EditorObjectKind::ElevatedPlatform) == LevelEditorRequest::AddPlatform,
         "Edit > Add > Platform maps to AddPlatform");
     Expect(

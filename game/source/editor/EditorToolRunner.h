@@ -59,6 +59,10 @@ public:
         const std::vector<EditorToolCommand>& steps,
         bool executionAvailable);
 
+    // Synchronous Development feedback (M47 import). Does not launch a process.
+    // Fails and leaves state unchanged while a job is running.
+    bool ReportLocalResult(EditorToolKind kind, bool succeeded, std::string_view message);
+
     void Poll();
     void Shutdown();
     void ClearLog();

@@ -30,7 +30,8 @@ No Blender.
 The cooker copies known authored files from `game/assets/source/` to
 `game/assets/cooked/` by explicit identity (`textures/test_checker.png`,
 `models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
-`levels/level_01.level`).
+`levels/level_01.level`) plus extra valid `source/models/*.glb` files discovered
+for Milestone 47 import. It does not glob every PNG under `source/textures/`.
 It does not glob every PNG under `source/textures/`. Skips a rewrite when the
 cooked bytes already match the current cook result, writes
 `game/assets/cooked/manifest.json`, and removes only previously manifested
@@ -77,6 +78,7 @@ Cooker tests (stdlib unittest, not pytest):
 ```
 python tools/test_cook_runtime_png.py
 python tools/test_cook_level_v1.py
+python tools/test_import_static_glb.py
 ```
 
 The oversized fixture `tools/fixtures/textures/test_large_checker.png` is

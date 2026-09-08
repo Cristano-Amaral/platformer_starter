@@ -30,6 +30,27 @@ if(DEFINED PLATFORMER_STAGE_ASSET_LIST AND NOT PLATFORMER_STAGE_ASSET_LIST STREQ
     set(PLATFORMER_RUNTIME_ASSETS ${PLATFORMER_STAGE_ASSET_LIST})
 else()
     include("${CMAKE_CURRENT_LIST_DIR}/RuntimeAssets.cmake")
+    # M47: imported static models are extra cooked files, not required inventory.
+    # Configure-time still uses only cmake/RuntimeAssets.cmake. Each staging run
+    # discovers additional cooked models/*.glb so Cook & Stage can ship imports
+    # without editing the required list.
+    file(GLOB _platformer_extra_cooked_models
+        RELATIVE "${PLATFORMER_COOKED_DIR}"
+        "${PLATFORMER_COOKED_DIR}/models/*.glb")
+    list(SORT _platformer_extra_cooked_models)
+    foreach(_platformer_extra_model IN LISTS _platformer_extra_cooked_models)
+        if(_platformer_extra_model STREQUAL "")
+            continue()
+        endif()
+        file(TO_CMAKE_PATH "${_platformer_extra_model}" _platformer_extra_model)
+    list(FIND PLATFORMER_RUNTIME_ASSETS "${_platformer_extra_model}" _platformer_extra_index)
+        if(_platformer_extra_index EQUAL -1)
+            list(APPEND PLATFORMER_RUNTIME_ASSETS "${_platformer_extra_model}")
+        endif()
+    endforeach()
+    unset(_platformer_extra_cooked_models)
+    unset(_platformer_extra_model)
+    unset(_platformer_extra_index)
 endif()
 
 message(STATUS "Staging runtime assets")

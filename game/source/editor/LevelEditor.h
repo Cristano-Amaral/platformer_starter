@@ -66,6 +66,7 @@ enum class LevelEditorRequest
     SaveLevelSource,
     ReloadRuntimeLevel,
     CookStageAndReload,
+    ImportStaticGlb,
     AddPlatform,
     AddCheckpoint,
     AddHazard,
@@ -187,10 +188,12 @@ void ResetEditorWorkspaceLayout(
     float viewportHeight);
 
 // F2-only Dear ImGui main menu bar (View / Transform / Level, plus Development
-// Edit and Build). The Edit menu emits lifecycle intents only; Application
-// mutates workingCopy through HandleAuthoredLifecycleRequest. Development
-// Level includes Reload Runtime Level. Development Build includes Cook, Stage
-// & Reload (intent only; Application orchestrates).
+// Edit, Assets, and Build). The Edit menu emits lifecycle intents only;
+// Application mutates workingCopy through HandleAuthoredLifecycleRequest.
+// Development Assets > Import Static GLB copies a compatible GLB into source
+// and does not mutate authored level state. Development Level includes Reload
+// Runtime Level. Development Build includes Cook, Stage & Reload (intent only;
+// Application orchestrates).
 LevelEditorRequest DrawEditorMenuBar(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,

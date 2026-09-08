@@ -20,6 +20,7 @@ enum class EditorToolKind
     BuildDevelopment,
     BuildRelease,
     BuildAll,
+    ImportStaticGlb,
 };
 
 enum class EditorSelfBuildPolicy

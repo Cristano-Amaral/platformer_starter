@@ -10,8 +10,10 @@ the current working directory.
 
 Standalone runtime PNGs (`kind: runtime_png`) are listed explicitly and may be
 downscaled with cooker-only Pillow. Blender authoring PNGs and `.blend` files
-are not cooker inputs. GLBs are opaque copies. Level v1 files (`kind: level_v1`)
-are UTF-8 text copies after a header check; C++ owns full grammar validation.
+are not cooker inputs. Known GLBs plus extra valid `source/models/*.glb` files
+are opaque copies after static-GLB compatibility checks. Level v1 files
+(`kind: level_v1`) are UTF-8 text copies after a header check; C++ owns full
+grammar validation.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ SCHEMA_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 
 # Asset kinds are declarative. Do not glob/discover every PNG under source/textures.
+# Extra valid source/models/*.glb files are discovered (M47). PNGs stay explicit.
 #   copy         = opaque byte copy (GLBs; embedded images are not inspected)
 #   runtime_png  = standalone runtime PNG (M19 policy applies to these only)
 KIND_COPY = "copy"
@@ -343,6 +346,150 @@ def remove_stale_outputs(
             ) from exc
 
 
+GLB_MAGIC = b"glTF"
+GLB_VERSION = 2
+GLB_JSON_CHUNK = 0x4E4F534A
+GLB_BIN_CHUNK = 0x004E4942
+STATIC_MODELS_DIRECTORY = "models"
+STATIC_GLB_SUFFIX = ".glb"
+STATIC_GLB_IMPORT_TEMP_SUFFIX = ".importing.tmp"
+
+
+def _glb_u32(data: bytes, offset: int) -> int:
+    return struct.unpack_from("<I", data, offset)[0]
+
+
+def validate_static_glb(data: bytes) -> None:
+    """Reject GLBs that are not self-contained static glTF 2.0 binaries.
+
+    Import is the Development gate; the cooker reuses the same checks so a
+    discovered models/*.glb cannot enter cooked output with different rules.
+    """
+    if len(data) < 12:
+        raise CookError("GLB is too small to contain a header")
+    if data[:4] != GLB_MAGIC:
+        raise CookError("not a GLB (missing glTF magic)")
+    version = _glb_u32(data, 4)
+    if version != GLB_VERSION:
+        raise CookError("unsupported GLB version (expected glTF 2.0 binary)")
+    declared = _glb_u32(data, 8)
+    if declared != len(data):
+        raise CookError("GLB length does not match file size")
+
+    offset = 12
+    json_text: str | None = None
+    saw_bin = False
+    while offset < len(data):
+        if offset + 8 > len(data):
+            raise CookError("truncated GLB chunk header")
+        chunk_length = _glb_u32(data, offset)
+        chunk_type = _glb_u32(data, offset + 4)
+        offset += 8
+        if offset + chunk_length > len(data):
+            raise CookError("truncated GLB chunk payload")
+        if chunk_length % 4 != 0:
+            raise CookError("GLB chunk length is not 4-byte aligned")
+        payload = data[offset : offset + chunk_length]
+        offset += chunk_length
+        if chunk_type == GLB_JSON_CHUNK:
+            if json_text is not None:
+                raise CookError("GLB contains more than one JSON chunk")
+            json_text = payload.decode("utf-8", errors="strict").rstrip(" \0")
+        elif chunk_type == GLB_BIN_CHUNK:
+            saw_bin = True
+        else:
+            raise CookError("GLB contains an unsupported chunk type")
+
+    if json_text is None:
+        raise CookError("GLB is missing the JSON chunk")
+    if not saw_bin:
+        raise CookError("static GLB must embed binary data in a BIN chunk")
+    try:
+        payload_json = json.loads(json_text)
+    except json.JSONDecodeError as exc:
+        raise CookError(f"GLB JSON is malformed: {exc}") from exc
+    if not isinstance(payload_json, dict):
+        raise CookError("GLB JSON chunk is not an object")
+    asset = payload_json.get("asset")
+    if not isinstance(asset, dict) or not str(asset.get("version", "")).startswith("2"):
+        raise CookError("GLB JSON is not glTF 2.x")
+    meshes = payload_json.get("meshes")
+    if not isinstance(meshes, list) or not meshes:
+        raise CookError("static GLB must contain at least one mesh")
+    animations = payload_json.get("animations")
+    if isinstance(animations, list) and animations:
+        raise CookError("animated GLB files are not supported")
+    skins = payload_json.get("skins")
+    if isinstance(skins, list) and skins:
+        raise CookError("skeletal / skinned GLB files are not supported")
+    for buffer in payload_json.get("buffers") or []:
+        if isinstance(buffer, dict) and buffer.get("uri"):
+            raise CookError("GLB must be self-contained (no external buffer URIs)")
+    for image in payload_json.get("images") or []:
+        if not isinstance(image, dict):
+            raise CookError("GLB images must be embedded")
+        uri = image.get("uri")
+        if uri:
+            if not str(uri).startswith("data:"):
+                raise CookError(
+                    "GLB images must be embedded (bufferView or data URI); "
+                    "external files are rejected"
+                )
+        elif "bufferView" not in image:
+            raise CookError(
+                "GLB images must be embedded (bufferView or data URI); "
+                "external files are rejected"
+            )
+
+
+def is_safe_static_glb_file_name(name: str) -> bool:
+    if not name or not name.endswith(STATIC_GLB_SUFFIX) or name.startswith("."):
+        return False
+    if STATIC_GLB_IMPORT_TEMP_SUFFIX in name:
+        return False
+    stem = name[: -len(STATIC_GLB_SUFFIX)]
+    if not stem or stem in {".", ".."}:
+        return False
+    if any(ch in name for ch in '\\/:*?"<>|') or any(ord(ch) < 32 for ch in name):
+        return False
+    if name[0] == " " or name[-1] == " " or stem[-1] in ". ":
+        return False
+    return True
+
+
+def discover_extra_static_glb_assets(sources: Path) -> list[dict[str, str]]:
+    """models/*.glb not already listed in KNOWN_ASSETS. Non-recursive."""
+    models = sources / STATIC_MODELS_DIRECTORY
+    extras: list[dict[str, str]] = []
+    if not models.is_dir():
+        return extras
+    for path in sorted(models.iterdir(), key=lambda item: item.name):
+        if not path.is_file():
+            continue
+        name = path.name
+        if not is_safe_static_glb_file_name(name):
+            continue
+        identity = portable_relative(f"{STATIC_MODELS_DIRECTORY}/{name}")
+        extras.append(
+            {
+                "id": identity,
+                "source": identity,
+                "cooked": identity,
+                "kind": KIND_COPY,
+            }
+        )
+    return extras
+
+
+def collect_cook_assets(sources: Path) -> list[dict[str, str]]:
+    merged: dict[str, dict[str, str]] = {
+        portable_relative(asset["id"]): dict(asset) for asset in KNOWN_ASSETS
+    }
+    for extra in discover_extra_static_glb_assets(sources):
+        merged.setdefault(extra["id"], extra)
+    return [merged[key] for key in sorted(merged)]
+
+
 def validate_level_v1_header(data: bytes) -> None:
     """Cheap header gate only. C++ ParseLevelText is the format authority."""
     try:
@@ -365,8 +512,8 @@ def validate_level_v1_header(data: bytes) -> None:
     raise CookError("level file must start with PLATFORMER_LEVEL 1")
 
 
-def cook() -> int:
-    root = repo_root()
+def cook(root: Path | None = None) -> int:
+    root = repo_root() if root is None else root
     sources = source_root(root)
     cooked = cooked_root(root)
     manifest_path = cooked / MANIFEST_NAME
@@ -379,7 +526,8 @@ def cook() -> int:
         return 1
 
     previous_manifest = load_previous_manifest(manifest_path)
-    current_ids = {asset["id"] for asset in KNOWN_ASSETS}
+    assets = collect_cook_assets(sources)
+    current_ids = {asset["id"] for asset in assets}
 
     try:
         remove_stale_outputs(cooked, previous_manifest, current_ids)
@@ -389,7 +537,7 @@ def cook() -> int:
 
     manifest_entries: list[dict[str, Any]] = []
 
-    for asset in KNOWN_ASSETS:
+    for asset in assets:
         identity = portable_relative(asset["id"])
         source_relative = portable_relative(asset["source"])
         cooked_relative = portable_relative(asset["cooked"])
@@ -439,6 +587,8 @@ def cook() -> int:
             else:
                 if kind == KIND_LEVEL_V1:
                     validate_level_v1_header(source_data)
+                if kind == KIND_COPY and identity.endswith(STATIC_GLB_SUFFIX):
+                    validate_static_glb(source_data)
                 cooked_data = source_data
                 wrote = write_bytes_if_changed(cooked_path, cooked_data)
                 manifest_entries.append(
