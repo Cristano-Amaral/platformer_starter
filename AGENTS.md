@@ -76,11 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 48 — Content Browser / Asset Browser v1
-(Development Content Browser over the M47 static-model catalog:
-visualize/find, search, refresh, Import Static GLB, confirmed Delete
-Asset with source/cooked/staged cleanup; awaiting manual acceptance).
-Milestone 47 is complete and merged. Milestone 49 has not started.
+Milestone 48.1 — Content Browser Thumbnails
+(Development Content Browser visual thumbnails over the M47/M48 static-model
+catalog: Thumbnail grid default, List mode, local derived PNG cache,
+deterministic framing, awaiting manual acceptance).
+Milestone 48 is complete. Milestone 49 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -174,5 +174,8 @@ workflow. M48 adds a Development Content Browser over that derived
 catalog (search/filter, refresh, the same import request, and confirmed
 Delete Asset that removes canonical source plus matching cooked/staged
 copies). Browser selection is not scene selection and does not instantiate
-a level object. Debug has the visual editor but cannot author. Release has
+a level object. M48.1 adds Development Content Browser thumbnails: default
+Thumbnails grid, optional List mode, local derived cache under
+`%LOCALAPPDATA%\Platformer3D\thumbnails\`, and Reset Editor Layout restoring
+Thumbnails. Debug has the visual editor but cannot author. Release has
 no editor.

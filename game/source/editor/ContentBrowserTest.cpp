@@ -3,6 +3,7 @@
 #include "assets/StaticModelCatalog.h"
 #include "assets/StaticModelDelete.h"
 #include "editor/ContentBrowser.h"
+#include "editor/ContentBrowserView.h"
 #include "world/LevelDefinition.h"
 
 #include <cstdio>
@@ -119,6 +120,10 @@ int main()
         ContentBrowserState browser{};
         editor::RefreshContentBrowser(browser, sourceRoot);
         Expect(browser.catalog.Count() == 0, "zero-asset catalog is valid");
+        Expect(
+            browser.viewMode == editor::kDefaultContentBrowserViewMode
+                && browser.viewMode == editor::ContentBrowserViewMode::Thumbnails,
+            "default view mode is Thumbnails");
         Expect(
             editor::FilterContentBrowserEntries(browser.catalog, "").empty(),
             "empty catalog filter is empty");

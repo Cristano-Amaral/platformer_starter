@@ -24,6 +24,11 @@
 
 #include <string>
 
+namespace render
+{
+class StaticModelThumbnailStore;
+}
+
 namespace editor
 {
 // Authored values M32 exposes. Nothing else is editable.
@@ -175,6 +180,7 @@ struct LevelEditorViewContext
     float viewportHeight = 720.0f;
     bool forceDefaultLayout = false;
     bool recoverOffscreenLayout = false;
+    render::StaticModelThumbnailStore* thumbnails = nullptr;
 };
 
 class EditorToolRunner;

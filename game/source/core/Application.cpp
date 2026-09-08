@@ -33,7 +33,9 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "assets/StaticModelDelete.h"
 #include "editor/AuthoringPaths.h"
 #include "editor/ContentBrowser.h"
+#include "editor/ContentBrowserView.h"
 #include "editor/CookStageReloadWorkflow.h"
+#include "editor/StaticModelThumbnailCache.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
 #include "editor/EditorNudge.h"
@@ -46,6 +48,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/AuthoredLifecycleCommands.h"
 #include "editor/RuntimeLevelReload.h"
 #include "platform/OpenFileDialog.h"
+#include "render/StaticModelThumbnail.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
 
@@ -1069,12 +1072,16 @@ int Application::Run()
                         EditorQuickToolbarVisible(levelEditorState)));
             }
         }
-        const editor::LevelEditorViewContext levelEditorView{
+        editor::LevelEditorViewContext levelEditorView{
             runtimeLevelPathDisplay.c_str(),
             movingPlatform.position,
             static_cast<float>(window.Width()),
             static_cast<float>(window.Height()),
             false};
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        thumbnailStore.BeginFrame();
+        levelEditorView.thumbnails = &thumbnailStore;
+#endif
         // Cook, Stage & Reload observation lives in Application::Run, not in
         // ImGui Draw, so F2 hide and panel visibility cannot cancel it.
         editorToolRunner.Poll();
@@ -1489,6 +1496,7 @@ void Application::Initialize()
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();
     levelEditorState.selectedBuildTarget = editor::LoadEditorBuildSelection();
+    levelEditorState.contentBrowser.viewMode = editor::LoadContentBrowserViewMode();
 #endif
     initialized = true;
 }
@@ -1687,6 +1695,8 @@ void Application::DeleteContentBrowserAsset()
     if (assets::StaticModelDeleteSucceeded(deleted.status))
     {
         editor::ClearContentBrowserSelection(levelEditorState.contentBrowser);
+        thumbnailStore.Forget(identity);
+        editor::RemoveThumbnailCacheEntry(identity, editor::ThumbnailCacheRoot());
     }
     levelEditorState.contentBrowser.statusMessage = deleted.message;
     editorToolRunner.ReportLocalResult(
@@ -2039,6 +2049,9 @@ void Application::Shutdown()
     input::SetMouseLookActive(false);
     cookStageReload.Cancel();
     editorToolRunner.Shutdown();
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    thumbnailStore.Shutdown();
+#endif
     debugUi.Shutdown();
 #endif
     physicsWorld.Shutdown();

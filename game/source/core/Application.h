@@ -20,6 +20,9 @@
 #include "editor/LevelEditor.h"
 #include "ui/debug/DebugUi.h"
 #endif
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+#include "render/StaticModelThumbnail.h"
+#endif
 
 #include <string>
 
@@ -72,6 +75,9 @@ private:
     editor::LevelEditorState levelEditorState;
     editor::EditorToolRunner editorToolRunner;
     editor::CookStageReloadWorkflow cookStageReload;
+#endif
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    render::StaticModelThumbnailStore thumbnailStore;
 #endif
     bool initialized = false;
     // Set only when an editor physics rebuild fails. Normal gameplay never

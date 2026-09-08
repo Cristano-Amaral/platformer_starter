@@ -62,6 +62,10 @@ add_executable(Platformer3D
     game/source/editor/EditorCamera.h
     game/source/editor/ContentBrowser.cpp
     game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserView.cpp
+    game/source/editor/ContentBrowserView.h
+    game/source/editor/StaticModelThumbnailCache.cpp
+    game/source/editor/StaticModelThumbnailCache.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorHierarchy.h
@@ -120,6 +124,8 @@ add_executable(Platformer3D
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
     game/source/render/CameraView.h
+    game/source/render/StaticModelThumbnail.cpp
+    game/source/render/StaticModelThumbnail.h
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
@@ -295,6 +301,52 @@ else()
     target_compile_options(ContentBrowserTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(ContentBrowserTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+)
+
+# Milestone 48.1: thumbnail cache identity, invalidation, framing, and view-mode
+# persistence. Not ImGui and not raylib.
+add_executable(ContentBrowserThumbnailTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticGlbImport.cpp
+    game/source/assets/StaticGlbImport.h
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
+    game/source/assets/StaticModelDelete.cpp
+    game/source/assets/StaticModelDelete.h
+    game/source/editor/ContentBrowser.cpp
+    game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserView.cpp
+    game/source/editor/ContentBrowserView.h
+    game/source/editor/ContentBrowserThumbnailTest.cpp
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/StaticModelThumbnailCache.cpp
+    game/source/editor/StaticModelThumbnailCache.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+)
+if(WIN32)
+    target_sources(ContentBrowserThumbnailTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(ContentBrowserThumbnailTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(ContentBrowserThumbnailTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ContentBrowserThumbnailTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ContentBrowserThumbnailTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(ContentBrowserThumbnailTest PRIVATE ole32 shell32 uuid)
+endif()
+target_compile_definitions(ContentBrowserThumbnailTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
 

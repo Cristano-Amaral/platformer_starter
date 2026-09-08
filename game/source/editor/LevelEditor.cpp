@@ -11,14 +11,21 @@
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "editor/ContentBrowser.h"
+#include "editor/ContentBrowserView.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
 #include "editor/EditorPlacement.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorToolRunner.h"
 #include "imgui.h"
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+#include "editor/StaticModelThumbnailCache.h"
+#include "render/StaticModelThumbnail.h"
+#endif
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -437,6 +444,10 @@ LevelEditorRequest DrawContentBrowser(
     if (ImGui::Button("Refresh"))
     {
         RefreshContentBrowser(state.contentBrowser, sourceRoot);
+        if (view.thumbnails != nullptr)
+        {
+            view.thumbnails->AllowRetryAll();
+        }
         state.contentBrowser.statusMessage = "Catalog refreshed from canonical source models.";
     }
     ImGui::SameLine();
@@ -455,8 +466,40 @@ LevelEditorRequest DrawContentBrowser(
     }
     ImGui::EndDisabled();
 
+    ImGui::SameLine();
+    ImGui::TextUnformatted("View");
+    ImGui::SameLine();
+    if (ImGui::RadioButton(
+            "Thumbnails", state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails))
+    {
+        state.contentBrowser.viewMode = ContentBrowserViewMode::Thumbnails;
+        SaveContentBrowserViewMode(state.contentBrowser.viewMode);
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("List", state.contentBrowser.viewMode == ContentBrowserViewMode::List))
+    {
+        state.contentBrowser.viewMode = ContentBrowserViewMode::List;
+        SaveContentBrowserViewMode(state.contentBrowser.viewMode);
+    }
+
     const std::vector<assets::StaticModelCatalogEntry> visible =
         FilterContentBrowserEntries(state.contentBrowser.catalog, state.contentBrowser.filterQuery);
+    const std::filesystem::path cacheRoot = ThumbnailCacheRoot();
+    if (view.thumbnails != nullptr
+        && state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails)
+    {
+        for (const assets::StaticModelCatalogEntry& entry : visible)
+        {
+            view.thumbnails->Ensure(
+                entry.canonicalIdentity, sourceRoot / entry.canonicalIdentity, cacheRoot);
+        }
+        std::string thumbnailFailure;
+        if (view.thumbnails->ConsumeLastFailure(thumbnailFailure))
+        {
+            state.contentBrowser.statusMessage = thumbnailFailure;
+        }
+    }
+
     if (state.contentBrowser.catalog.Count() == 0)
     {
         ImGui::Spacing();
@@ -468,6 +511,77 @@ LevelEditorRequest DrawContentBrowser(
     {
         ImGui::Spacing();
         ImGui::TextWrapped("No static models match the current search.");
+    }
+    else if (state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails)
+    {
+        constexpr float kThumbSize = 96.0f;
+        constexpr float kCellPad = 8.0f;
+        const float avail = ImGui::GetContentRegionAvail().x;
+        const int columns = std::max(1, static_cast<int>(avail / (kThumbSize + kCellPad * 2.0f)));
+        int column = 0;
+        if (ImGui::BeginChild("content-browser-thumbs", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None))
+        {
+            for (const assets::StaticModelCatalogEntry& entry : visible)
+            {
+                if (column > 0)
+                {
+                    ImGui::SameLine();
+                }
+                ImGui::PushID(entry.canonicalIdentity.c_str());
+                const bool selected =
+                    state.contentBrowser.selectedIdentity == entry.canonicalIdentity;
+                ImGui::BeginGroup();
+                if (ImGui::Selectable(
+                        "##thumb",
+                        selected,
+                        ImGuiSelectableFlags_AllowOverlap,
+                        ImVec2(kThumbSize, kThumbSize + ImGui::GetTextLineHeightWithSpacing())))
+                {
+                    SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
+                }
+                const ImVec2 cellMin = ImGui::GetItemRectMin();
+                ImGui::SetCursorScreenPos(ImVec2(cellMin.x, cellMin.y));
+                const unsigned int gpuId = view.thumbnails != nullptr
+                    ? view.thumbnails->TextureGpuId(entry.canonicalIdentity)
+                    : 0;
+                if (gpuId != 0)
+                {
+                    ImGui::Image(
+                        ImTextureRef(static_cast<ImTextureID>(static_cast<intptr_t>(gpuId))),
+                        ImVec2(kThumbSize, kThumbSize));
+                }
+                else
+                {
+                    ImVec2 dummyMin = ImGui::GetCursorScreenPos();
+                    ImGui::Dummy(ImVec2(kThumbSize, kThumbSize));
+                    ImVec2 dummyMax = ImGui::GetItemRectMax();
+                    const bool failed = view.thumbnails != nullptr
+                        && view.thumbnails->IsFailed(entry.canonicalIdentity);
+                    ImGui::GetWindowDrawList()->AddRectFilled(
+                        dummyMin,
+                        dummyMax,
+                        failed ? IM_COL32(88, 64, 64, 255) : IM_COL32(48, 52, 62, 255));
+                    ImGui::GetWindowDrawList()->AddRect(
+                        dummyMin, dummyMax, IM_COL32(120, 126, 140, 255));
+                    (void)dummyMin;
+                }
+                ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + kThumbSize);
+                ImGui::TextUnformatted(entry.displayName.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::EndGroup();
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip(
+                        "%s\n%s\n%s",
+                        entry.displayName.c_str(),
+                        entry.assetType.c_str(),
+                        entry.canonicalIdentity.c_str());
+                }
+                ImGui::PopID();
+                column = (column + 1) % columns;
+            }
+        }
+        ImGui::EndChild();
     }
     else if (ImGui::BeginTable(
                  "content-browser-assets",
@@ -756,6 +870,8 @@ void ResetEditorWorkspaceLayout(
     float viewportHeight)
 {
     ResetEditorWorkspaceVisibility(state.workspace);
+    state.contentBrowser.viewMode = kDefaultContentBrowserViewMode;
+    SaveContentBrowserViewMode(state.contentBrowser.viewMode);
     SnapKnownEditorWindowsToDefaults(viewportWidth, viewportHeight);
     state.forceDefaultLayoutFrames = 2;
 }

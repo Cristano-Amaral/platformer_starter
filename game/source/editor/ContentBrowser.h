@@ -4,6 +4,7 @@
 // second asset registry. StaticModelCatalog remains authority.
 
 #include "assets/StaticModelCatalog.h"
+#include "editor/ContentBrowserView.h"
 
 #include <filesystem>
 #include <string>
@@ -19,6 +20,7 @@ struct ContentBrowserState
     std::string selectedIdentity;
     std::string statusMessage;
     bool deleteConfirmOpen = false;
+    ContentBrowserViewMode viewMode = kDefaultContentBrowserViewMode;
 };
 
 bool ContentBrowserQueryMatches(std::string_view haystack, std::string_view query);

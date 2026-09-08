@@ -60,3 +60,14 @@ Milestone 48 Content Browser / Delete Asset:
 - generated copies are removed first; source last, so a failed generated cleanup is retry-safe
 - cancellation makes no filesystem changes
 - delete is not Cook/Stage, not a recycle bin, and not a level edit
+
+Milestone 48.1 Content Browser thumbnails:
+- derived editor visualization over the same M47 catalog; not a second registry
+- default view is Thumbnails; List remains available
+- view mode persists as `%LOCALAPPDATA%/Platformer3D/editor_content_browser_view.txt`
+- thumbnail cache is `%LOCALAPPDATA%/Platformer3D/thumbnails/` (`{hash}.png` + `{hash}.meta`)
+- cache is not source, not cooked, not staged, and not Git-tracked
+- invalidation uses schema version 1 plus source last-write time and size
+- generation is lazy and synchronous (at most one GLB per editor frame)
+- Delete Asset also removes that asset's mapped thumbnail cache entry
+- cancellation of Delete does not touch thumbnail cache
