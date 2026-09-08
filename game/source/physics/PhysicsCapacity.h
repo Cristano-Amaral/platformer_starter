@@ -11,18 +11,35 @@ namespace physics
 // streaming/LOD system.
 inline constexpr unsigned int kPhysicsMaxBodies = 64;
 
-// M44: the M23 cyan dynamic crate is no longer instantiated in the canonical
-// scene. Level Format v1 still stores dynamic_box for round-trip. Do not
-// recreate that body here without updating this count.
-inline constexpr bool kInstantiateCanonicalDynamicProbeBody = false;
-
 // ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body.
-// CharacterVirtual itself is not a Jolt body.
-inline constexpr int kPhysicsNonPlatformBodyCount = 5;
+// CharacterVirtual itself is not a Jolt body. Elevated platforms and
+// Dynamic Boxes share the leftover.
+inline constexpr int kPhysicsFixedBodyCount = 5;
+inline constexpr int kPhysicsNonPlatformBodyCount = kPhysicsFixedBodyCount;
 
-inline constexpr int kMaxPhysicsElevatedPlatformCount =
-    static_cast<int>(kPhysicsMaxBodies) - kPhysicsNonPlatformBodyCount;
+inline constexpr int kMaxAuthoredPhysicsBodies =
+    static_cast<int>(kPhysicsMaxBodies) - kPhysicsFixedBodyCount;
 
-static_assert(kPhysicsNonPlatformBodyCount == 5);
+// Historical name: max platforms when Dynamic Box count is 0.
+inline constexpr int kMaxPhysicsElevatedPlatformCount = kMaxAuthoredPhysicsBodies;
+
+inline constexpr bool AuthoredPhysicsBodiesWithinBudget(
+    int elevatedPlatformCount,
+    int dynamicBoxCount)
+{
+    if (elevatedPlatformCount < 0 || dynamicBoxCount < 0)
+    {
+        return false;
+    }
+    if (elevatedPlatformCount > kMaxAuthoredPhysicsBodies
+        || dynamicBoxCount > kMaxAuthoredPhysicsBodies)
+    {
+        return false;
+    }
+    return elevatedPlatformCount + dynamicBoxCount <= kMaxAuthoredPhysicsBodies;
+}
+
+static_assert(kPhysicsFixedBodyCount == 5);
+static_assert(kMaxAuthoredPhysicsBodies == 59);
 static_assert(kMaxPhysicsElevatedPlatformCount == 59);
 }

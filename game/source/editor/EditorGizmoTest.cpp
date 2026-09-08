@@ -105,7 +105,7 @@ int main()
         Expect(editor::IsGizmoSelection({EditorObjectKind::Hazard, 0}), "hazard translate gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::Collectible, 0}), "collectible translate gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal has no gizmo");
-        Expect(!editor::IsGizmoSelection({EditorObjectKind::DynamicBox, 0}), "cyan box no gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box has gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::None, 0}), "none is not gizmo");
     }
 
@@ -142,6 +142,24 @@ int main()
         Expect(
             editor::GetEditableSize(level, {EditorObjectKind::Checkpoint, 0}) == nullptr,
             "checkpoint has no resize gizmo size");
+        level.dynamicBoxes.push_back(
+            {{2.0f, 1.0f, 0.0f}, world::kDefaultDynamicBoxSize, world::kDefaultDynamicBoxMassKg});
+        core::Vec3* boxCenter =
+            editor::GetEditablePosition(level, {EditorObjectKind::DynamicBox, 0});
+        Expect(boxCenter != nullptr, "Dynamic Box has translate origin");
+        if (boxCenter != nullptr)
+        {
+            boxCenter->x = 4.0f;
+        }
+        Expect(NearlyEqual(level.dynamicBoxes[0].center.x, 4.0f), "Translate mutates working center");
+        core::Vec3* boxSize = editor::GetEditableSize(level, {EditorObjectKind::DynamicBox, 0});
+        Expect(boxSize != nullptr, "Dynamic Box has resize size");
+        if (boxSize != nullptr)
+        {
+            boxSize->x = 2.0f;
+        }
+        Expect(NearlyEqual(level.dynamicBoxes[0].size.x, 2.0f), "Resize mutates working size");
+        Expect(level.dynamicBoxes[0].massKg == 30.0f, "gizmo does not rewrite mass");
     }
 
     // ---- X/Y/Z constrained drag ----
@@ -527,6 +545,7 @@ int main()
         Expect(!editor::IsResizeSelection({EditorObjectKind::Checkpoint, 0}), "checkpoint is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Hazard, 0}), "hazard is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Collectible, 0}), "collectible is not resize");
+        Expect(editor::IsResizeSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box is resize");
         world::LevelDefinition level = MakeStubLevel();
         Expect(
             editor::GetEditableSize(level, {EditorObjectKind::Spawn, 0}) == nullptr,

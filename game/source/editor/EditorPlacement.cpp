@@ -16,6 +16,8 @@ const char* PlacementModeName(PlacementMode mode)
         return "Hazard";
     case PlacementMode::Collectible:
         return "Collectible";
+    case PlacementMode::DynamicBox:
+        return "Dynamic Box";
     default:
         return "None";
     }
@@ -33,6 +35,8 @@ EditorObjectKind KindFromPlacementMode(PlacementMode mode)
         return EditorObjectKind::Hazard;
     case PlacementMode::Collectible:
         return EditorObjectKind::Collectible;
+    case PlacementMode::DynamicBox:
+        return EditorObjectKind::DynamicBox;
     default:
         return EditorObjectKind::None;
     }
@@ -50,6 +54,8 @@ PlacementMode PlacementModeFromKind(EditorObjectKind kind)
         return PlacementMode::Hazard;
     case EditorObjectKind::Collectible:
         return PlacementMode::Collectible;
+    case EditorObjectKind::DynamicBox:
+        return PlacementMode::DynamicBox;
     default:
         return PlacementMode::None;
     }
@@ -67,6 +73,8 @@ LevelEditorRequest PlacementAddRequest(PlacementMode mode)
         return LevelEditorRequest::AddHazard;
     case PlacementMode::Collectible:
         return LevelEditorRequest::AddCollectible;
+    case PlacementMode::DynamicBox:
+        return LevelEditorRequest::AddDynamicBox;
     default:
         return LevelEditorRequest::None;
     }
@@ -84,6 +92,8 @@ core::Vec3 DefaultPlacementSize(PlacementMode mode)
         return kDefaultAddedHazardSize;
     case PlacementMode::Collectible:
         return kDefaultAddedCollectibleSize;
+    case PlacementMode::DynamicBox:
+        return world::kDefaultDynamicBoxSize;
     default:
         return {};
     }
@@ -101,6 +111,8 @@ core::Vec3 DefaultPlacementOffset(PlacementMode mode)
         return kDefaultAddedHazardOffset;
     case PlacementMode::Collectible:
         return kDefaultAddedCollectibleOffset;
+    case PlacementMode::DynamicBox:
+        return kDefaultAddedDynamicBoxOffset;
     default:
         return {};
     }

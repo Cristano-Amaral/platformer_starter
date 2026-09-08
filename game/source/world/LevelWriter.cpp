@@ -193,13 +193,16 @@ std::string SerializeLevelText(const LevelDefinition& level)
 
     AppendCenterSizeRecord(out, "goal", level.goal.center, level.goal.size);
 
-    out += "dynamic_box ";
-    AppendVec3(out, level.dynamicBox.center);
-    out += ' ';
-    AppendVec3(out, level.dynamicBox.size);
-    out += ' ';
-    AppendFloat(out, level.dynamicBox.mass);
-    out += '\n';
+    for (const DynamicBoxSpec& box : level.dynamicBoxes)
+    {
+        out += "dynamic_box ";
+        AppendVec3(out, box.center);
+        out += ' ';
+        AppendVec3(out, box.size);
+        out += ' ';
+        AppendFloat(out, box.massKg);
+        out += '\n';
+    }
 
     out += "camera ";
     AppendVec3(out, level.camera.offset);

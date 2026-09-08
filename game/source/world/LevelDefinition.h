@@ -5,6 +5,7 @@
 
 #include "core/Vec3.h"
 #include "world/CollectibleWorld.h"
+#include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
@@ -22,25 +23,20 @@ namespace world
 inline constexpr std::string_view kLevel01Id = "level_01";
 // Canonical Level 01 instance counts. Variable-count v1 files may differ.
 inline constexpr int kLevel01ElevatedPlatformCount = 6;
+inline constexpr int kLevel01DynamicBoxCount = 0;
 inline constexpr int kLevel01SlopeCount = 2;
 inline constexpr int kLevel01WalkableSlopeIndex = 0;
 inline constexpr int kLevel01SteepSlopeIndex = 1;
 
 // Minimum platforms so support_index_* can stay in range.
 inline constexpr int kMinElevatedPlatformCount = 1;
-// Physics-derived platform budget (Jolt body allocator minus non-platform
-// bodies). Must match physics::kMaxPhysicsElevatedPlatformCount (64 - 5 = 59).
+// Shared authored-body leftover (platforms + Dynamic Boxes). Must match
+// physics::kMaxAuthoredPhysicsBodies (64 - 5 = 59). Independent of that
+// leftover, a valid level still needs at least one platform.
 inline constexpr int kMaxElevatedPlatformCount = 59;
 
 static_assert(kMinElevatedPlatformCount >= 1);
 static_assert(kLevel01ElevatedPlatformCount <= kMaxElevatedPlatformCount);
-
-struct DynamicBoxSpec
-{
-    core::Vec3 center{};
-    core::Vec3 size{};
-    float mass = 0.0f;
-};
 
 // Level framing only. Follow dead-zone and sharpness stay on PlatformerCamera.
 struct LevelCameraSpec
@@ -71,7 +67,7 @@ struct LevelDefinition
     std::vector<HazardSpec> hazards{};
     std::vector<CollectibleSpec> collectibles{};
     LevelGoalSpec goal{};
-    DynamicBoxSpec dynamicBox{};
+    std::vector<DynamicBoxSpec> dynamicBoxes{};
     LevelCameraSpec camera{};
 };
 

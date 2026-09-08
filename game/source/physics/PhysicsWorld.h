@@ -4,6 +4,7 @@
 #include "physics/PhysicsCapacity.h"
 
 #include <memory>
+#include <vector>
 
 namespace world
 {
@@ -12,11 +13,16 @@ struct LevelDefinition;
 
 namespace physics
 {
-struct DynamicTestBox
+struct DynamicBoxRuntimeState
 {
-    core::Vec3 position{};
+    core::Vec3 center{};
+    core::Vec3 size{};
     core::Vec3 linearVelocity{};
-    core::Vec3 size{1.0f, 1.0f, 1.0f};
+    float massKg = 0.0f;
+    float rotationX = 0.0f;
+    float rotationY = 0.0f;
+    float rotationZ = 0.0f;
+    float rotationW = 1.0f;
     bool valid = false;
     bool active = false;
 };
@@ -88,7 +94,9 @@ public:
         core::Vec3 playerVisualSize);
     void ResetCharacter(const core::Vec3& visualCenter, const core::Vec3& velocity);
     void ResetMovingPlatform();
-    void ResetDynamicTestBox();
+    // Full run restart: authored pose, zero linear/angular velocity.
+    // Checkpoint respawn does not call this.
+    void ResetDynamicBoxes();
     void UpdateMovingPlatform(float deltaSeconds);
     void MovePlayer(const PlayerMoveCommand& command, float deltaSeconds);
     void Update(float deltaSeconds);
@@ -96,8 +104,8 @@ public:
 
     bool IsInitialized() const;
     int StaticBodyCount() const;
-    bool IsDynamicTestBodyValid() const;
-    DynamicTestBox GetDynamicTestBox() const;
+    int DynamicBodyCount() const;
+    std::vector<DynamicBoxRuntimeState> GetDynamicBoxes() const;
     MovingPlatformState GetMovingPlatform() const;
     PlayerPhysicsState GetPlayerPhysicsState() const;
 

@@ -1,6 +1,8 @@
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 
+#include "physics/PhysicsCapacity.h"
+
 #include <cmath>
 #include <cstddef>
 
@@ -39,13 +41,11 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     if (!Vec3Finite(level.initialSpawnVisualCenter) || !std::isfinite(level.killPlaneY)
         || !Vec3Finite(level.ground.center) || !PositiveSize(level.ground.size)
         || !PositiveSize(level.goal.size) || !Vec3Finite(level.goal.center)
-        || !PositiveSize(level.dynamicBox.size) || !Vec3Finite(level.dynamicBox.center)
         || !PositiveSize(level.movingPlatform.size) || !Vec3Finite(level.camera.offset))
     {
         return false;
     }
-    if (!std::isfinite(level.dynamicBox.mass) || !(level.dynamicBox.mass > 0.0f)
-        || !std::isfinite(level.camera.fieldOfViewY) || !(level.camera.fieldOfViewY > 0.0f)
+    if (!std::isfinite(level.camera.fieldOfViewY) || !(level.camera.fieldOfViewY > 0.0f)
         || !(level.camera.fieldOfViewY < 180.0f))
     {
         return false;
@@ -61,7 +61,8 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
         return false;
     }
     const int platformCount = static_cast<int>(level.elevatedPlatforms.size());
-    if (level.elevatedPlatforms.size() > static_cast<std::size_t>(kMaxElevatedPlatformCount))
+    if (!physics::AuthoredPhysicsBodiesWithinBudget(
+            platformCount, static_cast<int>(level.dynamicBoxes.size())))
     {
         return false;
     }
@@ -114,6 +115,13 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    for (const DynamicBoxSpec& box : level.dynamicBoxes)
+    {
+        if (!DynamicBoxSpecIsValid(box))
+        {
+            return false;
+        }
+    }
 
     return true;
 }
@@ -132,7 +140,8 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
     if (a.elevatedPlatforms.size() != b.elevatedPlatforms.size()
         || a.checkpoints.size() != b.checkpoints.size()
         || a.hazards.size() != b.hazards.size()
-        || a.collectibles.size() != b.collectibles.size())
+        || a.collectibles.size() != b.collectibles.size()
+        || a.dynamicBoxes.size() != b.dynamicBoxes.size())
     {
         return false;
     }
@@ -180,6 +189,15 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             return false;
         }
     }
+    for (std::size_t index = 0; index < a.dynamicBoxes.size(); ++index)
+    {
+        if (!Vec3Equal(a.dynamicBoxes[index].center, b.dynamicBoxes[index].center)
+            || !Vec3Equal(a.dynamicBoxes[index].size, b.dynamicBoxes[index].size)
+            || a.dynamicBoxes[index].massKg != b.dynamicBoxes[index].massKg)
+        {
+            return false;
+        }
+    }
 
     return Vec3Equal(a.movingPlatform.size, b.movingPlatform.size)
         && a.movingPlatform.centerY == b.movingPlatform.centerY
@@ -189,9 +207,6 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         && a.movingPlatform.speed == b.movingPlatform.speed
         && a.movingPlatform.startX == b.movingPlatform.startX
         && Vec3Equal(a.goal.center, b.goal.center) && Vec3Equal(a.goal.size, b.goal.size)
-        && Vec3Equal(a.dynamicBox.center, b.dynamicBox.center)
-        && Vec3Equal(a.dynamicBox.size, b.dynamicBox.size)
-        && a.dynamicBox.mass == b.dynamicBox.mass
         && Vec3Equal(a.camera.offset, b.camera.offset)
         && a.camera.fieldOfViewY == b.camera.fieldOfViewY;
 }

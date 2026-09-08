@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 44 — Legacy Prototype Scene Cleanup
-(remove obsolete Level 01 scene probes; keep useful cooker/staging tests;
+Milestone 45 — Authored Dynamic Physics Objects
+(repeatable authored Dynamic Boxes; Jolt dynamic bodies; shared body budget;
 awaiting manual acceptance).
-Milestone 43 is complete and merged. Milestone 45 has not started.
+Milestone 44 is complete and merged. Milestone 46 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -128,14 +128,14 @@ default Development) that Run maps through EditorToolRunner. View > Quick Toolba
 shares workspace visibility. Reset Editor Layout restores toolbar visibility and
 does not reset the last build selection. The 3D viewport starts below menu+toolbar
 when the toolbar is visible.
-M44 removes the M15–M19 cooker-probe instances and the M23 cyan dynamic crate
+M44 removed the M15–M19 cooker-probe instances and the M23 cyan dynamic crate
 from the canonical runtime/editor scene. Source/cooked/staged test assets and
 their cooker/staging tests remain. Both authored slopes and the moving platform
-remain. `dynamic_box` stays in Level Format v1 for parser/writer compatibility;
-it is not a Hierarchy/Inspector scene object, not rendered, not picked, and not
-a Jolt body.
-Platform leftover is 59 (`kPhysicsMaxBodies` 64 minus 5 non-platform bodies).
-Do not add Undo/Redo, a probe framework, Level Format v2, or Milestone 45.
+remain. M45 turns `dynamic_box` into a repeatable authored Dynamic Box
+(`center`, `size`, `massKg`) with a real Jolt dynamic body. Canonical Level 01
+has 0 Dynamic Boxes. Shared leftover is 59 bodies for platforms plus Dynamic
+Boxes (`kPhysicsMaxBodies` 64 minus 5 fixed bodies).
+Do not add Undo/Redo, a probe framework, Level Format v2, or Milestone 46.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -156,4 +156,7 @@ in-process M39 reload. M41 lifecycle edits mutate `workingCopy` only and
 still require Apply Preview, then Save, then Cook, Stage & Reload.
 M42 placement still requires that same Apply / Save / Cook, Stage & Reload
 path. M43 placement and picking use the content viewport below the Quick Toolbar.
-M44 is implemented and awaiting manual acceptance.
+M44 is complete and merged. M45 adds repeatable authored Dynamic Boxes
+(Jolt dynamic bodies, mass in kg, shared platform+box leftover). Canonical
+Level 01 has 0 Dynamic Boxes. Debug has the visual editor but cannot author.
+Release has no editor.

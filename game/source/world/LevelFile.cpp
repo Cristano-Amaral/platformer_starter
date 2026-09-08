@@ -1,5 +1,7 @@
 #include "world/LevelFile.h"
 
+#include "physics/PhysicsCapacity.h"
+
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -166,13 +168,13 @@ struct ParseState
     bool seenSupportGoal = false;
     bool seenMovingPlatform = false;
     bool seenGoal = false;
-    bool seenDynamicBox = false;
     bool seenCamera = false;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
     std::vector<CheckpointSpec> checkpoints;
     std::vector<HazardSpec> hazards;
     std::vector<CollectibleSpec> collectibles;
+    std::vector<DynamicBoxSpec> dynamicBoxes;
 };
 
 bool RequireTokenCount(
@@ -520,18 +522,25 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "dynamic_box")
         {
-            if (!RequireSingleton(
-                    state.seenDynamicBox, failure, lineNumber, "duplicate dynamic_box")
-                || !RequireTokenCount(tokens, 8, failure, lineNumber))
+            if (!RequireTokenCount(tokens, 8, failure, lineNumber))
             {
                 return failure;
             }
-            if (!ParseVec3(tokens, 1, loaded.level.dynamicBox.center)
-                || !ParseVec3(tokens, 4, loaded.level.dynamicBox.size)
-                || !ParseFloatToken(tokens[7], loaded.level.dynamicBox.mass))
+            DynamicBoxSpec box{};
+            if (!ParseVec3(tokens, 1, box.center) || !ParseVec3(tokens, 4, box.size)
+                || !ParseFloatToken(tokens[7], box.massKg) || !DynamicBoxSpecIsValid(box))
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid dynamic_box");
             }
+            if (state.dynamicBoxes.size()
+                >= static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid,
+                    lineNumber,
+                    "dynamic_box count exceeds physics body capacity");
+            }
+            state.dynamicBoxes.push_back(box);
             continue;
         }
         if (keyword == "camera")
@@ -558,8 +567,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     }
     if (!state.seenId || !state.seenSpawn || !state.seenKillPlane || !state.seenGround
         || !state.seenSupportCp1 || !state.seenSupportCp2 || !state.seenSupportGoal
-        || !state.seenMovingPlatform || !state.seenGoal || !state.seenDynamicBox
-        || !state.seenCamera)
+        || !state.seenMovingPlatform || !state.seenGoal || !state.seenCamera)
     {
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "missing required record");
     }
@@ -576,6 +584,15 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.checkpoints = std::move(state.checkpoints);
     loaded.level.hazards = std::move(state.hazards);
     loaded.level.collectibles = std::move(state.collectibles);
+    loaded.level.dynamicBoxes = std::move(state.dynamicBoxes);
+
+    if (!physics::AuthoredPhysicsBodiesWithinBudget(
+            static_cast<int>(loaded.level.elevatedPlatforms.size()),
+            static_cast<int>(loaded.level.dynamicBoxes.size())))
+    {
+        return MakeStatus(
+            LoadLevelFileStatus::Invalid, lineNumber, "authored physics body capacity exceeded");
+    }
 
     if (!LevelDefinitionHasRequiredAuthoredContent(loaded.level))
     {

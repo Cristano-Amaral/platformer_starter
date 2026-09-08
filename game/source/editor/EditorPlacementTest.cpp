@@ -480,6 +480,32 @@ int main()
             "toolbar ImGui capture does not place");
     }
 
+    {
+        using editor::PlacementMode;
+        PlacementMode mode = PlacementMode::None;
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::DynamicBox);
+        Expect(mode == PlacementMode::DynamicBox, "click Dynamic Box enters placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::DynamicBox);
+        Expect(mode == PlacementMode::None, "click Dynamic Box again exits placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Platform);
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::DynamicBox);
+        Expect(mode == PlacementMode::DynamicBox, "click Dynamic Box switches from Platform");
+        Expect(
+            editor::KindFromPlacementMode(mode) == EditorObjectKind::DynamicBox,
+            "placement kind is Dynamic Box");
+        Expect(
+            editor::PlacementAddRequest(mode) == editor::LevelEditorRequest::AddDynamicBox,
+            "placement confirm is AddDynamicBox");
+        const editor::PlacementCandidate candidate =
+            editor::MakePlacementCandidate(PlacementMode::DynamicBox, {2.0f, 1.0f, 0.0f});
+        Expect(candidate.visible, "Dynamic Box candidate visible");
+        Expect(candidate.size.x == 1.0f && candidate.size.y == 1.0f && candidate.size.z == 1.0f,
+            "candidate uses default 1x1x1 size");
+        world::LevelDefinition working = MakeActiveLevel();
+        Expect(editor::AddDynamicBoxAt(working, {2.0f, 1.0f, 0.0f}).succeeded, "palette confirm Add");
+        Expect(working.dynamicBoxes[0].massKg == 30.0f, "placed mass is 30 kg");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor placement test(s) failed.\n", gFailures);

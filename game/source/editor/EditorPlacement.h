@@ -21,6 +21,7 @@ enum class PlacementMode
     Checkpoint,
     Hazard,
     Collectible,
+    DynamicBox,
 };
 
 // Transient, not authored, not Level Format.

@@ -324,6 +324,15 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Size X Y Z", collectible.size);
         }
         break;
+    case EditorObjectKind::DynamicBox:
+        if (state.selection.index < level.dynamicBoxes.size())
+        {
+            world::DynamicBoxSpec& box = level.dynamicBoxes[state.selection.index];
+            EditVec3("Center X Y Z", box.center);
+            EditVec3("Size X Y Z", box.size);
+            ImGui::InputFloat("Mass (kg)", &box.massKg, 0.0f, 0.0f, kFloatFormat);
+        }
+        break;
     case EditorObjectKind::Goal:
         ImGui::TextUnformatted("Read-only in M33.");
         ReadOnlyVec3("Center", level.goal.center);
@@ -375,6 +384,7 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Checkpoint", PlacementMode::Checkpoint, LevelEditorRequest::AddCheckpoint);
     paletteButton("Hazard", PlacementMode::Hazard, LevelEditorRequest::AddHazard);
     paletteButton("Collectible", PlacementMode::Collectible, LevelEditorRequest::AddCollectible);
+    paletteButton("Dynamic Box", PlacementMode::DynamicBox, LevelEditorRequest::AddDynamicBox);
 
     ImGui::Separator();
     if (PlacementModeIsActive(state.placementMode))
@@ -684,10 +694,10 @@ LevelEditorRequest DrawEditorMenuBar(
                     state.workingCopy,
                     state.selection,
                     gizmoDragging,
-                    LevelEditorRequest::AddPlatform));
+                    EditAddMenuRequest(EditorObjectKind::ElevatedPlatform)));
             if (ImGui::MenuItem("Platform"))
             {
-                request = LevelEditorRequest::AddPlatform;
+                request = EditAddMenuRequest(EditorObjectKind::ElevatedPlatform);
             }
             ImGui::EndDisabled();
             ImGui::BeginDisabled(
@@ -696,10 +706,10 @@ LevelEditorRequest DrawEditorMenuBar(
                     state.workingCopy,
                     state.selection,
                     gizmoDragging,
-                    LevelEditorRequest::AddCheckpoint));
+                    EditAddMenuRequest(EditorObjectKind::Checkpoint)));
             if (ImGui::MenuItem("Checkpoint"))
             {
-                request = LevelEditorRequest::AddCheckpoint;
+                request = EditAddMenuRequest(EditorObjectKind::Checkpoint);
             }
             ImGui::EndDisabled();
             ImGui::BeginDisabled(
@@ -708,10 +718,10 @@ LevelEditorRequest DrawEditorMenuBar(
                     state.workingCopy,
                     state.selection,
                     gizmoDragging,
-                    LevelEditorRequest::AddHazard));
+                    EditAddMenuRequest(EditorObjectKind::Hazard)));
             if (ImGui::MenuItem("Hazard"))
             {
-                request = LevelEditorRequest::AddHazard;
+                request = EditAddMenuRequest(EditorObjectKind::Hazard);
             }
             ImGui::EndDisabled();
             ImGui::BeginDisabled(
@@ -720,10 +730,22 @@ LevelEditorRequest DrawEditorMenuBar(
                     state.workingCopy,
                     state.selection,
                     gizmoDragging,
-                    LevelEditorRequest::AddCollectible));
+                    EditAddMenuRequest(EditorObjectKind::Collectible)));
             if (ImGui::MenuItem("Collectible"))
             {
-                request = LevelEditorRequest::AddCollectible;
+                request = EditAddMenuRequest(EditorObjectKind::Collectible);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::DynamicBox)));
+            if (ImGui::MenuItem("Dynamic Box"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::DynamicBox);
             }
             ImGui::EndDisabled();
             ImGui::EndMenu();

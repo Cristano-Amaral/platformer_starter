@@ -23,5 +23,4 @@ collectible 5 2.5 0 1 1.2 1
 collectible -4.5 4 0 1 1.2 1
 collectible -10 3.75 0 1 1.2 1
 goal -21 3.8 0 2 1.6 1.8
-dynamic_box 0 5 0 1 1 1 30
 camera 2 3.5 12 40

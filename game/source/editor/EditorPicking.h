@@ -29,8 +29,8 @@ struct EditorPickingWorldState
 {
     core::Vec3 movingPlatformCenter{};
     core::Vec3 movingPlatformSize{};
-    core::Vec3 dynamicBoxCenter{};
-    core::Vec3 dynamicBoxSize{};
+    std::vector<core::Vec3> dynamicBoxCenters{};
+    std::vector<core::Vec3> dynamicBoxSizes{};
 };
 
 struct PickingProxy

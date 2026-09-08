@@ -136,9 +136,7 @@ void DrawDebugMetrics(
         ImGui::Text("Collectibles: %d", snapshot.levelCollectibleCount);
         ImGui::Text("Goal present: %s", BoolText(snapshot.levelHasGoal));
         ImGui::Text("Moving platform present: %s", BoolText(snapshot.levelHasMovingPlatform));
-        ImGui::Text(
-            "Dynamic box authored: %s (not instantiated in canonical scene)",
-            BoolText(snapshot.levelHasDynamicBox));
+        ImGui::Text("Dynamic Boxes: %d", snapshot.levelDynamicBoxCount);
         ImGui::Text(
             "Camera offset: %.4f, %.4f, %.4f",
             snapshot.levelCameraOffset.x,
@@ -211,11 +209,13 @@ void DrawDebugMetrics(
     {
         ImGui::Text("Jolt initialized: %s", BoolText(snapshot.physicsInitialized));
         ImGui::Text("static greybox bodies: %d", snapshot.staticBodyCount);
+        ImGui::Text("authored Dynamic Box bodies: %d", snapshot.physicsDynamicBoxCount);
+        ImGui::Text("first Dynamic Box valid: %s", BoolText(snapshot.dynamicTestBodyValid));
         ImGui::Text(
-            "canonical dynamic probe instantiated: %s",
-            BoolText(snapshot.dynamicTestBodyValid));
-        ImGui::TextWrapped(
-            "M44 does not create the M23 cyan crate body. Level Format still stores dynamic_box.");
+            "first Dynamic Box position: %.4f, %.4f, %.4f",
+            snapshot.physicsTestBoxPosition.x,
+            snapshot.physicsTestBoxPosition.y,
+            snapshot.physicsTestBoxPosition.z);
     }
 
     if (ImGui::CollapsingHeader("Player Physics / Character", ImGuiTreeNodeFlags_DefaultOpen))

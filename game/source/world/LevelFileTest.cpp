@@ -1,5 +1,6 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/RuntimeLevelReload.h"
+#include "physics/PhysicsCapacity.h"
 #include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -71,8 +72,7 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.collectibles[1].center, {-4.5f, 4.0f, 0.0f})
         && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
         && Vec3Equal(level.goal.center, {-21.0f, 3.8f, 0.0f})
-        && level.dynamicBox.mass == 30.0f
-        && Vec3Equal(level.dynamicBox.center, {0.0f, 5.0f, 0.0f})
+        && level.dynamicBoxes.empty()
         && Vec3Equal(level.camera.offset, {2.0f, 3.5f, 12.0f})
         && level.camera.fieldOfViewY == 40.0f;
 }
@@ -321,8 +321,7 @@ int main()
             "moving_platform 4 0.4 3 1.3 0 6 -6 2.5 0"));
     ExpectInvalid(
         "invalid mass",
-        ReplaceFirstLineStartingWith(
-            canonical, "dynamic_box ", "dynamic_box 0 5 0 1 1 1 0"));
+        canonical + "dynamic_box 0 5 0 1 1 1 0\n");
     ExpectInvalid(
         "invalid FOV",
         ReplaceFirstLineStartingWith(canonical, "camera ", "camera 2 3.5 12 0"));
@@ -401,7 +400,7 @@ int main()
         CountRecords(written, "collectible") == world::kLevel01CollectibleCount,
         "writer collectible count");
     Expect(CountRecords(written, "goal") == 1, "writer goal count");
-    Expect(CountRecords(written, "dynamic_box") == 1, "writer dynamic_box count");
+    Expect(CountRecords(written, "dynamic_box") == 0, "writer dynamic_box count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
 
@@ -823,6 +822,107 @@ int main()
             tooManyPlatforms += "platform 0 1 0 1 1 1\n";
         }
         ExpectInvalid("platform count exceeds physics body capacity", tooManyPlatforms);
+
+        {
+            const std::string oneBox = canonical + "dynamic_box 2 1 0 1 1 1 30\n";
+            const world::ParseLevelFileResult one = world::ParseLevelText(oneBox);
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one dynamic_box loads");
+            Expect(one.level.dynamicBoxes.size() == 1, "one dynamic_box count");
+            Expect(one.level.dynamicBoxes[0].center.x == 2.0f, "one dynamic_box center x");
+            Expect(one.level.dynamicBoxes[0].massKg == 30.0f, "one dynamic_box default mass");
+            const std::string writtenOne = world::SerializeLevelText(one.level);
+            Expect(CountRecords(writtenOne, "dynamic_box") == 1, "writer one dynamic_box");
+            Expect(
+                world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
+                "one dynamic_box round trip");
+
+            const std::string twoBoxes =
+                canonical + "dynamic_box 2 1 0 1 1 1 30\ndynamic_box 4 1 0 1 1 1 5\n";
+            const world::ParseLevelFileResult two = world::ParseLevelText(twoBoxes);
+            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two dynamic_box loads");
+            Expect(two.level.dynamicBoxes.size() == 2, "two dynamic_box count");
+            Expect(two.level.dynamicBoxes[0].massKg == 30.0f, "encounter order first");
+            Expect(two.level.dynamicBoxes[1].massKg == 5.0f, "encounter order second");
+            Expect(
+                CountRecords(world::SerializeLevelText(two.level), "dynamic_box") == 2,
+                "writer two dynamic_box");
+
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 1 1 1 0\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero mass rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 1 1 1 -1\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative mass rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 1 1 1 nan\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN mass rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 1 1 1 inf\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Inf mass rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "dynamic_box 2 1 0 1 1 1 10000.1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "above-max mass rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 1 1 1 10000\n").status
+                    == world::LoadLevelFileStatus::Loaded,
+                "max mass accepted");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 0 1 1 30\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 -1 1 1 30\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 nan 1 1 30\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 inf 1 1 30\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Inf size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 0.12 0.12 0.12 30\n").status
+                    == world::LoadLevelFileStatus::Loaded,
+                "minimum extent accepted");
+            Expect(
+                world::ParseLevelText(canonical + "dynamic_box 2 1 0 0.119 1 1 30\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "below minimum extent rejected");
+
+            world::LevelDefinition saveAuthored = parsed.level;
+            world::DynamicBoxSpec authoredBox{};
+            authoredBox.center = {2.0f, 1.0f, 0.0f};
+            authoredBox.size = world::kDefaultDynamicBoxSize;
+            authoredBox.massKg = world::kDefaultDynamicBoxMassKg;
+            saveAuthored.dynamicBoxes.push_back(authoredBox);
+            const std::string saved = world::SerializeLevelText(saveAuthored);
+            Expect(saved.find("dynamic_box 2 ") != std::string::npos, "Save writes authored X=2");
+            Expect(saved.find("dynamic_box 8 ") == std::string::npos, "Save does not bake X=8");
+
+            world::LevelDefinition combined = parsed.level;
+            combined.elevatedPlatforms.resize(
+                static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies) - 2,
+                {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+            combined.dynamicBoxes.assign(
+                2, world::DynamicBoxSpec{{2.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f});
+            Expect(
+                world::LevelDefinitionHasRequiredAuthoredContent(combined),
+                "exact combined capacity is valid");
+            combined.dynamicBoxes.push_back(
+                {{6.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f});
+            Expect(
+                !world::LevelDefinitionHasRequiredAuthoredContent(combined),
+                "one body over combined capacity is invalid");
+        }
 
         std::error_code cleanupError;
         const std::filesystem::path reloadDir =

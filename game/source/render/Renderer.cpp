@@ -35,6 +35,7 @@ constexpr Color kPlayerColor{216, 96, 72, 255};
 constexpr Color kMovingPlatformColor{168, 132, 72, 255};
 constexpr Color kWalkableSlopeColor{132, 148, 92, 255};
 constexpr Color kSteepSlopeColor{148, 92, 84, 255};
+constexpr Color kDynamicBoxColor{158, 162, 170, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
 constexpr Color kCheckpointFutureBeacon{140, 148, 168, 255};
@@ -268,6 +269,38 @@ void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
     rlRotatef(slope.rotationZDegrees, 0.0f, 0.0f, 1.0f);
     DrawCube(Vector3{0.0f, 0.0f, 0.0f}, slope.size.x, slope.size.y, slope.size.z, fill);
     DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, slope.size.x, slope.size.y, slope.size.z, kWireColor);
+    rlPopMatrix();
+}
+
+void DrawRuntimeDynamicBox(const DynamicBoxDrawState& box, Color fill)
+{
+    if (!(box.size.x > 0.0f) || !(box.size.y > 0.0f) || !(box.size.z > 0.0f))
+    {
+        return;
+    }
+
+    float axisX = 0.0f;
+    float axisY = 1.0f;
+    float axisZ = 0.0f;
+    float degrees = 0.0f;
+    const float w = box.rotationW < -1.0f ? -1.0f : (box.rotationW > 1.0f ? 1.0f : box.rotationW);
+    const float sine = std::sqrt(std::max(0.0f, 1.0f - w * w));
+    if (sine > 1.0e-6f)
+    {
+        axisX = box.rotationX / sine;
+        axisY = box.rotationY / sine;
+        axisZ = box.rotationZ / sine;
+        degrees = 2.0f * std::acos(w) * (180.0f / 3.14159265358979323846f);
+    }
+
+    rlPushMatrix();
+    rlTranslatef(box.center.x, box.center.y, box.center.z);
+    if (degrees != 0.0f)
+    {
+        rlRotatef(degrees, axisX, axisY, axisZ);
+    }
+    DrawCube(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, fill);
+    DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, kWireColor);
     rlPopMatrix();
 }
 
@@ -604,6 +637,17 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
         {
             DrawPendingDeleteSolid(center, visualSize, kCollectibleFill);
         }
+    }
+    for (std::size_t index = 0; index < overlay.pendingDeleteDynamicBoxCenters.size(); ++index)
+    {
+        if (index >= overlay.pendingDeleteDynamicBoxSizes.size())
+        {
+            break;
+        }
+        DrawPendingDeleteSolid(
+            overlay.pendingDeleteDynamicBoxCenters[index],
+            overlay.pendingDeleteDynamicBoxSizes[index],
+            kDynamicBoxColor);
     }
     const auto drawPendingAuthoring = [&](bool selectedPass) {
         for (const DebugWorldOverlay::PendingAuthoringOverlayItem& item : overlay.pendingAuthoring)
@@ -974,8 +1018,7 @@ void Renderer::DrawWorld(
     const gameplay::Player& player,
     const CameraView& cameraView,
     const world::LevelDefinition& level,
-    core::Vec3 physicsTestBoxPosition,
-    core::Vec3 physicsTestBoxSize,
+    const std::vector<DynamicBoxDrawState>& dynamicBoxes,
     core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,
@@ -988,9 +1031,6 @@ void Renderer::DrawWorld(
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect)
 {
-    (void)physicsTestBoxPosition;
-    (void)physicsTestBoxSize;
-
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
     if (subViewport)
@@ -1021,6 +1061,14 @@ void Renderer::DrawWorld(
     }
 
     DrawGreyboxBox(movingPlatformPosition, movingPlatformSize, kMovingPlatformColor);
+    for (std::size_t index = 0; index < dynamicBoxes.size(); ++index)
+    {
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteDynamicBoxIndices, index))
+        {
+            continue;
+        }
+        DrawRuntimeDynamicBox(dynamicBoxes[index], kDynamicBoxColor);
+    }
     DrawOrientedGreyboxBox(
         level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],
         kWalkableSlopeColor);

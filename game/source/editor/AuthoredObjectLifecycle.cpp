@@ -1,5 +1,6 @@
 #include "editor/AuthoredObjectLifecycle.h"
 
+#include "physics/PhysicsCapacity.h"
 #include "world/LevelFile.h"
 
 #include <cmath>
@@ -95,6 +96,7 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::DynamicBox:
         return true;
     default:
         return false;
@@ -107,6 +109,8 @@ int CategoryMaxCount(EditorObjectKind kind)
     {
     case EditorObjectKind::ElevatedPlatform:
         return world::kMaxElevatedPlatformCount;
+    case EditorObjectKind::DynamicBox:
+        return physics::kMaxAuthoredPhysicsBodies;
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
@@ -128,6 +132,8 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.hazards.size();
     case EditorObjectKind::Collectible:
         return level.collectibles.size();
+    case EditorObjectKind::DynamicBox:
+        return level.dynamicBoxes.size();
     default:
         return 0;
     }
@@ -143,10 +149,16 @@ bool CategoryAtCountLimit(const world::LevelDefinition& level, EditorObjectKind 
     {
         return true;
     }
-    if (kind == EditorObjectKind::ElevatedPlatform
-        && CategoryCount(level, kind) >= static_cast<std::size_t>(world::kMaxElevatedPlatformCount))
+    if (kind == EditorObjectKind::ElevatedPlatform || kind == EditorObjectKind::DynamicBox)
     {
-        return true;
+        const int nextPlatforms = static_cast<int>(level.elevatedPlatforms.size())
+            + (kind == EditorObjectKind::ElevatedPlatform ? 1 : 0);
+        const int nextBoxes = static_cast<int>(level.dynamicBoxes.size())
+            + (kind == EditorObjectKind::DynamicBox ? 1 : 0);
+        if (!physics::AuthoredPhysicsBodiesWithinBudget(nextPlatforms, nextBoxes))
+        {
+            return true;
+        }
     }
     return false;
 }
@@ -167,6 +179,9 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::Collectible:
         pending.collectibles = true;
         break;
+    case EditorObjectKind::DynamicBox:
+        pending.dynamicBoxes = true;
+        break;
     default:
         break;
     }
@@ -186,6 +201,8 @@ bool CategoryHasStructuralPending(
         return pending.hazards;
     case EditorObjectKind::Collectible:
         return pending.collectibles;
+    case EditorObjectKind::DynamicBox:
+        return pending.dynamicBoxes;
     default:
         return false;
     }
@@ -205,6 +222,8 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.hazards;
     case EditorObjectKind::Collectible:
         return &map.collectibles;
+    case EditorObjectKind::DynamicBox:
+        return &map.dynamicBoxes;
     default:
         return nullptr;
     }
@@ -222,6 +241,8 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.hazards;
     case EditorObjectKind::Collectible:
         return &map.collectibles;
+    case EditorObjectKind::DynamicBox:
+        return &map.dynamicBoxes;
     default:
         return nullptr;
     }
@@ -250,6 +271,7 @@ void ResetStructuralIndexMap(
     FillIdentity(map.checkpoints, active.checkpoints.size());
     FillIdentity(map.hazards, active.hazards.size());
     FillIdentity(map.collectibles, active.collectibles.size());
+    FillIdentity(map.dynamicBoxes, active.dynamicBoxes.size());
 }
 
 void EnsureStructuralIndexMap(
@@ -259,7 +281,8 @@ void EnsureStructuralIndexMap(
     if (CategoryMapMatchesActive(map.elevatedPlatforms, active.elevatedPlatforms.size())
         && CategoryMapMatchesActive(map.checkpoints, active.checkpoints.size())
         && CategoryMapMatchesActive(map.hazards, active.hazards.size())
-        && CategoryMapMatchesActive(map.collectibles, active.collectibles.size()))
+        && CategoryMapMatchesActive(map.collectibles, active.collectibles.size())
+        && CategoryMapMatchesActive(map.dynamicBoxes, active.dynamicBoxes.size()))
     {
         return;
     }
@@ -404,6 +427,19 @@ PendingDeleteVisuals MakePendingDeleteVisuals(
         visuals.collectibleIndices.push_back(static_cast<int>(index));
         visuals.collectibleCenters.push_back(active.collectibles[index].center);
     }
+    const std::size_t dynamicBoxLimit =
+        active.dynamicBoxes.size() < map.dynamicBoxes.activeToWorking.size()
+        ? active.dynamicBoxes.size()
+        : map.dynamicBoxes.activeToWorking.size();
+    for (std::size_t index = 0; index < dynamicBoxLimit; ++index)
+    {
+        if (map.dynamicBoxes.activeToWorking[index] != kNoStructuralIndex)
+        {
+            continue;
+        }
+        visuals.dynamicBoxIndices.push_back(static_cast<int>(index));
+        visuals.dynamicBoxes.push_back(active.dynamicBoxes[index]);
+    }
     return visuals;
 }
 
@@ -541,6 +577,23 @@ LifecycleEditResult AddCollectibleAt(
     return Ok({EditorObjectKind::Collectible, workingCopy.collectibles.size() - 1});
 }
 
+LifecycleEditResult AddDynamicBoxAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::DynamicBox))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    world::DynamicBoxSpec box{};
+    box.center = ApplyWorldCenter(worldCenter, {});
+    box.size = world::kDefaultDynamicBoxSize;
+    box.massKg = world::kDefaultDynamicBoxMassKg;
+    workingCopy.dynamicBoxes.push_back(box);
+    return Ok({EditorObjectKind::DynamicBox, workingCopy.dynamicBoxes.size() - 1});
+}
+
 LifecycleEditResult AddPlatform(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor)
@@ -586,6 +639,18 @@ LifecycleEditResult AddCollectible(
         ApplyPlacementAnchor(
             placementAnchor,
             kDefaultAddedCollectibleOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddDynamicBox(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddDynamicBoxAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedDynamicBoxOffset,
             workingCopy.initialSpawnVisualCenter.z));
 }
 
@@ -637,6 +702,13 @@ LifecycleEditResult DuplicateSelected(
         OffsetX(copy.center, kLifecycleDuplicateOffsetX);
         workingCopy.collectibles.push_back(copy);
         return Ok({EditorObjectKind::Collectible, workingCopy.collectibles.size() - 1});
+    }
+    case EditorObjectKind::DynamicBox:
+    {
+        world::DynamicBoxSpec copy = workingCopy.dynamicBoxes[selection.index];
+        OffsetX(copy.center, kLifecycleDuplicateOffsetX);
+        workingCopy.dynamicBoxes.push_back(copy);
+        return Ok({EditorObjectKind::DynamicBox, workingCopy.dynamicBoxes.size() - 1});
     }
     default:
         break;
@@ -696,6 +768,10 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::Collectible:
         workingCopy.collectibles.erase(
             workingCopy.collectibles.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::DynamicBox:
+        workingCopy.dynamicBoxes.erase(
+            workingCopy.dynamicBoxes.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     default:
         return Fail(LifecycleEditStatus::UnsupportedType, selection);

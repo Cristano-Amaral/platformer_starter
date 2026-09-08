@@ -12,12 +12,15 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
+#include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 
+#include <cmath>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -84,7 +87,7 @@ bool ApplyCycle(physics::PhysicsWorld& world, const world::LevelDefinition& leve
     Expect(world.IsInitialized(), tag + ": initialized after Initialize");
     // Ground + 6 elevated platforms + 2 slopes.
     Expect(world.StaticBodyCount() == 9, tag + ": static body count");
-    Expect(!world.IsDynamicTestBodyValid(), tag + ": canonical dynamic probe is not instantiated");
+    Expect(world.DynamicBodyCount() == 0, tag + ": canonical Dynamic Boxes stay empty");
 
     if (!world.InitializePlayer(level.initialSpawnVisualCenter, world::kPlayerVisualSize))
     {
@@ -102,8 +105,8 @@ bool ApplyCycle(physics::PhysicsWorld& world, const world::LevelDefinition& leve
         tag + ": moving platform reset to authored startX");
     Expect(platformAtRebuild.direction == 1.0f, tag + ": moving platform direction reset");
 
-    const physics::DynamicTestBox boxAtRebuild = world.GetDynamicTestBox();
-    Expect(!boxAtRebuild.valid, tag + ": dynamic box remains uninstantiated after rebuild");
+    Expect(world.DynamicBodyCount() == static_cast<int>(level.dynamicBoxes.size()),
+        tag + ": Dynamic Box body count matches authored collection");
 
     SettleFrames(world, 30);
 
@@ -221,7 +224,7 @@ int main()
         Expect(
             live.GetMovingPlatform().position.x == moved.movingPlatform.startX,
             "TryRebuild resets moving platform to authored start");
-        Expect(!live.GetDynamicTestBox().valid, "TryRebuild does not instantiate the dynamic probe");
+        Expect(live.DynamicBodyCount() == 0, "canonical rebuild has zero Dynamic Box bodies");
 
         physics::PhysicsWorld probe;
         Expect(probe.Initialize(parsed.level), "second world Initialize while live exists");
@@ -335,6 +338,143 @@ int main()
                 || !rejected.InitializePlayer(
                     overBudget.initialSpawnVisualCenter, world::kPlayerVisualSize),
             "over-budget platform count is rejected by physics");
+    }
+
+    {
+        physics::PhysicsWorld boxWorld;
+        world::LevelDefinition withBox = parsed.level;
+        world::DynamicBoxSpec spec{};
+        // x=8 is over Ground, clear of the start-pose moving platform and of
+        // platform 0 (x=5). Authored y=2 is high enough to fall under gravity.
+        spec.center = {8.0f, 2.0f, 0.0f};
+        spec.size = {1.0f, 1.0f, 1.0f};
+        spec.massKg = 30.0f;
+        withBox.dynamicBoxes.push_back(spec);
+        Expect(boxWorld.Initialize(withBox), "Initialize with one Dynamic Box");
+        Expect(
+            boxWorld.InitializePlayer(withBox.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "InitializePlayer with Dynamic Box");
+        Expect(boxWorld.DynamicBodyCount() == 1, "one definition creates one dynamic body");
+        std::vector<physics::DynamicBoxRuntimeState> boxes = boxWorld.GetDynamicBoxes();
+        Expect(boxes.size() == 1 && boxes[0].valid, "runtime query has one valid box");
+        Expect(boxes[0].massKg == 30.0f, "authored mass maps to runtime");
+        Expect(boxes[0].size.x == 1.0f && boxes[0].size.y == 1.0f && boxes[0].size.z == 1.0f,
+            "authored size maps to runtime");
+        const core::Vec3 start = boxes[0].center;
+        for (int frame = 0; frame < 45; ++frame)
+        {
+            boxWorld.Update(kStepSeconds);
+        }
+        boxes = boxWorld.GetDynamicBoxes();
+        Expect(boxes[0].center.y < start.y - 0.2f, "gravity lowers the Dynamic Box");
+        Expect(boxes[0].center.y > withBox.ground.center.y, "Ground collision keeps the box above ground");
+        const float fallenY = boxes[0].center.y;
+        boxWorld.ResetCharacter(withBox.initialSpawnVisualCenter, {});
+        boxes = boxWorld.GetDynamicBoxes();
+        Expect(
+            std::fabs(boxes[0].center.y - fallenY) < 0.2f,
+            "checkpoint-style ResetCharacter does not reset Dynamic Boxes");
+
+        boxWorld.ResetDynamicBoxes();
+        boxes = boxWorld.GetDynamicBoxes();
+        Expect(
+            std::fabs(boxes[0].center.x - spec.center.x) < 0.05f
+                && std::fabs(boxes[0].center.y - spec.center.y) < 0.05f,
+            "reset restores authored pose");
+        Expect(
+            std::fabs(boxes[0].linearVelocity.x) < 0.05f
+                && std::fabs(boxes[0].linearVelocity.y) < 0.05f
+                && std::fabs(boxes[0].linearVelocity.z) < 0.05f,
+            "reset clears linear velocity");
+
+        const core::Vec3 authored = spec.center;
+        for (int frame = 0; frame < 30; ++frame)
+        {
+            boxWorld.Update(kStepSeconds);
+        }
+        boxes = boxWorld.GetDynamicBoxes();
+        Expect(std::fabs(boxes[0].center.y - authored.y) > 0.1f, "simulation moved the box");
+        Expect(withBox.dynamicBoxes[0].center.x == authored.x, "authored center remains X=8");
+
+        Expect(
+            boxWorld.TryRebuild(
+                withBox, withBox.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "rebuild after simulation");
+        boxes = boxWorld.GetDynamicBoxes();
+        Expect(
+            std::fabs(boxes[0].center.x - authored.x) < 0.05f
+                && std::fabs(boxes[0].center.y - authored.y) < 0.05f,
+            "rebuild restores authored pose");
+
+        world::LevelDefinition deleted = withBox;
+        deleted.dynamicBoxes.clear();
+        Expect(
+            boxWorld.TryRebuild(
+                deleted, deleted.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "delete + Apply removes body");
+        Expect(boxWorld.DynamicBodyCount() == 0, "no dynamic bodies after delete rebuild");
+        Expect(boxWorld.IsInitialized(), "world remains initialized after delete rebuild");
+
+        world::LevelDefinition preserved = withBox;
+        physics::PhysicsWorld failed;
+        Expect(failed.Initialize(preserved), "preserve-world Initialize");
+        Expect(
+            failed.InitializePlayer(preserved.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "preserve-world InitializePlayer");
+        world::LevelDefinition invalid = preserved;
+        invalid.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies) + 1,
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        Expect(
+            !failed.TryRebuild(
+                invalid, invalid.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "failed rebuild rejects over-budget level");
+        Expect(failed.IsInitialized(), "failed rebuild preserves previous world");
+        Expect(failed.DynamicBodyCount() == 1, "failed rebuild keeps previous Dynamic Box");
+
+        world::LevelDefinition mixed = parsed.level;
+        mixed.elevatedPlatforms.resize(50, {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        mixed.dynamicBoxes.assign(
+            9, world::DynamicBoxSpec{{2.0f, 2.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f});
+        physics::PhysicsWorld mixedWorld;
+        Expect(mixedWorld.Initialize(mixed), "50 platforms + 9 boxes Initialize");
+        Expect(
+            mixedWorld.InitializePlayer(mixed.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "50+9 InitializePlayer");
+        Expect(mixedWorld.DynamicBodyCount() == 9, "nine Dynamic Box bodies");
+        mixed.dynamicBoxes.push_back({{8.0f, 2.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f});
+        Expect(
+            !mixedWorld.TryRebuild(
+                mixed, mixed.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "50 platforms + 10 boxes exceeds shared budget");
+        Expect(mixedWorld.DynamicBodyCount() == 9, "over-budget rebuild keeps previous 9 boxes");
+    }
+
+    {
+        physics::PhysicsWorld pushWorld;
+        world::LevelDefinition pushLevel = parsed.level;
+        world::DynamicBoxSpec pushBox{};
+        pushBox.center = {1.4f, 0.5f, 0.0f};
+        pushBox.size = {1.0f, 1.0f, 1.0f};
+        pushBox.massKg = 5.0f;
+        pushLevel.dynamicBoxes.push_back(pushBox);
+        Expect(pushWorld.Initialize(pushLevel), "push Initialize");
+        Expect(
+            pushWorld.InitializePlayer(pushLevel.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "push InitializePlayer");
+        for (int frame = 0; frame < 90; ++frame)
+        {
+            pushWorld.UpdateMovingPlatform(kStepSeconds);
+            pushWorld.MovePlayer({4.0f, -1.0f}, kStepSeconds);
+            pushWorld.Update(kStepSeconds);
+        }
+        const std::vector<physics::DynamicBoxRuntimeState> pushed = pushWorld.GetDynamicBoxes();
+        Expect(
+            pushed.size() == 1 && pushed[0].center.x > pushBox.center.x + 0.05f,
+            "player contact can push a Dynamic Box");
+        Expect(
+            pushLevel.dynamicBoxes[0].center.x == 1.4f,
+            "push simulation does not rewrite authored center");
     }
 
     if (gFailures != 0)

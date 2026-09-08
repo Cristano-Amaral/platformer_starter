@@ -70,6 +70,7 @@ enum class LevelEditorRequest
     AddCheckpoint,
     AddHazard,
     AddCollectible,
+    AddDynamicBox,
     DuplicateSelected,
     DeleteSelected,
 };

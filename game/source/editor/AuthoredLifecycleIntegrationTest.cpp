@@ -6,9 +6,11 @@
 #include "editor/EditorPlacement.h"
 #include "editor/EditorSelection.h"
 #include "gameplay/CollectibleRunState.h"
+#include "physics/PhysicsCapacity.h"
 #include "world/LevelDefinition.h"
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -79,6 +81,28 @@ int main()
     Expect(editor::IsAuthoredLifecycleRequest(LevelEditorRequest::DeleteSelected), "delete is lifecycle");
     Expect(!editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ApplyPreview), "Apply is not lifecycle");
     Expect(!editor::IsAuthoredLifecycleRequest(LevelEditorRequest::SaveLevelSource), "Save is not lifecycle");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::ElevatedPlatform) == LevelEditorRequest::AddPlatform,
+        "Edit > Add > Platform maps to AddPlatform");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::Checkpoint) == LevelEditorRequest::AddCheckpoint,
+        "Edit > Add > Checkpoint maps to AddCheckpoint");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::Hazard) == LevelEditorRequest::AddHazard,
+        "Edit > Add > Hazard maps to AddHazard");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::Collectible) == LevelEditorRequest::AddCollectible,
+        "Edit > Add > Collectible maps to AddCollectible");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::DynamicBox) == LevelEditorRequest::AddDynamicBox,
+        "Edit > Add > Dynamic Box maps to AddDynamicBox");
+    Expect(
+        editor::IsAuthoredLifecycleRequest(editor::EditAddMenuRequest(EditorObjectKind::DynamicBox)),
+        "Edit Add Dynamic Box is owner-dispatched lifecycle");
+    Expect(
+        editor::PlacementAddRequest(editor::PlacementMode::DynamicBox)
+            == LevelEditorRequest::AddDynamicBox,
+        "Object Palette Dynamic Box still confirms AddDynamicBox");
 
     {
         const world::LevelDefinition active = MakeActiveLevel();
@@ -732,6 +756,197 @@ int main()
         state.placementMode = editor::PlacementMode::Hazard;
         editor::ClearPlacementMode(state.placementMode);
         Expect(state.placementMode == editor::PlacementMode::None, "Apply/Revert/Reload cancel helper");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(active.dynamicBoxes.empty(), "fixture starts with zero Dynamic Boxes");
+        Expect(HierarchyKindCount(active, EditorObjectKind::DynamicBox) == 0,
+            "empty collection has no Hierarchy Dynamic Box rows");
+
+        const LevelEditorRequest editAdd =
+            editor::EditAddMenuRequest(EditorObjectKind::DynamicBox);
+        Expect(editAdd == LevelEditorRequest::AddDynamicBox, "menu action is AddDynamicBox");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(true, active, {}, false, editAdd),
+            "Development can add Dynamic Box");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                false, active, {}, false, editAdd),
+            "Debug authoring cannot add Dynamic Box");
+
+        const core::Vec3 cameraAnchor{12.0f, 5.0f, -6.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(state, active, editAdd, true, cameraAnchor),
+            "Edit > Add > Dynamic Box reaches workingCopy mutation");
+        Expect(state.workingCopy.dynamicBoxes.size() == 1, "workingCopy gains exactly one Dynamic Box");
+        Expect(active.dynamicBoxes.empty(), "Edit Add does not mutate active");
+        Expect(
+            state.workingCopy.dynamicBoxes[0].size.x == world::kDefaultDynamicBoxSize.x
+                && state.workingCopy.dynamicBoxes[0].size.y == world::kDefaultDynamicBoxSize.y
+                && state.workingCopy.dynamicBoxes[0].size.z == world::kDefaultDynamicBoxSize.z,
+            "default size is 1,1,1");
+        Expect(
+            state.workingCopy.dynamicBoxes[0].massKg == world::kDefaultDynamicBoxMassKg,
+            "default mass is 30 kg");
+        Expect(
+            state.workingCopy.dynamicBoxes[0].center.x == cameraAnchor.x
+                && state.workingCopy.dynamicBoxes[0].center.y == cameraAnchor.y,
+            "Edit Add uses camera-region X/Y");
+        Expect(
+            state.workingCopy.dynamicBoxes[0].center.z == active.initialSpawnVisualCenter.z,
+            "Edit Add uses spawn-lane Z");
+        Expect(state.selection.kind == EditorObjectKind::DynamicBox, "new Dynamic Box is selected");
+        Expect(state.selection.index == 0, "selection uses new working index 0");
+        Expect(
+            editor::MappedActiveIndex(state.structuralMap, EditorObjectKind::DynamicBox, 0)
+                == editor::kNoStructuralIndex,
+            "pending Add has no active counterpart");
+        Expect(state.placementMode == editor::PlacementMode::None, "Edit Add does not enter palette mode");
+        Expect(state.modified, "pending Add is Modified");
+        Expect(
+            state.lastApplyStatus == editor::LevelEditorApplyStatus::NotAttempted,
+            "Edit Add does not Apply Preview / create Jolt bodies");
+
+        const std::vector<editor::PendingAuthoringVisual> pending =
+            editor::CollectPendingAuthoringVisuals(
+                active, state.workingCopy, state.structuralMap, state.selection);
+        Expect(
+            editor::PendingAuthoringContains(pending, EditorObjectKind::DynamicBox, 0),
+            "pending Add ghost exists");
+
+        bool hierarchyHasGroup = false;
+        for (const editor::HierarchyEntry& entry : editor::BuildHierarchyEntries(state.workingCopy))
+        {
+            if (entry.selection.kind == EditorObjectKind::DynamicBox && entry.selection.index == 0)
+            {
+                hierarchyHasGroup = std::strcmp(entry.group, "Dynamic Boxes") == 0;
+            }
+        }
+        Expect(hierarchyHasGroup, "0 -> 1 shows Dynamic Boxes / Dynamic Box 0");
+        Expect(
+            editor::IsEditableSelection(state.selection),
+            "Inspector path is enabled for Dynamic Box");
+        Expect(
+            editor::GetEditablePosition(state.workingCopy, state.selection) != nullptr,
+            "Inspector Center is available");
+        Expect(
+            editor::GetEditableSize(state.workingCopy, state.selection) != nullptr,
+            "Inspector Size is available");
+        Expect(state.workingCopy.dynamicBoxes[0].massKg == 30.0f, "Inspector Mass shows 30");
+
+        const std::size_t platformsBefore = active.elevatedPlatforms.size();
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::ElevatedPlatform),
+                true,
+                cameraAnchor),
+            "Edit > Add > Platform still works");
+        Expect(
+            state.workingCopy.elevatedPlatforms.size() == platformsBefore + 1,
+            "Platform Add still appends");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::Checkpoint),
+                true,
+                cameraAnchor),
+            "Edit > Add > Checkpoint still works");
+        Expect(state.workingCopy.checkpoints.size() == active.checkpoints.size() + 1,
+            "Checkpoint Add still appends");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::Hazard),
+                true,
+                cameraAnchor),
+            "Edit > Add > Hazard still works");
+        Expect(state.workingCopy.hazards.size() == active.hazards.size() + 1, "Hazard Add still appends");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::Collectible),
+                true,
+                cameraAnchor),
+            "Edit > Add > Collectible still works");
+        Expect(
+            state.workingCopy.collectibles.size() == active.collectibles.size() + 1,
+            "Collectible Add still appends");
+
+        editor::LevelEditorState paletteState{};
+        SeedEditor(paletteState, active);
+        editor::ApplyPaletteCategoryClick(paletteState.placementMode, editor::PlacementMode::DynamicBox);
+        Expect(
+            paletteState.placementMode == editor::PlacementMode::DynamicBox,
+            "Object Palette Dynamic Box still enters placement");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                paletteState,
+                active,
+                editor::PlacementAddRequest(paletteState.placementMode),
+                true,
+                {3.0f, 1.0f, 0.0f},
+                true),
+            "palette confirm still uses world-center AddDynamicBoxAt");
+        Expect(paletteState.workingCopy.dynamicBoxes.size() == 1, "palette confirm adds one box");
+        Expect(
+            paletteState.workingCopy.dynamicBoxes[0].center.x == 3.0f
+                && paletteState.workingCopy.dynamicBoxes[0].center.z == 0.0f,
+            "palette confirm does not snap to spawn.z lane");
+        Expect(active.dynamicBoxes.empty(), "palette confirm does not mutate active");
+
+        editor::LevelEditorState dupState{};
+        SeedEditor(dupState, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::DynamicBox),
+                true,
+                cameraAnchor),
+            "Add before Duplicate");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Dynamic Box request");
+        Expect(dupState.workingCopy.dynamicBoxes.size() == 2, "Duplicate appends Dynamic Box");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Dynamic Box request");
+        Expect(dupState.workingCopy.dynamicBoxes.size() == 1, "Delete removes working Dynamic Box");
+
+        world::LevelDefinition atLimit = active;
+        atLimit.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies),
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        editor::LevelEditorState limitState{};
+        SeedEditor(limitState, atLimit);
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                atLimit,
+                {},
+                false,
+                editor::EditAddMenuRequest(EditorObjectKind::DynamicBox)),
+            "Edit Add Dynamic Box disabled at shared capacity");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                limitState,
+                atLimit,
+                editor::EditAddMenuRequest(EditorObjectKind::DynamicBox),
+                true,
+                cameraAnchor),
+            "AtLimit still handled as lifecycle");
+        Expect(limitState.workingCopy.dynamicBoxes.empty(), "AtLimit does not append a Dynamic Box");
+        Expect(atLimit.dynamicBoxes.empty(), "AtLimit does not mutate active");
     }
 
     if (gFailures != 0)

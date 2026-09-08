@@ -40,7 +40,6 @@ world::LevelDefinition MakeStubLevel()
     level.movingPlatform.size = {4.0f, 0.4f, 3.0f};
     level.movingPlatform.centerY = 1.3f;
     level.movingPlatform.startX = 0.0f;
-    level.dynamicBox = {{0.0f, 5.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f};
     level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
     level.checkpoints.resize(static_cast<std::size_t>(world::kLevel01CheckpointCount));
     level.hazards.resize(static_cast<std::size_t>(world::kLevel01HazardCount));
@@ -51,7 +50,7 @@ world::LevelDefinition MakeStubLevel()
 
 int main()
 {
-    Expect(!physics::kInstantiateCanonicalDynamicProbeBody, "canonical dynamic probe is off");
+    Expect(physics::kPhysicsFixedBodyCount == 5, "fixed bodies are 5");
     Expect(physics::kPhysicsNonPlatformBodyCount == 5, "non-platform bodies are 5");
     Expect(physics::kMaxPhysicsElevatedPlatformCount == 59, "physics platform leftover is 59");
     Expect(world::kMaxElevatedPlatformCount == 59, "world platform leftover is 59");
@@ -63,7 +62,18 @@ int main()
             == static_cast<int>(physics::kPhysicsMaxBodies)
                 - physics::kPhysicsNonPlatformBodyCount,
         "leftover is max bodies minus non-platform count");
-    Expect(world::kLevel01SlopeCount == 2, "canonical slope count stays 2");
+    Expect(
+        physics::kMaxAuthoredPhysicsBodies == 59,
+        "shared authored-body leftover is 59");
+    Expect(
+        physics::AuthoredPhysicsBodiesWithinBudget(59, 0),
+        "59 platforms and 0 boxes fit");
+    Expect(
+        physics::AuthoredPhysicsBodiesWithinBudget(0, 59),
+        "0 platforms and 59 boxes fit");
+    Expect(
+        !physics::AuthoredPhysicsBodiesWithinBudget(59, 1),
+        "59 platforms and 1 box overflow");
     Expect(!render::kCanonicalSceneInstantiatesCookerProbes, "cooker probes are not in the scene");
 
     Expect(
@@ -85,10 +95,10 @@ int main()
     const world::LevelDefinition level = MakeStubLevel();
     Expect(
         !editor::IsValidSelection(level, {editor::EditorObjectKind::DynamicBox, 0}),
-        "DynamicBox cannot be selected");
+        "empty Dynamic Boxes collection is not selectable");
     Expect(
-        !editor::IsEditableSelection({editor::EditorObjectKind::DynamicBox, 0}),
-        "DynamicBox has no Inspector path");
+        editor::IsEditableSelection({editor::EditorObjectKind::DynamicBox, 0}),
+        "Dynamic Box has an Inspector path");
 
     const std::vector<editor::HierarchyEntry> hierarchy = editor::BuildHierarchyEntries(level);
     bool hierarchyHasDynamicBox = false;
@@ -132,7 +142,7 @@ int main()
             hierarchyHasSlope1 = true;
         }
     }
-    Expect(!hierarchyHasDynamicBox, "Hierarchy does not list Dynamic Cyan Box");
+    Expect(!hierarchyHasDynamicBox, "empty collection has no Dynamic Box hierarchy rows");
     Expect(hierarchyHasSpawn, "Hierarchy lists Player Spawn");
     Expect(hierarchyHasCamera, "Hierarchy lists Camera");
     Expect(hierarchyHasGround, "Hierarchy lists Ground");
@@ -146,7 +156,7 @@ int main()
     Expect(hierarchyHasGoal, "Hierarchy lists Goal");
     Expect(
         hierarchy.back().selection.kind == editor::EditorObjectKind::Goal,
-        "Hierarchy ends with Goal, not Dynamic Cyan Box");
+        "empty collection keeps Goal last");
 
     const editor::EditorPickingSet set =
         editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
@@ -170,12 +180,12 @@ int main()
     Expect(pickHasPlatform, "picking includes Platform");
     Expect(pickHasSlope, "picking includes Slope");
     Expect(pickHasMovingPlatform, "picking includes moving platform");
-    Expect(!pickHasDynamicBox, "picking excludes uninstantiated DynamicBox");
+    Expect(!pickHasDynamicBox, "empty collection has no Dynamic Box pick proxy");
 
     const editor::Ray3 atAuthoredCrate{{0.0f, 5.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
     Expect(
         editor::PickNearest(atAuthoredCrate, set).kind != editor::EditorObjectKind::DynamicBox,
-        "authored cyan-box center is not pickable");
+        "legacy cyan-box center is not pickable");
 
     const editor::Ray3 atSlope{{21.7f, 1.6732f, 8.0f}, {0.0f, 0.0f, -1.0f}};
     Expect(

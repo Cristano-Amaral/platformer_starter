@@ -35,7 +35,7 @@ struct DebugWorldOverlay
     // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
     struct PendingAuthoringOverlayItem
     {
-        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box
         bool selected = false;
         core::Vec3 boundsCenter{};
         core::Vec3 boundsSize{};
@@ -68,6 +68,9 @@ struct DebugWorldOverlay
     std::vector<world::HazardSpec> pendingDeleteHazards;
     std::vector<int> pendingDeleteCollectibleIndices;
     std::vector<core::Vec3> pendingDeleteCollectibleCenters;
+    std::vector<int> pendingDeleteDynamicBoxIndices;
+    std::vector<core::Vec3> pendingDeleteDynamicBoxCenters;
+    std::vector<core::Vec3> pendingDeleteDynamicBoxSizes;
     // Translation gizmo at the working-copy origin. hovered/active: 0 none,
     // 1 X, 2 Y, 3 Z (matches editor::EditorAxis).
     bool drawTranslationGizmo = false;
@@ -106,6 +109,16 @@ struct WorldViewRect
 // M44: cooker probes remain in cook/stage inventory but are not drawn or
 // loaded into the canonical Level 01 scene.
 inline constexpr bool kCanonicalSceneInstantiatesCookerProbes = false;
+
+struct DynamicBoxDrawState
+{
+    core::Vec3 center{};
+    core::Vec3 size{};
+    float rotationX = 0.0f;
+    float rotationY = 0.0f;
+    float rotationZ = 0.0f;
+    float rotationW = 1.0f;
+};
 
 class Renderer
 {
@@ -146,8 +159,7 @@ public:
         const gameplay::Player& player,
         const CameraView& cameraView,
         const world::LevelDefinition& level,
-        core::Vec3 physicsTestBoxPosition,
-        core::Vec3 physicsTestBoxSize,
+        const std::vector<DynamicBoxDrawState>& dynamicBoxes,
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,

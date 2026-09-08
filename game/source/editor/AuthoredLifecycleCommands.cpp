@@ -21,6 +21,8 @@ EditorObjectKind AddKindForRequest(LevelEditorRequest request)
         return EditorObjectKind::Hazard;
     case LevelEditorRequest::AddCollectible:
         return EditorObjectKind::Collectible;
+    case LevelEditorRequest::AddDynamicBox:
+        return EditorObjectKind::DynamicBox;
     default:
         return EditorObjectKind::None;
     }
@@ -38,6 +40,8 @@ const char* LifecycleCategoryLabel(EditorObjectKind kind)
         return "Hazard";
     case EditorObjectKind::Collectible:
         return "Collectible";
+    case EditorObjectKind::DynamicBox:
+        return "Dynamic Box";
     default:
         return "Object";
     }
@@ -60,6 +64,8 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
         case EditorObjectKind::Hazard:
         case EditorObjectKind::Collectible:
             return "Level file record limit reached.";
+        case EditorObjectKind::DynamicBox:
+            return "Physics body capacity reached.";
         default:
             return "Technical capacity reached.";
         }
@@ -94,6 +100,9 @@ LifecycleEditResult RunLifecycleMutation(
     case LevelEditorRequest::AddCollectible:
         return worldCenterPlacement ? AddCollectibleAt(workingCopy, placementAnchor)
                                     : AddCollectible(workingCopy, placementAnchor);
+    case LevelEditorRequest::AddDynamicBox:
+        return worldCenterPlacement ? AddDynamicBoxAt(workingCopy, placementAnchor)
+                                    : AddDynamicBox(workingCopy, placementAnchor);
     case LevelEditorRequest::DuplicateSelected:
         return DuplicateSelected(workingCopy, selection);
     case LevelEditorRequest::DeleteSelected:
@@ -116,6 +125,7 @@ void SetSuccessMessage(LevelEditorState& state, LevelEditorRequest request, Edit
     case LevelEditorRequest::AddCheckpoint:
     case LevelEditorRequest::AddHazard:
     case LevelEditorRequest::AddCollectible:
+    case LevelEditorRequest::AddDynamicBox:
         state.lastMessage = std::string(label) + " added.";
         return;
     case LevelEditorRequest::DuplicateSelected:
@@ -139,11 +149,31 @@ bool IsAuthoredLifecycleRequest(LevelEditorRequest request)
     case LevelEditorRequest::AddCheckpoint:
     case LevelEditorRequest::AddHazard:
     case LevelEditorRequest::AddCollectible:
+    case LevelEditorRequest::AddDynamicBox:
     case LevelEditorRequest::DuplicateSelected:
     case LevelEditorRequest::DeleteSelected:
         return true;
     default:
         return false;
+    }
+}
+
+LevelEditorRequest EditAddMenuRequest(EditorObjectKind kind)
+{
+    switch (kind)
+    {
+    case EditorObjectKind::ElevatedPlatform:
+        return LevelEditorRequest::AddPlatform;
+    case EditorObjectKind::Checkpoint:
+        return LevelEditorRequest::AddCheckpoint;
+    case EditorObjectKind::Hazard:
+        return LevelEditorRequest::AddHazard;
+    case EditorObjectKind::Collectible:
+        return LevelEditorRequest::AddCollectible;
+    case EditorObjectKind::DynamicBox:
+        return LevelEditorRequest::AddDynamicBox;
+    default:
+        return LevelEditorRequest::None;
     }
 }
 
@@ -160,6 +190,7 @@ bool CanIssueAuthoredLifecycleRequest(
     case LevelEditorRequest::AddCheckpoint:
     case LevelEditorRequest::AddHazard:
     case LevelEditorRequest::AddCollectible:
+    case LevelEditorRequest::AddDynamicBox:
         return CanAddLifecycleObject(
             authoringAvailable, workingCopy, AddKindForRequest(request), gizmoDragging);
     case LevelEditorRequest::DuplicateSelected:
@@ -237,6 +268,7 @@ bool HandleAuthoredLifecycleRequest(
                 || request == LevelEditorRequest::AddCheckpoint
                 || request == LevelEditorRequest::AddHazard
                 || request == LevelEditorRequest::AddCollectible
+                || request == LevelEditorRequest::AddDynamicBox
                 || request == LevelEditorRequest::DuplicateSelected))
         {
             state.lastMessage = RejectionMessage(LifecycleEditStatus::AtLimit, affectedKind);

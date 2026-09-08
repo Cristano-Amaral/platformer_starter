@@ -167,8 +167,13 @@ EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& 
         appliedLevel.movingPlatform.centerY,
         appliedLevel.movingPlatform.centerZ};
     state.movingPlatformSize = appliedLevel.movingPlatform.size;
-    state.dynamicBoxCenter = appliedLevel.dynamicBox.center;
-    state.dynamicBoxSize = appliedLevel.dynamicBox.size;
+    state.dynamicBoxCenters.resize(appliedLevel.dynamicBoxes.size());
+    state.dynamicBoxSizes.resize(appliedLevel.dynamicBoxes.size());
+    for (std::size_t index = 0; index < appliedLevel.dynamicBoxes.size(); ++index)
+    {
+        state.dynamicBoxCenters[index] = appliedLevel.dynamicBoxes[index].center;
+        state.dynamicBoxSizes[index] = appliedLevel.dynamicBoxes[index].size;
+    }
     return state;
 }
 
@@ -255,8 +260,16 @@ EditorPickingSet BuildPickingSet(
     }
     AddProxy(
         set, EditorObjectKind::Goal, 0, appliedLevel.goal.center, appliedLevel.goal.size, 0.0f);
-    // M44: DynamicBox is authored Level Format data but is not instantiated
-    // in the canonical scene, so it must not intercept viewport picking.
+    for (std::size_t index = 0; index < appliedLevel.dynamicBoxes.size(); ++index)
+    {
+        const core::Vec3 center = index < worldState.dynamicBoxCenters.size()
+            ? worldState.dynamicBoxCenters[index]
+            : appliedLevel.dynamicBoxes[index].center;
+        const core::Vec3 size = index < worldState.dynamicBoxSizes.size()
+            ? worldState.dynamicBoxSizes[index]
+            : appliedLevel.dynamicBoxes[index].size;
+        AddProxy(set, EditorObjectKind::DynamicBox, index, center, size, 0.0f);
+    }
     return set;
 }
 

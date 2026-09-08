@@ -82,7 +82,7 @@ void FormatSelectionDisplayName(
         std::snprintf(buffer, bufferSize, "Goal");
         return;
     case EditorObjectKind::DynamicBox:
-        std::snprintf(buffer, bufferSize, "Dynamic Cyan Box");
+        std::snprintf(buffer, bufferSize, "Dynamic Box %zu", selection.index);
         return;
     }
     std::snprintf(buffer, bufferSize, "(none)");
@@ -107,7 +107,7 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
     case EditorObjectKind::Goal:
         return selection.index == 0;
     case EditorObjectKind::DynamicBox:
-        return false;
+        return selection.index < level.dynamicBoxes.size();
     case EditorObjectKind::ElevatedPlatform:
         return selection.index < level.elevatedPlatforms.size();
     case EditorObjectKind::Slope:
@@ -133,6 +133,7 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::DynamicBox:
         return true;
     default:
         return false;

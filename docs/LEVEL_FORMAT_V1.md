@@ -54,9 +54,10 @@ Blank lines are ignored. Leading/trailing spaces/tabs on a line are ignored.
 No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
-records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`) is the
-array order in `LevelDefinition`. Singleton records must appear exactly once.
-Unknown keywords and trailing unrecognized content are `Invalid`.
+records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
+`dynamic_box`) is the array order in `LevelDefinition`. Singleton records must
+appear exactly once. Unknown keywords and trailing unrecognized content are
+`Invalid`.
 
 ### Required singletons
 
@@ -70,7 +71,6 @@ support_index_cp2 <int>
 support_index_goal <int>
 moving_platform <sx> <sy> <sz> <centerY> <centerZ> <pathMinX> <pathMaxX> <speed> <startX>
 goal <cx> <cy> <cz> <sx> <sy> <sz>
-dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <mass>
 camera <ox> <oy> <oz> <fovY>
 ```
 
@@ -80,7 +80,7 @@ parser and writer accept any valid identifier.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 still uses 6 / 2 / 2 / 2 / 3, but v1 does **not** require those instance counts. Checkpoint / hazard / collectible counts are 0 or more; the parser does **not** impose a small design cap (the old 8/8/16 values were Phase A policy). Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count is additionally limited by the Jolt body allocator leftover (`kMaxElevatedPlatformCount` = 59). Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -88,6 +88,7 @@ slope <cx> <cy> <cz> <sx> <sy> <sz> <rotZ> # exactly 2
 checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
 hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
+dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 ```
 
 `support_index_*` are 0-based indices into the `platform` array (M30
@@ -100,12 +101,18 @@ Locale-independent `std::from_chars`. Whole token must parse. Reject overflow,
 NaN, Inf, leftover suffix (`1.0f`), and empty tokens. Integers for version and
 support indices.
 
-Positive sizes: each component finite and `> 0`.
+Positive sizes: each component finite and `> 0`. Dynamic Box extents must also
+be `>= kMinDynamicBoxExtent` (0.12), matching the editor authored-box minimum
+so Jolt never receives a zero-volume shape.
 Moving platform: size positive, path min `<` path max, speed `> 0`, startX
 inside `[pathMinX, pathMaxX]`.
-Dynamic box mass finite and `> 0`. Milestone 44 still requires `dynamic_box`
-for parser/writer round-trip; the canonical runtime does not create a Jolt
-body or draw the crate.
+Dynamic Box mass is kilograms: finite, `> 0`, and `<= kMaxDynamicBoxMassKg`
+(10000). Reject 0, negative, NaN, ±Inf, and values above that safety maximum.
+Do not store inverse mass. Zero, one, or many `dynamic_box` records are valid.
+A historical one-record file parses as a one-element collection. Canonical
+Level 01 intentionally has **zero** Dynamic Boxes (M45 removed the legacy
+probe line; this is not the historical EOL artifact). Save serializes authored
+`center`, never the live Jolt pose.
 
 Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
@@ -188,7 +195,7 @@ checkpoint          variable, checkpoints index order
 hazard              variable, hazards index order
 collectible         variable, collectibles index order
 goal
-dynamic_box
+dynamic_box         variable, dynamicBoxes index order
 camera
 ```
 

@@ -1,5 +1,6 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "gameplay/CollectibleRunState.h"
+#include "physics/PhysicsCapacity.h"
 #include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -73,7 +74,7 @@ int main()
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Goal), "goal unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Slope), "slope unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::MovingPlatform), "moving unsupported");
-    Expect(!editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic unsupported");
+    Expect(editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic box supported");
 
     {
         world::LevelDefinition working = MakeBaseLevel();
@@ -452,7 +453,7 @@ int main()
             "no moving delete");
         Expect(
             !editor::DeleteSelected(working, {EditorObjectKind::DynamicBox, 0}).succeeded,
-            "no dynamic delete");
+            "empty Dynamic Box delete is invalid");
         Expect(working.elevatedPlatforms.size() == platforms, "unsupported ops do not mutate");
     }
 
@@ -1125,6 +1126,52 @@ int main()
             working.elevatedPlatforms.size() == static_cast<std::size_t>(world::kMaxElevatedPlatformCount),
             "physics platform max unchanged after rejection");
         Expect(start < 17, "started below 17");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const editor::LifecycleEditResult added =
+            editor::AddDynamicBox(working, kTestPlacementA);
+        Expect(added.succeeded, "Add Dynamic Box");
+        Expect(working.dynamicBoxes.size() == 1, "one Dynamic Box after Add");
+        Expect(working.dynamicBoxes[0].massKg == world::kDefaultDynamicBoxMassKg, "default mass 30 kg");
+        Expect(
+            working.dynamicBoxes[0].size.x == world::kDefaultDynamicBoxSize.x, "default size x");
+        Expect(added.selection.kind == EditorObjectKind::DynamicBox, "Add selects Dynamic Box");
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelected(working, added.selection);
+        Expect(duplicated.succeeded, "Duplicate Dynamic Box");
+        Expect(working.dynamicBoxes.size() == 2, "two Dynamic Boxes after Duplicate");
+        Expect(
+            working.dynamicBoxes[1].center.x
+                == working.dynamicBoxes[0].center.x + editor::kLifecycleDuplicateOffsetX,
+            "Duplicate offsets +1 X");
+        working.dynamicBoxes[0].massKg = 5.0f;
+        Expect(working.dynamicBoxes[0].massKg == 5.0f, "Inspector mass edit is workingCopy only");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::DynamicBox, 1}).succeeded,
+            "Delete Dynamic Box");
+        Expect(working.dynamicBoxes.size() == 1, "one Dynamic Box after Delete");
+
+        world::LevelDefinition shared = MakeBaseLevel();
+        shared.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies) - 1,
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        Expect(
+            editor::AddDynamicBox(shared, kTestPlacementA).succeeded,
+            "one leftover body can add a Dynamic Box");
+        Expect(
+            !editor::AddPlatform(shared, kTestPlacementA).succeeded,
+            "shared budget blocks extra Platform");
+        Expect(
+            !editor::AddDynamicBox(shared, kTestPlacementB).succeeded,
+            "shared budget blocks extra Dynamic Box");
+        Expect(
+            editor::CategoryAtCountLimit(shared, EditorObjectKind::ElevatedPlatform),
+            "Platform AtLimit with shared budget");
+        Expect(
+            editor::CategoryAtCountLimit(shared, EditorObjectKind::DynamicBox),
+            "Dynamic Box AtLimit with shared budget");
     }
 
     if (gFailures != 0)

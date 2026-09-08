@@ -21,14 +21,15 @@ inline constexpr std::uintmax_t kMaxLevelFileBytes = 65536;
 inline constexpr std::size_t kMaxLevelLineLength = 512;
 inline constexpr std::size_t kMaxLevelLines = 256;
 // header + id + spawn + kill_plane + ground + 3 support indices + 2 slopes +
-// moving_platform + goal + dynamic_box + camera.
-inline constexpr int kLevelV1FixedRecordLineCount = 14;
+// moving_platform + goal + camera. Repeatable records are counted separately.
+inline constexpr int kLevelV1FixedRecordLineCount = 13;
 
 inline int CountLevelV1RecordLines(const LevelDefinition& level)
 {
     return kLevelV1FixedRecordLineCount + static_cast<int>(level.elevatedPlatforms.size())
         + static_cast<int>(level.checkpoints.size()) + static_cast<int>(level.hazards.size())
-        + static_cast<int>(level.collectibles.size());
+        + static_cast<int>(level.collectibles.size())
+        + static_cast<int>(level.dynamicBoxes.size());
 }
 
 enum class LoadLevelFileStatus

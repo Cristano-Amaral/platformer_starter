@@ -77,6 +77,44 @@ render::CameraView MakeGameplayCameraView(const gameplay::PlatformerCamera& came
     return view;
 }
 
+std::vector<render::DynamicBoxDrawState> MakeDynamicBoxDrawStates(
+    const std::vector<physics::DynamicBoxRuntimeState>& boxes)
+{
+    std::vector<render::DynamicBoxDrawState> draw;
+    draw.reserve(boxes.size());
+    for (const physics::DynamicBoxRuntimeState& box : boxes)
+    {
+        render::DynamicBoxDrawState item{};
+        item.center = box.center;
+        item.size = box.size;
+        item.rotationX = box.rotationX;
+        item.rotationY = box.rotationY;
+        item.rotationZ = box.rotationZ;
+        item.rotationW = box.rotationW;
+        draw.push_back(item);
+    }
+    return draw;
+}
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+editor::EditorPickingWorldState MakeRuntimePickingWorldState(
+    const physics::MovingPlatformState& movingPlatform,
+    const std::vector<physics::DynamicBoxRuntimeState>& boxes)
+{
+    editor::EditorPickingWorldState state{};
+    state.movingPlatformCenter = movingPlatform.position;
+    state.movingPlatformSize = movingPlatform.size;
+    state.dynamicBoxCenters.reserve(boxes.size());
+    state.dynamicBoxSizes.reserve(boxes.size());
+    for (const physics::DynamicBoxRuntimeState& box : boxes)
+    {
+        state.dynamicBoxCenters.push_back(box.center);
+        state.dynamicBoxSizes.push_back(box.size);
+    }
+    return state;
+}
+#endif
+
 bool RunTimeFormatScaffoldingOk()
 {
     char buffer[32]{};
@@ -451,13 +489,17 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.verticalDeadZone = gameplay::PlatformerCamera::kVerticalDeadZone;
     snapshot.followSharpness = gameplay::PlatformerCamera::kFollowSharpness;
 
-    const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
+    const std::vector<physics::DynamicBoxRuntimeState> dynamicBoxes = physicsWorld.GetDynamicBoxes();
     snapshot.physicsInitialized = physicsWorld.IsInitialized();
-    snapshot.physicsTestBoxPosition = testBox.position;
-    snapshot.physicsTestBoxLinearVelocity = testBox.linearVelocity;
-    snapshot.physicsTestBoxActive = testBox.active;
+    snapshot.physicsDynamicBoxCount = physicsWorld.DynamicBodyCount();
+    if (!dynamicBoxes.empty())
+    {
+        snapshot.physicsTestBoxPosition = dynamicBoxes[0].center;
+        snapshot.physicsTestBoxLinearVelocity = dynamicBoxes[0].linearVelocity;
+        snapshot.physicsTestBoxActive = dynamicBoxes[0].active;
+        snapshot.dynamicTestBodyValid = dynamicBoxes[0].valid;
+    }
     snapshot.staticBodyCount = physicsWorld.StaticBodyCount();
-    snapshot.dynamicTestBodyValid = testBox.valid;
 
     snapshot.characterVirtualInitialized = player.CharacterVirtualInitialized();
     snapshot.playerGroundSupport = GroundSupportName(player.GroundSupport());
@@ -586,8 +628,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.levelHasMovingPlatform = level.movingPlatform.size.x > 0.0f
         && level.movingPlatform.size.y > 0.0f && level.movingPlatform.size.z > 0.0f
         && level.movingPlatform.speed > 0.0f;
-    snapshot.levelHasDynamicBox = level.dynamicBox.size.x > 0.0f && level.dynamicBox.size.y > 0.0f
-        && level.dynamicBox.size.z > 0.0f && level.dynamicBox.mass > 0.0f;
+    snapshot.levelDynamicBoxCount = static_cast<int>(level.dynamicBoxes.size());
     snapshot.levelCameraOffset = level.camera.offset;
     snapshot.levelCameraFieldOfViewY = level.camera.fieldOfViewY;
     return snapshot;
@@ -719,7 +760,10 @@ int Application::Run()
             }
         }
 
-        const physics::DynamicTestBox testBox = physicsWorld.GetDynamicTestBox();
+        const std::vector<physics::DynamicBoxRuntimeState> dynamicBoxes =
+            physicsWorld.GetDynamicBoxes();
+        const std::vector<render::DynamicBoxDrawState> dynamicDraw =
+            MakeDynamicBoxDrawStates(dynamicBoxes);
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         render::CameraView cameraView = MakeGameplayCameraView(camera);
         render::DebugWorldOverlay overlay{};
@@ -756,11 +800,8 @@ int Application::Run()
             overlay.spawnCenter = levelDefinition.initialSpawnVisualCenter;
             overlay.spawnSize = world::kPlayerVisualSize;
 
-            const editor::EditorPickingWorldState pickingWorld{
-                movingPlatform.position,
-                movingPlatform.size,
-                testBox.position,
-                testBox.size};
+            const editor::EditorPickingWorldState pickingWorld =
+                MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes);
             const editor::EditorHighlightRequest highlight = editor::MakeHighlightRequest(
                 editor::HighlightSelectionFromWorking(
                     levelEditorState.selection, levelEditorState.structuralMap),
@@ -810,6 +851,9 @@ int Application::Run()
                 case editor::EditorObjectKind::Collectible:
                     item.kind = 3;
                     break;
+                case editor::EditorObjectKind::DynamicBox:
+                    item.kind = 4;
+                    break;
                 default:
                     continue;
                 }
@@ -857,6 +901,9 @@ int Application::Run()
                 case editor::EditorObjectKind::Collectible:
                     overlay.placementCandidateKind = 3;
                     break;
+                case editor::EditorObjectKind::DynamicBox:
+                    overlay.placementCandidateKind = 4;
+                    break;
                 default:
                     overlay.placementCandidateKind = 0;
                     break;
@@ -889,6 +936,31 @@ int Application::Run()
             overlay.pendingDeleteHazards = pendingDelete.hazards;
             overlay.pendingDeleteCollectibleIndices = pendingDelete.collectibleIndices;
             overlay.pendingDeleteCollectibleCenters = pendingDelete.collectibleCenters;
+            overlay.pendingDeleteDynamicBoxIndices = pendingDelete.dynamicBoxIndices;
+            overlay.pendingDeleteDynamicBoxCenters.clear();
+            overlay.pendingDeleteDynamicBoxSizes.clear();
+            overlay.pendingDeleteDynamicBoxCenters.reserve(pendingDelete.dynamicBoxes.size());
+            overlay.pendingDeleteDynamicBoxSizes.reserve(pendingDelete.dynamicBoxes.size());
+            for (std::size_t index = 0; index < pendingDelete.dynamicBoxIndices.size(); ++index)
+            {
+                const int activeIndex = pendingDelete.dynamicBoxIndices[index];
+                if (activeIndex >= 0
+                    && static_cast<std::size_t>(activeIndex) < dynamicBoxes.size())
+                {
+                    overlay.pendingDeleteDynamicBoxCenters.push_back(
+                        dynamicBoxes[static_cast<std::size_t>(activeIndex)].center);
+                    overlay.pendingDeleteDynamicBoxSizes.push_back(
+                        dynamicBoxes[static_cast<std::size_t>(activeIndex)].size);
+                    continue;
+                }
+                if (index < pendingDelete.dynamicBoxes.size())
+                {
+                    overlay.pendingDeleteDynamicBoxCenters.push_back(
+                        pendingDelete.dynamicBoxes[index].center);
+                    overlay.pendingDeleteDynamicBoxSizes.push_back(
+                        pendingDelete.dynamicBoxes[index].size);
+                }
+            }
 #endif
 
             const editor::CheckpointEditorOverlay checkpointOverlay =
@@ -944,8 +1016,7 @@ int Application::Run()
             player,
             cameraView,
             levelDefinition,
-            testBox.position,
-            testBox.size,
+            dynamicDraw,
             movingPlatform.position,
             movingPlatform.size,
             MakeCheckpointVisuals(
@@ -1190,11 +1261,7 @@ int Application::Run()
                     ray,
                     editor::BuildPickingSet(
                         levelDefinition,
-                        editor::EditorPickingWorldState{
-                            movingPlatform.position,
-                            movingPlatform.size,
-                            testBox.position,
-                            testBox.size}),
+                        MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes)),
                     editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
                 editor::HandleAuthoredLifecycleRequest(
                     levelEditorState,
@@ -1212,11 +1279,8 @@ int Application::Run()
                     widgetConsumedPointer,
                     gizmoConsumedPointer))
             {
-                const editor::EditorPickingWorldState pickingWorld{
-                    movingPlatform.position,
-                    movingPlatform.size,
-                    testBox.position,
-                    testBox.size};
+                const editor::EditorPickingWorldState pickingWorld =
+                    MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes);
                 const std::vector<editor::PendingPickProxy> pendingProxies =
                     editor::BuildPendingPickProxies(editor::CollectPendingAuthoringVisuals(
                         levelDefinition,
@@ -1443,7 +1507,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
 void Application::RestartRun()
 {
     physicsWorld.ResetMovingPlatform();
-    physicsWorld.ResetDynamicTestBox();
+    physicsWorld.ResetDynamicBoxes();
     physicsWorld.ResetCharacter(levelDefinition.initialSpawnVisualCenter, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
@@ -1500,6 +1564,19 @@ void Application::SetLevelEditorActive(bool active)
 
 bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
 {
+    // Edit > Add / Duplicate / Delete share this set. Listing cases here
+    // independently is how AddDynamicBox previously fell through to Apply.
+    if (editor::IsAuthoredLifecycleRequest(request))
+    {
+        editor::HandleAuthoredLifecycleRequest(
+            levelEditorState,
+            levelDefinition,
+            request,
+            editor::IsLevelAuthoringAvailable(),
+            editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
+        return true;
+    }
+
     switch (request)
     {
     case editor::LevelEditorRequest::None:
@@ -1525,21 +1602,10 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         return ReloadRuntimeLevelFromStaged();
     case editor::LevelEditorRequest::CookStageAndReload:
         return StartCookStageAndReload();
-    case editor::LevelEditorRequest::AddPlatform:
-    case editor::LevelEditorRequest::AddCheckpoint:
-    case editor::LevelEditorRequest::AddHazard:
-    case editor::LevelEditorRequest::AddCollectible:
-    case editor::LevelEditorRequest::DuplicateSelected:
-    case editor::LevelEditorRequest::DeleteSelected:
-        editor::HandleAuthoredLifecycleRequest(
-            levelEditorState,
-            levelDefinition,
-            request,
-            editor::IsLevelAuthoringAvailable(),
-            editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
-        return true;
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        break;
+    default:
         break;
     }
 

@@ -2,8 +2,6 @@
 
 // Authoring hierarchy view. Built from the working copy so pending Add /
 // Duplicate / Delete appear before Apply. Not a scene graph.
-// M44 Correction 1: DynamicBox is Level Format compatibility only and is
-// not a Hierarchy row.
 
 #include "editor/EditorSelection.h"
 #include "world/LevelDefinition.h"
@@ -46,6 +44,10 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
         entries.push_back({{EditorObjectKind::Collectible, index}, "Collectibles"});
     }
     entries.push_back({{EditorObjectKind::Goal, 0}, ""});
+    for (std::size_t index = 0; index < level.dynamicBoxes.size(); ++index)
+    {
+        entries.push_back({{EditorObjectKind::DynamicBox, index}, "Dynamic Boxes"});
+    }
     return entries;
 }
 }

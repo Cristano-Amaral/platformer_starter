@@ -59,6 +59,7 @@ struct DebugMetricsSnapshot
     const char* playerGroundSupport = "InAir";
     int playerContactCount = 0;
     int staticBodyCount = 0;
+    int physicsDynamicBoxCount = 0;
     bool dynamicTestBodyValid = false;
     bool playerPositionFinite = true;
     bool playerVelocityFinite = true;
@@ -137,7 +138,7 @@ struct DebugMetricsSnapshot
     int levelCollectibleCount = 0;
     bool levelHasGoal = false;
     bool levelHasMovingPlatform = false;
-    bool levelHasDynamicBox = false;
+    int levelDynamicBoxCount = 0;
     core::Vec3 levelCameraOffset{};
     float levelCameraFieldOfViewY = 0.0f;
 };

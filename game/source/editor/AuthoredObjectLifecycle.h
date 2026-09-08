@@ -31,6 +31,7 @@ inline constexpr core::Vec3 kDefaultAddedHazardOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedHazardSize{1.4f, 1.0f, 2.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleSize{1.0f, 1.2f, 1.0f};
+inline constexpr core::Vec3 kDefaultAddedDynamicBoxOffset{0.0f, 0.0f, 0.0f};
 
 struct CategoryStructuralPending
 {
@@ -38,6 +39,7 @@ struct CategoryStructuralPending
     bool checkpoints = false;
     bool hazards = false;
     bool collectibles = false;
+    bool dynamicBoxes = false;
 };
 
 inline void ClearCategoryStructuralPending(CategoryStructuralPending& pending)
@@ -60,6 +62,7 @@ struct StructuralIndexMap
     CategoryIndexMap checkpoints;
     CategoryIndexMap hazards;
     CategoryIndexMap collectibles;
+    CategoryIndexMap dynamicBoxes;
 };
 
 struct PendingDeleteVisuals
@@ -72,6 +75,8 @@ struct PendingDeleteVisuals
     std::vector<world::HazardSpec> hazards;
     std::vector<int> collectibleIndices;
     std::vector<core::Vec3> collectibleCenters;
+    std::vector<int> dynamicBoxIndices;
+    std::vector<world::DynamicBoxSpec> dynamicBoxes;
 };
 
 // Tiny editor visual mode. Not a render-state / material architecture.
@@ -208,6 +213,9 @@ LifecycleEditResult AddHazard(
 LifecycleEditResult AddCollectible(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor);
+LifecycleEditResult AddDynamicBox(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor);
 
 // Object Palette confirm: authored center is worldCenter. Does not snap to spawn.z.
 LifecycleEditResult AddPlatformAt(
@@ -222,6 +230,9 @@ LifecycleEditResult AddHazardAt(
 LifecycleEditResult AddCollectibleAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
+LifecycleEditResult AddDynamicBoxAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
 
 inline const char* CategoryCapacityReason(EditorObjectKind kind)
 {
@@ -233,6 +244,8 @@ inline const char* CategoryCapacityReason(EditorObjectKind kind)
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
         return "Level file record limit reached.";
+    case EditorObjectKind::DynamicBox:
+        return "Physics body capacity reached.";
     default:
         return "Technical capacity reached.";
     }

@@ -70,7 +70,6 @@ world::LevelDefinition MakeStubLevel()
     level.movingPlatform.centerY = 1.3f;
     level.movingPlatform.centerZ = 0.0f;
     level.movingPlatform.startX = 0.0f;
-    level.dynamicBox = {{0.0f, 5.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, 30.0f};
     level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
     level.checkpoints.resize(static_cast<std::size_t>(world::kLevel01CheckpointCount));
     level.checkpoints[0] = {{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}};
@@ -132,8 +131,8 @@ int main()
             !editor::IsValidSelection(level, {editor::EditorObjectKind::DynamicBox, 0}),
             "DynamicBox is not a selectable scene object");
         Expect(
-            !editor::IsEditableSelection({editor::EditorObjectKind::DynamicBox, 0}),
-            "DynamicBox is not inspector-editable");
+            editor::IsEditableSelection({editor::EditorObjectKind::DynamicBox, 0}),
+            "DynamicBox is inspector-editable");
     }
 
     const std::vector<editor::HierarchyEntry> hierarchy =
@@ -153,7 +152,7 @@ int main()
             hierarchyHasDynamicBox || entry.selection.kind == editor::EditorObjectKind::DynamicBox;
         hierarchyHasGoal = hierarchyHasGoal || entry.selection.kind == editor::EditorObjectKind::Goal;
     }
-    Expect(!hierarchyHasDynamicBox, "Hierarchy does not list Dynamic Cyan Box");
+    Expect(!hierarchyHasDynamicBox, "empty Dynamic Boxes collection has no hierarchy rows");
     Expect(hierarchyHasGoal, "Hierarchy lists Goal");
     Expect(
         hierarchy.back().selection.kind == editor::EditorObjectKind::Goal,
@@ -230,7 +229,6 @@ int main()
         level.slopes[0].center = {40.0f, 0.0f, 0.0f};
         level.slopes[1].center = {40.0f, 0.0f, 0.0f};
         level.movingPlatform.centerY = 40.0f;
-        level.dynamicBox.center = {40.0f, 5.0f, 0.0f};
         level.checkpoints[0].center = {40.0f, 1.8f, 0.0f};
         level.hazards[0].center = {40.0f, 0.5f, 0.0f};
         level.goal.center = {40.0f, 3.8f, 0.0f};
@@ -263,14 +261,13 @@ int main()
         Expect(picked.kind == editor::EditorObjectKind::Ground, "tie keeps earlier hierarchy proxy");
     }
 
-    // ---- runtime pose vs authored start for moving platform / cyan box ----
+    // ---- runtime pose vs authored start for moving platform / Dynamic Box ----
     {
         world::LevelDefinition level = MakeStubLevel();
         editor::EditorPickingWorldState worldState = editor::AuthoredPickingWorldState(level);
         Expect(NearlyEqual(worldState.movingPlatformCenter.x, 0.0f), "authored startX proxy");
 
         worldState.movingPlatformCenter = {10.0f, 1.3f, 0.0f};
-        worldState.dynamicBoxCenter = {8.0f, 1.0f, 0.0f};
         const editor::EditorPickingSet set = editor::BuildPickingSet(level, worldState);
 
         const editor::Ray3 atRuntime{{10.0f, 1.3f, 8.0f}, {0.0f, 0.0f, -1.0f}};
@@ -282,11 +279,27 @@ int main()
         Expect(
             editor::PickNearest(atAuthoredStart, set).kind != editor::EditorObjectKind::MovingPlatform,
             "authored startX is not picked when the platform has moved");
+    }
 
-        const editor::Ray3 atCyan{{8.0f, 1.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        world::DynamicBoxSpec box{};
+        box.center = {2.0f, 1.0f, 0.0f};
+        box.size = {1.0f, 1.0f, 1.0f};
+        box.massKg = 30.0f;
+        level.dynamicBoxes.push_back(box);
+        editor::EditorPickingWorldState worldState = editor::AuthoredPickingWorldState(level);
+        worldState.dynamicBoxCenters[0] = {8.0f, 1.0f, 0.0f};
+        worldState.dynamicBoxSizes[0] = box.size;
+        const editor::EditorPickingSet set = editor::BuildPickingSet(level, worldState);
+        const editor::Ray3 atRuntime{{8.0f, 1.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
         Expect(
-            editor::PickNearest(atCyan, set).kind != editor::EditorObjectKind::DynamicBox,
-            "authored dynamic_box is not a viewport pick proxy");
+            editor::PickNearest(atRuntime, set).kind == editor::EditorObjectKind::DynamicBox,
+            "active Dynamic Box picks the runtime pose");
+        const editor::Ray3 atAuthored{{2.0f, 1.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atAuthored, set).kind != editor::EditorObjectKind::DynamicBox,
+            "stale authored center does not own active picking");
     }
 
     // ---- camera is not a world proxy; spawn is ----
@@ -308,7 +321,7 @@ int main()
         Expect(!sawCamera, "authored camera has no world picking proxy");
         Expect(sawSpawn, "player spawn has a world picking proxy");
         Expect(!sawPlayerKind, "runtime Player is not a selectable authored object");
-        Expect(!sawDynamicBox, "uninstantiated dynamic_box has no world picking proxy");
+        Expect(!sawDynamicBox, "empty Dynamic Boxes collection has no world picking proxy");
         Expect(
             set.proxies.size() == 19,
             "19 world proxies: hierarchy minus Camera");
@@ -440,7 +453,6 @@ int main()
         active.slopes[0].center = {40.0f, 0.0f, 0.0f};
         active.slopes[1].center = {40.0f, 0.0f, 0.0f};
         active.movingPlatform.centerY = 40.0f;
-        active.dynamicBox.center = {40.0f, 5.0f, 0.0f};
         active.checkpoints[0].center = {40.0f, 1.8f, 0.0f};
         active.checkpoints[1].center = {40.0f, 1.8f, 0.0f};
         active.hazards[0].center = {40.0f, 0.5f, 0.0f};
@@ -975,6 +987,28 @@ int main()
                                                active, working, map, {}))
                 .empty(),
             "Revert/Apply identity clears pending pick proxies");
+    }
+
+    {
+        world::LevelDefinition active = MakeStubLevel();
+        world::LevelDefinition working = active;
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        Expect(
+            editor::AddDynamicBoxAt(working, {3.0f, 1.0f, 0.0f}).succeeded,
+            "pending add Dynamic Box");
+        editor::ApplyLifecycleToStructuralMap(map, editor::EditorObjectKind::DynamicBox, false, 0);
+        const std::vector<editor::PendingPickProxy> pending =
+            editor::BuildPendingPickProxies(editor::CollectPendingAuthoringVisuals(
+                active, working, map, {editor::EditorObjectKind::DynamicBox, 0}));
+        Expect(!pending.empty(), "pending Dynamic Box is pickable");
+        const editor::Ray3 atPending{
+            {working.dynamicBoxes[0].center.x, working.dynamicBoxes[0].center.y, 8.0f},
+            {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearestPending(atPending, pending).kind
+                == editor::EditorObjectKind::DynamicBox,
+            "pending Dynamic Box pick hits authored ghost");
     }
 
     if (gFailures != 0)

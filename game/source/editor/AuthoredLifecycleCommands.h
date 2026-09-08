@@ -11,6 +11,11 @@ namespace editor
 {
 bool IsAuthoredLifecycleRequest(LevelEditorRequest request);
 
+// Canonical Edit > Add menu mapping. Direct-add lifecycle request, not Object
+// Palette placement mode. ImGui MenuItem must use this instead of constructing
+// a parallel request set inside Draw().
+LevelEditorRequest EditAddMenuRequest(EditorObjectKind kind);
+
 // Development Edit-menu enable. Dirty and Modified are not parameters.
 bool CanIssueAuthoredLifecycleRequest(
     bool authoringAvailable,

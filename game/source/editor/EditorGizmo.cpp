@@ -220,6 +220,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::DynamicBox:
         return true;
     default:
         return false;
@@ -233,6 +234,7 @@ bool IsResizeSelection(EditorSelection selection)
     case EditorObjectKind::Ground:
         return selection.index == 0;
     case EditorObjectKind::ElevatedPlatform:
+    case EditorObjectKind::DynamicBox:
         return true;
     default:
         return false;
@@ -277,6 +279,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.collectibles.size())
         {
             return &level.collectibles[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::DynamicBox:
+        if (selection.index < level.dynamicBoxes.size())
+        {
+            return &level.dynamicBoxes[selection.index].center;
         }
         break;
     default:
@@ -327,6 +335,12 @@ const core::Vec3* GetEditablePosition(
             return &level.collectibles[selection.index].center;
         }
         break;
+    case EditorObjectKind::DynamicBox:
+        if (selection.index < level.dynamicBoxes.size())
+        {
+            return &level.dynamicBoxes[selection.index].center;
+        }
+        break;
     default:
         break;
     }
@@ -347,6 +361,12 @@ core::Vec3* GetEditableSize(world::LevelDefinition& level, EditorSelection selec
         if (selection.index < level.elevatedPlatforms.size())
         {
             return &level.elevatedPlatforms[selection.index].size;
+        }
+        break;
+    case EditorObjectKind::DynamicBox:
+        if (selection.index < level.dynamicBoxes.size())
+        {
+            return &level.dynamicBoxes[selection.index].size;
         }
         break;
     default:
@@ -371,6 +391,12 @@ const core::Vec3* GetEditableSize(
         if (selection.index < level.elevatedPlatforms.size())
         {
             return &level.elevatedPlatforms[selection.index].size;
+        }
+        break;
+    case EditorObjectKind::DynamicBox:
+        if (selection.index < level.dynamicBoxes.size())
+        {
+            return &level.dynamicBoxes[selection.index].size;
         }
         break;
     default:
@@ -453,6 +479,15 @@ bool GetGizmoPreviewBox(
             const world::CollectibleSpec& collectible = workingCopy.collectibles[selection.index];
             center = collectible.center;
             size = collectible.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::DynamicBox:
+        if (selection.index < workingCopy.dynamicBoxes.size())
+        {
+            const world::DynamicBoxSpec& box = workingCopy.dynamicBoxes[selection.index];
+            center = box.center;
+            size = box.size;
             return true;
         }
         break;
@@ -619,6 +654,26 @@ bool AuthoredGeometryDiffers(
             workingCopy.collectibles[selection.index];
         return Vec3Differs(activeCollectible.center, workingCollectible.center)
             || Vec3Differs(activeCollectible.size, workingCollectible.size);
+    }
+    case EditorObjectKind::DynamicBox:
+    {
+        if (selection.index >= workingCopy.dynamicBoxes.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::DynamicBox, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.dynamicBoxes.size())
+        {
+            return true;
+        }
+        const world::DynamicBoxSpec& activeBox =
+            active.dynamicBoxes[static_cast<std::size_t>(activeIndex)];
+        const world::DynamicBoxSpec& workingBox = workingCopy.dynamicBoxes[selection.index];
+        return Vec3Differs(activeBox.center, workingBox.center)
+            || Vec3Differs(activeBox.size, workingBox.size)
+            || activeBox.massKg != workingBox.massKg;
     }
     default:
         return false;
@@ -814,7 +869,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::ElevatedPlatform,
         EditorObjectKind::Checkpoint,
         EditorObjectKind::Hazard,
-        EditorObjectKind::Collectible};
+        EditorObjectKind::Collectible,
+        EditorObjectKind::DynamicBox};
     for (const EditorObjectKind kind : kinds)
     {
         const std::size_t count = [&]() -> std::size_t {
@@ -828,6 +884,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.hazards.size();
             case EditorObjectKind::Collectible:
                 return workingCopy.collectibles.size();
+            case EditorObjectKind::DynamicBox:
+                return workingCopy.dynamicBoxes.size();
             default:
                 return 0;
             }
