@@ -1,6 +1,7 @@
 #include "physics/PhysicsWorld.h"
 
 #include "physics/PhysicsCapacity.h"
+#include "physics/PhysicsWorldTestAccess.h"
 #include "world/LevelDefinition.h"
 
 #include <Jolt/Jolt.h>
@@ -289,6 +290,7 @@ struct PhysicsWorld::Impl
     float gameplayZ = 0.0f;
     world::MovingPlatformSpec movingPlatformSpec{};
     std::vector<world::DynamicBoxSpec> dynamicBoxSpecs{};
+    float killPlaneY = 0.0f;
     float movingPlatformDirection = 1.0f;
     float carriedGroundVelocityX = 0.0f;
     bool holdsJoltRegistration = false;
@@ -566,6 +568,61 @@ struct PhysicsWorld::Impl
         }
         return count;
     }
+
+    std::size_t DynamicBoxCount() const
+    {
+        return dynamicBodyIds.size() < dynamicBoxSpecs.size()
+            ? dynamicBodyIds.size()
+            : dynamicBoxSpecs.size();
+    }
+
+    void ResetDynamicBoxBody(std::size_t index)
+    {
+        if (index >= DynamicBoxCount())
+        {
+            return;
+        }
+
+        const JPH::BodyID id = dynamicBodyIds[index];
+        if (id.IsInvalid())
+        {
+            return;
+        }
+
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        bodyInterface.SetPositionAndRotation(
+            id,
+            ToRVec3(dynamicBoxSpecs[index].center),
+            JPH::Quat::sIdentity(),
+            JPH::EActivation::Activate);
+        bodyInterface.SetLinearVelocity(id, JPH::Vec3::sZero());
+        bodyInterface.SetAngularVelocity(id, JPH::Vec3::sZero());
+    }
+
+    void RecoverFallenDynamicBoxes()
+    {
+        if (!initialized || physicsSystem == nullptr)
+        {
+            return;
+        }
+
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        const std::size_t count = DynamicBoxCount();
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const JPH::BodyID id = dynamicBodyIds[index];
+            if (id.IsInvalid())
+            {
+                continue;
+            }
+
+            const float runtimeBodyCenterY = bodyInterface.GetPosition(id).GetY();
+            if (runtimeBodyCenterY < killPlaneY)
+            {
+                ResetDynamicBoxBody(index);
+            }
+        }
+    }
 };
 
 PhysicsWorld::PhysicsWorld()
@@ -587,6 +644,7 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
 
     impl->movingPlatformSpec = level.movingPlatform;
     impl->dynamicBoxSpecs = level.dynamicBoxes;
+    impl->killPlaneY = level.killPlaneY;
 
     if (!AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(level.elevatedPlatforms.size()),
@@ -801,25 +859,64 @@ void PhysicsWorld::ResetDynamicBoxes()
         return;
     }
 
-    JPH::BodyInterface& bodyInterface = impl->physicsSystem->GetBodyInterface();
-    const std::size_t count = impl->dynamicBodyIds.size() < impl->dynamicBoxSpecs.size()
-        ? impl->dynamicBodyIds.size()
-        : impl->dynamicBoxSpecs.size();
+    const std::size_t count = impl->DynamicBoxCount();
     for (std::size_t index = 0; index < count; ++index)
     {
-        const JPH::BodyID id = impl->dynamicBodyIds[index];
-        if (id.IsInvalid())
-        {
-            continue;
-        }
-        bodyInterface.SetPositionAndRotation(
-            id,
-            ToRVec3(impl->dynamicBoxSpecs[index].center),
-            JPH::Quat::sIdentity(),
-            JPH::EActivation::Activate);
-        bodyInterface.SetLinearVelocity(id, JPH::Vec3::sZero());
-        bodyInterface.SetAngularVelocity(id, JPH::Vec3::sZero());
+        impl->ResetDynamicBoxBody(index);
     }
+}
+
+void PhysicsWorld::RecoverFallenDynamicBoxes()
+{
+    impl->RecoverFallenDynamicBoxes();
+}
+
+void PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
+    PhysicsWorld& world,
+    std::size_t index,
+    core::Vec3 center,
+    core::Vec3 linearVelocity,
+    core::Vec3 angularVelocity,
+    float rotationX,
+    float rotationY,
+    float rotationZ,
+    float rotationW)
+{
+    if (!world.impl->initialized || world.impl->physicsSystem == nullptr
+        || index >= world.impl->DynamicBoxCount())
+    {
+        return;
+    }
+
+    const JPH::BodyID id = world.impl->dynamicBodyIds[index];
+    if (id.IsInvalid())
+    {
+        return;
+    }
+
+    JPH::Quat rotation(rotationX, rotationY, rotationZ, rotationW);
+    if (!rotation.IsNormalized())
+    {
+        if (rotation.LengthSq() > 0.0f)
+        {
+            rotation = rotation.Normalized();
+        }
+        else
+        {
+            rotation = JPH::Quat::sIdentity();
+        }
+    }
+
+    JPH::BodyInterface& bodyInterface = world.impl->physicsSystem->GetBodyInterface();
+    bodyInterface.SetPositionAndRotation(
+        id,
+        ToRVec3(center),
+        rotation,
+        JPH::EActivation::Activate);
+    bodyInterface.SetLinearVelocity(
+        id, JPH::Vec3(linearVelocity.x, linearVelocity.y, linearVelocity.z));
+    bodyInterface.SetAngularVelocity(
+        id, JPH::Vec3(angularVelocity.x, angularVelocity.y, angularVelocity.z));
 }
 
 void PhysicsWorld::UpdateMovingPlatform(float deltaSeconds)
@@ -903,6 +1000,7 @@ void PhysicsWorld::Update(float deltaSeconds)
         impl->jobSystem.get());
 
     impl->EnforceFixedZ();
+    impl->RecoverFallenDynamicBoxes();
 }
 
 void PhysicsWorld::Shutdown()
@@ -924,6 +1022,7 @@ void PhysicsWorld::Shutdown()
         }
         impl->dynamicBodyIds.clear();
         impl->dynamicBoxSpecs.clear();
+        impl->killPlaneY = 0.0f;
         if (!impl->movingPlatformId.IsInvalid())
         {
             bodyInterface.RemoveBody(impl->movingPlatformId);
@@ -1005,6 +1104,9 @@ std::vector<DynamicBoxRuntimeState> PhysicsWorld::GetDynamicBoxes() const
         box.center = ToVec3(bodyInterface.GetPosition(id));
         const JPH::Vec3 linearVelocity = bodyInterface.GetLinearVelocity(id);
         box.linearVelocity = {linearVelocity.GetX(), linearVelocity.GetY(), linearVelocity.GetZ()};
+        const JPH::Vec3 angularVelocity = bodyInterface.GetAngularVelocity(id);
+        box.angularVelocity = {
+            angularVelocity.GetX(), angularVelocity.GetY(), angularVelocity.GetZ()};
         const JPH::Quat rotation = bodyInterface.GetRotation(id);
         box.rotationX = rotation.GetX();
         box.rotationY = rotation.GetY();

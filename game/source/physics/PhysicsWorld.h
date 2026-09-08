@@ -18,6 +18,7 @@ struct DynamicBoxRuntimeState
     core::Vec3 center{};
     core::Vec3 size{};
     core::Vec3 linearVelocity{};
+    core::Vec3 angularVelocity{};
     float massKg = 0.0f;
     float rotationX = 0.0f;
     float rotationY = 0.0f;
@@ -73,6 +74,8 @@ struct MovingPlatformState
     bool valid = false;
 };
 
+struct PhysicsWorldTestAccess;
+
 class PhysicsWorld
 {
 public:
@@ -97,6 +100,11 @@ public:
     // Full run restart: authored pose, zero linear/angular velocity.
     // Checkpoint respawn does not call this.
     void ResetDynamicBoxes();
+    // Per-body kill-plane recovery using the applied authored kill plane copied
+    // at Initialize / TryRebuild. Restores only bodies whose runtime center Y
+    // is strictly below that plane. Does not rebuild PhysicsWorld and does not
+    // mutate authored Dynamic Box specs.
+    void RecoverFallenDynamicBoxes();
     void UpdateMovingPlatform(float deltaSeconds);
     void MovePlayer(const PlayerMoveCommand& command, float deltaSeconds);
     void Update(float deltaSeconds);
@@ -110,6 +118,7 @@ public:
     PlayerPhysicsState GetPlayerPhysicsState() const;
 
 private:
+    friend struct PhysicsWorldTestAccess;
     struct Impl;
     std::unique_ptr<Impl> impl;
 };

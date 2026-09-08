@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 45 — Authored Dynamic Physics Objects
-(repeatable authored Dynamic Boxes; Jolt dynamic bodies; shared body budget;
+Milestone 46 — Dynamic Box Runtime Recovery
+(individual kill-plane recovery for active authored Dynamic Boxes;
 awaiting manual acceptance).
-Milestone 44 is complete and merged. Milestone 46 has not started.
+Milestone 45 is complete and merged. Milestone 47 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -135,7 +135,11 @@ remain. M45 turns `dynamic_box` into a repeatable authored Dynamic Box
 (`center`, `size`, `massKg`) with a real Jolt dynamic body. Canonical Level 01
 has 0 Dynamic Boxes. Shared leftover is 59 bodies for platforms plus Dynamic
 Boxes (`kPhysicsMaxBodies` 64 minus 5 fixed bodies).
-Do not add Undo/Redo, a probe framework, Level Format v2, or Milestone 46.
+M46 recovers each active Dynamic Box whose runtime Jolt body center Y is
+strictly below `active.killPlane` back to its currently applied authored
+transform, with identity orientation and zero linear/angular velocity. Recovery
+is per body and does not rebuild PhysicsWorld or mutate authoring state.
+Do not add Undo/Redo, a probe framework, Level Format v2, or Milestone 47.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -158,5 +162,6 @@ M42 placement still requires that same Apply / Save / Cook, Stage & Reload
 path. M43 placement and picking use the content viewport below the Quick Toolbar.
 M44 is complete and merged. M45 adds repeatable authored Dynamic Boxes
 (Jolt dynamic bodies, mass in kg, shared platform+box leftover). Canonical
-Level 01 has 0 Dynamic Boxes. Debug has the visual editor but cannot author.
-Release has no editor.
+Level 01 has 0 Dynamic Boxes. M46 adds individual runtime kill-plane recovery
+for those boxes without mutating authored state. Debug has the visual editor
+but cannot author. Release has no editor.

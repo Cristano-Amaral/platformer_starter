@@ -1,7 +1,9 @@
 #pragma once
 
 // Authored Dynamic Box (Milestone 45). Box-shaped dynamic rigid body only.
-// Jolt types stay out of this header.
+// Jolt types stay out of this header. Runtime recovery (Milestone 46) restores
+// the live body to this authored center with identity orientation; it does not
+// add an authored orientation field.
 
 #include "core/Vec3.h"
 

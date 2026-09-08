@@ -33,7 +33,7 @@ Renderer / PlatformerCamera / DebugMetrics
 
 Jolt CharacterVirtual is the authoritative Player collision and physical-position backend. There is no second custom Player AABB collision path.
 
-Player owns gameplay policy: semantic movement intent, horizontal acceleration/deceleration relative to supporting ground, vertical gameplay velocity, jump, coyote time, and jump buffer. PhysicsWorld owns Jolt runtime state, CharacterVirtual, static greybox bodies, the kinematic moving platform, and the dynamic test box.
+Player owns gameplay policy: semantic movement intent, horizontal acceleration/deceleration relative to supporting ground, vertical gameplay velocity, jump, coyote time, and jump buffer. PhysicsWorld owns Jolt runtime state, CharacterVirtual, static greybox bodies, the kinematic moving platform, authored Dynamic Box bodies, and individual Dynamic Box kill-plane recovery.
 
 Project-facing Player position is the **visual AABB center**. CharacterVirtual `GetPosition`/`SetPosition` is the **feet** (`visualCenter.y - visualSize.y * 0.5`). `PhysicsWorld::InitializePlayer` and `ResetCharacter` accept visual-center coordinates.
 
@@ -41,7 +41,7 @@ Project-facing Player position is the **visual AABB center**. CharacterVirtual `
 
 Checkpoint types and AABB helpers live in `world/RespawnWorld.h` (`CheckpointSpec`). Authored spawn, kill-plane Y, and checkpoint instances live in the immutable `LevelDefinition` loaded from the staged Level 01 file. Runtime state lives in `gameplay::RespawnState`, owned by `Application`. PhysicsWorld does not interpret checkpoints. Renderer does not own activation.
 
-`input::InputState::respawnPressed` is edge-triggered (`R` mapped in the input backend only). Application owns the respawn decision after `Player::Update`: Fall if visual-center Y is below the active level's `killPlaneY`, else Hazard, else Manual if `respawnPressed`. Fall wins if both Fall and Hazard occur. At most one respawn per frame. Checkpoint activation runs only when no respawn happened that frame.
+`input::InputState::respawnPressed` is edge-triggered (`R` mapped in the input backend only). Application owns the respawn decision after `Player::Update`: Fall if visual-center Y is below the active level's `killPlaneY`, else Hazard, else Manual if `respawnPressed`. Fall wins if both Fall and Hazard occur. At most one respawn per frame. Checkpoint activation runs only when no respawn happened that frame. Dynamic Box recovery uses the same authored `killPlaneY` inside `PhysicsWorld::Update` and does not respawn the player or reset other boxes.
 
 `PhysicsWorld::ResetCharacter` teleports CharacterVirtual (feet), zeros linear velocity and airborne platform carry (`carriedGroundVelocityX`), refreshes contacts, and enforces fixed gameplay Z. `Player::ResetMovementState` clears relative horizontal/vertical velocity, coyote, jump buffer, and carry-related Player fields. `PlatformerCamera::SnapToTarget` copies the player visual center into both desired and smoothed targets. On a respawn frame the camera is snapped and `camera.Update` is skipped.
 
@@ -86,7 +86,9 @@ Static test slopes are `LevelDefinition::slopes` (`SlopeSpec`: 30° walkable, 60
 The Player rides kinematic ground through CharacterVirtual: `UpdateGroundVelocity` then `GetGroundVelocity`, added to Player-relative horizontal speed. The Player is not parented to the platform and does not receive a manual position delta.
 
 ## Physics boundary
-Jolt types stay inside `PhysicsWorld.cpp`. Public physics headers expose only project-owned types (`PlayerMoveCommand`, `PlayerPhysicsState`, `PlayerGroundSupport`, `DynamicTestBox`, `MovingPlatformState`). The project has one physics backend: Jolt v5.6.0. There is no abstract `IPhysicsEngine`.
+Jolt types stay inside `PhysicsWorld.cpp`. Public physics headers expose only project-owned types (`PlayerMoveCommand`, `PlayerPhysicsState`, `PlayerGroundSupport`, `DynamicBoxRuntimeState`, `MovingPlatformState`). The project has one physics backend: Jolt v5.6.0. There is no abstract `IPhysicsEngine`.
+
+Applied authored Dynamic Box specs and `killPlaneY` are copied at `Initialize` / `TryRebuild`. Runtime pose lives on the Jolt body. `RecoverFallenDynamicBoxes` compares that body's center Y to the copied kill plane and resets only the fallen body (`SetPositionAndRotation` to the authored center and `Quat::sIdentity()`, then zero linear/angular velocity). It is not a second transform authority for rendering or picking.
 
 ## Early abstraction points
 Only abstract boundaries that are known to vary by target:
@@ -617,8 +619,8 @@ M44 separates cooker/physics **test coverage** from **canonical scene visibility
 
 **Kept in the scene:** slope 0 (30° walkable, `kLevel01WalkableSlopeIndex`), slope 1 (60° steep, `kLevel01SteepSlopeIndex`), kinematic moving platform. M42 placement surfaces remain Ground / Platform / Slope.
 
-**Authored `dynamic_box` (M45):** repeatable `std::vector<world::DynamicBoxSpec>` with `center`, `size`, `massKg`. Zero, one, or many records. Each applied box creates one Jolt dynamic `BoxShape` with authored mass, gravity, world collision, and CharacterVirtual push. Runtime pose authority is Jolt; rendering and active picking follow the live body. Save / Reload / Apply use authored definitions. Full `RestartRun` restores authored pose and zeros velocities. Checkpoint respawn does not reset Dynamic Boxes. Canonical Level 01 has 0 Dynamic Boxes (intentional M45 migration of the leftover probe line). Not the old hard-coded cyan crate.
+**Authored `dynamic_box` (M45/M46):** repeatable `std::vector<world::DynamicBoxSpec>` with `center`, `size`, `massKg`. Zero, one, or many records. Each applied box creates one Jolt dynamic `BoxShape` with authored mass, gravity, world collision, and CharacterVirtual push. Runtime pose authority is Jolt; rendering and active picking follow the live body. Save / Reload / Apply use authored definitions. Full `RestartRun` restores every Dynamic Box to its authored pose and zeros velocities. Checkpoint respawn does not reset Dynamic Boxes. If an active runtime body center Y is strictly below the currently applied `killPlaneY`, `PhysicsWorld` restores **only that body** to its applied authored center, identity orientation (`Quat::sIdentity()`, matching body creation), and zero linear/angular velocity. Recovery does not rebuild PhysicsWorld, does not reset other boxes, and does not mutate `workingCopy`, active authored definitions, or `savedSourceBaseline`. Canonical Level 01 has 0 Dynamic Boxes (intentional M45 migration of the leftover probe line). Not the old hard-coded cyan crate.
 
 **Body budget.** `kPhysicsMaxBodies` remains 64. Fixed bodies are 5 (ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body). Authored leftover is **59**, shared by elevated Platforms and Dynamic Boxes: `fixed + platforms + dynamicBoxes <= 64`. Canonical Level 01 static bodies stay 9 (ground + 6 platforms + 2 slopes) with 0 Dynamic Boxes.
 
-Status: Milestone 44 is CLOSED and merged. Milestone 45 is implemented, awaiting manual acceptance. Milestone 46 has not started.
+Status: Milestone 44 is CLOSED and merged. Milestone 45 is CLOSED and merged. Milestone 46 is implemented, awaiting manual acceptance. Milestone 47 has not started.

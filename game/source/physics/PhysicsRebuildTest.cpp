@@ -12,12 +12,14 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
+#include "physics/PhysicsWorldTestAccess.h"
 #include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -36,6 +38,51 @@ void Expect(bool condition, const std::string& name)
 }
 
 constexpr float kStepSeconds = 1.0f / 60.0f;
+
+bool NearlyEqual(float a, float b, float epsilon = 0.05f)
+{
+    return std::fabs(a - b) < epsilon;
+}
+
+bool VecNear(core::Vec3 a, core::Vec3 b, float epsilon = 0.05f)
+{
+    return NearlyEqual(a.x, b.x, epsilon) && NearlyEqual(a.y, b.y, epsilon)
+        && NearlyEqual(a.z, b.z, epsilon);
+}
+
+bool VelocityNearZero(core::Vec3 velocity, float epsilon = 0.05f)
+{
+    return VecNear(velocity, {}, epsilon);
+}
+
+bool RotationIsIdentity(const physics::DynamicBoxRuntimeState& box, float epsilon = 0.02f)
+{
+    return std::fabs(box.rotationX) < epsilon && std::fabs(box.rotationY) < epsilon
+        && std::fabs(box.rotationZ) < epsilon && std::fabs(std::fabs(box.rotationW) - 1.0f) < epsilon;
+}
+
+void ArrangeDynamicBoxRuntimeMotion(
+    physics::PhysicsWorld& world,
+    std::size_t index,
+    core::Vec3 center,
+    core::Vec3 linearVelocity,
+    core::Vec3 angularVelocity,
+    float rotationX = 0.0f,
+    float rotationY = 0.0f,
+    float rotationZ = 0.0f,
+    float rotationW = 1.0f)
+{
+    physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
+        world,
+        index,
+        center,
+        linearVelocity,
+        angularVelocity,
+        rotationX,
+        rotationY,
+        rotationZ,
+        rotationW);
+}
 
 void SettleFrames(physics::PhysicsWorld& world, int frames)
 {
@@ -475,6 +522,234 @@ int main()
         Expect(
             pushLevel.dynamicBoxes[0].center.x == 1.4f,
             "push simulation does not rewrite authored center");
+    }
+
+    {
+        physics::PhysicsWorld recoveryWorld;
+        world::LevelDefinition recoveryLevel = parsed.level;
+        world::DynamicBoxSpec boxA{};
+        boxA.center = {2.0f, 4.0f, 0.0f};
+        boxA.size = {1.0f, 4.0f, 1.0f};
+        boxA.massKg = 30.0f;
+        world::DynamicBoxSpec boxB{};
+        boxB.center = {6.0f, 3.0f, 0.0f};
+        boxB.size = {1.0f, 1.0f, 1.0f};
+        boxB.massKg = 5.0f;
+        recoveryLevel.dynamicBoxes.push_back(boxA);
+        recoveryLevel.dynamicBoxes.push_back(boxB);
+
+        world::LevelDefinition workingCopy = recoveryLevel;
+        workingCopy.dynamicBoxes[0].center.x = 99.0f;
+        const world::LevelDefinition savedSourceBaseline = recoveryLevel;
+        const bool modifiedBefore =
+            !world::AuthoredLevelDataEqual(workingCopy, recoveryLevel);
+        const bool dirtyBefore =
+            !world::AuthoredLevelDataEqual(recoveryLevel, savedSourceBaseline);
+
+        Expect(recoveryWorld.Initialize(recoveryLevel), "recovery Initialize");
+        Expect(
+            recoveryWorld.InitializePlayer(
+                recoveryLevel.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "recovery InitializePlayer");
+        Expect(recoveryWorld.DynamicBodyCount() == 2, "recovery starts with two Dynamic Boxes");
+        Expect(recoveryLevel.killPlaneY == -8.0f, "canonical active kill plane is -8");
+
+        const float halfExtentY = boxA.size.y * 0.5f;
+        Expect(halfExtentY == 2.0f, "threshold fixture half-extent is 2");
+
+        const core::Vec3 aboveCenter{-10.0f, -7.9f, 1.0f};
+        Expect(aboveCenter.y >= recoveryLevel.killPlaneY, "threshold high sample is not below kill plane");
+        Expect(
+            aboveCenter.y - halfExtentY < recoveryLevel.killPlaneY,
+            "AABB minimum Y of high sample is below kill plane");
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            0,
+            aboveCenter,
+            {3.0f, -2.0f, 1.0f},
+            {0.0f, 0.0f, 4.0f},
+            0.0f,
+            0.0f,
+            0.70710678f,
+            0.70710678f);
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            1,
+            {8.0f, 1.5f, 0.25f},
+            {1.25f, 0.5f, -0.75f},
+            {0.4f, -0.2f, 0.6f},
+            0.0f,
+            0.70710678f,
+            0.0f,
+            0.70710678f);
+
+        recoveryWorld.RecoverFallenDynamicBoxes();
+        std::vector<physics::DynamicBoxRuntimeState> recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(recovered.size() == 2, "recovery query still has two boxes");
+        Expect(
+            VecNear(recovered[0].center, aboveCenter, 0.02f),
+            "center Y >= kill plane does not recover even when AABB min Y is below");
+        Expect(!RotationIsIdentity(recovered[0]), "unrecovered box keeps arranged orientation");
+        Expect(
+            !VelocityNearZero(recovered[0].linearVelocity) && !VelocityNearZero(recovered[0].angularVelocity),
+            "unrecovered box keeps arranged velocities");
+
+        const core::Vec3 belowCenter{-10.0f, -8.1f, 1.0f};
+        Expect(belowCenter.y < recoveryLevel.killPlaneY, "threshold low sample is below kill plane");
+        Expect(
+            boxA.center.y >= recoveryLevel.killPlaneY,
+            "authored center Y is not the detection value");
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            0,
+            belowCenter,
+            {3.0f, -2.0f, 1.0f},
+            {0.0f, 0.0f, 4.0f},
+            0.0f,
+            0.0f,
+            0.70710678f,
+            0.70710678f);
+        const std::vector<physics::DynamicBoxRuntimeState> beforeFallen =
+            recoveryWorld.GetDynamicBoxes();
+        Expect(beforeFallen[0].center.y < recoveryLevel.killPlaneY, "arranged runtime center is below kill plane");
+        Expect(!RotationIsIdentity(beforeFallen[0]), "fallen box starts tumbled");
+        Expect(
+            !VelocityNearZero(beforeFallen[0].linearVelocity)
+                && !VelocityNearZero(beforeFallen[0].angularVelocity),
+            "fallen box starts with motion");
+        const physics::DynamicBoxRuntimeState preservedB = beforeFallen[1];
+
+        recoveryWorld.RecoverFallenDynamicBoxes();
+        recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(VecNear(recovered[0].center, boxA.center), "fallen box recovers to active authored center");
+        Expect(VelocityNearZero(recovered[0].linearVelocity), "recovered linear velocity is zero");
+        Expect(VelocityNearZero(recovered[0].angularVelocity), "recovered angular velocity is zero");
+        Expect(RotationIsIdentity(recovered[0]), "recovered orientation is authored identity");
+        Expect(VecNear(recovered[1].center, preservedB.center, 0.02f), "other box keeps independent center");
+        Expect(
+            VecNear(recovered[1].linearVelocity, preservedB.linearVelocity, 0.02f),
+            "other box keeps independent linear velocity");
+        Expect(
+            VecNear(recovered[1].angularVelocity, preservedB.angularVelocity, 0.02f),
+            "other box keeps independent angular velocity");
+        Expect(
+            NearlyEqual(recovered[1].rotationX, preservedB.rotationX, 0.02f)
+                && NearlyEqual(recovered[1].rotationY, preservedB.rotationY, 0.02f)
+                && NearlyEqual(recovered[1].rotationZ, preservedB.rotationZ, 0.02f)
+                && NearlyEqual(recovered[1].rotationW, preservedB.rotationW, 0.02f),
+            "other box keeps independent orientation");
+
+        Expect(
+            world::AuthoredLevelDataEqual(recoveryLevel, savedSourceBaseline),
+            "recovery does not mutate active authored LevelDefinition");
+        Expect(
+            workingCopy.dynamicBoxes[0].center.x == 99.0f,
+            "recovery does not mutate workingCopy");
+        Expect(
+            !world::AuthoredLevelDataEqual(workingCopy, recoveryLevel) == modifiedBefore,
+            "Modified semantics unchanged by recovery");
+        Expect(
+            !world::AuthoredLevelDataEqual(recoveryLevel, savedSourceBaseline) == dirtyBefore,
+            "Dirty semantics unchanged by recovery");
+        Expect(modifiedBefore, "pending workingCopy transform keeps Modified true");
+        Expect(!dirtyBefore, "matching baseline keeps Dirty false");
+
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            0,
+            {-12.0f, -20.0f, 0.0f},
+            {2.0f, -8.0f, 0.0f},
+            {1.0f, 0.0f, 1.0f},
+            0.0f,
+            0.0f,
+            0.70710678f,
+            0.70710678f);
+        recoveryWorld.Update(kStepSeconds);
+        recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(
+            VecNear(recovered[0].center, boxA.center),
+            "PhysicsWorld::Update recovers a fallen box without a full rebuild");
+        Expect(VelocityNearZero(recovered[0].linearVelocity), "Update recovery zeros linear velocity");
+        Expect(VelocityNearZero(recovered[0].angularVelocity), "Update recovery zeros angular velocity");
+        Expect(RotationIsIdentity(recovered[0]), "Update recovery restores identity orientation");
+
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            0, {3.5f, 2.0f, 0.0f}, {0.8f, 0.0f, 0.0f}, {0.0f, 0.3f, 0.0f});
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            1, {9.5f, 1.25f, 0.0f}, {-0.4f, 0.2f, 0.0f}, {0.0f, 0.0f, 0.5f});
+        recoveryWorld.ResetCharacter(recoveryLevel.initialSpawnVisualCenter, {});
+        recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(
+            VecNear(recovered[0].center, {3.5f, 2.0f, 0.0f}, 0.05f)
+                && VecNear(recovered[1].center, {9.5f, 1.25f, 0.0f}, 0.05f),
+            "checkpoint-style ResetCharacter still does not reset valid Dynamic Boxes");
+
+        recoveryWorld.ResetDynamicBoxes();
+        recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(VecNear(recovered[0].center, boxA.center), "Restart Run resets all boxes, including A");
+        Expect(VecNear(recovered[1].center, boxB.center), "Restart Run resets all boxes, including B");
+        Expect(VelocityNearZero(recovered[0].linearVelocity) && VelocityNearZero(recovered[0].angularVelocity),
+            "Restart Run zeros box A motion");
+        Expect(VelocityNearZero(recovered[1].linearVelocity) && VelocityNearZero(recovered[1].angularVelocity),
+            "Restart Run zeros box B motion");
+        Expect(RotationIsIdentity(recovered[0]) && RotationIsIdentity(recovered[1]),
+            "Restart Run restores identity orientation for every box");
+
+        world::LevelDefinition applied = recoveryLevel;
+        applied.dynamicBoxes[0].center = {5.0f, 4.5f, 0.0f};
+        Expect(
+            recoveryWorld.TryRebuild(
+                applied, applied.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "Apply-style rebuild with new authored Dynamic Box transform");
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            0,
+            {-9.0f, -12.0f, 0.0f},
+            {4.0f, -3.0f, 0.0f},
+            {0.0f, 2.0f, 0.0f},
+            0.0f,
+            0.70710678f,
+            0.0f,
+            0.70710678f);
+        recoveryWorld.RecoverFallenDynamicBoxes();
+        recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(
+            VecNear(recovered[0].center, applied.dynamicBoxes[0].center),
+            "post-Apply recovery uses the new active authored transform");
+        Expect(
+            !VecNear(recovered[0].center, boxA.center),
+            "post-Apply recovery does not use the pre-Apply transform");
+        Expect(
+            !VecNear(recovered[0].center, workingCopy.dynamicBoxes[0].center),
+            "post-Apply recovery does not use unapplied workingCopy");
+        Expect(workingCopy.dynamicBoxes[0].center.x == 99.0f, "Apply rebuild does not consume this pending copy");
+
+        world::LevelDefinition staged = applied;
+        staged.dynamicBoxes[0].center = {11.0f, 3.25f, 0.0f};
+        Expect(
+            recoveryWorld.TryRebuild(
+                staged, staged.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "staged-reload-style rebuild from new authored definition");
+        ArrangeDynamicBoxRuntimeMotion(recoveryWorld,
+            0, {-4.0f, -15.0f, 0.0f}, {1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 3.0f});
+        recoveryWorld.RecoverFallenDynamicBoxes();
+        recovered = recoveryWorld.GetDynamicBoxes();
+        Expect(
+            VecNear(recovered[0].center, staged.dynamicBoxes[0].center),
+            "post-reload recovery uses the newly active staged authored transform");
+        Expect(
+            !VecNear(recovered[0].center, applied.dynamicBoxes[0].center),
+            "stale pre-reload recovery transform does not survive");
+    }
+
+    {
+        physics::PhysicsWorld zeroWorld;
+        Expect(zeroWorld.Initialize(parsed.level), "zero-box Initialize");
+        Expect(
+            zeroWorld.InitializePlayer(parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "zero-box InitializePlayer");
+        Expect(zeroWorld.DynamicBodyCount() == 0, "canonical Level 01 still has zero Dynamic Boxes");
+        zeroWorld.RecoverFallenDynamicBoxes();
+        Expect(zeroWorld.IsInitialized(), "zero-box recovery is a no-op");
+        Expect(zeroWorld.GetDynamicBoxes().empty(), "zero-box query stays empty");
+        zeroWorld.Update(kStepSeconds);
+        Expect(zeroWorld.DynamicBodyCount() == 0, "zero-box Update stays stable");
+        Expect(zeroWorld.GetPlayerPhysicsState().characterInitialized, "zero-box player remains");
     }
 
     if (gFailures != 0)

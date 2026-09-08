@@ -120,7 +120,9 @@ Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
 Runtime: active checkpoint, respawn position, death count, collected flags,
 completion, TIME, BEST, moving-platform pose/direction, BodyIDs,
-camera smoothed target.
+camera smoothed target, Dynamic Box runtime pose/velocity, and Dynamic Box
+kill-plane recovery. Recovery uses the existing authored `kill_plane` and does
+not add a Dynamic Box field.
 
 Player/controller policy: accel/decel/speed/gravity/jump/coyote/buffer,
 CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
