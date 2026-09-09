@@ -22,6 +22,7 @@ enum class PlacementMode
     Hazard,
     Collectible,
     DynamicBox,
+    PressurePlate,
 };
 
 // Transient, not authored, not Level Format.

@@ -275,6 +275,16 @@ EditorPickingSet BuildPickingSet(
             : appliedLevel.dynamicBoxes[index].size;
         AddProxy(set, EditorObjectKind::DynamicBox, index, center, size, 0.0f);
     }
+    for (std::size_t index = 0; index < appliedLevel.pressurePlates.size(); ++index)
+    {
+        AddProxy(
+            set,
+            EditorObjectKind::PressurePlate,
+            index,
+            appliedLevel.pressurePlates[index].center,
+            appliedLevel.pressurePlates[index].size,
+            0.0f);
+    }
     for (std::size_t index = 0; index < appliedLevel.staticProps.size(); ++index)
     {
         const world::StaticPropSpec& prop = appliedLevel.staticProps[index];

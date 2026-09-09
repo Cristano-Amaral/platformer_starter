@@ -106,6 +106,7 @@ int main()
         Expect(editor::IsGizmoSelection({EditorObjectKind::Collectible, 0}), "collectible translate gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal has no gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box has gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::PressurePlate, 0}), "Pressure Plate has gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::StaticProp, 0}), "Static Prop has Translate gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::None, 0}), "none is not gizmo");
     }
@@ -161,6 +162,25 @@ int main()
         }
         Expect(NearlyEqual(level.dynamicBoxes[0].size.x, 2.0f), "Resize mutates working size");
         Expect(level.dynamicBoxes[0].massKg == 30.0f, "gizmo does not rewrite mass");
+        level.pressurePlates.push_back({{4.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize});
+        core::Vec3* plateCenter =
+            editor::GetEditablePosition(level, {EditorObjectKind::PressurePlate, 0});
+        Expect(plateCenter != nullptr, "Pressure Plate has translate origin");
+        if (plateCenter != nullptr)
+        {
+            plateCenter->x = 5.0f;
+        }
+        Expect(NearlyEqual(level.pressurePlates[0].center.x, 5.0f), "Translate mutates plate center");
+        core::Vec3* plateSize = editor::GetEditableSize(level, {EditorObjectKind::PressurePlate, 0});
+        Expect(plateSize != nullptr, "Pressure Plate has resize size");
+        if (plateSize != nullptr)
+        {
+            plateSize->x = 3.0f;
+        }
+        Expect(NearlyEqual(level.pressurePlates[0].size.x, 3.0f), "Resize mutates plate size");
+        Expect(
+            !editor::IsScaleSelection({EditorObjectKind::PressurePlate, 0}),
+            "Pressure Plate is not Static Prop Scale");
         world::StaticPropSpec prop{};
         prop.modelIdentity = "models/test_static.glb";
         prop.position = {3.0f, 1.0f, 0.0f};
@@ -591,6 +611,7 @@ int main()
         Expect(!editor::IsResizeSelection({EditorObjectKind::Hazard, 0}), "hazard is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Collectible, 0}), "collectible is not resize");
         Expect(editor::IsResizeSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box is resize");
+        Expect(editor::IsResizeSelection({EditorObjectKind::PressurePlate, 0}), "Pressure Plate is resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is not primitive Resize");
         Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is Scale selection");
         Expect(!editor::IsScaleSelection({EditorObjectKind::Spawn, 0}), "spawn is not Scale");

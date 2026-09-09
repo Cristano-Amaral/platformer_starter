@@ -30,6 +30,7 @@ inline int CountLevelV1RecordLines(const LevelDefinition& level)
         + static_cast<int>(level.checkpoints.size()) + static_cast<int>(level.hazards.size())
         + static_cast<int>(level.collectibles.size())
         + static_cast<int>(level.dynamicBoxes.size())
+        + static_cast<int>(level.pressurePlates.size())
         + static_cast<int>(level.staticProps.size());
 }
 

@@ -775,6 +775,31 @@ int main()
         Expect(propWorld.DynamicBodyCount() == 0, "rebuild still has zero Dynamic Boxes");
     }
 
+    {
+        world::LevelDefinition withPlates = parsed.level;
+        world::PressurePlateSpec plate{};
+        plate.center = {8.0f, 0.1f, 0.0f};
+        plate.size = world::kDefaultPressurePlateSize;
+        withPlates.pressurePlates.push_back(plate);
+        withPlates.pressurePlates.push_back(plate);
+        physics::PhysicsWorld plateWorld;
+        Expect(plateWorld.Initialize(withPlates), "Pressure Plates Initialize");
+        Expect(
+            plateWorld.InitializePlayer(withPlates.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "Pressure Plates InitializePlayer");
+        Expect(plateWorld.StaticBodyCount() == 9, "Pressure Plates do not add static Jolt bodies");
+        Expect(plateWorld.DynamicBodyCount() == 0, "Pressure Plates do not add dynamic Jolt bodies");
+        Expect(plateWorld.GetPressurePlates().size() == 2, "rebuild stores two applied plates");
+        Expect(!plateWorld.GetPressurePlates()[0].active, "zero boxes stay Inactive");
+        Expect(
+            plateWorld.TryRebuild(
+                withPlates, withPlates.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "TryRebuild with Pressure Plates");
+        Expect(plateWorld.StaticBodyCount() == 9, "rebuild still ignores Pressure Plates for bodies");
+        Expect(plateWorld.DynamicBodyCount() == 0, "rebuild still has zero Dynamic Boxes");
+        Expect(plateWorld.GetPressurePlates().size() == 2, "rebuild keeps two plates");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d physics rebuild test(s) failed.\n", gFailures);

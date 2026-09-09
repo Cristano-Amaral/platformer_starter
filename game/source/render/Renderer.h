@@ -37,7 +37,7 @@ struct DebugWorldOverlay
     // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
     struct PendingAuthoringOverlayItem
     {
-        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate
         bool selected = false;
         core::Vec3 boundsCenter{};
         core::Vec3 boundsSize{};
@@ -78,6 +78,9 @@ struct DebugWorldOverlay
     std::vector<int> pendingDeleteDynamicBoxIndices;
     std::vector<core::Vec3> pendingDeleteDynamicBoxCenters;
     std::vector<core::Vec3> pendingDeleteDynamicBoxSizes;
+    std::vector<int> pendingDeletePressurePlateIndices;
+    std::vector<core::Vec3> pendingDeletePressurePlateCenters;
+    std::vector<core::Vec3> pendingDeletePressurePlateSizes;
     std::vector<int> pendingDeleteStaticPropIndices;
     std::vector<core::Vec3> pendingDeleteStaticPropCenters;
     std::vector<core::Vec3> pendingDeleteStaticPropSizes;
@@ -140,6 +143,13 @@ struct DynamicBoxDrawState
     DynamicBoxDrawFeedback feedback = DynamicBoxDrawFeedback::None;
 };
 
+struct PressurePlateDrawState
+{
+    core::Vec3 center{};
+    core::Vec3 size{};
+    bool active = false;
+};
+
 class StaticModelSceneStore;
 
 class Renderer
@@ -187,6 +197,7 @@ public:
         const CameraView& cameraView,
         const world::LevelDefinition& level,
         const std::vector<DynamicBoxDrawState>& dynamicBoxes,
+        const std::vector<PressurePlateDrawState>& pressurePlates,
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,

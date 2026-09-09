@@ -13,7 +13,8 @@ inline constexpr unsigned int kPhysicsMaxBodies = 64;
 
 // ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body.
 // CharacterVirtual itself is not a Jolt body. Elevated platforms and
-// Dynamic Boxes share the leftover.
+// Dynamic Boxes share the leftover. Pressure Plates and Static Props
+// do not consume body slots.
 inline constexpr int kPhysicsFixedBodyCount = 5;
 inline constexpr int kPhysicsNonPlatformBodyCount = kPhysicsFixedBodyCount;
 

@@ -42,6 +42,15 @@ class LevelV1HeaderTests(unittest.TestCase):
         self.assertIn(b"static_prop 1 2 3", payload)
         self.assertIn(b"models/test_static.glb", payload)
 
+    def test_pressure_plate_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"pressure_plate 2 0.1 0 2 0.2 2\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"pressure_plate 2 0.1 0", payload)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -119,6 +119,22 @@ std::vector<render::DynamicBoxDrawState> MakeDynamicBoxDrawStates(
     return draw;
 }
 
+std::vector<render::PressurePlateDrawState> MakePressurePlateDrawStates(
+    const std::vector<physics::PressurePlateRuntimeState>& plates)
+{
+    std::vector<render::PressurePlateDrawState> draw;
+    draw.reserve(plates.size());
+    for (const physics::PressurePlateRuntimeState& plate : plates)
+    {
+        render::PressurePlateDrawState item{};
+        item.center = plate.center;
+        item.size = plate.size;
+        item.active = plate.active;
+        draw.push_back(item);
+    }
+    return draw;
+}
+
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 editor::EditorPickingWorldState MakeRuntimePickingWorldState(
     const physics::MovingPlatformState& movingPlatform,
@@ -529,6 +545,17 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.grabCarrying = grab.carrying;
     snapshot.grabCarriedIndex = grab.carriedIndex;
     snapshot.staticBodyCount = physicsWorld.StaticBodyCount();
+    const std::vector<physics::PressurePlateRuntimeState> pressurePlates =
+        physicsWorld.GetPressurePlates();
+    snapshot.physicsPressurePlateCount = static_cast<int>(pressurePlates.size());
+    snapshot.physicsActivePressurePlateCount = 0;
+    for (const physics::PressurePlateRuntimeState& plate : pressurePlates)
+    {
+        if (plate.active)
+        {
+            ++snapshot.physicsActivePressurePlateCount;
+        }
+    }
 
     snapshot.characterVirtualInitialized = player.CharacterVirtualInitialized();
     snapshot.playerGroundSupport = GroundSupportName(player.GroundSupport());
@@ -658,6 +685,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
         && level.movingPlatform.size.y > 0.0f && level.movingPlatform.size.z > 0.0f
         && level.movingPlatform.speed > 0.0f;
     snapshot.levelDynamicBoxCount = static_cast<int>(level.dynamicBoxes.size());
+    snapshot.levelPressurePlateCount = static_cast<int>(level.pressurePlates.size());
     snapshot.levelCameraOffset = level.camera.offset;
     snapshot.levelCameraFieldOfViewY = level.camera.fieldOfViewY;
     return snapshot;
@@ -800,6 +828,8 @@ int Application::Run()
         const physics::DynamicBoxGrabState grabState = physicsWorld.GetGrabState();
         const std::vector<render::DynamicBoxDrawState> dynamicDraw =
             MakeDynamicBoxDrawStates(dynamicBoxes, grabState);
+        const std::vector<render::PressurePlateDrawState> pressurePlateDraw =
+            MakePressurePlateDrawStates(physicsWorld.GetPressurePlates());
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         render::CameraView cameraView = MakeGameplayCameraView(camera);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
@@ -897,6 +927,9 @@ int Application::Run()
                 case editor::EditorObjectKind::StaticProp:
                     item.kind = 5;
                     break;
+                case editor::EditorObjectKind::PressurePlate:
+                    item.kind = 6;
+                    break;
                 default:
                     continue;
                 }
@@ -989,6 +1022,9 @@ int Application::Run()
                 case editor::EditorObjectKind::DynamicBox:
                     overlay.placementCandidateKind = 4;
                     break;
+                case editor::EditorObjectKind::PressurePlate:
+                    overlay.placementCandidateKind = 6;
+                    break;
                 default:
                     overlay.placementCandidateKind = 0;
                     break;
@@ -1045,6 +1081,16 @@ int Application::Run()
                     overlay.pendingDeleteDynamicBoxSizes.push_back(
                         pendingDelete.dynamicBoxes[index].size);
                 }
+            }
+            overlay.pendingDeletePressurePlateIndices = pendingDelete.pressurePlateIndices;
+            overlay.pendingDeletePressurePlateCenters.clear();
+            overlay.pendingDeletePressurePlateSizes.clear();
+            overlay.pendingDeletePressurePlateCenters.reserve(pendingDelete.pressurePlates.size());
+            overlay.pendingDeletePressurePlateSizes.reserve(pendingDelete.pressurePlates.size());
+            for (const world::PressurePlateSpec& plate : pendingDelete.pressurePlates)
+            {
+                overlay.pendingDeletePressurePlateCenters.push_back(plate.center);
+                overlay.pendingDeletePressurePlateSizes.push_back(plate.size);
             }
             overlay.pendingDeleteStaticPropIndices = pendingDelete.staticPropIndices;
             overlay.pendingDeleteStaticPropCenters.clear();
@@ -1145,6 +1191,7 @@ int Application::Run()
             cameraView,
             levelDefinition,
             dynamicDraw,
+            pressurePlateDraw,
             movingPlatform.position,
             movingPlatform.size,
             MakeCheckpointVisuals(

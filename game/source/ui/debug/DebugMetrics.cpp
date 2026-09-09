@@ -137,6 +137,7 @@ void DrawDebugMetrics(
         ImGui::Text("Goal present: %s", BoolText(snapshot.levelHasGoal));
         ImGui::Text("Moving platform present: %s", BoolText(snapshot.levelHasMovingPlatform));
         ImGui::Text("Dynamic Boxes: %d", snapshot.levelDynamicBoxCount);
+        ImGui::Text("Pressure Plates: %d", snapshot.levelPressurePlateCount);
         ImGui::Text(
             "Camera offset: %.4f, %.4f, %.4f",
             snapshot.levelCameraOffset.x,
@@ -211,6 +212,8 @@ void DrawDebugMetrics(
         ImGui::Text("Jolt initialized: %s", BoolText(snapshot.physicsInitialized));
         ImGui::Text("static greybox bodies: %d", snapshot.staticBodyCount);
         ImGui::Text("authored Dynamic Box bodies: %d", snapshot.physicsDynamicBoxCount);
+        ImGui::Text("Pressure Plates: %d", snapshot.physicsPressurePlateCount);
+        ImGui::Text("Active Pressure Plates: %d", snapshot.physicsActivePressurePlateCount);
         ImGui::Text("first Dynamic Box valid: %s", BoolText(snapshot.dynamicTestBodyValid));
         ImGui::Text("grab target: %s (%d)", BoolText(snapshot.grabHasTarget), snapshot.grabTargetIndex);
         ImGui::Text("grab carrying: %s (%d)", BoolText(snapshot.grabCarrying), snapshot.grabCarriedIndex);

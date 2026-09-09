@@ -107,6 +107,10 @@ int main()
         editor::EditAddMenuRequest(EditorObjectKind::DynamicBox) == LevelEditorRequest::AddDynamicBox,
         "Edit > Add > Dynamic Box maps to AddDynamicBox");
     Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::PressurePlate)
+            == LevelEditorRequest::AddPressurePlate,
+        "Edit > Add > Pressure Plate maps to AddPressurePlate");
+    Expect(
         editor::EditAddMenuRequest(EditorObjectKind::StaticProp) == LevelEditorRequest::AddStaticProp,
         "Edit > Add > Static Prop maps to AddStaticProp");
     Expect(
@@ -129,6 +133,10 @@ int main()
         editor::PlacementAddRequest(editor::PlacementMode::DynamicBox)
             == LevelEditorRequest::AddDynamicBox,
         "Object Palette Dynamic Box still confirms AddDynamicBox");
+    Expect(
+        editor::PlacementAddRequest(editor::PlacementMode::PressurePlate)
+            == LevelEditorRequest::AddPressurePlate,
+        "Object Palette Pressure Plate confirms AddPressurePlate");
 
     {
         const world::LevelDefinition active = MakeActiveLevel();
@@ -973,6 +981,137 @@ int main()
             "AtLimit still handled as lifecycle");
         Expect(limitState.workingCopy.dynamicBoxes.empty(), "AtLimit does not append a Dynamic Box");
         Expect(atLimit.dynamicBoxes.empty(), "AtLimit does not mutate active");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(active.pressurePlates.empty(), "fixture starts with zero Pressure Plates");
+        Expect(
+            HierarchyKindCount(active, EditorObjectKind::PressurePlate) == 0,
+            "empty collection has no Hierarchy Pressure Plate rows");
+
+        const LevelEditorRequest editAdd =
+            editor::EditAddMenuRequest(EditorObjectKind::PressurePlate);
+        Expect(editAdd == LevelEditorRequest::AddPressurePlate, "menu action is AddPressurePlate");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(true, active, {}, false, editAdd),
+            "Development can add Pressure Plate");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(false, active, {}, false, editAdd),
+            "Debug authoring cannot add Pressure Plate");
+
+        const core::Vec3 cameraAnchor{12.0f, 5.0f, -6.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(state, active, editAdd, true, cameraAnchor),
+            "Edit > Add > Pressure Plate reaches workingCopy mutation");
+        Expect(state.workingCopy.pressurePlates.size() == 1, "workingCopy gains exactly one Pressure Plate");
+        Expect(active.pressurePlates.empty(), "Edit Add does not mutate active");
+        Expect(
+            state.workingCopy.pressurePlates[0].size.x == world::kDefaultPressurePlateSize.x
+                && state.workingCopy.pressurePlates[0].size.y == world::kDefaultPressurePlateSize.y
+                && state.workingCopy.pressurePlates[0].size.z == world::kDefaultPressurePlateSize.z,
+            "default size is 2,0.2,2");
+        Expect(
+            state.workingCopy.pressurePlates[0].center.x == cameraAnchor.x
+                && state.workingCopy.pressurePlates[0].center.y == cameraAnchor.y,
+            "Edit Add uses camera-region X/Y");
+        Expect(
+            state.workingCopy.pressurePlates[0].center.z == active.initialSpawnVisualCenter.z,
+            "Edit Add uses spawn-lane Z");
+        Expect(state.selection.kind == EditorObjectKind::PressurePlate, "new Pressure Plate is selected");
+        Expect(state.selection.index == 0, "selection uses new working index 0");
+        Expect(
+            editor::MappedActiveIndex(state.structuralMap, EditorObjectKind::PressurePlate, 0)
+                == editor::kNoStructuralIndex,
+            "pending Add has no active counterpart");
+        Expect(state.placementMode == editor::PlacementMode::None, "Edit Add does not enter palette mode");
+        Expect(state.modified, "pending Add is Modified");
+        Expect(
+            state.lastApplyStatus == editor::LevelEditorApplyStatus::NotAttempted,
+            "Edit Add does not Apply Preview");
+        Expect(
+            editor::GetEditablePosition(state.workingCopy, state.selection) != nullptr,
+            "Inspector Position is available");
+        Expect(
+            editor::GetEditableSize(state.workingCopy, state.selection) != nullptr,
+            "Inspector Size is available");
+        Expect(
+            !editor::IsScaleSelection(state.selection),
+            "Pressure Plate does not use Static Prop Scale");
+
+        editor::LevelEditorState paletteState{};
+        SeedEditor(paletteState, active);
+        editor::ApplyPaletteCategoryClick(paletteState.placementMode, editor::PlacementMode::PressurePlate);
+        Expect(
+            paletteState.placementMode == editor::PlacementMode::PressurePlate,
+            "Object Palette Pressure Plate enters placement");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                paletteState,
+                active,
+                editor::PlacementAddRequest(paletteState.placementMode),
+                true,
+                {3.0f, 0.1f, 0.0f},
+                true),
+            "palette confirm uses world-center AddPressurePlateAt");
+        Expect(paletteState.workingCopy.pressurePlates.size() == 1, "palette confirm adds one plate");
+        Expect(
+            paletteState.workingCopy.pressurePlates[0].center.x == 3.0f
+                && paletteState.workingCopy.pressurePlates[0].center.z == 0.0f,
+            "palette confirm does not snap to spawn.z lane");
+        Expect(active.pressurePlates.empty(), "palette confirm does not mutate active");
+        Expect(paletteState.workingCopy.staticProps.empty(), "palette plate does not add Static Props");
+
+        editor::LevelEditorState dupState{};
+        SeedEditor(dupState, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::PressurePlate),
+                true,
+                cameraAnchor),
+            "Add before Duplicate");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Pressure Plate request");
+        Expect(dupState.workingCopy.pressurePlates.size() == 2, "Duplicate appends Pressure Plate");
+        Expect(
+            dupState.workingCopy.pressurePlates[1].size.y == world::kDefaultPressurePlateSize.y,
+            "Duplicate preserves size");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Pressure Plate request");
+        Expect(dupState.workingCopy.pressurePlates.size() == 1, "Delete removes working Pressure Plate");
+
+        world::LevelDefinition atLimit = active;
+        atLimit.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies),
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        editor::LevelEditorState limitState{};
+        SeedEditor(limitState, atLimit);
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                atLimit,
+                {},
+                false,
+                editor::EditAddMenuRequest(EditorObjectKind::PressurePlate)),
+            "Edit Add Pressure Plate remains enabled at physics leftover capacity");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                limitState,
+                atLimit,
+                editor::EditAddMenuRequest(EditorObjectKind::PressurePlate),
+                true,
+                cameraAnchor),
+            "AtLimit still adds a Pressure Plate");
+        Expect(limitState.workingCopy.pressurePlates.size() == 1, "AtLimit appends a Pressure Plate");
+        Expect(atLimit.pressurePlates.empty(), "AtLimit does not mutate active");
     }
 
     {

@@ -223,6 +223,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::PressurePlate:
     case EditorObjectKind::StaticProp:
         return true;
     default:
@@ -238,6 +239,7 @@ bool IsResizeSelection(EditorSelection selection)
         return selection.index == 0;
     case EditorObjectKind::ElevatedPlatform:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::PressurePlate:
         return true;
     default:
         return false;
@@ -293,6 +295,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.dynamicBoxes.size())
         {
             return &level.dynamicBoxes[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::PressurePlate:
+        if (selection.index < level.pressurePlates.size())
+        {
+            return &level.pressurePlates[selection.index].center;
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -355,6 +363,12 @@ const core::Vec3* GetEditablePosition(
             return &level.dynamicBoxes[selection.index].center;
         }
         break;
+    case EditorObjectKind::PressurePlate:
+        if (selection.index < level.pressurePlates.size())
+        {
+            return &level.pressurePlates[selection.index].center;
+        }
+        break;
     case EditorObjectKind::StaticProp:
         if (selection.index < level.staticProps.size())
         {
@@ -389,6 +403,12 @@ core::Vec3* GetEditableSize(world::LevelDefinition& level, EditorSelection selec
             return &level.dynamicBoxes[selection.index].size;
         }
         break;
+    case EditorObjectKind::PressurePlate:
+        if (selection.index < level.pressurePlates.size())
+        {
+            return &level.pressurePlates[selection.index].size;
+        }
+        break;
     default:
         break;
     }
@@ -417,6 +437,12 @@ const core::Vec3* GetEditableSize(
         if (selection.index < level.dynamicBoxes.size())
         {
             return &level.dynamicBoxes[selection.index].size;
+        }
+        break;
+    case EditorObjectKind::PressurePlate:
+        if (selection.index < level.pressurePlates.size())
+        {
+            return &level.pressurePlates[selection.index].size;
         }
         break;
     default:
@@ -530,6 +556,15 @@ bool GetGizmoPreviewBox(
             const world::DynamicBoxSpec& box = workingCopy.dynamicBoxes[selection.index];
             center = box.center;
             size = box.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::PressurePlate:
+        if (selection.index < workingCopy.pressurePlates.size())
+        {
+            const world::PressurePlateSpec& plate = workingCopy.pressurePlates[selection.index];
+            center = plate.center;
+            size = plate.size;
             return true;
         }
         break;
@@ -728,6 +763,25 @@ bool AuthoredGeometryDiffers(
         return Vec3Differs(activeBox.center, workingBox.center)
             || Vec3Differs(activeBox.size, workingBox.size)
             || activeBox.massKg != workingBox.massKg;
+    }
+    case EditorObjectKind::PressurePlate:
+    {
+        if (selection.index >= workingCopy.pressurePlates.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::PressurePlate, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.pressurePlates.size())
+        {
+            return true;
+        }
+        const world::PressurePlateSpec& activePlate =
+            active.pressurePlates[static_cast<std::size_t>(activeIndex)];
+        const world::PressurePlateSpec& workingPlate = workingCopy.pressurePlates[selection.index];
+        return Vec3Differs(activePlate.center, workingPlate.center)
+            || Vec3Differs(activePlate.size, workingPlate.size);
     }
     case EditorObjectKind::StaticProp:
     {
@@ -946,6 +1000,7 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::Hazard,
         EditorObjectKind::Collectible,
         EditorObjectKind::DynamicBox,
+        EditorObjectKind::PressurePlate,
         EditorObjectKind::StaticProp};
     for (const EditorObjectKind kind : kinds)
     {
@@ -962,6 +1017,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.collectibles.size();
             case EditorObjectKind::DynamicBox:
                 return workingCopy.dynamicBoxes.size();
+            case EditorObjectKind::PressurePlate:
+                return workingCopy.pressurePlates.size();
             case EditorObjectKind::StaticProp:
                 return workingCopy.staticProps.size();
             default:

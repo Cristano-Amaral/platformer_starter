@@ -413,6 +413,7 @@ struct PhysicsWorld::Impl
     float gameplayZ = 0.0f;
     world::MovingPlatformSpec movingPlatformSpec{};
     std::vector<world::DynamicBoxSpec> dynamicBoxSpecs{};
+    std::vector<world::PressurePlateSpec> pressurePlateSpecs{};
     float killPlaneY = 0.0f;
     float movingPlatformDirection = 1.0f;
     float carriedGroundVelocityX = 0.0f;
@@ -1094,6 +1095,7 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
 
     impl->movingPlatformSpec = level.movingPlatform;
     impl->dynamicBoxSpecs = level.dynamicBoxes;
+    impl->pressurePlateSpecs = level.pressurePlates;
     impl->killPlaneY = level.killPlaneY;
 
     if (!AuthoredPhysicsBodiesWithinBudget(
@@ -1550,6 +1552,7 @@ void PhysicsWorld::Shutdown()
         }
         impl->dynamicBodyIds.clear();
         impl->dynamicBoxSpecs.clear();
+        impl->pressurePlateSpecs.clear();
         impl->killPlaneY = 0.0f;
         if (!impl->movingPlatformId.IsInvalid())
         {
@@ -1643,6 +1646,33 @@ std::vector<DynamicBoxRuntimeState> PhysicsWorld::GetDynamicBoxes() const
         box.active = bodyInterface.IsActive(id);
     }
     return boxes;
+}
+
+std::vector<PressurePlateRuntimeState> PhysicsWorld::GetPressurePlates() const
+{
+    std::vector<PressurePlateRuntimeState> plates(impl->pressurePlateSpecs.size());
+    const std::vector<DynamicBoxRuntimeState> boxes = GetDynamicBoxes();
+    for (std::size_t plateIndex = 0; plateIndex < impl->pressurePlateSpecs.size(); ++plateIndex)
+    {
+        const world::PressurePlateSpec& spec = impl->pressurePlateSpecs[plateIndex];
+        PressurePlateRuntimeState& plate = plates[plateIndex];
+        plate.center = spec.center;
+        plate.size = spec.size;
+        plate.active = false;
+        for (const DynamicBoxRuntimeState& box : boxes)
+        {
+            if (!box.valid)
+            {
+                continue;
+            }
+            if (world::PressurePlateOverlapsBox(spec, box.center, box.size))
+            {
+                plate.active = true;
+                break;
+            }
+        }
+    }
+    return plates;
 }
 
 MovingPlatformState PhysicsWorld::GetMovingPlatform() const

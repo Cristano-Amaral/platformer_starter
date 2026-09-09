@@ -510,6 +510,36 @@ int main()
         Expect(working.dynamicBoxes[0].massKg == 30.0f, "placed mass is 30 kg");
     }
 
+    {
+        using editor::PlacementMode;
+        PlacementMode mode = PlacementMode::None;
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::PressurePlate);
+        Expect(mode == PlacementMode::PressurePlate, "click Pressure Plate enters placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::PressurePlate);
+        Expect(mode == PlacementMode::None, "click Pressure Plate again exits placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::DynamicBox);
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::PressurePlate);
+        Expect(mode == PlacementMode::PressurePlate, "click Pressure Plate switches from Dynamic Box");
+        Expect(
+            editor::KindFromPlacementMode(mode) == EditorObjectKind::PressurePlate,
+            "placement kind is Pressure Plate");
+        Expect(
+            editor::PlacementAddRequest(mode) == editor::LevelEditorRequest::AddPressurePlate,
+            "placement confirm is AddPressurePlate");
+        const editor::PlacementCandidate candidate =
+            editor::MakePlacementCandidate(PlacementMode::PressurePlate, {2.0f, 0.1f, 0.0f});
+        Expect(candidate.visible, "Pressure Plate candidate visible");
+        Expect(
+            candidate.size.x == world::kDefaultPressurePlateSize.x
+                && candidate.size.y == world::kDefaultPressurePlateSize.y
+                && candidate.size.z == world::kDefaultPressurePlateSize.z,
+            "candidate uses default plate size");
+        world::LevelDefinition working = MakeActiveLevel();
+        Expect(editor::AddPressurePlateAt(working, {2.0f, 0.1f, 0.0f}).succeeded, "palette confirm Add");
+        Expect(working.pressurePlates[0].center.x == 2.0f, "placed plate uses world center");
+        Expect(working.staticProps.empty(), "Pressure Plate placement does not add Static Props");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor placement test(s) failed.\n", gFailures);

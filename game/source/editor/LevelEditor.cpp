@@ -375,6 +375,14 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::InputFloat("Mass (kg)", &box.massKg, 0.0f, 0.0f, kFloatFormat);
         }
         break;
+    case EditorObjectKind::PressurePlate:
+        if (state.selection.index < level.pressurePlates.size())
+        {
+            world::PressurePlateSpec& plate = level.pressurePlates[state.selection.index];
+            EditVec3("Position X Y Z", plate.center);
+            EditVec3("Size X Y Z", plate.size);
+        }
+        break;
     case EditorObjectKind::StaticProp:
         if (state.selection.index < level.staticProps.size())
         {
@@ -485,6 +493,7 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Hazard", PlacementMode::Hazard, LevelEditorRequest::AddHazard);
     paletteButton("Collectible", PlacementMode::Collectible, LevelEditorRequest::AddCollectible);
     paletteButton("Dynamic Box", PlacementMode::DynamicBox, LevelEditorRequest::AddDynamicBox);
+    paletteButton("Pressure Plate", PlacementMode::PressurePlate, LevelEditorRequest::AddPressurePlate);
 
     ImGui::Separator();
     if (StaticPropPlacementIsActive(state.staticPropPlacement))
@@ -1342,6 +1351,18 @@ LevelEditorRequest DrawEditorMenuBar(
             if (ImGui::MenuItem("Dynamic Box"))
             {
                 request = EditAddMenuRequest(EditorObjectKind::DynamicBox);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::PressurePlate)));
+            if (ImGui::MenuItem("Pressure Plate"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::PressurePlate);
             }
             ImGui::EndDisabled();
             // Static Prop is the only Add entry whose enablement depends on

@@ -55,7 +55,7 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`dynamic_box`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
+`dynamic_box`, `pressure_plate`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
 appear exactly once. Unknown keywords and trailing unrecognized content are
 `Invalid`.
 
@@ -80,7 +80,7 @@ parser and writer accept any valid identifier.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Static Props are visual-only and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes / Pressure Plates / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box / Pressure Plate / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Pressure Plates and Static Props are not Jolt bodies and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -89,6 +89,7 @@ checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
 hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
+pressure_plate <cx> <cy> <cz> <sx> <sy> <sz>
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
 
@@ -102,9 +103,9 @@ Locale-independent `std::from_chars`. Whole token must parse. Reject overflow,
 NaN, Inf, leftover suffix (`1.0f`), and empty tokens. Integers for version and
 support indices.
 
-Positive sizes: each component finite and `> 0`. Dynamic Box extents must also
-be `>= kMinDynamicBoxExtent` (0.12), matching the editor authored-box minimum
-so Jolt never receives a zero-volume shape.
+Positive sizes: each component finite and `> 0`. Dynamic Box and Pressure Plate extents must also
+be `>= kMinDynamicBoxExtent` / `kMinPressurePlateExtent` (0.12), matching the editor authored-box minimum
+so Jolt never receives a zero-volume shape and Resize/parse share one floor.
 Moving platform: size positive, path min `<` path max, speed `> 0`, startX
 inside `[pathMinX, pathMaxX]`.
 Dynamic Box mass is kilograms: finite, `> 0`, and `<= kMaxDynamicBoxMassKg`
@@ -114,6 +115,13 @@ A historical one-record file parses as a one-element collection. Canonical
 Level 01 intentionally has **zero** Dynamic Boxes (M45 removed the legacy
 probe line; this is not the historical EOL artifact). Save serializes authored
 `center`, never the live Jolt pose.
+
+`pressure_plate` is an authored axis-aligned trigger volume, not a Jolt body.
+Position is world center. Size is extents; each axis finite and
+`>= kMinPressurePlateExtent` (0.12). Default Add size is `2, 0.2, 2`. Zero,
+one, or many records are valid. Canonical Level 01 has **zero** Pressure
+Plates. Runtime Active/Inactive is derived from current Dynamic Box overlap
+and is **not** a Level Format field.
 
 `static_prop` is a visual authored instance, not a physics body. Identity is
 the canonical project-relative Static Model Asset path (`models/<file>.glb`),
@@ -135,9 +143,11 @@ Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
 Runtime: active checkpoint, respawn position, death count, collected flags,
 completion, TIME, BEST, moving-platform pose/direction, BodyIDs,
-camera smoothed target, Dynamic Box runtime pose/velocity, and Dynamic Box
-kill-plane recovery. Recovery uses the existing authored `kill_plane` and does
-not add a Dynamic Box field.
+camera smoothed target, Dynamic Box runtime pose/velocity, Dynamic Box
+kill-plane recovery, Pressure Plate Active/Inactive, overlapping Dynamic Box
+index, and overlap count. Recovery uses the existing authored `kill_plane` and does
+not add a Dynamic Box field. Pressure Plate activation is recomputed from
+current runtime overlap and is never written.
 
 Player/controller policy: accel/decel/speed/gravity/jump/coyote/buffer,
 CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
@@ -145,7 +155,7 @@ CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
 Camera follow policy: dead zone X/Y, follow sharpness.
 
 `LevelFileTest` asserts this by whitelist: every keyword the writer emits must
-be one of the 18 v1 keywords, so no runtime state can appear in output.
+be one of the 19 v1 keywords, so no runtime state can appear in output.
 
 ## Cooker
 
@@ -213,6 +223,7 @@ hazard              variable, hazards index order
 collectible         variable, collectibles index order
 goal
 dynamic_box         variable, dynamicBoxes index order
+pressure_plate      variable, pressurePlates index order
 static_prop         variable, staticProps index order
 camera
 ```

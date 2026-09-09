@@ -73,6 +73,7 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
         && Vec3Equal(level.goal.center, {-21.0f, 3.8f, 0.0f})
         && level.dynamicBoxes.empty()
+        && level.pressurePlates.empty()
         && level.staticProps.empty()
         && Vec3Equal(level.camera.offset, {2.0f, 3.5f, 12.0f})
         && level.camera.fieldOfViewY == 40.0f;
@@ -110,7 +111,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 18> allowed{
+    static constexpr std::array<std::string_view, 19> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -127,6 +128,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "collectible",
         "goal",
         "dynamic_box",
+        "pressure_plate",
         "static_prop",
         "camera"};
 
@@ -403,6 +405,7 @@ int main()
         "writer collectible count");
     Expect(CountRecords(written, "goal") == 1, "writer goal count");
     Expect(CountRecords(written, "dynamic_box") == 0, "writer dynamic_box count");
+    Expect(CountRecords(written, "pressure_plate") == 0, "writer pressure_plate count");
     Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
@@ -604,6 +607,26 @@ int main()
         Expect(
             !world::AuthoredLevelDataEqual(parsed.level, countEdit),
             "authored equality detects platform count change");
+
+        world::LevelDefinition plateEdit = parsed.level;
+        world::PressurePlateSpec plate{};
+        plate.center = {2.0f, 0.1f, 0.0f};
+        plate.size = world::kDefaultPressurePlateSize;
+        plateEdit.pressurePlates.push_back(plate);
+        Expect(
+            !world::AuthoredLevelDataEqual(parsed.level, plateEdit),
+            "authored equality detects Pressure Plate add");
+        plateEdit.pressurePlates[0].center.x += 1.0f;
+        world::LevelDefinition plateMoved = plateEdit;
+        plateMoved.pressurePlates[0].center.x += 1.0f;
+        Expect(
+            !world::AuthoredLevelDataEqual(plateEdit, plateMoved),
+            "authored equality detects Pressure Plate position edit");
+        world::LevelDefinition plateSized = plateEdit;
+        plateSized.pressurePlates[0].size.x += 0.5f;
+        Expect(
+            !world::AuthoredLevelDataEqual(plateEdit, plateSized),
+            "authored equality detects Pressure Plate size edit");
     }
 
     // ---- Milestone 39 staged reload core (no ImGui, no tools) ----
@@ -925,6 +948,70 @@ int main()
             Expect(
                 !world::LevelDefinitionHasRequiredAuthoredContent(combined),
                 "one body over combined capacity is invalid");
+        }
+
+        {
+            const std::string onePlate = canonical + "pressure_plate 2 0.1 0 2 0.2 2\n";
+            const world::ParseLevelFileResult one = world::ParseLevelText(onePlate);
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one pressure_plate loads");
+            Expect(one.level.pressurePlates.size() == 1, "one pressure_plate count");
+            Expect(one.level.pressurePlates[0].center.x == 2.0f, "one pressure_plate center x");
+            Expect(one.level.pressurePlates[0].size.y == 0.2f, "one pressure_plate size y");
+            const std::string writtenOne = world::SerializeLevelText(one.level);
+            Expect(CountRecords(writtenOne, "pressure_plate") == 1, "writer one pressure_plate");
+            Expect(
+                world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
+                "one pressure_plate round trip");
+            Expect(writtenOne.find("active") == std::string::npos, "activation is not serialized");
+
+            const std::string twoPlates =
+                canonical + "pressure_plate 2 0.1 0 2 0.2 2\npressure_plate 6 0.1 0 2 0.2 2\n";
+            const world::ParseLevelFileResult two = world::ParseLevelText(twoPlates);
+            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two pressure_plate loads");
+            Expect(two.level.pressurePlates.size() == 2, "two pressure_plate count");
+            Expect(two.level.pressurePlates[0].center.x == 2.0f, "encounter order first plate");
+            Expect(two.level.pressurePlates[1].center.x == 6.0f, "encounter order second plate");
+            Expect(
+                CountRecords(world::SerializeLevelText(two.level), "pressure_plate") == 2,
+                "writer two pressure_plate");
+
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate nan 0.1 0 2 0.2 2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN pressure_plate position rejected");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate inf 0.1 0 2 0.2 2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Inf pressure_plate position rejected");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 0 0.2 2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero pressure_plate size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 -1 0.2 2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative pressure_plate size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 0.119 0.2 2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "below-minimum pressure_plate size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 0.12 0.12 0.12\n").status
+                    == world::LoadLevelFileStatus::Loaded,
+                "minimum pressure_plate extent accepted");
+
+            world::LevelDefinition manyPlates = parsed.level;
+            while (manyPlates.pressurePlates.size() < 8)
+            {
+                const float x = static_cast<float>(manyPlates.pressurePlates.size()) * 3.0f;
+                manyPlates.pressurePlates.push_back({{x, 0.1f, 0.0f}, world::kDefaultPressurePlateSize});
+            }
+            RoundTrip(manyPlates, "8 pressure plates round trip");
+            Expect(
+                physics::AuthoredPhysicsBodiesWithinBudget(
+                    static_cast<int>(manyPlates.elevatedPlatforms.size()),
+                    static_cast<int>(manyPlates.dynamicBoxes.size())),
+                "Pressure Plates do not consume physics leftover");
         }
 
         {

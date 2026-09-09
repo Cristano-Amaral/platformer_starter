@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 51 — Dynamic Box Grab / Carry
-(Gameplay: target, grab, carry, and drop authored Dynamic Boxes only;
-runtime-only carry state; awaiting manual acceptance).
-Milestone 50 is complete. Milestone 52 has not started.
+Milestone 52 — Pressure Plate / Dynamic Box Trigger
+(Authored Pressure Plate; runtime Active iff a Dynamic Box overlaps
+the applied trigger AABB; awaiting manual acceptance).
+Milestone 51 is complete. Milestone 53 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -140,7 +140,7 @@ strictly below `active.killPlane` back to its currently applied authored
 transform, with identity orientation and zero linear/angular velocity. Recovery
 is per body and does not rebuild PhysicsWorld or mutate authoring state.
 Do not add Undo/Redo, a probe framework, Level Format v2,
-or Milestone 52.
+or Milestone 53.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -213,4 +213,9 @@ Gameplay framebuffer capture was removed after the clip-plane fix. M50 is
 complete. Milestone 51 adds gameplay Grab / Carry for authored Dynamic Boxes
 only (`E` toggles Grab/Drop). Carry is runtime-only: it does not mutate
 `workingCopy`, active authored definitions, Modified/Dirty, or Level Format.
-Static Props stay visual and non-grabbable. Do not start Milestone 52.
+Static Props stay visual and non-grabbable. Milestone 52 adds repeatable
+authored Pressure Plates (`center`, `size`). Runtime Active is derived from
+current Dynamic Box AABB overlap with the applied plate AABB (no Jolt sensor
+body, no generic trigger/action framework, no door/output). Canonical Level 01
+has 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props. Do not start
+Milestone 53.

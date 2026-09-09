@@ -98,6 +98,7 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::PressurePlate:
     case EditorObjectKind::StaticProp:
         return true;
     default:
@@ -116,6 +117,7 @@ int CategoryMaxCount(EditorObjectKind kind)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::PressurePlate:
     case EditorObjectKind::StaticProp:
         return static_cast<int>(world::kMaxLevelLines) - world::kLevelV1FixedRecordLineCount;
     default:
@@ -137,6 +139,8 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.collectibles.size();
     case EditorObjectKind::DynamicBox:
         return level.dynamicBoxes.size();
+    case EditorObjectKind::PressurePlate:
+        return level.pressurePlates.size();
     case EditorObjectKind::StaticProp:
         return level.staticProps.size();
     default:
@@ -187,6 +191,9 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::DynamicBox:
         pending.dynamicBoxes = true;
         break;
+    case EditorObjectKind::PressurePlate:
+        pending.pressurePlates = true;
+        break;
     case EditorObjectKind::StaticProp:
         pending.staticProps = true;
         break;
@@ -211,6 +218,8 @@ bool CategoryHasStructuralPending(
         return pending.collectibles;
     case EditorObjectKind::DynamicBox:
         return pending.dynamicBoxes;
+    case EditorObjectKind::PressurePlate:
+        return pending.pressurePlates;
     case EditorObjectKind::StaticProp:
         return pending.staticProps;
     default:
@@ -234,6 +243,8 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.collectibles;
     case EditorObjectKind::DynamicBox:
         return &map.dynamicBoxes;
+    case EditorObjectKind::PressurePlate:
+        return &map.pressurePlates;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
     default:
@@ -255,6 +266,8 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.collectibles;
     case EditorObjectKind::DynamicBox:
         return &map.dynamicBoxes;
+    case EditorObjectKind::PressurePlate:
+        return &map.pressurePlates;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
     default:
@@ -286,6 +299,7 @@ void ResetStructuralIndexMap(
     FillIdentity(map.hazards, active.hazards.size());
     FillIdentity(map.collectibles, active.collectibles.size());
     FillIdentity(map.dynamicBoxes, active.dynamicBoxes.size());
+    FillIdentity(map.pressurePlates, active.pressurePlates.size());
     FillIdentity(map.staticProps, active.staticProps.size());
 }
 
@@ -298,6 +312,7 @@ void EnsureStructuralIndexMap(
         && CategoryMapMatchesActive(map.hazards, active.hazards.size())
         && CategoryMapMatchesActive(map.collectibles, active.collectibles.size())
         && CategoryMapMatchesActive(map.dynamicBoxes, active.dynamicBoxes.size())
+        && CategoryMapMatchesActive(map.pressurePlates, active.pressurePlates.size())
         && CategoryMapMatchesActive(map.staticProps, active.staticProps.size()))
     {
         return;
@@ -455,6 +470,19 @@ PendingDeleteVisuals MakePendingDeleteVisuals(
         }
         visuals.dynamicBoxIndices.push_back(static_cast<int>(index));
         visuals.dynamicBoxes.push_back(active.dynamicBoxes[index]);
+    }
+    const std::size_t pressurePlateLimit =
+        active.pressurePlates.size() < map.pressurePlates.activeToWorking.size()
+        ? active.pressurePlates.size()
+        : map.pressurePlates.activeToWorking.size();
+    for (std::size_t index = 0; index < pressurePlateLimit; ++index)
+    {
+        if (map.pressurePlates.activeToWorking[index] != kNoStructuralIndex)
+        {
+            continue;
+        }
+        visuals.pressurePlateIndices.push_back(static_cast<int>(index));
+        visuals.pressurePlates.push_back(active.pressurePlates[index]);
     }
     const std::size_t staticPropLimit =
         active.staticProps.size() < map.staticProps.activeToWorking.size()
@@ -623,6 +651,22 @@ LifecycleEditResult AddDynamicBoxAt(
     return Ok({EditorObjectKind::DynamicBox, workingCopy.dynamicBoxes.size() - 1});
 }
 
+LifecycleEditResult AddPressurePlateAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::PressurePlate))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    world::PressurePlateSpec plate{};
+    plate.center = ApplyWorldCenter(worldCenter, {});
+    plate.size = world::kDefaultPressurePlateSize;
+    workingCopy.pressurePlates.push_back(plate);
+    return Ok({EditorObjectKind::PressurePlate, workingCopy.pressurePlates.size() - 1});
+}
+
 LifecycleEditResult AddPlatform(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor)
@@ -680,6 +724,18 @@ LifecycleEditResult AddDynamicBox(
         ApplyPlacementAnchor(
             placementAnchor,
             kDefaultAddedDynamicBoxOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddPressurePlate(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddPressurePlateAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedPressurePlateOffset,
             workingCopy.initialSpawnVisualCenter.z));
 }
 
@@ -776,6 +832,13 @@ LifecycleEditResult DuplicateSelected(
         workingCopy.dynamicBoxes.push_back(copy);
         return Ok({EditorObjectKind::DynamicBox, workingCopy.dynamicBoxes.size() - 1});
     }
+    case EditorObjectKind::PressurePlate:
+    {
+        world::PressurePlateSpec copy = workingCopy.pressurePlates[selection.index];
+        OffsetX(copy.center, kLifecycleDuplicateOffsetX);
+        workingCopy.pressurePlates.push_back(copy);
+        return Ok({EditorObjectKind::PressurePlate, workingCopy.pressurePlates.size() - 1});
+    }
     case EditorObjectKind::StaticProp:
     {
         world::StaticPropSpec copy = workingCopy.staticProps[selection.index];
@@ -845,6 +908,10 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::DynamicBox:
         workingCopy.dynamicBoxes.erase(
             workingCopy.dynamicBoxes.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::PressurePlate:
+        workingCopy.pressurePlates.erase(
+            workingCopy.pressurePlates.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     case EditorObjectKind::StaticProp:
         workingCopy.staticProps.erase(

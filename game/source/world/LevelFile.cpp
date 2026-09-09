@@ -175,6 +175,7 @@ struct ParseState
     std::vector<HazardSpec> hazards;
     std::vector<CollectibleSpec> collectibles;
     std::vector<DynamicBoxSpec> dynamicBoxes;
+    std::vector<PressurePlateSpec> pressurePlates;
     std::vector<StaticPropSpec> staticProps;
 };
 
@@ -544,6 +545,22 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.dynamicBoxes.push_back(box);
             continue;
         }
+        if (keyword == "pressure_plate")
+        {
+            if (!RequireTokenCount(tokens, 7, failure, lineNumber))
+            {
+                return failure;
+            }
+            PressurePlateSpec plate{};
+            if (!ParseVec3(tokens, 1, plate.center) || !ParseVec3(tokens, 4, plate.size)
+                || !PressurePlateSpecIsValid(plate))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+            }
+            state.pressurePlates.push_back(plate);
+            continue;
+        }
         if (keyword == "static_prop")
         {
             if (tokens.size() < 11)
@@ -615,6 +632,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.hazards = std::move(state.hazards);
     loaded.level.collectibles = std::move(state.collectibles);
     loaded.level.dynamicBoxes = std::move(state.dynamicBoxes);
+    loaded.level.pressurePlates = std::move(state.pressurePlates);
     loaded.level.staticProps = std::move(state.staticProps);
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(

@@ -3,6 +3,7 @@
 #include "core/Vec3.h"
 #include "physics/DynamicBoxGrab.h"
 #include "physics/PhysicsCapacity.h"
+#include "world/PressurePlate.h"
 
 #include <memory>
 #include <vector>
@@ -26,6 +27,13 @@ struct DynamicBoxRuntimeState
     float rotationZ = 0.0f;
     float rotationW = 1.0f;
     bool valid = false;
+    bool active = false;
+};
+
+struct PressurePlateRuntimeState
+{
+    core::Vec3 center{};
+    core::Vec3 size{};
     bool active = false;
 };
 
@@ -121,6 +129,7 @@ public:
     int StaticBodyCount() const;
     int DynamicBodyCount() const;
     std::vector<DynamicBoxRuntimeState> GetDynamicBoxes() const;
+    std::vector<PressurePlateRuntimeState> GetPressurePlates() const;
     MovingPlatformState GetMovingPlatform() const;
     PlayerPhysicsState GetPlayerPhysicsState() const;
 

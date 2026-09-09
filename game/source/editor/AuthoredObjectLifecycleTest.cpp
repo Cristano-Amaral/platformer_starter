@@ -75,6 +75,7 @@ int main()
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Slope), "slope unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::MovingPlatform), "moving unsupported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic box supported");
+    Expect(editor::SupportsLifecycle(EditorObjectKind::PressurePlate), "pressure plate supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::StaticProp), "static prop supported");
 
     {
@@ -1179,6 +1180,12 @@ int main()
         Expect(
             editor::AddStaticProp(shared, kTestPlacementA, "models/test_static.glb").succeeded,
             "Static Prop still adds when physics leftover is full");
+        Expect(
+            editor::AddPressurePlate(shared, kTestPlacementA).succeeded,
+            "Pressure Plate still adds when physics leftover is full");
+        Expect(
+            !editor::CategoryAtCountLimit(shared, EditorObjectKind::PressurePlate),
+            "Pressure Plate does not consume physics leftover");
     }
 
     {
@@ -1243,6 +1250,42 @@ int main()
         Expect(
             working.staticProps[0].modelIdentity == "models/test_static.glb",
             "Delete instance does not clear remaining identity");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const editor::LifecycleEditResult added =
+            editor::AddPressurePlate(working, kTestPlacementA);
+        Expect(added.succeeded, "Add Pressure Plate");
+        Expect(working.pressurePlates.size() == 1, "one Pressure Plate after Add");
+        Expect(
+            working.pressurePlates[0].size.x == world::kDefaultPressurePlateSize.x
+                && working.pressurePlates[0].size.y == world::kDefaultPressurePlateSize.y
+                && working.pressurePlates[0].size.z == world::kDefaultPressurePlateSize.z,
+            "default Pressure Plate size");
+        Expect(added.selection.kind == EditorObjectKind::PressurePlate, "Add selects Pressure Plate");
+        const float originalSizeX = working.pressurePlates[0].size.x;
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelected(working, added.selection);
+        Expect(duplicated.succeeded, "Duplicate Pressure Plate");
+        Expect(working.pressurePlates.size() == 2, "two Pressure Plates after Duplicate");
+        Expect(
+            working.pressurePlates[1].center.x
+                == working.pressurePlates[0].center.x + editor::kLifecycleDuplicateOffsetX,
+            "Duplicate offsets +1 X");
+        Expect(
+            working.pressurePlates[1].size.x == originalSizeX
+                && working.pressurePlates[1].size.y == world::kDefaultPressurePlateSize.y,
+            "Duplicate preserves size");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::PressurePlate, 1}).succeeded,
+            "Delete Pressure Plate");
+        Expect(working.pressurePlates.size() == 1, "one Pressure Plate after Delete");
+        Expect(
+            editor::AddPressurePlateAt(working, {9.0f, 0.1f, 4.0f}).succeeded,
+            "AddPressurePlateAt uses world center");
+        Expect(working.pressurePlates.back().center.x == 9.0f, "AddAt X");
+        Expect(working.pressurePlates.back().center.z == 4.0f, "AddAt does not snap to spawn.z");
     }
 
     if (gFailures != 0)

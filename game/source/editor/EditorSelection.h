@@ -25,6 +25,7 @@ enum class EditorObjectKind
     Goal,
     DynamicBox,
     StaticProp,
+    PressurePlate,
 };
 
 struct EditorSelection

@@ -303,6 +303,36 @@ int main()
             "stale authored center does not own active picking");
     }
 
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        Expect(
+            !editor::IsValidSelection(level, {editor::EditorObjectKind::PressurePlate, 0}),
+            "empty Pressure Plates collection is not selectable");
+        Expect(
+            editor::IsEditableSelection({editor::EditorObjectKind::PressurePlate, 0}),
+            "Pressure Plate is inspector-editable");
+        world::PressurePlateSpec plate{};
+        plate.center = {6.0f, 0.1f, 0.0f};
+        plate.size = world::kDefaultPressurePlateSize;
+        level.pressurePlates.push_back(plate);
+        Expect(
+            editor::IsValidSelection(level, {editor::EditorObjectKind::PressurePlate, 0}),
+            "authored Pressure Plate is selectable");
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::Ray3 atPlate{{6.0f, 0.1f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atPlate, set).kind == editor::EditorObjectKind::PressurePlate,
+            "Pressure Plate AABB is pickable");
+        bool sawPlate = false;
+        for (const editor::HierarchyEntry& entry : editor::BuildHierarchyEntries(level))
+        {
+            sawPlate = sawPlate || (entry.selection.kind == editor::EditorObjectKind::PressurePlate
+                && std::strcmp(entry.group, "Pressure Plates") == 0);
+        }
+        Expect(sawPlate, "Hierarchy lists Pressure Plates");
+    }
+
     // ---- camera is not a world proxy; spawn is ----
     {
         const world::LevelDefinition level = MakeStubLevel();
@@ -312,17 +342,21 @@ int main()
         bool sawSpawn = false;
         bool sawPlayerKind = false;
         bool sawDynamicBox = false;
+        bool sawPressurePlate = false;
         for (const editor::PickingProxy& proxy : set.proxies)
         {
             sawCamera = sawCamera || proxy.selection.kind == editor::EditorObjectKind::Camera;
             sawSpawn = sawSpawn || proxy.selection.kind == editor::EditorObjectKind::Spawn;
             sawDynamicBox =
                 sawDynamicBox || proxy.selection.kind == editor::EditorObjectKind::DynamicBox;
+            sawPressurePlate =
+                sawPressurePlate || proxy.selection.kind == editor::EditorObjectKind::PressurePlate;
         }
         Expect(!sawCamera, "authored camera has no world picking proxy");
         Expect(sawSpawn, "player spawn has a world picking proxy");
         Expect(!sawPlayerKind, "runtime Player is not a selectable authored object");
         Expect(!sawDynamicBox, "empty Dynamic Boxes collection has no world picking proxy");
+        Expect(!sawPressurePlate, "empty Pressure Plates collection has no world picking proxy");
         Expect(
             set.proxies.size() == 19,
             "19 world proxies: hierarchy minus Camera");
@@ -1010,6 +1044,28 @@ int main()
             editor::PickNearestPending(atPending, pending).kind
                 == editor::EditorObjectKind::DynamicBox,
             "pending Dynamic Box pick hits authored ghost");
+    }
+
+    {
+        world::LevelDefinition active = MakeStubLevel();
+        world::LevelDefinition working = active;
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        Expect(
+            editor::AddPressurePlateAt(working, {4.0f, 0.1f, 0.0f}).succeeded,
+            "pending add Pressure Plate");
+        editor::ApplyLifecycleToStructuralMap(map, editor::EditorObjectKind::PressurePlate, false, 0);
+        const std::vector<editor::PendingPickProxy> pending =
+            editor::BuildPendingPickProxies(editor::CollectPendingAuthoringVisuals(
+                active, working, map, {editor::EditorObjectKind::PressurePlate, 0}));
+        Expect(!pending.empty(), "pending Pressure Plate is pickable");
+        const editor::Ray3 atPending{
+            {working.pressurePlates[0].center.x, working.pressurePlates[0].center.y, 8.0f},
+            {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearestPending(atPending, pending).kind
+                == editor::EditorObjectKind::PressurePlate,
+            "pending Pressure Plate pick hits authored ghost");
     }
 
     {

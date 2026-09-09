@@ -42,6 +42,8 @@ constexpr Color kDynamicBoxTargetFill{198, 188, 96, 255};
 constexpr Color kDynamicBoxTargetWire{236, 214, 72, 255};
 constexpr Color kDynamicBoxCarryFill{96, 168, 214, 255};
 constexpr Color kDynamicBoxCarryWire{72, 214, 236, 255};
+constexpr Color kPressurePlateInactive{86, 98, 124, 255};
+constexpr Color kPressurePlateActive{56, 188, 92, 255};
 constexpr Color kStaticPropFallbackColor{120, 72, 88, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
@@ -674,6 +676,17 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             overlay.pendingDeleteDynamicBoxSizes[index],
             kDynamicBoxColor);
     }
+    for (std::size_t index = 0; index < overlay.pendingDeletePressurePlateCenters.size(); ++index)
+    {
+        if (index >= overlay.pendingDeletePressurePlateSizes.size())
+        {
+            break;
+        }
+        DrawPendingDeleteSolid(
+            overlay.pendingDeletePressurePlateCenters[index],
+            overlay.pendingDeletePressurePlateSizes[index],
+            kPressurePlateInactive);
+    }
     for (std::size_t index = 0; index < overlay.pendingDeleteStaticPropCenters.size(); ++index)
     {
         if (index >= overlay.pendingDeleteStaticPropSizes.size())
@@ -1100,6 +1113,7 @@ void Renderer::DrawWorld(
     const CameraView& cameraView,
     const world::LevelDefinition& level,
     const std::vector<DynamicBoxDrawState>& dynamicBoxes,
+    const std::vector<PressurePlateDrawState>& pressurePlates,
     core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,
@@ -1172,6 +1186,17 @@ void Renderer::DrawWorld(
             grabHudTarget = true;
         }
         DrawRuntimeDynamicBox(dynamicBoxes[index], fill, wire);
+    }
+    for (std::size_t index = 0; index < pressurePlates.size(); ++index)
+    {
+        if (OverlayMarksPendingDelete(overlay.pendingDeletePressurePlateIndices, index))
+        {
+            continue;
+        }
+        DrawGreyboxBox(
+            pressurePlates[index].center,
+            pressurePlates[index].size,
+            pressurePlates[index].active ? kPressurePlateActive : kPressurePlateInactive);
     }
     if (staticPropModels)
     {

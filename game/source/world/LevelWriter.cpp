@@ -204,6 +204,11 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out += '\n';
     }
 
+    for (const PressurePlateSpec& plate : level.pressurePlates)
+    {
+        AppendCenterSizeRecord(out, "pressure_plate", plate.center, plate.size);
+    }
+
     for (const StaticPropSpec& prop : level.staticProps)
     {
         out += "static_prop ";

@@ -122,6 +122,13 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    for (const PressurePlateSpec& plate : level.pressurePlates)
+    {
+        if (!PressurePlateSpecIsValid(plate))
+        {
+            return false;
+        }
+    }
     for (const StaticPropSpec& prop : level.staticProps)
     {
         if (!StaticPropSpecIsValid(prop))
@@ -149,6 +156,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.hazards.size() != b.hazards.size()
         || a.collectibles.size() != b.collectibles.size()
         || a.dynamicBoxes.size() != b.dynamicBoxes.size()
+        || a.pressurePlates.size() != b.pressurePlates.size()
         || a.staticProps.size() != b.staticProps.size())
     {
         return false;
@@ -202,6 +210,14 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         if (!Vec3Equal(a.dynamicBoxes[index].center, b.dynamicBoxes[index].center)
             || !Vec3Equal(a.dynamicBoxes[index].size, b.dynamicBoxes[index].size)
             || a.dynamicBoxes[index].massKg != b.dynamicBoxes[index].massKg)
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.pressurePlates.size(); ++index)
+    {
+        if (!Vec3Equal(a.pressurePlates[index].center, b.pressurePlates[index].center)
+            || !Vec3Equal(a.pressurePlates[index].size, b.pressurePlates[index].size))
         {
             return false;
         }

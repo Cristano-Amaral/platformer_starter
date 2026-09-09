@@ -83,6 +83,7 @@ enum class LevelEditorRequest
     AddHazard,
     AddCollectible,
     AddDynamicBox,
+    AddPressurePlate,
     AddStaticProp,
     DuplicateSelected,
     DeleteSelected,

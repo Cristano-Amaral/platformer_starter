@@ -18,6 +18,8 @@ const char* PlacementModeName(PlacementMode mode)
         return "Collectible";
     case PlacementMode::DynamicBox:
         return "Dynamic Box";
+    case PlacementMode::PressurePlate:
+        return "Pressure Plate";
     default:
         return "None";
     }
@@ -37,6 +39,8 @@ EditorObjectKind KindFromPlacementMode(PlacementMode mode)
         return EditorObjectKind::Collectible;
     case PlacementMode::DynamicBox:
         return EditorObjectKind::DynamicBox;
+    case PlacementMode::PressurePlate:
+        return EditorObjectKind::PressurePlate;
     default:
         return EditorObjectKind::None;
     }
@@ -56,6 +60,8 @@ PlacementMode PlacementModeFromKind(EditorObjectKind kind)
         return PlacementMode::Collectible;
     case EditorObjectKind::DynamicBox:
         return PlacementMode::DynamicBox;
+    case EditorObjectKind::PressurePlate:
+        return PlacementMode::PressurePlate;
     default:
         return PlacementMode::None;
     }
@@ -75,6 +81,8 @@ LevelEditorRequest PlacementAddRequest(PlacementMode mode)
         return LevelEditorRequest::AddCollectible;
     case PlacementMode::DynamicBox:
         return LevelEditorRequest::AddDynamicBox;
+    case PlacementMode::PressurePlate:
+        return LevelEditorRequest::AddPressurePlate;
     default:
         return LevelEditorRequest::None;
     }
@@ -94,6 +102,8 @@ core::Vec3 DefaultPlacementSize(PlacementMode mode)
         return kDefaultAddedCollectibleSize;
     case PlacementMode::DynamicBox:
         return world::kDefaultDynamicBoxSize;
+    case PlacementMode::PressurePlate:
+        return world::kDefaultPressurePlateSize;
     default:
         return {};
     }
@@ -113,6 +123,8 @@ core::Vec3 DefaultPlacementOffset(PlacementMode mode)
         return kDefaultAddedCollectibleOffset;
     case PlacementMode::DynamicBox:
         return kDefaultAddedDynamicBoxOffset;
+    case PlacementMode::PressurePlate:
+        return kDefaultAddedPressurePlateOffset;
     default:
         return {};
     }

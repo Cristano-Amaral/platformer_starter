@@ -154,6 +154,7 @@ add_executable(Platformer3D
     game/source/world/LevelWriter.cpp
     game/source/world/LevelWriter.h
     game/source/world/MovingPlatform.h
+    game/source/world/PressurePlate.h
     game/source/world/RespawnWorld.h
     game/source/world/Slope.h
 )
@@ -519,6 +520,34 @@ else()
     target_compile_options(DynamicBoxGrabTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(DynamicBoxGrabTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Focused Milestone 52 Pressure Plate overlap harness. Not shipped. Jolt only; no raylib.
+add_executable(PressurePlateTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/physics/DynamicBoxGrab.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/physics/PressurePlateTest.cpp
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/PressurePlate.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+)
+target_include_directories(PressurePlateTest PRIVATE game/source)
+target_link_libraries(PressurePlateTest PRIVATE Jolt)
+if(MSVC)
+    target_compile_options(PressurePlateTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(PressurePlateTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(PressurePlateTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 
