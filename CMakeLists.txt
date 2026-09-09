@@ -113,6 +113,7 @@ add_executable(Platformer3D
     game/source/input/Input.h
     game/source/input/InputState.h
     game/source/physics/PhysicsCapacity.h
+    game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
     game/source/persistence/BestTimeSave.cpp
@@ -472,6 +473,7 @@ add_executable(PhysicsRebuildTest
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/physics/PhysicsCapacity.h
+    game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsRebuildTest.cpp
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
@@ -490,6 +492,33 @@ else()
     target_compile_options(PhysicsRebuildTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(PhysicsRebuildTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Focused Milestone 51 Grab / Carry harness. Not shipped. Jolt only; no raylib.
+add_executable(DynamicBoxGrabTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/physics/DynamicBoxGrab.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/physics/DynamicBoxGrabTest.cpp
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+)
+target_include_directories(DynamicBoxGrabTest PRIVATE game/source)
+target_link_libraries(DynamicBoxGrabTest PRIVATE Jolt)
+if(MSVC)
+    target_compile_options(DynamicBoxGrabTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(DynamicBoxGrabTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(DynamicBoxGrabTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 

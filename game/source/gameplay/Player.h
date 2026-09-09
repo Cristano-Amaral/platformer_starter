@@ -20,6 +20,7 @@ public:
 
     const core::Vec3& Position() const;
     const core::Vec3& Size() const;
+    float FacingX() const;
     float HorizontalVelocity() const;
     float VerticalVelocity() const;
     bool IsGrounded() const;
@@ -51,6 +52,7 @@ private:
 
     core::Vec3 position;
     core::Vec3 size;
+    float facingX = 1.0f;
     float horizontalVelocity = 0.0f;
     float verticalVelocity = 0.0f;
     bool grounded = true;

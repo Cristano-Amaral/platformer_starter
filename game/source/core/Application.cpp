@@ -91,12 +91,14 @@ render::CameraView MakeGameplayCameraView(const gameplay::PlatformerCamera& came
 }
 
 std::vector<render::DynamicBoxDrawState> MakeDynamicBoxDrawStates(
-    const std::vector<physics::DynamicBoxRuntimeState>& boxes)
+    const std::vector<physics::DynamicBoxRuntimeState>& boxes,
+    const physics::DynamicBoxGrabState& grab)
 {
     std::vector<render::DynamicBoxDrawState> draw;
     draw.reserve(boxes.size());
-    for (const physics::DynamicBoxRuntimeState& box : boxes)
+    for (std::size_t index = 0; index < boxes.size(); ++index)
     {
+        const physics::DynamicBoxRuntimeState& box = boxes[index];
         render::DynamicBoxDrawState item{};
         item.center = box.center;
         item.size = box.size;
@@ -104,6 +106,14 @@ std::vector<render::DynamicBoxDrawState> MakeDynamicBoxDrawStates(
         item.rotationY = box.rotationY;
         item.rotationZ = box.rotationZ;
         item.rotationW = box.rotationW;
+        if (grab.carrying && grab.carriedIndex == static_cast<int>(index))
+        {
+            item.feedback = render::DynamicBoxDrawFeedback::Carried;
+        }
+        else if (grab.hasTarget && grab.targetIndex == static_cast<int>(index))
+        {
+            item.feedback = render::DynamicBoxDrawFeedback::Targeted;
+        }
         draw.push_back(item);
     }
     return draw;
@@ -483,6 +493,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.jumpPressed = inputState.jumpPressed;
     snapshot.respawnPressed = inputState.respawnPressed;
     snapshot.restartPressed = inputState.restartPressed;
+    snapshot.grabDropPressed = inputState.grabDropPressed;
 
     snapshot.coyoteElapsed = player.TimeSinceGrounded();
     snapshot.coyoteAvailable = player.IsCoyoteAvailable();
@@ -512,6 +523,11 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
         snapshot.physicsTestBoxActive = dynamicBoxes[0].active;
         snapshot.dynamicTestBodyValid = dynamicBoxes[0].valid;
     }
+    const physics::DynamicBoxGrabState grab = physicsWorld.GetGrabState();
+    snapshot.grabHasTarget = grab.hasTarget;
+    snapshot.grabTargetIndex = grab.targetIndex;
+    snapshot.grabCarrying = grab.carrying;
+    snapshot.grabCarriedIndex = grab.carriedIndex;
     snapshot.staticBodyCount = physicsWorld.StaticBodyCount();
 
     snapshot.characterVirtualInitialized = player.CharacterVirtualInitialized();
@@ -766,6 +782,12 @@ int Application::Run()
                 restartedThisFrame = true;
             }
 
+            physicsWorld.SetGrabAim(player.Position(), player.FacingX());
+            if (!respawnedThisFrame && !restartedThisFrame && inputState.grabDropPressed)
+            {
+                physicsWorld.HandleGrabDrop();
+            }
+
             physicsWorld.Update(deltaSeconds);
             if (!respawnedThisFrame && !restartedThisFrame)
             {
@@ -775,8 +797,9 @@ int Application::Run()
 
         const std::vector<physics::DynamicBoxRuntimeState> dynamicBoxes =
             physicsWorld.GetDynamicBoxes();
+        const physics::DynamicBoxGrabState grabState = physicsWorld.GetGrabState();
         const std::vector<render::DynamicBoxDrawState> dynamicDraw =
-            MakeDynamicBoxDrawStates(dynamicBoxes);
+            MakeDynamicBoxDrawStates(dynamicBoxes, grabState);
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         render::CameraView cameraView = MakeGameplayCameraView(camera);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)

@@ -14,6 +14,12 @@
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
@@ -21,6 +27,7 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdarg>
 #include <cstddef>
@@ -68,6 +75,89 @@ constexpr float kMaxStrength = 100.0f;
 constexpr float kInnerShapeFraction = 0.9f;
 
 int gJoltRegistrationUsers = 0;
+
+class IgnoreBodyFilter final : public JPH::BodyFilter
+{
+public:
+    explicit IgnoreBodyFilter(JPH::BodyID id)
+        : ignore(id)
+    {
+    }
+
+    bool ShouldCollide(const JPH::BodyID& inBodyID) const override
+    {
+        return ignore.IsInvalid() || inBodyID != ignore;
+    }
+
+    bool ShouldCollideLocked(const JPH::Body& inBody) const override
+    {
+        return ignore.IsInvalid() || inBody.GetID() != ignore;
+    }
+
+private:
+    JPH::BodyID ignore;
+};
+
+class WorldSolidBodyFilter final : public JPH::BodyFilter
+{
+public:
+    WorldSolidBodyFilter(
+        const std::vector<JPH::BodyID>* dynamicIds,
+        JPH::BodyID inner,
+        JPH::BodyID extraIgnore)
+        : dynamicIds(dynamicIds)
+        , inner(inner)
+        , extraIgnore(extraIgnore)
+    {
+    }
+
+    bool ShouldCollide(const JPH::BodyID& inBodyID) const override
+    {
+        if (inBodyID.IsInvalid())
+        {
+            return false;
+        }
+        if (!inner.IsInvalid() && inBodyID == inner)
+        {
+            return false;
+        }
+        if (!extraIgnore.IsInvalid() && inBodyID == extraIgnore)
+        {
+            return false;
+        }
+        if (dynamicIds != nullptr)
+        {
+            for (const JPH::BodyID id : *dynamicIds)
+            {
+                if (inBodyID == id)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    bool ShouldCollideLocked(const JPH::Body& inBody) const override
+    {
+        return ShouldCollide(inBody.GetID());
+    }
+
+private:
+    const std::vector<JPH::BodyID>* dynamicIds;
+    JPH::BodyID inner;
+    JPH::BodyID extraIgnore;
+};
+
+float Vec3Length(core::Vec3 value)
+{
+    return std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
+}
+
+int FacingSign(float facingX)
+{
+    return facingX < 0.0f ? -1 : 1;
+}
 
 namespace ObjectLayers
 {
@@ -276,6 +366,39 @@ float ClampDeltaSeconds(float deltaSeconds)
 
 struct PhysicsWorld::Impl
 {
+    struct CarryContactListener final : public JPH::ContactListener
+    {
+        Impl* owner = nullptr;
+
+        JPH::ValidateResult OnContactValidate(
+            const JPH::Body& inBody1,
+            const JPH::Body& inBody2,
+            JPH::RVec3Arg,
+            const JPH::CollideShapeResult&) override
+        {
+            if (owner == nullptr)
+            {
+                return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
+            }
+
+            const JPH::BodyID carried = owner->CarriedBodyId();
+            const JPH::BodyID inner =
+                owner->character != nullptr ? owner->character->GetInnerBodyID() : JPH::BodyID();
+            if (carried.IsInvalid() || inner.IsInvalid())
+            {
+                return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
+            }
+
+            const JPH::BodyID a = inBody1.GetID();
+            const JPH::BodyID b = inBody2.GetID();
+            if ((a == carried && b == inner) || (a == inner && b == carried))
+            {
+                return JPH::ValidateResult::RejectAllContactsForThisBodyPair;
+            }
+            return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
+        }
+    };
+
     BroadPhaseLayerInterfaceImpl broadPhaseLayerInterface;
     ObjectVsBroadPhaseLayerFilterImpl objectVsBroadPhaseLayerFilter;
     ObjectLayerPairFilterImpl objectLayerPairFilter;
@@ -295,6 +418,328 @@ struct PhysicsWorld::Impl
     float carriedGroundVelocityX = 0.0f;
     bool holdsJoltRegistration = false;
     bool initialized = false;
+    CarryContactListener contactListener;
+    int grabHeldIndex = kNoDynamicBoxGrabIndex;
+    int grabTargetIndex = kNoDynamicBoxGrabIndex;
+    core::Vec3 grabAimCenter{};
+    float grabFacingX = 1.0f;
+    bool grabAimValid = false;
+    core::Vec3 grabCarryTarget{};
+    bool grabCarryTargetValid = false;
+
+    JPH::BodyID CarriedBodyId() const
+    {
+        if (grabHeldIndex < 0
+            || static_cast<std::size_t>(grabHeldIndex) >= dynamicBodyIds.size())
+        {
+            return {};
+        }
+        return dynamicBodyIds[static_cast<std::size_t>(grabHeldIndex)];
+    }
+
+    bool HeldIndexIsValid() const
+    {
+        if (grabHeldIndex < 0
+            || static_cast<std::size_t>(grabHeldIndex) >= dynamicBodyIds.size())
+        {
+            return false;
+        }
+        return !dynamicBodyIds[static_cast<std::size_t>(grabHeldIndex)].IsInvalid();
+    }
+
+    bool TargetIndexIsValid() const
+    {
+        if (grabTargetIndex < 0
+            || static_cast<std::size_t>(grabTargetIndex) >= dynamicBodyIds.size())
+        {
+            return false;
+        }
+        return !dynamicBodyIds[static_cast<std::size_t>(grabTargetIndex)].IsInvalid();
+    }
+
+    IgnoreBodyFilter MakeCharacterBodyFilter() const
+    {
+        return IgnoreBodyFilter(CarriedBodyId());
+    }
+
+    core::Vec3 CharacterVisualCenter() const
+    {
+        if (character == nullptr)
+        {
+            return grabAimCenter;
+        }
+        const JPH::RVec3 feet = character->GetPosition();
+        return {
+            static_cast<float>(feet.GetX()),
+            static_cast<float>(feet.GetY()) + playerVisualSize.y * 0.5f,
+            gameplayZ};
+    }
+
+    void EnsureGrabAim()
+    {
+        if (grabAimValid)
+        {
+            return;
+        }
+        if (character == nullptr)
+        {
+            return;
+        }
+        grabAimCenter = CharacterVisualCenter();
+        grabAimValid = true;
+    }
+
+    bool CastWorldRay(JPH::RVec3 origin, JPH::Vec3 offset, float& outFraction) const
+    {
+        if (physicsSystem == nullptr)
+        {
+            return false;
+        }
+        if (offset.LengthSq() <= 1.0e-8f)
+        {
+            return false;
+        }
+
+        JPH::RRayCast ray{origin, offset};
+        JPH::RayCastSettings settings;
+        JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> collector;
+        const JPH::BodyID inner =
+            character != nullptr ? character->GetInnerBodyID() : JPH::BodyID();
+        const WorldSolidBodyFilter bodyFilter(&dynamicBodyIds, inner, {});
+        physicsSystem->GetNarrowPhaseQuery().CastRay(
+            ray,
+            settings,
+            collector,
+            physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
+            physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
+            bodyFilter);
+        if (!collector.HadHit())
+        {
+            return false;
+        }
+        outFraction = collector.mHit.mFraction;
+        return true;
+    }
+
+    void ClearCarryState()
+    {
+        if (HeldIndexIsValid() && physicsSystem != nullptr)
+        {
+            physicsSystem->GetBodyInterface().SetGravityFactor(CarriedBodyId(), 1.0f);
+        }
+        grabHeldIndex = kNoDynamicBoxGrabIndex;
+        grabCarryTarget = {};
+        grabCarryTargetValid = false;
+    }
+
+    void RefreshGrabTarget()
+    {
+        grabTargetIndex = kNoDynamicBoxGrabIndex;
+        if (HeldIndexIsValid())
+        {
+            return;
+        }
+        EnsureGrabAim();
+        if (!grabAimValid || physicsSystem == nullptr)
+        {
+            return;
+        }
+
+        const float facing = static_cast<float>(FacingSign(grabFacingX));
+        int bestIndex = kNoDynamicBoxGrabIndex;
+        float bestDistance = kDynamicBoxMaxGrabDistance + 1.0f;
+        const std::size_t count = DynamicBoxCount();
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const JPH::BodyID id = dynamicBodyIds[index];
+            if (id.IsInvalid())
+            {
+                continue;
+            }
+
+            const core::Vec3 center = ToVec3(physicsSystem->GetBodyInterface().GetPosition(id));
+            const core::Vec3 delta{
+                center.x - grabAimCenter.x,
+                center.y - grabAimCenter.y,
+                center.z - grabAimCenter.z};
+            const float distance = Vec3Length(delta);
+            if (!(distance <= kDynamicBoxMaxGrabDistance) || distance < 0.05f)
+            {
+                continue;
+            }
+
+            const float facingDelta = delta.x * facing;
+            if (facingDelta <= 0.0f)
+            {
+                continue;
+            }
+            if (facingDelta < distance * kDynamicBoxMinFacingDot)
+            {
+                continue;
+            }
+
+            float fraction = 1.0f;
+            const JPH::Vec3 offset(delta.x, delta.y, delta.z);
+            if (CastWorldRay(ToRVec3(grabAimCenter), offset, fraction) && fraction < 0.98f)
+            {
+                continue;
+            }
+
+            if (distance + 1.0e-5f < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = static_cast<int>(index);
+            }
+        }
+        grabTargetIndex = bestIndex;
+    }
+
+    core::Vec3 ComputeCarryTarget(core::Vec3 boxSize) const
+    {
+        const float facing = static_cast<float>(FacingSign(grabFacingX));
+        core::Vec3 desired{
+            grabAimCenter.x + facing * kDynamicBoxCarryDistance,
+            grabAimCenter.y + kDynamicBoxCarryHeightOffset,
+            grabAimCenter.z};
+
+        const core::Vec3 delta{
+            desired.x - grabAimCenter.x,
+            desired.y - grabAimCenter.y,
+            desired.z - grabAimCenter.z};
+        const float desiredLength = Vec3Length(delta);
+        if (desiredLength <= 1.0e-4f)
+        {
+            return desired;
+        }
+
+        float fraction = 1.0f;
+        if (CastWorldRay(ToRVec3(grabAimCenter), JPH::Vec3(delta.x, delta.y, delta.z), fraction)
+            && fraction < 1.0f)
+        {
+            const float halfExtent =
+                0.5f * std::max(boxSize.x, std::max(boxSize.y, boxSize.z));
+            float allowed = desiredLength * fraction - halfExtent - kDynamicBoxCarrySafetyMargin;
+            if (allowed < kDynamicBoxCarryMinDistance)
+            {
+                allowed = kDynamicBoxCarryMinDistance;
+            }
+            if (allowed > desiredLength)
+            {
+                allowed = desiredLength;
+            }
+            const float scale = allowed / desiredLength;
+            desired.x = grabAimCenter.x + delta.x * scale;
+            desired.y = grabAimCenter.y + delta.y * scale;
+            desired.z = grabAimCenter.z + delta.z * scale;
+        }
+        return desired;
+    }
+
+    void DriveCarriedBox(float deltaSeconds)
+    {
+        (void)deltaSeconds;
+        if (!HeldIndexIsValid() || physicsSystem == nullptr)
+        {
+            ClearCarryState();
+            return;
+        }
+
+        const std::size_t index = static_cast<std::size_t>(grabHeldIndex);
+        grabCarryTarget = ComputeCarryTarget(dynamicBoxSpecs[index].size);
+        grabCarryTargetValid = true;
+
+        const JPH::BodyID id = dynamicBodyIds[index];
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        const JPH::RVec3 position = bodyInterface.GetPosition(id);
+        JPH::Vec3 offset(
+            grabCarryTarget.x - static_cast<float>(position.GetX()),
+            grabCarryTarget.y - static_cast<float>(position.GetY()),
+            grabCarryTarget.z - static_cast<float>(position.GetZ()));
+        const float distance = offset.Length();
+        JPH::Vec3 velocity = JPH::Vec3::sZero();
+        if (distance > 1.0e-4f)
+        {
+            const float speed = std::min(kDynamicBoxCarryMaxSpeed, distance * kDynamicBoxCarryGain);
+            velocity = offset * (speed / distance);
+        }
+        bodyInterface.SetLinearVelocity(id, velocity);
+        bodyInterface.SetAngularVelocity(id, JPH::Vec3::sZero());
+        bodyInterface.SetGravityFactor(id, 0.0f);
+        bodyInterface.ActivateBody(id);
+    }
+
+    void TryGrabCurrentTarget()
+    {
+        if (HeldIndexIsValid() || !TargetIndexIsValid())
+        {
+            return;
+        }
+        grabHeldIndex = grabTargetIndex;
+        grabTargetIndex = kNoDynamicBoxGrabIndex;
+        if (physicsSystem != nullptr)
+        {
+            physicsSystem->GetBodyInterface().SetGravityFactor(CarriedBodyId(), 0.0f);
+            physicsSystem->GetBodyInterface().ActivateBody(CarriedBodyId());
+        }
+    }
+
+    bool AabbOverlap(
+        core::Vec3 aCenter,
+        core::Vec3 aSize,
+        core::Vec3 bCenter,
+        core::Vec3 bSize) const
+    {
+        return std::fabs(aCenter.x - bCenter.x) < (aSize.x + bSize.x) * 0.5f
+            && std::fabs(aCenter.y - bCenter.y) < (aSize.y + bSize.y) * 0.5f
+            && std::fabs(aCenter.z - bCenter.z) < (aSize.z + bSize.z) * 0.5f;
+    }
+
+    void DropCarriedBox()
+    {
+        if (!HeldIndexIsValid() || physicsSystem == nullptr)
+        {
+            ClearCarryState();
+            return;
+        }
+
+        const std::size_t index = static_cast<std::size_t>(grabHeldIndex);
+        const JPH::BodyID id = dynamicBodyIds[index];
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        bodyInterface.SetGravityFactor(id, 1.0f);
+
+        const core::Vec3 boxCenter = ToVec3(bodyInterface.GetPosition(id));
+        const core::Vec3 boxSize = dynamicBoxSpecs[index].size;
+        const core::Vec3 playerCenter = CharacterVisualCenter();
+        if (AabbOverlap(playerCenter, playerVisualSize, boxCenter, boxSize))
+        {
+            const float facing = static_cast<float>(FacingSign(grabFacingX));
+            const float needed =
+                0.5f * (playerVisualSize.x + boxSize.x) + kDynamicBoxCarrySafetyMargin;
+            core::Vec3 nudged = boxCenter;
+            nudged.x = playerCenter.x + facing * needed;
+            float fraction = 1.0f;
+            const JPH::Vec3 offset(
+                nudged.x - playerCenter.x,
+                nudged.y - playerCenter.y,
+                nudged.z - playerCenter.z);
+            if (CastWorldRay(ToRVec3(playerCenter), offset, fraction) && fraction < 1.0f)
+            {
+                const float halfExtent = 0.5f * boxSize.x + kDynamicBoxCarrySafetyMargin;
+                float allowed = Vec3Length({offset.GetX(), offset.GetY(), offset.GetZ()}) * fraction
+                    - halfExtent;
+                if (allowed < kDynamicBoxCarryMinDistance)
+                {
+                    allowed = kDynamicBoxCarryMinDistance;
+                }
+                nudged.x = playerCenter.x + facing * allowed;
+            }
+            bodyInterface.SetPosition(id, ToRVec3(nudged), JPH::EActivation::Activate);
+        }
+
+        grabHeldIndex = kNoDynamicBoxGrabIndex;
+        grabCarryTarget = {};
+        grabCarryTargetValid = false;
+    }
 
     bool AddStaticBox(const world::Box& box, const char* name)
     {
@@ -590,6 +1035,7 @@ struct PhysicsWorld::Impl
         }
 
         JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        bodyInterface.SetGravityFactor(id, 1.0f);
         bodyInterface.SetPositionAndRotation(
             id,
             ToRVec3(dynamicBoxSpecs[index].center),
@@ -619,6 +1065,10 @@ struct PhysicsWorld::Impl
             const float runtimeBodyCenterY = bodyInterface.GetPosition(id).GetY();
             if (runtimeBodyCenterY < killPlaneY)
             {
+                if (grabHeldIndex == static_cast<int>(index))
+                {
+                    ClearCarryState();
+                }
                 ResetDynamicBoxBody(index);
             }
         }
@@ -680,6 +1130,8 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
         impl->broadPhaseLayerInterface,
         impl->objectVsBroadPhaseLayerFilter,
         impl->objectLayerPairFilter);
+    impl->contactListener.owner = impl.get();
+    impl->physicsSystem->SetContactListener(&impl->contactListener);
 
     if (!impl->AddGreyboxStaticBodies(level))
     {
@@ -776,10 +1228,11 @@ bool PhysicsWorld::InitializePlayer(core::Vec3 visualCenter, core::Vec3 visualSi
         return false;
     }
 
+    const IgnoreBodyFilter bodyFilter = impl->MakeCharacterBodyFilter();
     impl->character->RefreshContacts(
         impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
         impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
-        {},
+        bodyFilter,
         {},
         *impl->tempAllocator);
     impl->EnforceFixedZ();
@@ -806,6 +1259,7 @@ bool PhysicsWorld::TryRebuild(
 
 void PhysicsWorld::ResetCharacter(const core::Vec3& visualCenter, const core::Vec3& velocity)
 {
+    impl->ClearCarryState();
     if (impl->character == nullptr)
     {
         return;
@@ -824,10 +1278,11 @@ void PhysicsWorld::ResetCharacter(const core::Vec3& visualCenter, const core::Ve
         bodyInterface.SetAngularVelocity(innerBodyId, JPH::Vec3::sZero());
     }
 
+    const IgnoreBodyFilter bodyFilter = impl->MakeCharacterBodyFilter();
     impl->character->RefreshContacts(
         impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
         impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
-        {},
+        bodyFilter,
         {},
         *impl->tempAllocator);
     impl->EnforceFixedZ();
@@ -859,6 +1314,7 @@ void PhysicsWorld::ResetDynamicBoxes()
         return;
     }
 
+    impl->ClearCarryState();
     const std::size_t count = impl->DynamicBoxCount();
     for (std::size_t index = 0; index < count; ++index)
     {
@@ -869,6 +1325,58 @@ void PhysicsWorld::ResetDynamicBoxes()
 void PhysicsWorld::RecoverFallenDynamicBoxes()
 {
     impl->RecoverFallenDynamicBoxes();
+}
+
+void PhysicsWorld::SetGrabAim(core::Vec3 playerVisualCenter, float facingX)
+{
+    if (!std::isfinite(playerVisualCenter.x) || !std::isfinite(playerVisualCenter.y)
+        || !std::isfinite(playerVisualCenter.z))
+    {
+        return;
+    }
+    impl->grabAimCenter = playerVisualCenter;
+    impl->grabFacingX = static_cast<float>(FacingSign(facingX));
+    impl->grabAimValid = true;
+}
+
+void PhysicsWorld::HandleGrabDrop()
+{
+    if (!impl->initialized)
+    {
+        return;
+    }
+    if (impl->HeldIndexIsValid())
+    {
+        impl->DropCarriedBox();
+        return;
+    }
+    impl->EnsureGrabAim();
+    impl->RefreshGrabTarget();
+    impl->TryGrabCurrentTarget();
+}
+
+void PhysicsWorld::ClearCarry()
+{
+    impl->ClearCarryState();
+}
+
+DynamicBoxGrabState PhysicsWorld::GetGrabState() const
+{
+    DynamicBoxGrabState state;
+    if (impl->HeldIndexIsValid())
+    {
+        state.carrying = true;
+        state.carriedIndex = impl->grabHeldIndex;
+        state.carryTarget = impl->grabCarryTarget;
+        state.carryTargetValid = impl->grabCarryTargetValid;
+        return state;
+    }
+    if (impl->TargetIndexIsValid())
+    {
+        state.hasTarget = true;
+        state.targetIndex = impl->grabTargetIndex;
+    }
+    return state;
 }
 
 void PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
@@ -968,12 +1476,13 @@ void PhysicsWorld::MovePlayer(const PlayerMoveCommand& command, float deltaSecon
     const float worldHorizontalVelocity = command.horizontalVelocity + groundVelocityX;
     impl->character->SetLinearVelocity(
         JPH::Vec3(worldHorizontalVelocity, command.verticalVelocity, 0.0f));
+    const IgnoreBodyFilter bodyFilter = impl->MakeCharacterBodyFilter();
     impl->character->Update(
         stepSeconds,
         JPH::Vec3(0.0f, kCharacterGravityY, 0.0f),
         impl->physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
         impl->physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
-        {},
+        bodyFilter,
         {},
         *impl->tempAllocator);
     impl->EnforceFixedZ();
@@ -993,6 +1502,16 @@ void PhysicsWorld::Update(float deltaSeconds)
         return;
     }
 
+    impl->EnsureGrabAim();
+    if (impl->HeldIndexIsValid())
+    {
+        impl->DriveCarriedBox(stepSeconds);
+    }
+    else
+    {
+        impl->RefreshGrabTarget();
+    }
+
     impl->physicsSystem->Update(
         stepSeconds,
         1,
@@ -1005,6 +1524,15 @@ void PhysicsWorld::Update(float deltaSeconds)
 
 void PhysicsWorld::Shutdown()
 {
+    if (impl->physicsSystem)
+    {
+        impl->physicsSystem->SetContactListener(nullptr);
+    }
+    impl->contactListener.owner = nullptr;
+    impl->ClearCarryState();
+    impl->grabTargetIndex = kNoDynamicBoxGrabIndex;
+    impl->grabAimValid = false;
+
     impl->character = nullptr;
     impl->carriedGroundVelocityX = 0.0f;
     impl->movingPlatformDirection = 1.0f;

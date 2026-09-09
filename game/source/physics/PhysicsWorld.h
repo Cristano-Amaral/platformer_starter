@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "physics/DynamicBoxGrab.h"
 #include "physics/PhysicsCapacity.h"
 
 #include <memory>
@@ -108,6 +109,12 @@ public:
     void UpdateMovingPlatform(float deltaSeconds);
     void MovePlayer(const PlayerMoveCommand& command, float deltaSeconds);
     void Update(float deltaSeconds);
+    // Runtime-only Grab / Carry. Does not mutate authored Dynamic Box specs.
+    // facingX should be +1 or -1 (player facing along the gameplay X axis).
+    void SetGrabAim(core::Vec3 playerVisualCenter, float facingX);
+    void HandleGrabDrop();
+    void ClearCarry();
+    DynamicBoxGrabState GetGrabState() const;
     void Shutdown();
 
     bool IsInitialized() const;

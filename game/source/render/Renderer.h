@@ -122,6 +122,13 @@ struct WorldViewRect
 // loaded into the canonical Level 01 scene.
 inline constexpr bool kCanonicalSceneInstantiatesCookerProbes = false;
 
+enum class DynamicBoxDrawFeedback
+{
+    None,
+    Targeted,
+    Carried,
+};
+
 struct DynamicBoxDrawState
 {
     core::Vec3 center{};
@@ -130,6 +137,7 @@ struct DynamicBoxDrawState
     float rotationY = 0.0f;
     float rotationZ = 0.0f;
     float rotationW = 1.0f;
+    DynamicBoxDrawFeedback feedback = DynamicBoxDrawFeedback::None;
 };
 
 class StaticModelSceneStore;

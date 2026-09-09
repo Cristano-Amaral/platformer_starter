@@ -38,6 +38,10 @@ constexpr Color kMovingPlatformColor{168, 132, 72, 255};
 constexpr Color kWalkableSlopeColor{132, 148, 92, 255};
 constexpr Color kSteepSlopeColor{148, 92, 84, 255};
 constexpr Color kDynamicBoxColor{158, 162, 170, 255};
+constexpr Color kDynamicBoxTargetFill{198, 188, 96, 255};
+constexpr Color kDynamicBoxTargetWire{236, 214, 72, 255};
+constexpr Color kDynamicBoxCarryFill{96, 168, 214, 255};
+constexpr Color kDynamicBoxCarryWire{72, 214, 236, 255};
 constexpr Color kStaticPropFallbackColor{120, 72, 88, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
@@ -64,6 +68,8 @@ constexpr int kTimerHudFontSize = 22;
 constexpr int kTimerHudMargin = 20;
 constexpr int kBestHudGap = 4;
 constexpr Color kTimerHudText{240, 240, 244, 255};
+constexpr Color kGrabHudText{236, 214, 72, 255};
+constexpr Color kGrabHudMuted{200, 208, 220, 255};
 constexpr Color kSpawnMarkerFill{240, 200, 64, 255};
 constexpr Color kSelectionHighlightColor{255, 236, 64, 255};
 constexpr Color kPendingPreviewWire{72, 220, 236, 255};
@@ -265,6 +271,21 @@ void DrawSessionBest(bool hasBestTime, double bestSeconds)
     DrawText(text, kTimerHudMargin, y, kTimerHudFontSize, kTimerHudText);
 }
 
+void DrawGrabCarryHud(bool carrying, bool hasTarget)
+{
+    if (!carrying && !hasTarget)
+    {
+        return;
+    }
+
+    const char* text = carrying ? "E Drop" : "E Grab";
+    const int font = kTimerHudFontSize;
+    const int width = MeasureText(text, font);
+    const int x = (GetScreenWidth() - width) / 2;
+    const int y = GetScreenHeight() - font - kTimerHudMargin;
+    DrawText(text, x, y, font, carrying ? kGrabHudMuted : kGrabHudText);
+}
+
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
 {
     rlPushMatrix();
@@ -275,7 +296,7 @@ void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
     rlPopMatrix();
 }
 
-void DrawRuntimeDynamicBox(const DynamicBoxDrawState& box, Color fill)
+void DrawRuntimeDynamicBox(const DynamicBoxDrawState& box, Color fill, Color wire)
 {
     if (!(box.size.x > 0.0f) || !(box.size.y > 0.0f) || !(box.size.z > 0.0f))
     {
@@ -303,7 +324,7 @@ void DrawRuntimeDynamicBox(const DynamicBoxDrawState& box, Color fill)
         rlRotatef(degrees, axisX, axisY, axisZ);
     }
     DrawCube(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, fill);
-    DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, kWireColor);
+    DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, wire);
     rlPopMatrix();
 }
 
@@ -1128,13 +1149,29 @@ void Renderer::DrawWorld(
     }
 
     DrawGreyboxBox(movingPlatformPosition, movingPlatformSize, kMovingPlatformColor);
+    bool grabHudCarrying = false;
+    bool grabHudTarget = false;
     for (std::size_t index = 0; index < dynamicBoxes.size(); ++index)
     {
         if (OverlayMarksPendingDelete(overlay.pendingDeleteDynamicBoxIndices, index))
         {
             continue;
         }
-        DrawRuntimeDynamicBox(dynamicBoxes[index], kDynamicBoxColor);
+        Color fill = kDynamicBoxColor;
+        Color wire = kWireColor;
+        if (dynamicBoxes[index].feedback == DynamicBoxDrawFeedback::Carried)
+        {
+            fill = kDynamicBoxCarryFill;
+            wire = kDynamicBoxCarryWire;
+            grabHudCarrying = true;
+        }
+        else if (dynamicBoxes[index].feedback == DynamicBoxDrawFeedback::Targeted)
+        {
+            fill = kDynamicBoxTargetFill;
+            wire = kDynamicBoxTargetWire;
+            grabHudTarget = true;
+        }
+        DrawRuntimeDynamicBox(dynamicBoxes[index], fill, wire);
     }
     if (staticPropModels)
     {
@@ -1220,6 +1257,7 @@ void Renderer::DrawWorld(
     DrawRunTimer(elapsedSeconds);
     DrawSessionBest(hasBestTime, bestSeconds);
     DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
+    DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
     if (levelCompleted)
     {
         DrawLevelCompleteMessage();

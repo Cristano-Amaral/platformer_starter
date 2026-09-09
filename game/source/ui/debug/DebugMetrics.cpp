@@ -165,6 +165,7 @@ void DrawDebugMetrics(
         ImGui::Text("jumpPressed: %s", BoolText(snapshot.jumpPressed));
         ImGui::Text("respawnPressed: %s", BoolText(snapshot.respawnPressed));
         ImGui::Text("restartPressed: %s", BoolText(snapshot.restartPressed));
+        ImGui::Text("grabDropPressed: %s", BoolText(snapshot.grabDropPressed));
         ImGui::Text("Restart available: %s", BoolText(snapshot.restartAvailable));
         ImGui::Text("Restarted this frame: %s", BoolText(snapshot.restartedThisFrame));
     }
@@ -211,6 +212,8 @@ void DrawDebugMetrics(
         ImGui::Text("static greybox bodies: %d", snapshot.staticBodyCount);
         ImGui::Text("authored Dynamic Box bodies: %d", snapshot.physicsDynamicBoxCount);
         ImGui::Text("first Dynamic Box valid: %s", BoolText(snapshot.dynamicTestBodyValid));
+        ImGui::Text("grab target: %s (%d)", BoolText(snapshot.grabHasTarget), snapshot.grabTargetIndex);
+        ImGui::Text("grab carrying: %s (%d)", BoolText(snapshot.grabCarrying), snapshot.grabCarriedIndex);
         ImGui::Text(
             "first Dynamic Box position: %.4f, %.4f, %.4f",
             snapshot.physicsTestBoxPosition.x,

@@ -76,12 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 50 — Static Prop Placement Workflow
-(Development Content Browser **Place Static Prop**: transient real-model
-viewport placement onto Ground/Platform/Slope, confirming existing M49
-Static Props into `workingCopy`; Direct Add remains distinct; awaiting
-manual acceptance).
-Milestone 49 is complete. Milestone 51 has not started.
+Milestone 51 — Dynamic Box Grab / Carry
+(Gameplay: target, grab, carry, and drop authored Dynamic Boxes only;
+runtime-only carry state; awaiting manual acceptance).
+Milestone 50 is complete. Milestone 52 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -142,7 +140,7 @@ strictly below `active.killPlane` back to its currently applied authored
 transform, with identity orientation and zero linear/angular velocity. Recovery
 is per body and does not rebuild PhysicsWorld or mutate authoring state.
 Do not add Undo/Redo, a probe framework, Level Format v2,
-or Milestone 51.
+or Milestone 52.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -212,4 +210,7 @@ reference; Delete Asset cancels placement when the identity matches the
 pending preview asset. Canonical Level 01 still has 0 Static Props. Debug has
 the visual editor but cannot author. Release has no editor. Temporary Correction 5
 Gameplay framebuffer capture was removed after the clip-plane fix. M50 is
-implemented and awaits manual acceptance. Do not start Milestone 51.
+complete. Milestone 51 adds gameplay Grab / Carry for authored Dynamic Boxes
+only (`E` toggles Grab/Drop). Carry is runtime-only: it does not mutate
+`workingCopy`, active authored definitions, Modified/Dirty, or Level Format.
+Static Props stay visual and non-grabbable. Do not start Milestone 52.

@@ -29,6 +29,7 @@ struct DebugMetricsSnapshot
     bool jumpPressed = false;
     bool respawnPressed = false;
     bool restartPressed = false;
+    bool grabDropPressed = false;
     bool restartAvailable = false;
     bool restartedThisFrame = false;
 
@@ -61,6 +62,10 @@ struct DebugMetricsSnapshot
     int staticBodyCount = 0;
     int physicsDynamicBoxCount = 0;
     bool dynamicTestBodyValid = false;
+    bool grabHasTarget = false;
+    int grabTargetIndex = -1;
+    bool grabCarrying = false;
+    int grabCarriedIndex = -1;
     bool playerPositionFinite = true;
     bool playerVelocityFinite = true;
 

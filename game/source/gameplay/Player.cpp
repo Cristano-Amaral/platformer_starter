@@ -153,6 +153,7 @@ void Player::UpdateHorizontalVelocity(float moveX, float deltaSeconds)
     const float desiredVelocityX = moveX * kMaxMoveSpeed;
     if (moveX != 0.0f)
     {
+        facingX = moveX > 0.0f ? 1.0f : -1.0f;
         horizontalVelocity =
             MoveToward(horizontalVelocity, desiredVelocityX, kAcceleration * deltaSeconds);
     }
@@ -184,6 +185,11 @@ const core::Vec3& Player::Position() const
 const core::Vec3& Player::Size() const
 {
     return size;
+}
+
+float Player::FacingX() const
+{
+    return facingX;
 }
 
 float Player::HorizontalVelocity() const
