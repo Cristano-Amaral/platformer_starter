@@ -15,6 +15,7 @@
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
 #include "editor/EditorPlacement.h"
+#include "editor/StaticPropPlacement.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorToolRunner.h"
 #include "editor/StaticPropTransform.h"
@@ -469,6 +470,7 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
         if (ImGui::Selectable(label, selected))
         {
             ApplyPaletteCategoryClick(state.placementMode, mode);
+            CancelStaticPropPlacement(state.staticPropPlacement);
         }
         ImGui::EndDisabled();
         if (!canAdd)
@@ -485,7 +487,13 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Dynamic Box", PlacementMode::DynamicBox, LevelEditorRequest::AddDynamicBox);
 
     ImGui::Separator();
-    if (PlacementModeIsActive(state.placementMode))
+    if (StaticPropPlacementIsActive(state.staticPropPlacement))
+    {
+        ImGui::Text("Placement active: %s", StaticPropPlacementHudName());
+        ImGui::TextUnformatted(PlacementStopHintText());
+        ImGui::TextUnformatted(PlacementViewportActionHintText());
+    }
+    else if (PlacementModeIsActive(state.placementMode))
     {
         ImGui::Text("Placement active: %s", PlacementModeName(state.placementMode));
         ImGui::TextUnformatted(PlacementStopHintText());
@@ -520,9 +528,10 @@ LevelEditorRequest DrawContentBrowser(
 
     ImGui::TextUnformatted("Registered static GLB assets. Selection is not a level object.");
     ImGui::TextWrapped(
-        "Add Static Prop creates one authored instance from the selected asset (working copy only; "
-        "not placement). Import copies canonical source only. Delete removes source plus matching "
-        "cooked/staged copies.");
+        "Add Static Prop creates one authored instance immediately from the selected asset "
+        "(working copy only). Place Static Prop enters viewport placement and creates nothing "
+        "until a valid Ground/Platform/Slope click. Import copies canonical source only. Delete "
+        "removes source plus matching cooked/staged copies.");
 
     char query[256];
     std::snprintf(query, sizeof(query), "%s", state.contentBrowser.filterQuery.c_str());
@@ -560,7 +569,7 @@ LevelEditorRequest DrawContentBrowser(
         ContentBrowserAddStaticPropRequest(),
         state.contentBrowser.selectedIdentity);
     ImGui::BeginDisabled(!canAddStaticProp);
-    if (ImGui::Button("Add Static Prop"))
+    if (ImGui::Button(kContentBrowserAddStaticPropLabel))
     {
         request = ContentBrowserAddStaticPropRequest();
     }
@@ -574,6 +583,46 @@ LevelEditorRequest DrawContentBrowser(
         if (reason != nullptr)
         {
             ImGui::SetTooltip("%s", reason);
+        }
+        else
+        {
+            ImGui::SetTooltip(
+                "Creates one Static Prop immediately at the camera-region default. "
+                "Does not enter placement.");
+        }
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!canAddStaticProp);
+    if (ImGui::Button(kContentBrowserPlaceStaticPropLabel))
+    {
+        ApplyPlaceStaticPropClick(
+            state.staticPropPlacement,
+            state.placementMode,
+            state.placementPointerBlocked,
+            state.contentBrowser.selectedIdentity);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        const char* reason = AddStaticPropDisableReason(
+            authoringAvailable,
+            state.workingCopy,
+            state.gizmo.dragging,
+            state.contentBrowser.selectedIdentity);
+        if (reason != nullptr)
+        {
+            ImGui::SetTooltip("%s", reason);
+        }
+        else if (StaticPropPlacementIsActive(state.staticPropPlacement)
+            && state.staticPropPlacement.modelIdentity == state.contentBrowser.selectedIdentity)
+        {
+            ImGui::SetTooltip("Click again or press Esc to cancel Static Prop placement.");
+        }
+        else
+        {
+            ImGui::SetTooltip(
+                "Enter viewport placement. Click a Ground, Platform, or Slope to create. "
+                "Does not add until that click.");
         }
     }
     ImGui::EndDisabled();
@@ -658,6 +707,8 @@ LevelEditorRequest DrawContentBrowser(
                         ImVec2(kThumbSize, kThumbSize + ImGui::GetTextLineHeightWithSpacing())))
                 {
                     SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
+                    SyncStaticPropPlacementIdentityFromBrowser(
+                        state.staticPropPlacement, state.contentBrowser.selectedIdentity);
                 }
                 const ImVec2 cellMin = ImGui::GetItemRectMin();
                 ImGui::SetCursorScreenPos(ImVec2(cellMin.x, cellMin.y));
@@ -725,6 +776,8 @@ LevelEditorRequest DrawContentBrowser(
                     ImGuiSelectableFlags_SpanAllColumns))
             {
                 SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
+                SyncStaticPropPlacementIdentityFromBrowser(
+                    state.staticPropPlacement, state.contentBrowser.selectedIdentity);
             }
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(entry.assetType.c_str());
@@ -743,6 +796,12 @@ LevelEditorRequest DrawContentBrowser(
     else
     {
         ImGui::TextUnformatted("Selected asset: none");
+    }
+    if (StaticPropPlacementIsActive(state.staticPropPlacement))
+    {
+        ImGui::Text(
+            "Placing Static Prop: %s", state.staticPropPlacement.modelIdentity.c_str());
+        ImGui::TextUnformatted(PlacementViewportActionHintText());
     }
     if (!state.contentBrowser.statusMessage.empty())
     {

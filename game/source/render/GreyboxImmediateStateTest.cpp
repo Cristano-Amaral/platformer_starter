@@ -760,6 +760,33 @@ int main()
                 "Preview restore writes default clip planes");
             UnloadRenderTexture(preview);
         }
+        {
+            // M50 placement preview: DrawModel with a ghost tint must not
+            // change clip planes. Gameplay DrawWorld still establishes the
+            // default planes before BeginMode3D.
+            rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+            const Camera3D camera = MakeCamera();
+            BeginMode3D(camera);
+            DrawModel(chest, Vector3{0.0f, 0.5f, 0.0f}, 1.0f, Color{96, 220, 236, 160});
+            EndMode3D();
+            Snapshot afterPlacementDraw{};
+            afterPlacementDraw.cullNear = rlGetCullDistanceNear();
+            afterPlacementDraw.cullFar = rlGetCullDistanceFar();
+            Expect(
+                std::fabs(afterPlacementDraw.cullNear - RL_CULL_DISTANCE_NEAR) < 0.0001
+                    && std::fabs(afterPlacementDraw.cullFar - RL_CULL_DISTANCE_FAR) < 0.001,
+                "placement preview DrawModel does not leak clip planes");
+            Snapshot gameplayAfterPlacement{};
+            const int gameplayAfterPlacementPixels =
+                RenderGreyboxFrame(Experiment::Production, &gameplayAfterPlacement, true, true);
+            Expect(
+                gameplayAfterPlacementPixels > baselinePixels / 2,
+                "Gameplay still establishes expected clip planes after placement-like draw");
+            Expect(
+                std::fabs(gameplayAfterPlacement.cullNear - RL_CULL_DISTANCE_NEAR) < 0.0001
+                    && std::fabs(gameplayAfterPlacement.cullFar - RL_CULL_DISTANCE_FAR) < 0.001,
+                "DrawWorld-like restore after placement preview writes default clip planes");
+        }
         const int chestAfter = RunModelSequence("Chest", chest, healthyPreGrid);
         Expect(
             chestAfter > baselinePixels / 4,

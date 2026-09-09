@@ -815,6 +815,18 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             }
         }
     }
+    if (overlay.drawStaticPropPlacementPreview
+        && overlay.staticPropPlacementBoundsSize.x > 0.0f
+        && overlay.staticPropPlacementBoundsSize.y > 0.0f
+        && overlay.staticPropPlacementBoundsSize.z > 0.0f)
+    {
+        DrawCubeWires(
+            ToRaylib(overlay.staticPropPlacementBoundsCenter),
+            overlay.staticPropPlacementBoundsSize.x,
+            overlay.staticPropPlacementBoundsSize.y,
+            overlay.staticPropPlacementBoundsSize.z,
+            kPlacementCandidateWire);
+    }
     if (overlay.drawCheckpointRespawnMarker)
     {
         const Vector3 respawn = ToRaylib(overlay.checkpointRespawnMarker);
@@ -949,11 +961,13 @@ Renderer::~Renderer()
     }
 }
 
-void Renderer::SyncStaticPropModels(const world::LevelDefinition& level)
+void Renderer::SyncStaticPropModels(
+    const world::LevelDefinition& level,
+    std::string_view extraIdentity)
 {
     if (staticPropModels)
     {
-        staticPropModels->Sync(level);
+        staticPropModels->Sync(level, extraIdentity);
     }
 }
 
@@ -1188,6 +1202,10 @@ void Renderer::DrawWorld(
     // Editor overlay last in 3D: world, then marker/highlight/faded
     // pending-delete (depth on), cyan pending ghost, then the
     // depth-independent gizmo. ImGui is after EndMode3D.
+    if (overlay.drawStaticPropPlacementPreview && staticPropModels)
+    {
+        staticPropModels->DrawPlacementPreview(overlay.staticPropPlacementPreview);
+    }
     DrawWorldOverlay(overlay);
 
     if (subViewport)

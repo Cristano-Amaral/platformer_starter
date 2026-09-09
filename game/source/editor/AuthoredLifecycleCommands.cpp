@@ -278,12 +278,17 @@ bool HandleAuthoredLifecycleRequest(
     LevelEditorRequest request,
     bool authoringAvailable,
     core::Vec3 placementAnchor,
-    bool worldCenterPlacement)
+    bool worldCenterPlacement,
+    std::string_view staticPropIdentityOverride)
 {
     if (!IsAuthoredLifecycleRequest(request))
     {
         return false;
     }
+
+    const std::string_view staticPropIdentity = staticPropIdentityOverride.empty()
+        ? std::string_view(state.contentBrowser.selectedIdentity)
+        : staticPropIdentityOverride;
 
     const EditorSelection previousSelection = state.selection;
     const CategoryStructuralPending previousPending = state.structuralPending;
@@ -300,7 +305,7 @@ bool HandleAuthoredLifecycleRequest(
             state.selection,
             state.gizmo.dragging,
             request,
-            state.contentBrowser.selectedIdentity))
+            staticPropIdentity))
     {
         ResetLevelActionStatuses(state);
         if (!authoringAvailable)
@@ -366,7 +371,7 @@ bool HandleAuthoredLifecycleRequest(
         request,
         placementAnchor,
         worldCenterPlacement,
-        state.contentBrowser.selectedIdentity);
+        staticPropIdentity);
     if (!result.succeeded)
     {
         state.selection = previousSelection;

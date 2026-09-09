@@ -84,6 +84,8 @@ add_executable(Platformer3D
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPlacement.cpp
     game/source/editor/EditorPlacement.h
+    game/source/editor/StaticPropPlacement.cpp
+    game/source/editor/StaticPropPlacement.h
     game/source/editor/EditorBuildPreference.cpp
     game/source/editor/EditorBuildPreference.h
     game/source/editor/EditorSelection.cpp
@@ -673,6 +675,44 @@ else()
     target_compile_options(EditorPlacementTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 50: Static Prop placement workflow. No window, raylib, or ImGui.
+add_executable(StaticPropPlacementTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredLifecycleCommands.cpp
+    game/source/editor/AuthoredLifecycleCommands.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorHierarchy.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorPlacement.cpp
+    game/source/editor/EditorPlacement.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/LevelEditor.cpp
+    game/source/editor/LevelEditor.h
+    game/source/editor/StaticPropPlacement.cpp
+    game/source/editor/StaticPropPlacement.h
+    game/source/editor/StaticPropPlacementTest.cpp
+    game/source/editor/StaticPropTransform.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(StaticPropPlacementTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(StaticPropPlacementTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(StaticPropPlacementTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # Milestone 43: Quick Toolbar mapping, chrome geometry, and build preference.
 # No window, raylib, or ImGui.
 add_executable(EditorQuickToolbarTest
@@ -772,6 +812,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPlacement.cpp
     game/source/editor/EditorPlacement.h
+    game/source/editor/StaticPropPlacement.cpp
+    game/source/editor/StaticPropPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/LevelEditor.cpp

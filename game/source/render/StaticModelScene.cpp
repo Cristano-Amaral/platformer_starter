@@ -101,6 +101,7 @@ struct StaticModelSceneStore::GpuState
     std::unordered_map<std::string, Entry> entries;
     mutable std::size_t drawSubmissions = 0;
     mutable std::vector<std::string> submittedIdentities;
+    std::size_t loadCount = 0;
 };
 
 StaticModelSceneStore::StaticModelSceneStore()
@@ -131,7 +132,7 @@ void StaticModelSceneStore::Shutdown()
     gpu->entries.clear();
 }
 
-void StaticModelSceneStore::Sync(const world::LevelDefinition& level)
+void StaticModelSceneStore::Sync(const world::LevelDefinition& level, std::string_view extraIdentity)
 {
     if (gpu == nullptr)
     {
@@ -139,13 +140,17 @@ void StaticModelSceneStore::Sync(const world::LevelDefinition& level)
     }
 
     std::unordered_set<std::string> needed;
-    needed.reserve(level.staticProps.size());
+    needed.reserve(level.staticProps.size() + 1);
     for (const world::StaticPropSpec& prop : level.staticProps)
     {
         if (world::StaticPropIdentityIsValid(prop.modelIdentity))
         {
             needed.insert(prop.modelIdentity);
         }
+    }
+    if (world::StaticPropIdentityIsValid(extraIdentity))
+    {
+        needed.insert(std::string(extraIdentity));
     }
 
     for (auto it = gpu->entries.begin(); it != gpu->entries.end();)
@@ -199,6 +204,7 @@ void StaticModelSceneStore::Sync(const world::LevelDefinition& level)
             continue;
         }
         Model model = LoadModel(path.string().c_str());
+        ++gpu->loadCount;
         if (!ModelHasRenderableMesh(model))
         {
             UnloadModel(model);
@@ -279,6 +285,15 @@ std::size_t StaticModelSceneStore::CachedIdentityCount() const
     return gpu->entries.size();
 }
 
+std::size_t StaticModelSceneStore::LoadCount() const
+{
+    if (gpu == nullptr)
+    {
+        return 0;
+    }
+    return gpu->loadCount;
+}
+
 void StaticModelSceneStore::ResetDrawStats() const
 {
     if (gpu == nullptr)
@@ -345,7 +360,12 @@ void RestoreGreyboxImmediateState()
     rlEnableTexture(rlGetTextureIdDefault());
 }
 
-void StaticModelSceneStore::DrawProp(const world::StaticPropSpec& spec) const
+void StaticModelSceneStore::DrawPropTinted(
+    const world::StaticPropSpec& spec,
+    unsigned char red,
+    unsigned char green,
+    unsigned char blue,
+    unsigned char alpha) const
 {
     if (!world::StaticPropTransformIsValid(spec))
     {
@@ -367,16 +387,34 @@ void StaticModelSceneStore::DrawProp(const world::StaticPropSpec& spec) const
             entry = &it->second;
         }
     }
+    const Color tint{red, green, blue, alpha};
     if (entry != nullptr && entry->hasModel)
     {
-        DrawModel(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+        DrawModel(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, tint);
     }
     else
     {
-        DrawCube(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, kMissingPropColor);
+        DrawCube(
+            Vector3{0.0f, 0.0f, 0.0f},
+            1.0f,
+            1.0f,
+            1.0f,
+            alpha == 255 ? kMissingPropColor : tint);
         DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, WHITE);
     }
     rlPopMatrix();
     RestoreGreyboxImmediateState();
+}
+
+void StaticModelSceneStore::DrawProp(const world::StaticPropSpec& spec) const
+{
+    DrawPropTinted(spec, 255, 255, 255, 255);
+}
+
+void StaticModelSceneStore::DrawPlacementPreview(const world::StaticPropSpec& spec) const
+{
+    // Editor-only ghost tint. Must not LoadModel, mutate the shared Model, or
+    // change rlgl clip planes (M49 Gameplay contract).
+    DrawPropTinted(spec, 96, 220, 236, 160);
 }
 }

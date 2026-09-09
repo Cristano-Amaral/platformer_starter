@@ -76,12 +76,12 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 49 — Authored Static Props
-(Development-authored Static Prop instances referencing canonical
-`models/<file>.glb` identities, with complete position/rotation/scale,
-Hierarchy/Inspector/Translate/Scale gizmos, staged GLB rendering, and Delete Asset
-reference safety; awaiting manual acceptance).
-Milestone 48.2 is complete. Milestone 50 has not started.
+Milestone 50 — Static Prop Placement Workflow
+(Development Content Browser **Place Static Prop**: transient real-model
+viewport placement onto Ground/Platform/Slope, confirming existing M49
+Static Props into `workingCopy`; Direct Add remains distinct; awaiting
+manual acceptance).
+Milestone 49 is complete. Milestone 51 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -142,7 +142,7 @@ strictly below `active.killPlane` back to its currently applied authored
 transform, with identity orientation and zero linear/angular velocity. Recovery
 is per body and does not rebuild PhysicsWorld or mutate authoring state.
 Do not add Undo/Redo, a probe framework, Level Format v2,
-or Milestone 50.
+or Milestone 51.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -186,8 +186,11 @@ direct-add UI is Development Content Browser **Add Static Prop**;
 `Edit > Add > Static Prop` is retained and routes the same
 `LevelEditorRequest::AddStaticProp`. Both consume the Content Browser selected
 identity, and the Edit row states that asset (or `select asset`) so the
-cross-window dependency is visible. It is not Object Palette /
-ghost / click-to-place (M50). Props are visual only (no Jolt body). Scene
+cross-window dependency is visible. Milestone 50 adds Development Content
+Browser **Place Static Prop**, a distinct interactive viewport placement
+mode: transient real-model preview on Ground/Platform/Slope, confirmation
+creates the existing M49 Static Prop in `workingCopy` only, and Direct Add
+remains immediate. Props are visual only (no Jolt body). Scene
 rendering resolves staged runtime assets only; a missing staged model draws a
 placeholder cube and the editor says to run Cook & Stage (no source fallback,
 no automatic cook/stage). Authored `Scale (1,1,1)` keeps the model's raw GLB
@@ -204,6 +207,9 @@ and `DrawWorld` establishes those same planes again before Gameplay
 `BeginMode3D`. A leaked Chest-like far plane (~6) clips the gameplay camera.
 Delete
 Asset refuses identities referenced by `workingCopy`, `active`, or
-`savedSourceBaseline`. Canonical Level 01 still has 0 Static Props. Debug has
+`savedSourceBaseline`. A transient M50 placement preview is not an authored
+reference; Delete Asset cancels placement when the identity matches the
+pending preview asset. Canonical Level 01 still has 0 Static Props. Debug has
 the visual editor but cannot author. Release has no editor. Temporary Correction 5
-Gameplay framebuffer capture was removed after the clip-plane fix. M49 is not closed.
+Gameplay framebuffer capture was removed after the clip-plane fix. M50 is
+implemented and awaits manual acceptance. Do not start Milestone 51.

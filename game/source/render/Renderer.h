@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace gameplay
@@ -54,6 +55,11 @@ struct DebugWorldOverlay
     world::CheckpointSpec placementCandidateCheckpoint{};
     world::HazardSpec placementCandidateHazard{};
     world::CollectibleSpec placementCandidateCollectible{};
+    // M50 editor-only Static Prop real-model preview. Not authored, not Gameplay.
+    bool drawStaticPropPlacementPreview = false;
+    world::StaticPropSpec staticPropPlacementPreview{};
+    core::Vec3 staticPropPlacementBoundsCenter{};
+    core::Vec3 staticPropPlacementBoundsSize{};
     // Editor-only placeholders for collected authored Collectibles (active).
     std::vector<core::Vec3> collectedAuthoredCollectibleCenters;
     // Development-only pending-delete markers from active objects that
@@ -141,7 +147,9 @@ public:
 
     void LoadRuntimeAssets();
     void UnloadRuntimeAssets();
-    void SyncStaticPropModels(const world::LevelDefinition& level);
+    void SyncStaticPropModels(
+        const world::LevelDefinition& level,
+        std::string_view extraIdentity = {});
     StaticModelSceneStore* StaticPropModels();
     const StaticModelSceneStore* StaticPropModels() const;
 

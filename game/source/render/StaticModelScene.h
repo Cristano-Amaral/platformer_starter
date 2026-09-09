@@ -24,7 +24,7 @@ public:
     StaticModelSceneStore& operator=(const StaticModelSceneStore&) = delete;
 
     void Shutdown();
-    void Sync(const world::LevelDefinition& level);
+    void Sync(const world::LevelDefinition& level, std::string_view extraIdentity = {});
 
     bool HasModel(std::string_view identity) const;
     bool IsFailed(std::string_view identity) const;
@@ -34,6 +34,7 @@ public:
         core::Vec3& localMax) const;
     std::size_t UniqueLoadedCount() const;
     std::size_t CachedIdentityCount() const;
+    std::size_t LoadCount() const;
 
     void ResetDrawStats() const;
     std::size_t DrawSubmissionCount() const;
@@ -41,8 +42,16 @@ public:
     std::vector<std::string> SubmittedIdentities() const;
 
     void DrawProp(const world::StaticPropSpec& spec) const;
+    void DrawPlacementPreview(const world::StaticPropSpec& spec) const;
 
 private:
+    void DrawPropTinted(
+        const world::StaticPropSpec& spec,
+        unsigned char red,
+        unsigned char green,
+        unsigned char blue,
+        unsigned char alpha) const;
+
     struct GpuState;
     std::unique_ptr<GpuState> gpu;
 };

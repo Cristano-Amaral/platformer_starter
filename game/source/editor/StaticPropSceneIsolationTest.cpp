@@ -207,6 +207,37 @@ void TestUnloadLifecycle(const char* path, const char* label)
 
     const PixelCounts baseline = render(nullptr);
     const PixelCounts withModel = render(&model);
+    {
+        BeginTextureMode(target);
+        ClearBackground(kBackground);
+        Camera3D camera{};
+        camera.target = Vector3{0.0f, 0.8f, 0.0f};
+        camera.position = Vector3{2.0f, 4.3f, 12.0f};
+        camera.up = Vector3{0.0f, 1.0f, 0.0f};
+        camera.fovy = 40.0f;
+        camera.projection = CAMERA_PERSPECTIVE;
+        BeginMode3D(camera);
+        RestoreAfterModel();
+        DrawGrid(20, 1.0f);
+        DrawCube(Vector3{0.0f, -0.25f, 0.0f}, 56.0f, 0.5f, 8.0f, Color{90, 96, 108, 255});
+        for (int pass = 0; pass < 8; ++pass)
+        {
+            rlPushMatrix();
+            rlTranslatef(0.42f, 1.54f, 0.0f);
+            DrawModel(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, Color{96, 220, 236, 160});
+            rlPopMatrix();
+            RestoreAfterModel();
+        }
+        DrawCube(Vector3{0.0f, 0.8f, 0.0f}, 1.0f, 1.6f, 1.0f, kPlayer);
+        EndMode3D();
+        EndTextureMode();
+        Image image = LoadImageFromTexture(target.texture);
+        const PixelCounts repeated = CountPixels(image);
+        UnloadImage(image);
+        Expect(
+            repeated.player > 0,
+            "placement-tint DrawModel eight times keeps the later player cube (no per-frame LoadModel)");
+    }
     UnloadModel(model);
     model = {};
     const PixelCounts afterUnload = render(nullptr);

@@ -45,8 +45,11 @@ const char* AddStaticPropDisableReason(
 // Mutates workingCopy, selection, structuralPending, structuralMap, gizmo,
 // derived Modified/Dirty. Duplicate/Delete ignore placementAnchor.
 // When worldCenterPlacement is false (Edit > Add), Add uses camera-region X/Y
-// and authored Z from workingCopy spawn.z. When true (Object Palette confirm),
-// placementAnchor is the resolved world center and is not snapped to spawn.z.
+// and authored Z from workingCopy spawn.z. When true (Object Palette confirm
+// or M50 Static Prop placement confirm), placementAnchor is the resolved world
+// center and is not snapped to spawn.z.
+// staticPropIdentityOverride: empty uses Content Browser selection. Placement
+// confirm passes the session identity so Direct Add and Place stay distinct.
 // Returns true when the request was a lifecycle intent (handled, whether it
 // succeeded or was rejected).
 bool HandleAuthoredLifecycleRequest(
@@ -55,5 +58,6 @@ bool HandleAuthoredLifecycleRequest(
     LevelEditorRequest request,
     bool authoringAvailable,
     core::Vec3 placementAnchor = {},
-    bool worldCenterPlacement = false);
+    bool worldCenterPlacement = false,
+    std::string_view staticPropIdentityOverride = {});
 }

@@ -24,6 +24,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
@@ -43,6 +44,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
+#include "editor/StaticPropPlacement.h"
 #include "editor/StaticPropTransform.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorWorkspace.h"
@@ -52,6 +54,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "platform/OpenFileDialog.h"
 #include "render/StaticModelThumbnail.h"
 #include "render/StaticModelPreview.h"
+#include "render/StaticModelScene.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
 
@@ -789,7 +792,8 @@ int Application::Run()
             editorInput = editor::PollEditorInput();
             window.SetEscapeClosesWindow(
                 !editor::IsLevelAuthoringAvailable()
-                || !editor::PlacementModeIsActive(levelEditorState.placementMode));
+                || !editor::EditorViewportPlacementIsActive(
+                    levelEditorState.placementMode, levelEditorState.staticPropPlacement));
             editorViewport = MakeLiveEditorContentViewport(
                 static_cast<float>(window.Width()),
                 static_cast<float>(window.Height()),
@@ -888,7 +892,49 @@ int Application::Run()
             }
 
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
-            if (editor::PlacementModeIsActive(levelEditorState.placementMode))
+            {
+                const std::string_view previewIdentity =
+                    editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement)
+                    ? std::string_view(levelEditorState.staticPropPlacement.modelIdentity)
+                    : std::string_view{};
+                renderer.SyncStaticPropModels(levelDefinition, previewIdentity);
+            }
+            if (editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement))
+            {
+                const editor::Ray3 previewRay = editor::ScreenToWorldRayFromWindow(
+                    cameraView,
+                    editorInput.mouseX,
+                    editorInput.mouseY,
+                    editorViewport);
+                core::Vec3 localMin = editor::kStaticPropDefaultLocalMin;
+                core::Vec3 localMax = editor::kStaticPropDefaultLocalMax;
+                if (renderer.StaticPropModels() != nullptr)
+                {
+                    (void)renderer.StaticPropModels()->TryGetLoadedLocalBounds(
+                        levelEditorState.staticPropPlacement.modelIdentity, localMin, localMax);
+                }
+                const editor::StaticPropPlacementPreview preview =
+                    editor::ResolveStaticPropPlacementPreview(
+                        levelEditorState.staticPropPlacement,
+                        previewRay,
+                        editor::BuildPickingSet(levelDefinition, pickingWorld),
+                        localMin,
+                        localMax);
+                overlay.drawStaticPropPlacementPreview =
+                    editor::StaticPropPlacementPreviewShouldDraw(preview);
+                if (overlay.drawStaticPropPlacementPreview)
+                {
+                    overlay.staticPropPlacementPreview =
+                        editor::MakeStaticPropSpecFromPreview(preview);
+                    editor::StaticPropWorldAabb(
+                        overlay.staticPropPlacementPreview,
+                        localMin,
+                        localMax,
+                        overlay.staticPropPlacementBoundsCenter,
+                        overlay.staticPropPlacementBoundsSize);
+                }
+            }
+            else if (editor::PlacementModeIsActive(levelEditorState.placementMode))
             {
                 const editor::Ray3 previewRay = editor::ScreenToWorldRayFromWindow(
                     cameraView,
@@ -1062,7 +1108,15 @@ int Application::Run()
         }
 #endif
         renderer.BeginFrame();
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        renderer.SyncStaticPropModels(
+            levelDefinition,
+            editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement)
+                ? std::string_view(levelEditorState.staticPropPlacement.modelIdentity)
+                : std::string_view{});
+#else
         renderer.SyncStaticPropModels(levelDefinition);
+#endif
         renderer.DrawWorld(
             player,
             cameraView,
@@ -1104,12 +1158,19 @@ int Application::Run()
                 widgetAxes.y,
                 widgetAxes.z});
             if (editor::IsLevelAuthoringAvailable()
-                && editor::PlacementModeIsActive(levelEditorState.placementMode))
+                && editor::EditorViewportPlacementIsActive(
+                    levelEditorState.placementMode, levelEditorState.staticPropPlacement))
             {
+                const bool staticPropPlacing =
+                    editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement);
                 renderer.DrawEditorPlacementHud(
                     true,
-                    editor::PlacementModeName(levelEditorState.placementMode),
-                    overlay.placementCandidateFallback,
+                    staticPropPlacing
+                        ? editor::StaticPropPlacementHudName()
+                        : editor::PlacementModeName(levelEditorState.placementMode),
+                    staticPropPlacing
+                        ? !overlay.drawStaticPropPlacementPreview
+                        : overlay.placementCandidateFallback,
                     editor::OrientationWidgetLiveExtraTopInset(
                         levelEditorState.active,
                         levelEditorState.menuBarHeight,
@@ -1305,10 +1366,16 @@ int Application::Run()
             if (editor::ShouldCancelPlacementMode(
                     levelEditorState.placementMode,
                     editorInput.escapePressed,
+                    keyboardCaptured)
+                || editor::ShouldCancelStaticPropPlacement(
+                    levelEditorState.staticPropPlacement,
+                    editorInput.escapePressed,
                     keyboardCaptured))
             {
-                editor::CancelPlacementSession(
-                    levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+                editor::CancelAllEditorPlacement(
+                    levelEditorState.placementMode,
+                    levelEditorState.placementPointerBlocked,
+                    levelEditorState.staticPropPlacement);
                 window.SetEscapeClosesWindow(true);
             }
 
@@ -1329,10 +1396,59 @@ int Application::Run()
                 editorInput.selectReleased,
                 pointerClaimed);
 
+            const bool placingStaticProp =
+                editor::IsLevelAuthoringAvailable()
+                && editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement);
             const bool placing =
                 editor::IsLevelAuthoringAvailable()
                 && editor::PlacementModeIsActive(levelEditorState.placementMode);
-            if (placing
+            if (placingStaticProp)
+            {
+                core::Vec3 localMin = editor::kStaticPropDefaultLocalMin;
+                core::Vec3 localMax = editor::kStaticPropDefaultLocalMax;
+                if (renderer.StaticPropModels() != nullptr)
+                {
+                    (void)renderer.StaticPropModels()->TryGetLoadedLocalBounds(
+                        levelEditorState.staticPropPlacement.modelIdentity, localMin, localMax);
+                }
+                const editor::StaticPropPlacementPreview preview =
+                    editor::ResolveStaticPropPlacementPreview(
+                        levelEditorState.staticPropPlacement,
+                        ray,
+                        editor::BuildPickingSet(
+                            levelDefinition,
+                            MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes)),
+                        localMin,
+                        localMax);
+                const bool canAdd = editor::CanIssueAuthoredLifecycleRequest(
+                    true,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection,
+                    levelEditorState.gizmo.dragging,
+                    editor::LevelEditorRequest::AddStaticProp,
+                    levelEditorState.staticPropPlacement.modelIdentity);
+                if (editor::ShouldConfirmStaticPropPlacement(
+                        levelEditorState.staticPropPlacement,
+                        preview.valid,
+                        editorInput.selectPressed,
+                        mouseCaptured,
+                        editorInput.lookHeld,
+                        widgetConsumedPointer,
+                        gizmoConsumedPointer,
+                        levelEditorState.placementPointerBlocked,
+                        canAdd))
+                {
+                    editor::HandleAuthoredLifecycleRequest(
+                        levelEditorState,
+                        levelDefinition,
+                        editor::LevelEditorRequest::AddStaticProp,
+                        true,
+                        preview.position,
+                        true,
+                        levelEditorState.staticPropPlacement.modelIdentity);
+                }
+            }
+            else if (placing
                 && editor::ShouldConfirmPlacement(
                     levelEditorState.placementMode,
                     editorInput.selectPressed,
@@ -1358,7 +1474,7 @@ int Application::Run()
                     candidate.center,
                     true);
             }
-            if (!placing
+            if (!placing && !placingStaticProp
                 && editor::ShouldAttemptEditorViewportPick(
                     editorInput.selectPressed,
                     mouseCaptured,
@@ -1634,8 +1750,10 @@ void Application::SetLevelEditorActive(bool active)
             levelEditorState.selection = editor::ClearSelection();
         }
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
-        editor::CancelPlacementSession(
-            levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         editor::RefreshContentBrowser(
             levelEditorState.contentBrowser, editor::AuthoringSourceRoot());
@@ -1644,8 +1762,10 @@ void Application::SetLevelEditorActive(bool active)
     if (!active && levelEditorState.active)
     {
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
-        editor::CancelPlacementSession(
-            levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
         window.SetEscapeClosesWindow(true);
@@ -1765,6 +1885,10 @@ void Application::DeleteContentBrowserAsset()
     roots.cookedRoot = editor::CookedAssetsRoot(repositoryRoot);
     roots.stagedRoots = editor::AuthorizedStaticModelStagedRoots(repositoryRoot);
     const std::string identity = levelEditorState.contentBrowser.selectedIdentity;
+    if (levelEditorState.staticPropPlacement.modelIdentity == identity)
+    {
+        editor::CancelStaticPropPlacement(levelEditorState.staticPropPlacement);
+    }
     if (editor::AuthoredLevelsProtectStaticPropIdentity(
             levelEditorState.workingCopy,
             levelDefinition,
@@ -1822,8 +1946,10 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         levelEditorState.modified = false;
         editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
         editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
-        editor::CancelPlacementSession(
-            levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
         levelEditorState.selection =
             editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
         editor::ResetLevelActionStatuses(levelEditorState);
@@ -1900,8 +2026,10 @@ bool Application::ApplyLevelEditorPreview()
     levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
     levelEditorState.lastMessage =
         "Applied. Rendering and collision were rebuilt from the same authored data.";
-    editor::CancelPlacementSession(
-        levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+    editor::CancelAllEditorPlacement(
+        levelEditorState.placementMode,
+        levelEditorState.placementPointerBlocked,
+        levelEditorState.staticPropPlacement);
     return true;
 }
 
@@ -1993,8 +2121,10 @@ bool Application::ReloadRuntimeLevelFromStaged()
     editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     editor::ClearGizmoInteraction(levelEditorState.gizmo);
-    editor::CancelPlacementSession(
-        levelEditorState.placementMode, levelEditorState.placementPointerBlocked);
+    editor::CancelAllEditorPlacement(
+        levelEditorState.placementMode,
+        levelEditorState.placementPointerBlocked,
+        levelEditorState.staticPropPlacement);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Reloaded;
     levelEditorState.lastMessage =
