@@ -176,6 +176,7 @@ struct ParseState
     std::vector<CollectibleSpec> collectibles;
     std::vector<DynamicBoxSpec> dynamicBoxes;
     std::vector<PressurePlateSpec> pressurePlates;
+    std::vector<DoorSpec> doors;
     std::vector<StaticPropSpec> staticProps;
 };
 
@@ -547,18 +548,50 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "pressure_plate")
         {
-            if (!RequireTokenCount(tokens, 7, failure, lineNumber))
+            if (tokens.size() != 7 && tokens.size() != 8)
             {
-                return failure;
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
             }
             PressurePlateSpec plate{};
+            plate.linkedDoorIndex = kNoLinkedDoor;
             if (!ParseVec3(tokens, 1, plate.center) || !ParseVec3(tokens, 4, plate.size)
                 || !PressurePlateSpecIsValid(plate))
             {
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
             }
+            if (tokens.size() == 8)
+            {
+                if (!ParseIntToken(tokens[7], plate.linkedDoorIndex))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+            }
             state.pressurePlates.push_back(plate);
+            continue;
+        }
+        if (keyword == "door")
+        {
+            if (!RequireTokenCount(tokens, 8, failure, lineNumber))
+            {
+                return failure;
+            }
+            DoorSpec door{};
+            if (!ParseVec3(tokens, 1, door.center) || !ParseVec3(tokens, 4, door.size)
+                || !ParseFloatToken(tokens[7], door.openDistance) || !DoorSpecIsValid(door))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid door");
+            }
+            if (state.doors.size()
+                >= static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid,
+                    lineNumber,
+                    "door count exceeds physics body capacity");
+            }
+            state.doors.push_back(door);
             continue;
         }
         if (keyword == "static_prop")
@@ -633,11 +666,13 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.collectibles = std::move(state.collectibles);
     loaded.level.dynamicBoxes = std::move(state.dynamicBoxes);
     loaded.level.pressurePlates = std::move(state.pressurePlates);
+    loaded.level.doors = std::move(state.doors);
     loaded.level.staticProps = std::move(state.staticProps);
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(loaded.level.elevatedPlatforms.size()),
-            static_cast<int>(loaded.level.dynamicBoxes.size())))
+            static_cast<int>(loaded.level.dynamicBoxes.size()),
+            static_cast<int>(loaded.level.doors.size())))
     {
         return MakeStatus(
             LoadLevelFileStatus::Invalid, lineNumber, "authored physics body capacity exceeded");

@@ -36,6 +36,8 @@ const char* EditorObjectKindName(EditorObjectKind kind)
         return "StaticProp";
     case EditorObjectKind::PressurePlate:
         return "PressurePlate";
+    case EditorObjectKind::Door:
+        return "Door";
     }
     return "None";
 }
@@ -94,6 +96,9 @@ void FormatSelectionDisplayName(
     case EditorObjectKind::PressurePlate:
         std::snprintf(buffer, bufferSize, "Pressure Plate %zu", selection.index);
         return;
+    case EditorObjectKind::Door:
+        std::snprintf(buffer, bufferSize, "Door %zu", selection.index);
+        return;
     }
     std::snprintf(buffer, bufferSize, "(none)");
 }
@@ -122,6 +127,8 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
         return selection.index < level.staticProps.size();
     case EditorObjectKind::PressurePlate:
         return selection.index < level.pressurePlates.size();
+    case EditorObjectKind::Door:
+        return selection.index < level.doors.size();
     case EditorObjectKind::ElevatedPlatform:
         return selection.index < level.elevatedPlatforms.size();
     case EditorObjectKind::Slope:
@@ -150,6 +157,7 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::PressurePlate:
+    case EditorObjectKind::Door:
         return true;
     default:
         return false;

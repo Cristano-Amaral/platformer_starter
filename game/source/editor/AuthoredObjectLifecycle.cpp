@@ -27,6 +27,24 @@ void RemapSupportIndexAfterPlatformDelete(int& supportIndex, std::size_t deleted
     }
 }
 
+void RemapPressurePlateDoorLinksAfterDoorDelete(
+    world::LevelDefinition& workingCopy,
+    std::size_t deletedIndex)
+{
+    const int deleted = static_cast<int>(deletedIndex);
+    for (world::PressurePlateSpec& plate : workingCopy.pressurePlates)
+    {
+        if (plate.linkedDoorIndex == deleted)
+        {
+            plate.linkedDoorIndex = world::kNoLinkedDoor;
+        }
+        else if (plate.linkedDoorIndex > deleted)
+        {
+            --plate.linkedDoorIndex;
+        }
+    }
+}
+
 LifecycleEditResult Fail(LifecycleEditStatus status, EditorSelection selection = {})
 {
     LifecycleEditResult result{};
@@ -99,6 +117,7 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
+    case EditorObjectKind::Door:
     case EditorObjectKind::StaticProp:
         return true;
     default:
@@ -113,6 +132,7 @@ int CategoryMaxCount(EditorObjectKind kind)
     case EditorObjectKind::ElevatedPlatform:
         return world::kMaxElevatedPlatformCount;
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::Door:
         return physics::kMaxAuthoredPhysicsBodies;
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
@@ -141,6 +161,8 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.dynamicBoxes.size();
     case EditorObjectKind::PressurePlate:
         return level.pressurePlates.size();
+    case EditorObjectKind::Door:
+        return level.doors.size();
     case EditorObjectKind::StaticProp:
         return level.staticProps.size();
     default:
@@ -158,13 +180,16 @@ bool CategoryAtCountLimit(const world::LevelDefinition& level, EditorObjectKind 
     {
         return true;
     }
-    if (kind == EditorObjectKind::ElevatedPlatform || kind == EditorObjectKind::DynamicBox)
+    if (kind == EditorObjectKind::ElevatedPlatform || kind == EditorObjectKind::DynamicBox
+        || kind == EditorObjectKind::Door)
     {
         const int nextPlatforms = static_cast<int>(level.elevatedPlatforms.size())
             + (kind == EditorObjectKind::ElevatedPlatform ? 1 : 0);
         const int nextBoxes = static_cast<int>(level.dynamicBoxes.size())
             + (kind == EditorObjectKind::DynamicBox ? 1 : 0);
-        if (!physics::AuthoredPhysicsBodiesWithinBudget(nextPlatforms, nextBoxes))
+        const int nextDoors = static_cast<int>(level.doors.size())
+            + (kind == EditorObjectKind::Door ? 1 : 0);
+        if (!physics::AuthoredPhysicsBodiesWithinBudget(nextPlatforms, nextBoxes, nextDoors))
         {
             return true;
         }
@@ -194,6 +219,9 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::PressurePlate:
         pending.pressurePlates = true;
         break;
+    case EditorObjectKind::Door:
+        pending.doors = true;
+        break;
     case EditorObjectKind::StaticProp:
         pending.staticProps = true;
         break;
@@ -220,6 +248,8 @@ bool CategoryHasStructuralPending(
         return pending.dynamicBoxes;
     case EditorObjectKind::PressurePlate:
         return pending.pressurePlates;
+    case EditorObjectKind::Door:
+        return pending.doors;
     case EditorObjectKind::StaticProp:
         return pending.staticProps;
     default:
@@ -245,6 +275,8 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.dynamicBoxes;
     case EditorObjectKind::PressurePlate:
         return &map.pressurePlates;
+    case EditorObjectKind::Door:
+        return &map.doors;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
     default:
@@ -268,6 +300,8 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.dynamicBoxes;
     case EditorObjectKind::PressurePlate:
         return &map.pressurePlates;
+    case EditorObjectKind::Door:
+        return &map.doors;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
     default:
@@ -300,6 +334,7 @@ void ResetStructuralIndexMap(
     FillIdentity(map.collectibles, active.collectibles.size());
     FillIdentity(map.dynamicBoxes, active.dynamicBoxes.size());
     FillIdentity(map.pressurePlates, active.pressurePlates.size());
+    FillIdentity(map.doors, active.doors.size());
     FillIdentity(map.staticProps, active.staticProps.size());
 }
 
@@ -313,6 +348,7 @@ void EnsureStructuralIndexMap(
         && CategoryMapMatchesActive(map.collectibles, active.collectibles.size())
         && CategoryMapMatchesActive(map.dynamicBoxes, active.dynamicBoxes.size())
         && CategoryMapMatchesActive(map.pressurePlates, active.pressurePlates.size())
+        && CategoryMapMatchesActive(map.doors, active.doors.size())
         && CategoryMapMatchesActive(map.staticProps, active.staticProps.size()))
     {
         return;
@@ -483,6 +519,18 @@ PendingDeleteVisuals MakePendingDeleteVisuals(
         }
         visuals.pressurePlateIndices.push_back(static_cast<int>(index));
         visuals.pressurePlates.push_back(active.pressurePlates[index]);
+    }
+    const std::size_t doorLimit = active.doors.size() < map.doors.activeToWorking.size()
+        ? active.doors.size()
+        : map.doors.activeToWorking.size();
+    for (std::size_t index = 0; index < doorLimit; ++index)
+    {
+        if (map.doors.activeToWorking[index] != kNoStructuralIndex)
+        {
+            continue;
+        }
+        visuals.doorIndices.push_back(static_cast<int>(index));
+        visuals.doors.push_back(active.doors[index]);
     }
     const std::size_t staticPropLimit =
         active.staticProps.size() < map.staticProps.activeToWorking.size()
@@ -667,6 +715,23 @@ LifecycleEditResult AddPressurePlateAt(
     return Ok({EditorObjectKind::PressurePlate, workingCopy.pressurePlates.size() - 1});
 }
 
+LifecycleEditResult AddDoorAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::Door))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    world::DoorSpec door{};
+    door.center = ApplyWorldCenter(worldCenter, {});
+    door.size = world::kDefaultDoorSize;
+    door.openDistance = world::kDefaultDoorOpenDistance;
+    workingCopy.doors.push_back(door);
+    return Ok({EditorObjectKind::Door, workingCopy.doors.size() - 1});
+}
+
 LifecycleEditResult AddPlatform(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor)
@@ -736,6 +801,18 @@ LifecycleEditResult AddPressurePlate(
         ApplyPlacementAnchor(
             placementAnchor,
             kDefaultAddedPressurePlateOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddDoor(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddDoorAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedDoorOffset,
             workingCopy.initialSpawnVisualCenter.z));
 }
 
@@ -839,6 +916,13 @@ LifecycleEditResult DuplicateSelected(
         workingCopy.pressurePlates.push_back(copy);
         return Ok({EditorObjectKind::PressurePlate, workingCopy.pressurePlates.size() - 1});
     }
+    case EditorObjectKind::Door:
+    {
+        world::DoorSpec copy = workingCopy.doors[selection.index];
+        OffsetX(copy.center, kLifecycleDuplicateOffsetX);
+        workingCopy.doors.push_back(copy);
+        return Ok({EditorObjectKind::Door, workingCopy.doors.size() - 1});
+    }
     case EditorObjectKind::StaticProp:
     {
         world::StaticPropSpec copy = workingCopy.staticProps[selection.index];
@@ -912,6 +996,11 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::PressurePlate:
         workingCopy.pressurePlates.erase(
             workingCopy.pressurePlates.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::Door:
+        RemapPressurePlateDoorLinksAfterDoorDelete(workingCopy, selection.index);
+        workingCopy.doors.erase(
+            workingCopy.doors.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     case EditorObjectKind::StaticProp:
         workingCopy.staticProps.erase(

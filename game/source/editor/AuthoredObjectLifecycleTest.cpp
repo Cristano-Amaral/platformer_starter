@@ -1169,11 +1169,17 @@ int main()
             !editor::AddDynamicBox(shared, kTestPlacementB).succeeded,
             "shared budget blocks extra Dynamic Box");
         Expect(
+            !editor::AddDoor(shared, kTestPlacementA).succeeded,
+            "shared budget blocks extra Door");
+        Expect(
             editor::CategoryAtCountLimit(shared, EditorObjectKind::ElevatedPlatform),
             "Platform AtLimit with shared budget");
         Expect(
             editor::CategoryAtCountLimit(shared, EditorObjectKind::DynamicBox),
             "Dynamic Box AtLimit with shared budget");
+        Expect(
+            editor::CategoryAtCountLimit(shared, EditorObjectKind::Door),
+            "Door AtLimit with shared budget");
         Expect(
             !editor::CategoryAtCountLimit(shared, EditorObjectKind::StaticProp),
             "Static Prop does not consume physics leftover");
@@ -1286,6 +1292,66 @@ int main()
             "AddPressurePlateAt uses world center");
         Expect(working.pressurePlates.back().center.x == 9.0f, "AddAt X");
         Expect(working.pressurePlates.back().center.z == 4.0f, "AddAt does not snap to spawn.z");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const editor::LifecycleEditResult added = editor::AddDoor(working, kTestPlacementA);
+        Expect(added.succeeded, "Add Door");
+        Expect(working.doors.size() == 1, "one Door after Add");
+        Expect(
+            working.doors[0].size.x == world::kDefaultDoorSize.x
+                && working.doors[0].openDistance == world::kDefaultDoorOpenDistance,
+            "default Door size and openDistance");
+        Expect(added.selection.kind == EditorObjectKind::Door, "Add selects Door");
+        working.pressurePlates.push_back({{4.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
+        working.pressurePlates.push_back({{8.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelected(working, added.selection);
+        Expect(duplicated.succeeded, "Duplicate Door");
+        Expect(working.doors.size() == 2, "two Doors after Duplicate");
+        Expect(
+            working.doors[1].center.x
+                == working.doors[0].center.x + editor::kLifecycleDuplicateOffsetX,
+            "Duplicate Door offsets +1 X");
+        Expect(
+            working.doors[1].openDistance == working.doors[0].openDistance,
+            "Duplicate preserves openDistance");
+        Expect(
+            working.pressurePlates[0].linkedDoorIndex == 0
+                && working.pressurePlates[1].linkedDoorIndex == 0,
+            "Duplicate Door does not retarget existing plate links");
+        working.pressurePlates[0].linkedDoorIndex = 1;
+        working.pressurePlates[1].linkedDoorIndex = 1;
+        Expect(
+            editor::DuplicateSelected(working, {EditorObjectKind::PressurePlate, 0}).succeeded,
+            "Duplicate linked Pressure Plate");
+        Expect(
+            working.pressurePlates.back().linkedDoorIndex == 1,
+            "Duplicate Pressure Plate preserves Door link");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::Door, 0}).succeeded,
+            "Delete earlier Door");
+        Expect(working.doors.size() == 1, "one Door after deleting earlier");
+        Expect(
+            working.pressurePlates[0].linkedDoorIndex == 0
+                && working.pressurePlates[1].linkedDoorIndex == 0
+                && working.pressurePlates[2].linkedDoorIndex == 0,
+            "deleting earlier Door remaps later Door links");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::Door, 0}).succeeded,
+            "Delete last Door");
+        Expect(working.doors.empty(), "no Doors after last delete");
+        Expect(
+            working.pressurePlates[0].linkedDoorIndex == world::kNoLinkedDoor
+                && working.pressurePlates[1].linkedDoorIndex == world::kNoLinkedDoor
+                && working.pressurePlates[2].linkedDoorIndex == world::kNoLinkedDoor,
+            "deleting linked Door clears plate links");
+        Expect(
+            editor::AddDoorAt(working, {9.0f, 1.5f, 4.0f}).succeeded,
+            "AddDoorAt uses world center");
+        Expect(working.doors.back().center.x == 9.0f, "AddDoorAt X");
+        Expect(working.doors.back().center.z == 4.0f, "AddDoorAt does not snap to spawn.z");
     }
 
     if (gFailures != 0)

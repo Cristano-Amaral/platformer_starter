@@ -224,6 +224,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
+    case EditorObjectKind::Door:
     case EditorObjectKind::StaticProp:
         return true;
     default:
@@ -240,6 +241,7 @@ bool IsResizeSelection(EditorSelection selection)
     case EditorObjectKind::ElevatedPlatform:
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
+    case EditorObjectKind::Door:
         return true;
     default:
         return false;
@@ -301,6 +303,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.pressurePlates.size())
         {
             return &level.pressurePlates[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Door:
+        if (selection.index < level.doors.size())
+        {
+            return &level.doors[selection.index].center;
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -369,6 +377,12 @@ const core::Vec3* GetEditablePosition(
             return &level.pressurePlates[selection.index].center;
         }
         break;
+    case EditorObjectKind::Door:
+        if (selection.index < level.doors.size())
+        {
+            return &level.doors[selection.index].center;
+        }
+        break;
     case EditorObjectKind::StaticProp:
         if (selection.index < level.staticProps.size())
         {
@@ -409,6 +423,12 @@ core::Vec3* GetEditableSize(world::LevelDefinition& level, EditorSelection selec
             return &level.pressurePlates[selection.index].size;
         }
         break;
+    case EditorObjectKind::Door:
+        if (selection.index < level.doors.size())
+        {
+            return &level.doors[selection.index].size;
+        }
+        break;
     default:
         break;
     }
@@ -443,6 +463,12 @@ const core::Vec3* GetEditableSize(
         if (selection.index < level.pressurePlates.size())
         {
             return &level.pressurePlates[selection.index].size;
+        }
+        break;
+    case EditorObjectKind::Door:
+        if (selection.index < level.doors.size())
+        {
+            return &level.doors[selection.index].size;
         }
         break;
     default:
@@ -565,6 +591,15 @@ bool GetGizmoPreviewBox(
             const world::PressurePlateSpec& plate = workingCopy.pressurePlates[selection.index];
             center = plate.center;
             size = plate.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::Door:
+        if (selection.index < workingCopy.doors.size())
+        {
+            const world::DoorSpec& door = workingCopy.doors[selection.index];
+            center = door.center;
+            size = door.size;
             return true;
         }
         break;
@@ -781,7 +816,27 @@ bool AuthoredGeometryDiffers(
             active.pressurePlates[static_cast<std::size_t>(activeIndex)];
         const world::PressurePlateSpec& workingPlate = workingCopy.pressurePlates[selection.index];
         return Vec3Differs(activePlate.center, workingPlate.center)
-            || Vec3Differs(activePlate.size, workingPlate.size);
+            || Vec3Differs(activePlate.size, workingPlate.size)
+            || activePlate.linkedDoorIndex != workingPlate.linkedDoorIndex;
+    }
+    case EditorObjectKind::Door:
+    {
+        if (selection.index >= workingCopy.doors.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::Door, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.doors.size())
+        {
+            return true;
+        }
+        const world::DoorSpec& activeDoor = active.doors[static_cast<std::size_t>(activeIndex)];
+        const world::DoorSpec& workingDoor = workingCopy.doors[selection.index];
+        return Vec3Differs(activeDoor.center, workingDoor.center)
+            || Vec3Differs(activeDoor.size, workingDoor.size)
+            || activeDoor.openDistance != workingDoor.openDistance;
     }
     case EditorObjectKind::StaticProp:
     {
@@ -1001,6 +1056,7 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::Collectible,
         EditorObjectKind::DynamicBox,
         EditorObjectKind::PressurePlate,
+        EditorObjectKind::Door,
         EditorObjectKind::StaticProp};
     for (const EditorObjectKind kind : kinds)
     {
@@ -1019,6 +1075,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.dynamicBoxes.size();
             case EditorObjectKind::PressurePlate:
                 return workingCopy.pressurePlates.size();
+            case EditorObjectKind::Door:
+                return workingCopy.doors.size();
             case EditorObjectKind::StaticProp:
                 return workingCopy.staticProps.size();
             default:

@@ -800,6 +800,37 @@ int main()
         Expect(plateWorld.GetPressurePlates().size() == 2, "rebuild keeps two plates");
     }
 
+    {
+        world::LevelDefinition withDoors = parsed.level;
+        world::DoorSpec door{};
+        door.center = {8.5f, 1.5f, 0.0f};
+        door.size = world::kDefaultDoorSize;
+        door.openDistance = world::kDefaultDoorOpenDistance;
+        withDoors.doors.push_back(door);
+        withDoors.doors.push_back(door);
+        physics::PhysicsWorld doorWorld;
+        Expect(doorWorld.Initialize(withDoors), "Doors Initialize");
+        Expect(
+            doorWorld.InitializePlayer(withDoors.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "Doors InitializePlayer");
+        Expect(doorWorld.StaticBodyCount() == 9, "Doors do not add static Jolt bodies");
+        Expect(doorWorld.DynamicBodyCount() == 0, "Doors are not dynamic bodies");
+        Expect(doorWorld.DoorBodyCount() == 2, "two kinematic Door bodies");
+        Expect(doorWorld.GetDoors().size() == 2, "runtime stores two Doors");
+        Expect(!doorWorld.GetDoors()[0].desiredOpen, "unlinked Door stays closed");
+        Expect(
+            doorWorld.TryRebuild(
+                withDoors, withDoors.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "TryRebuild with Doors");
+        Expect(doorWorld.DoorBodyCount() == 2, "rebuild still two Door bodies");
+        Expect(doorWorld.StaticBodyCount() == 9, "rebuild keeps canonical static count");
+        Expect(
+            doorWorld.TryRebuild(
+                withDoors, withDoors.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "second Door rebuild");
+        Expect(doorWorld.DoorBodyCount() == 2, "repeated Door rebuild does not leak bodies");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d physics rebuild test(s) failed.\n", gFailures);

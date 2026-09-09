@@ -179,6 +179,13 @@ EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& 
         state.dynamicBoxCenters[index] = appliedLevel.dynamicBoxes[index].center;
         state.dynamicBoxSizes[index] = appliedLevel.dynamicBoxes[index].size;
     }
+    state.doorCenters.resize(appliedLevel.doors.size());
+    state.doorSizes.resize(appliedLevel.doors.size());
+    for (std::size_t index = 0; index < appliedLevel.doors.size(); ++index)
+    {
+        state.doorCenters[index] = appliedLevel.doors[index].center;
+        state.doorSizes[index] = appliedLevel.doors[index].size;
+    }
     return state;
 }
 
@@ -284,6 +291,16 @@ EditorPickingSet BuildPickingSet(
             appliedLevel.pressurePlates[index].center,
             appliedLevel.pressurePlates[index].size,
             0.0f);
+    }
+    for (std::size_t index = 0; index < appliedLevel.doors.size(); ++index)
+    {
+        const core::Vec3 center = index < worldState.doorCenters.size()
+            ? worldState.doorCenters[index]
+            : appliedLevel.doors[index].center;
+        const core::Vec3 size = index < worldState.doorSizes.size()
+            ? worldState.doorSizes[index]
+            : appliedLevel.doors[index].size;
+        AddProxy(set, EditorObjectKind::Door, index, center, size, 0.0f);
     }
     for (std::size_t index = 0; index < appliedLevel.staticProps.size(); ++index)
     {

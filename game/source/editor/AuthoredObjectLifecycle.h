@@ -35,6 +35,7 @@ inline constexpr core::Vec3 kDefaultAddedCollectibleOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleSize{1.0f, 1.2f, 1.0f};
 inline constexpr core::Vec3 kDefaultAddedDynamicBoxOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedPressurePlateOffset{0.0f, 0.0f, 0.0f};
+inline constexpr core::Vec3 kDefaultAddedDoorOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedStaticPropOffset{0.0f, 0.0f, 0.0f};
 
 struct CategoryStructuralPending
@@ -45,6 +46,7 @@ struct CategoryStructuralPending
     bool collectibles = false;
     bool dynamicBoxes = false;
     bool pressurePlates = false;
+    bool doors = false;
     bool staticProps = false;
 };
 
@@ -70,6 +72,7 @@ struct StructuralIndexMap
     CategoryIndexMap collectibles;
     CategoryIndexMap dynamicBoxes;
     CategoryIndexMap pressurePlates;
+    CategoryIndexMap doors;
     CategoryIndexMap staticProps;
 };
 
@@ -87,6 +90,8 @@ struct PendingDeleteVisuals
     std::vector<world::DynamicBoxSpec> dynamicBoxes;
     std::vector<int> pressurePlateIndices;
     std::vector<world::PressurePlateSpec> pressurePlates;
+    std::vector<int> doorIndices;
+    std::vector<world::DoorSpec> doors;
     std::vector<int> staticPropIndices;
     std::vector<world::StaticPropSpec> staticProps;
 };
@@ -252,6 +257,12 @@ LifecycleEditResult AddPressurePlate(
 LifecycleEditResult AddPressurePlateAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
+LifecycleEditResult AddDoor(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor);
+LifecycleEditResult AddDoorAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
 LifecycleEditResult AddStaticProp(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor,
@@ -274,6 +285,9 @@ inline const char* CategoryCapacityReason(EditorObjectKind kind)
     case EditorObjectKind::DynamicBox:
         return "Physics body capacity reached.";
     case EditorObjectKind::PressurePlate:
+        return "Level file record limit reached.";
+    case EditorObjectKind::Door:
+        return "Physics body capacity reached.";
     case EditorObjectKind::StaticProp:
         return "Level file record limit reached.";
     default:

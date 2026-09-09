@@ -111,6 +111,9 @@ int main()
             == LevelEditorRequest::AddPressurePlate,
         "Edit > Add > Pressure Plate maps to AddPressurePlate");
     Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::Door) == LevelEditorRequest::AddDoor,
+        "Edit > Add > Door maps to AddDoor");
+    Expect(
         editor::EditAddMenuRequest(EditorObjectKind::StaticProp) == LevelEditorRequest::AddStaticProp,
         "Edit > Add > Static Prop maps to AddStaticProp");
     Expect(
@@ -137,6 +140,9 @@ int main()
         editor::PlacementAddRequest(editor::PlacementMode::PressurePlate)
             == LevelEditorRequest::AddPressurePlate,
         "Object Palette Pressure Plate confirms AddPressurePlate");
+    Expect(
+        editor::PlacementAddRequest(editor::PlacementMode::Door) == LevelEditorRequest::AddDoor,
+        "Object Palette Door confirms AddDoor");
 
     {
         const world::LevelDefinition active = MakeActiveLevel();
@@ -1112,6 +1118,101 @@ int main()
             "AtLimit still adds a Pressure Plate");
         Expect(limitState.workingCopy.pressurePlates.size() == 1, "AtLimit appends a Pressure Plate");
         Expect(atLimit.pressurePlates.empty(), "AtLimit does not mutate active");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(active.doors.empty(), "fixture starts with zero Doors");
+        Expect(
+            HierarchyKindCount(active, EditorObjectKind::Door) == 0,
+            "empty collection has no Hierarchy Door rows");
+
+        const LevelEditorRequest editAdd = editor::EditAddMenuRequest(EditorObjectKind::Door);
+        Expect(editAdd == LevelEditorRequest::AddDoor, "menu action is AddDoor");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(true, active, {}, false, editAdd),
+            "Development can add Door");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(false, active, {}, false, editAdd),
+            "Debug authoring cannot add Door");
+
+        const core::Vec3 cameraAnchor{12.0f, 5.0f, -6.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(state, active, editAdd, true, cameraAnchor),
+            "Edit > Add > Door reaches workingCopy mutation");
+        Expect(state.workingCopy.doors.size() == 1, "workingCopy gains exactly one Door");
+        Expect(active.doors.empty(), "Edit Add does not mutate active");
+        Expect(
+            state.workingCopy.doors[0].size.x == world::kDefaultDoorSize.x
+                && state.workingCopy.doors[0].openDistance == world::kDefaultDoorOpenDistance,
+            "default Door size and openDistance");
+        Expect(state.selection.kind == EditorObjectKind::Door, "new Door is selected");
+        Expect(
+            HierarchyKindCount(state.workingCopy, EditorObjectKind::Door) == 1,
+            "Hierarchy lists the pending Door");
+        Expect(
+            !editor::IsScaleSelection(state.selection),
+            "Door does not use Static Prop Scale");
+        Expect(editor::IsResizeSelection(state.selection), "Door uses primitive Resize");
+
+        editor::LevelEditorState palState{};
+        SeedEditor(palState, active);
+        palState.placementMode = editor::PlacementMode::Door;
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                palState,
+                active,
+                editor::PlacementAddRequest(editor::PlacementMode::Door),
+                true,
+                {3.0f, 1.5f, 1.0f}),
+            "palette confirm uses world-center AddDoorAt");
+        Expect(palState.workingCopy.doors.size() == 1, "palette confirm adds one Door");
+        Expect(palState.workingCopy.doors[0].center.x == 3.0f, "palette confirm X");
+
+        editor::LevelEditorState dupState{};
+        SeedEditor(dupState, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, editor::EditAddMenuRequest(EditorObjectKind::Door), true, cameraAnchor),
+            "seed Door for Duplicate");
+        dupState.selection = {EditorObjectKind::Door, 0};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Door request");
+        Expect(dupState.workingCopy.doors.size() == 2, "Duplicate appends Door");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Door request");
+        Expect(dupState.workingCopy.doors.size() == 1, "Delete removes working Door");
+
+        world::LevelDefinition atLimit = active;
+        atLimit.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies),
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        editor::LevelEditorState limitState{};
+        SeedEditor(limitState, atLimit);
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                atLimit,
+                {},
+                false,
+                editor::EditAddMenuRequest(EditorObjectKind::Door)),
+            "Edit Add Door disables at physics leftover capacity");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                limitState,
+                atLimit,
+                editor::EditAddMenuRequest(EditorObjectKind::Door),
+                true,
+                cameraAnchor),
+            "AtLimit Door request is still handled");
+        Expect(limitState.workingCopy.doors.empty(), "AtLimit does not append a Door");
+        Expect(atLimit.doors.empty(), "AtLimit does not mutate active");
     }
 
     {

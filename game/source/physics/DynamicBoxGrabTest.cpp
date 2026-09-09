@@ -230,7 +230,8 @@ int main()
         Expect(
             physics::AuthoredPhysicsBodiesWithinBudget(
                 static_cast<int>(level.elevatedPlatforms.size()),
-                static_cast<int>(level.dynamicBoxes.size())),
+                static_cast<int>(level.dynamicBoxes.size()),
+                static_cast<int>(level.doors.size())),
             "40. body budget remains valid with two boxes");
 
         AimAndUpdate(world, 1.0f);

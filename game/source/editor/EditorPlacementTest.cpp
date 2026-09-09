@@ -540,6 +540,38 @@ int main()
         Expect(working.staticProps.empty(), "Pressure Plate placement does not add Static Props");
     }
 
+    {
+        using editor::PlacementMode;
+        PlacementMode mode = PlacementMode::None;
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Door);
+        Expect(mode == PlacementMode::Door, "click Door enters placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Door);
+        Expect(mode == PlacementMode::None, "click Door again exits placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::PressurePlate);
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Door);
+        Expect(mode == PlacementMode::Door, "click Door switches from Pressure Plate");
+        Expect(
+            editor::KindFromPlacementMode(mode) == EditorObjectKind::Door,
+            "placement kind is Door");
+        Expect(
+            editor::PlacementAddRequest(mode) == editor::LevelEditorRequest::AddDoor,
+            "placement confirm is AddDoor");
+        const editor::PlacementCandidate candidate =
+            editor::MakePlacementCandidate(PlacementMode::Door, {2.0f, 1.5f, 0.0f});
+        Expect(candidate.visible, "Door candidate visible");
+        Expect(
+            candidate.size.x == world::kDefaultDoorSize.x
+                && candidate.size.y == world::kDefaultDoorSize.y
+                && candidate.size.z == world::kDefaultDoorSize.z,
+            "candidate uses default Door size");
+        world::LevelDefinition working = MakeActiveLevel();
+        Expect(editor::AddDoorAt(working, {2.0f, 1.5f, 0.0f}).succeeded, "palette confirm Add Door");
+        Expect(working.doors[0].center.x == 2.0f, "placed Door uses world center");
+        Expect(working.doors[0].openDistance == world::kDefaultDoorOpenDistance, "placed openDistance");
+        Expect(working.staticProps.empty(), "Door placement does not add Static Props");
+        Expect(working.pressurePlates.empty(), "Door placement does not add Pressure Plates");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor placement test(s) failed.\n", gFailures);

@@ -20,6 +20,8 @@ const char* PlacementModeName(PlacementMode mode)
         return "Dynamic Box";
     case PlacementMode::PressurePlate:
         return "Pressure Plate";
+    case PlacementMode::Door:
+        return "Door";
     default:
         return "None";
     }
@@ -41,6 +43,8 @@ EditorObjectKind KindFromPlacementMode(PlacementMode mode)
         return EditorObjectKind::DynamicBox;
     case PlacementMode::PressurePlate:
         return EditorObjectKind::PressurePlate;
+    case PlacementMode::Door:
+        return EditorObjectKind::Door;
     default:
         return EditorObjectKind::None;
     }
@@ -62,6 +66,8 @@ PlacementMode PlacementModeFromKind(EditorObjectKind kind)
         return PlacementMode::DynamicBox;
     case EditorObjectKind::PressurePlate:
         return PlacementMode::PressurePlate;
+    case EditorObjectKind::Door:
+        return PlacementMode::Door;
     default:
         return PlacementMode::None;
     }
@@ -83,6 +89,8 @@ LevelEditorRequest PlacementAddRequest(PlacementMode mode)
         return LevelEditorRequest::AddDynamicBox;
     case PlacementMode::PressurePlate:
         return LevelEditorRequest::AddPressurePlate;
+    case PlacementMode::Door:
+        return LevelEditorRequest::AddDoor;
     default:
         return LevelEditorRequest::None;
     }
@@ -104,6 +112,8 @@ core::Vec3 DefaultPlacementSize(PlacementMode mode)
         return world::kDefaultDynamicBoxSize;
     case PlacementMode::PressurePlate:
         return world::kDefaultPressurePlateSize;
+    case PlacementMode::Door:
+        return world::kDefaultDoorSize;
     default:
         return {};
     }
@@ -125,6 +135,8 @@ core::Vec3 DefaultPlacementOffset(PlacementMode mode)
         return kDefaultAddedDynamicBoxOffset;
     case PlacementMode::PressurePlate:
         return kDefaultAddedPressurePlateOffset;
+    case PlacementMode::Door:
+        return kDefaultAddedDoorOffset;
     default:
         return {};
     }

@@ -206,7 +206,24 @@ std::string SerializeLevelText(const LevelDefinition& level)
 
     for (const PressurePlateSpec& plate : level.pressurePlates)
     {
-        AppendCenterSizeRecord(out, "pressure_plate", plate.center, plate.size);
+        out += "pressure_plate ";
+        AppendVec3(out, plate.center);
+        out += ' ';
+        AppendVec3(out, plate.size);
+        out += ' ';
+        AppendInt(out, plate.linkedDoorIndex);
+        out += '\n';
+    }
+
+    for (const DoorSpec& door : level.doors)
+    {
+        out += "door ";
+        AppendVec3(out, door.center);
+        out += ' ';
+        AppendVec3(out, door.size);
+        out += ' ';
+        AppendFloat(out, door.openDistance);
+        out += '\n';
     }
 
     for (const StaticPropSpec& prop : level.staticProps)

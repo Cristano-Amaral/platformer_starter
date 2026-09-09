@@ -8,6 +8,7 @@
 #include "world/RespawnWorld.h"
 
 #include <cmath>
+#include <cstddef>
 
 namespace world
 {
@@ -16,10 +17,16 @@ inline constexpr float kMinPressurePlateExtent = 0.12f;
 inline constexpr core::Vec3 kDefaultPressurePlateSize{2.0f, 0.2f, 2.0f};
 inline constexpr int kLevel01PressurePlateCount = 0;
 
+// Authored Door index into LevelDefinition.doors. Not a BodyID or pointer.
+// -1 means no linked Door. Validated against the Door collection, never
+// silently retargeted.
+inline constexpr int kNoLinkedDoor = -1;
+
 struct PressurePlateSpec
 {
     core::Vec3 center{};
     core::Vec3 size{};
+    int linkedDoorIndex = kNoLinkedDoor;
 };
 
 inline bool PressurePlateSizeIsValid(core::Vec3 size)
@@ -37,6 +44,15 @@ inline bool PressurePlateCenterIsValid(core::Vec3 center)
 inline bool PressurePlateSpecIsValid(const PressurePlateSpec& spec)
 {
     return PressurePlateCenterIsValid(spec.center) && PressurePlateSizeIsValid(spec.size);
+}
+
+inline bool PressurePlateDoorLinkIsValid(int linkedDoorIndex, std::size_t doorCount)
+{
+    if (linkedDoorIndex == kNoLinkedDoor)
+    {
+        return true;
+    }
+    return linkedDoorIndex >= 0 && static_cast<std::size_t>(linkedDoorIndex) < doorCount;
 }
 
 // Production overlap rule: authored plate AABB vs current Dynamic Box AABB.

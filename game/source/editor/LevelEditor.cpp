@@ -381,6 +381,43 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             world::PressurePlateSpec& plate = level.pressurePlates[state.selection.index];
             EditVec3("Position X Y Z", plate.center);
             EditVec3("Size X Y Z", plate.size);
+            {
+                int current = plate.linkedDoorIndex + 1;
+                if (current < 0 || current > static_cast<int>(level.doors.size()))
+                {
+                    current = 0;
+                }
+                if (ImGui::BeginCombo("Linked Door", current == 0 ? "None" : SelectionDisplayName(
+                        {EditorObjectKind::Door, static_cast<std::size_t>(current - 1)})))
+                {
+                    if (ImGui::Selectable("None", current == 0))
+                    {
+                        plate.linkedDoorIndex = world::kNoLinkedDoor;
+                    }
+                    for (std::size_t doorIndex = 0; doorIndex < level.doors.size(); ++doorIndex)
+                    {
+                        char label[64]{};
+                        FormatSelectionDisplayName(
+                            {EditorObjectKind::Door, doorIndex}, label, sizeof(label));
+                        if (ImGui::Selectable(
+                                label, plate.linkedDoorIndex == static_cast<int>(doorIndex)))
+                        {
+                            plate.linkedDoorIndex = static_cast<int>(doorIndex);
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+        }
+        break;
+    case EditorObjectKind::Door:
+        if (state.selection.index < level.doors.size())
+        {
+            world::DoorSpec& door = level.doors[state.selection.index];
+            EditVec3("Position X Y Z", door.center);
+            EditVec3("Size X Y Z", door.size);
+            ImGui::InputFloat("Open Distance", &door.openDistance, 0.0f, 0.0f, kFloatFormat);
+            ImGui::TextUnformatted("Opens +Y from the authored closed position.");
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -494,6 +531,7 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Collectible", PlacementMode::Collectible, LevelEditorRequest::AddCollectible);
     paletteButton("Dynamic Box", PlacementMode::DynamicBox, LevelEditorRequest::AddDynamicBox);
     paletteButton("Pressure Plate", PlacementMode::PressurePlate, LevelEditorRequest::AddPressurePlate);
+    paletteButton("Door", PlacementMode::Door, LevelEditorRequest::AddDoor);
 
     ImGui::Separator();
     if (StaticPropPlacementIsActive(state.staticPropPlacement))
@@ -1363,6 +1401,18 @@ LevelEditorRequest DrawEditorMenuBar(
             if (ImGui::MenuItem("Pressure Plate"))
             {
                 request = EditAddMenuRequest(EditorObjectKind::PressurePlate);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::Door)));
+            if (ImGui::MenuItem("Door"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::Door);
             }
             ImGui::EndDisabled();
             // Static Prop is the only Add entry whose enablement depends on

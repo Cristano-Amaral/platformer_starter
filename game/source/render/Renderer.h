@@ -37,7 +37,7 @@ struct DebugWorldOverlay
     // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
     struct PendingAuthoringOverlayItem
     {
-        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate, 7 Door
         bool selected = false;
         core::Vec3 boundsCenter{};
         core::Vec3 boundsSize{};
@@ -81,6 +81,9 @@ struct DebugWorldOverlay
     std::vector<int> pendingDeletePressurePlateIndices;
     std::vector<core::Vec3> pendingDeletePressurePlateCenters;
     std::vector<core::Vec3> pendingDeletePressurePlateSizes;
+    std::vector<int> pendingDeleteDoorIndices;
+    std::vector<core::Vec3> pendingDeleteDoorCenters;
+    std::vector<core::Vec3> pendingDeleteDoorSizes;
     std::vector<int> pendingDeleteStaticPropIndices;
     std::vector<core::Vec3> pendingDeleteStaticPropCenters;
     std::vector<core::Vec3> pendingDeleteStaticPropSizes;
@@ -150,6 +153,12 @@ struct PressurePlateDrawState
     bool active = false;
 };
 
+struct DoorDrawState
+{
+    core::Vec3 center{};
+    core::Vec3 size{};
+};
+
 class StaticModelSceneStore;
 
 class Renderer
@@ -198,6 +207,7 @@ public:
         const world::LevelDefinition& level,
         const std::vector<DynamicBoxDrawState>& dynamicBoxes,
         const std::vector<PressurePlateDrawState>& pressurePlates,
+        const std::vector<DoorDrawState>& doors,
         core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,

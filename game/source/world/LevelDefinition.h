@@ -10,6 +10,7 @@
 #include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
 #include "world/MovingPlatform.h"
+#include "world/Door.h"
 #include "world/PressurePlate.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
@@ -32,7 +33,7 @@ inline constexpr int kLevel01SteepSlopeIndex = 1;
 
 // Minimum platforms so support_index_* can stay in range.
 inline constexpr int kMinElevatedPlatformCount = 1;
-// Shared authored-body leftover (platforms + Dynamic Boxes). Must match
+// Shared authored-body leftover (platforms + Dynamic Boxes + Doors). Must match
 // physics::kMaxAuthoredPhysicsBodies (64 - 5 = 59). Independent of that
 // leftover, a valid level still needs at least one platform.
 inline constexpr int kMaxElevatedPlatformCount = 59;
@@ -71,6 +72,7 @@ struct LevelDefinition
     LevelGoalSpec goal{};
     std::vector<DynamicBoxSpec> dynamicBoxes{};
     std::vector<PressurePlateSpec> pressurePlates{};
+    std::vector<DoorSpec> doors{};
     std::vector<StaticPropSpec> staticProps{};
     LevelCameraSpec camera{};
 };

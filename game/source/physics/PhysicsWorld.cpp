@@ -74,6 +74,10 @@ constexpr float kMaxStrength = 100.0f;
 // inside the padded CharacterVirtual volume and does not rest on the same surfaces.
 constexpr float kInnerShapeFraction = 0.9f;
 
+// M53: constant-speed +Y open/close. Not serialized. Ordinary activation
+// never teleports between endpoints; Initialize/Restart snap to derived pose.
+constexpr float kDoorOpenSpeedMetersPerSecond = 2.5f;
+
 int gJoltRegistrationUsers = 0;
 
 class IgnoreBodyFilter final : public JPH::BodyFilter
@@ -147,6 +151,55 @@ private:
     const std::vector<JPH::BodyID>* dynamicIds;
     JPH::BodyID inner;
     JPH::BodyID extraIgnore;
+};
+
+// Closing-obstruction query: only the player inner body and Dynamic Boxes
+// can pause a closing step. Opening is never paused by this filter.
+class DoorCloseBlockerFilter final : public JPH::BodyFilter
+{
+public:
+    DoorCloseBlockerFilter(
+        JPH::BodyID door,
+        JPH::BodyID inner,
+        const std::vector<JPH::BodyID>* dynamicIds)
+        : door(door)
+        , inner(inner)
+        , dynamicIds(dynamicIds)
+    {
+    }
+
+    bool ShouldCollide(const JPH::BodyID& inBodyID) const override
+    {
+        if (inBodyID.IsInvalid() || inBodyID == door)
+        {
+            return false;
+        }
+        if (!inner.IsInvalid() && inBodyID == inner)
+        {
+            return true;
+        }
+        if (dynamicIds != nullptr)
+        {
+            for (const JPH::BodyID id : *dynamicIds)
+            {
+                if (!id.IsInvalid() && inBodyID == id)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    bool ShouldCollideLocked(const JPH::Body& inBody) const override
+    {
+        return ShouldCollide(inBody.GetID());
+    }
+
+private:
+    JPH::BodyID door;
+    JPH::BodyID inner;
+    const std::vector<JPH::BodyID>* dynamicIds;
 };
 
 float Vec3Length(core::Vec3 value)
@@ -414,6 +467,10 @@ struct PhysicsWorld::Impl
     world::MovingPlatformSpec movingPlatformSpec{};
     std::vector<world::DynamicBoxSpec> dynamicBoxSpecs{};
     std::vector<world::PressurePlateSpec> pressurePlateSpecs{};
+    std::vector<world::DoorSpec> doorSpecs{};
+    std::vector<JPH::BodyID> doorBodyIds{};
+    std::vector<float> doorOpenFraction{};
+    std::vector<bool> doorBlockedClosing{};
     float killPlaneY = 0.0f;
     float movingPlatformDirection = 1.0f;
     float carriedGroundVelocityX = 0.0f;
@@ -918,6 +975,224 @@ struct PhysicsWorld::Impl
         return true;
     }
 
+    bool CreateDoors()
+    {
+        doorBodyIds.clear();
+        doorOpenFraction.assign(doorSpecs.size(), 0.0f);
+        doorBlockedClosing.assign(doorSpecs.size(), false);
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        for (std::size_t index = 0; index < doorSpecs.size(); ++index)
+        {
+            const world::DoorSpec& spec = doorSpecs[index];
+            JPH::BodyCreationSettings settings(
+                new JPH::BoxShape(ToHalfExtent(spec.size)),
+                ToRVec3(spec.center),
+                JPH::Quat::sIdentity(),
+                JPH::EMotionType::Kinematic,
+                ObjectLayers::Moving);
+            settings.mAllowSleeping = false;
+            const JPH::BodyID id =
+                bodyInterface.CreateAndAddBody(settings, JPH::EActivation::Activate);
+            if (id.IsInvalid())
+            {
+                ReportError("failed to create kinematic door.");
+                return false;
+            }
+            doorBodyIds.push_back(id);
+        }
+        return true;
+    }
+
+    bool PressurePlateIsActive(std::size_t plateIndex) const
+    {
+        if (plateIndex >= pressurePlateSpecs.size() || physicsSystem == nullptr)
+        {
+            return false;
+        }
+
+        const world::PressurePlateSpec& spec = pressurePlateSpecs[plateIndex];
+        const JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        const std::size_t count = DynamicBoxCount();
+        for (std::size_t boxIndex = 0; boxIndex < count; ++boxIndex)
+        {
+            const JPH::BodyID id = dynamicBodyIds[boxIndex];
+            if (id.IsInvalid())
+            {
+                continue;
+            }
+            const core::Vec3 center = ToVec3(bodyInterface.GetPosition(id));
+            if (world::PressurePlateOverlapsBox(spec, center, dynamicBoxSpecs[boxIndex].size))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool DoorDesiredOpen(int doorIndex) const
+    {
+        for (std::size_t plateIndex = 0; plateIndex < pressurePlateSpecs.size(); ++plateIndex)
+        {
+            if (pressurePlateSpecs[plateIndex].linkedDoorIndex != doorIndex)
+            {
+                continue;
+            }
+            if (PressurePlateIsActive(plateIndex))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool ClosingBlocked(std::size_t index, JPH::RVec3 proposedCenter) const
+    {
+        if (index >= doorBodyIds.size() || doorBodyIds[index].IsInvalid() || physicsSystem == nullptr)
+        {
+            return false;
+        }
+
+        JPH::RefConst<JPH::Shape> shape;
+        {
+            JPH::BodyLockRead lock(physicsSystem->GetBodyLockInterface(), doorBodyIds[index]);
+            if (!lock.SucceededAndIsInBroadPhase())
+            {
+                return true;
+            }
+            shape = lock.GetBody().GetShape();
+        }
+        if (shape == nullptr)
+        {
+            return true;
+        }
+
+        JPH::CollideShapeSettings settings{};
+        JPH::AnyHitCollisionCollector<JPH::CollideShapeCollector> collector;
+        const JPH::BodyID inner =
+            character != nullptr ? character->GetInnerBodyID() : JPH::BodyID{};
+        const DoorCloseBlockerFilter filter(doorBodyIds[index], inner, &dynamicBodyIds);
+        physicsSystem->GetNarrowPhaseQuery().CollideShape(
+            shape,
+            JPH::Vec3::sReplicate(1.0f),
+            JPH::RMat44::sTranslation(proposedCenter),
+            settings,
+            JPH::RVec3::sZero(),
+            collector,
+            physicsSystem->GetDefaultBroadPhaseLayerFilter(ObjectLayers::Moving),
+            physicsSystem->GetDefaultLayerFilter(ObjectLayers::Moving),
+            filter);
+        return collector.HadHit();
+    }
+
+    void MoveDoorKinematic(std::size_t index, float fraction, float deltaSeconds)
+    {
+        if (index >= doorBodyIds.size() || doorBodyIds[index].IsInvalid())
+        {
+            return;
+        }
+        const core::Vec3 center = world::DoorCenterAtFraction(doorSpecs[index], fraction);
+        physicsSystem->GetBodyInterface().MoveKinematic(
+            doorBodyIds[index],
+            ToRVec3(center),
+            JPH::Quat::sIdentity(),
+            deltaSeconds);
+    }
+
+    void SnapDoorsToDesired()
+    {
+        if (!initialized || physicsSystem == nullptr)
+        {
+            return;
+        }
+
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        for (std::size_t index = 0; index < doorSpecs.size(); ++index)
+        {
+            const bool desired = DoorDesiredOpen(static_cast<int>(index));
+            const float fraction = desired ? 1.0f : 0.0f;
+            if (index < doorOpenFraction.size())
+            {
+                doorOpenFraction[index] = fraction;
+            }
+            if (index < doorBlockedClosing.size())
+            {
+                doorBlockedClosing[index] = false;
+            }
+            if (index >= doorBodyIds.size() || doorBodyIds[index].IsInvalid())
+            {
+                continue;
+            }
+            const JPH::BodyID id = doorBodyIds[index];
+            bodyInterface.SetPositionAndRotation(
+                id,
+                ToRVec3(world::DoorCenterAtFraction(doorSpecs[index], fraction)),
+                JPH::Quat::sIdentity(),
+                JPH::EActivation::Activate);
+            bodyInterface.SetLinearVelocity(id, JPH::Vec3::sZero());
+            bodyInterface.SetAngularVelocity(id, JPH::Vec3::sZero());
+        }
+    }
+
+    void StepDoors(float deltaSeconds)
+    {
+        if (!initialized || physicsSystem == nullptr || deltaSeconds <= 0.0f)
+        {
+            return;
+        }
+
+        for (std::size_t index = 0; index < doorSpecs.size(); ++index)
+        {
+            if (index >= doorBodyIds.size() || doorBodyIds[index].IsInvalid())
+            {
+                continue;
+            }
+
+            const world::DoorSpec& spec = doorSpecs[index];
+            const bool desired = DoorDesiredOpen(static_cast<int>(index));
+            const float target = desired ? 1.0f : 0.0f;
+            float fraction = index < doorOpenFraction.size() ? doorOpenFraction[index] : 0.0f;
+            const float distance = spec.openDistance > 0.0f ? spec.openDistance : 1.0f;
+            const float step = (kDoorOpenSpeedMetersPerSecond * deltaSeconds) / distance;
+            float next = fraction;
+            if (target > fraction)
+            {
+                next = fraction + step;
+                if (next > 1.0f)
+                {
+                    next = 1.0f;
+                }
+            }
+            else if (target < fraction)
+            {
+                next = fraction - step;
+                if (next < 0.0f)
+                {
+                    next = 0.0f;
+                }
+            }
+
+            bool blocked = false;
+            if (next < fraction)
+            {
+                const core::Vec3 proposed = world::DoorCenterAtFraction(spec, next);
+                if (ClosingBlocked(index, ToRVec3(proposed)))
+                {
+                    blocked = true;
+                    next = fraction;
+                }
+            }
+            if (index < doorBlockedClosing.size())
+            {
+                doorBlockedClosing[index] = blocked;
+            }
+            if (index < doorOpenFraction.size())
+            {
+                doorOpenFraction[index] = next;
+            }
+            MoveDoorKinematic(index, next, deltaSeconds);
+        }
+    }
+
     void StepMovingPlatform(float deltaSeconds)
     {
         if (movingPlatformId.IsInvalid())
@@ -1096,11 +1371,13 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
     impl->movingPlatformSpec = level.movingPlatform;
     impl->dynamicBoxSpecs = level.dynamicBoxes;
     impl->pressurePlateSpecs = level.pressurePlates;
+    impl->doorSpecs = level.doors;
     impl->killPlaneY = level.killPlaneY;
 
     if (!AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(level.elevatedPlatforms.size()),
-            static_cast<int>(level.dynamicBoxes.size())))
+            static_cast<int>(level.dynamicBoxes.size()),
+            static_cast<int>(level.doors.size())))
     {
         ReportError("authored physics body capacity exceeded.");
         return false;
@@ -1153,8 +1430,15 @@ bool PhysicsWorld::Initialize(const world::LevelDefinition& level)
         return false;
     }
 
+    if (!impl->CreateDoors())
+    {
+        Shutdown();
+        return false;
+    }
+
     impl->physicsSystem->OptimizeBroadPhase();
     impl->initialized = true;
+    impl->SnapDoorsToDesired();
     return true;
 }
 
@@ -1322,6 +1606,7 @@ void PhysicsWorld::ResetDynamicBoxes()
     {
         impl->ResetDynamicBoxBody(index);
     }
+    impl->SnapDoorsToDesired();
 }
 
 void PhysicsWorld::RecoverFallenDynamicBoxes()
@@ -1514,6 +1799,8 @@ void PhysicsWorld::Update(float deltaSeconds)
         impl->RefreshGrabTarget();
     }
 
+    impl->StepDoors(stepSeconds);
+
     impl->physicsSystem->Update(
         stepSeconds,
         1,
@@ -1554,6 +1841,18 @@ void PhysicsWorld::Shutdown()
         impl->dynamicBoxSpecs.clear();
         impl->pressurePlateSpecs.clear();
         impl->killPlaneY = 0.0f;
+        for (const JPH::BodyID id : impl->doorBodyIds)
+        {
+            if (!id.IsInvalid())
+            {
+                bodyInterface.RemoveBody(id);
+                bodyInterface.DestroyBody(id);
+            }
+        }
+        impl->doorBodyIds.clear();
+        impl->doorSpecs.clear();
+        impl->doorOpenFraction.clear();
+        impl->doorBlockedClosing.clear();
         if (!impl->movingPlatformId.IsInvalid())
         {
             bodyInterface.RemoveBody(impl->movingPlatformId);
@@ -1673,6 +1972,47 @@ std::vector<PressurePlateRuntimeState> PhysicsWorld::GetPressurePlates() const
         }
     }
     return plates;
+}
+
+std::vector<DoorRuntimeState> PhysicsWorld::GetDoors() const
+{
+    std::vector<DoorRuntimeState> doors(impl->doorSpecs.size());
+    for (std::size_t index = 0; index < impl->doorSpecs.size(); ++index)
+    {
+        const world::DoorSpec& spec = impl->doorSpecs[index];
+        DoorRuntimeState& door = doors[index];
+        door.closedCenter = spec.center;
+        door.size = spec.size;
+        door.openDistance = spec.openDistance;
+        door.openFraction =
+            index < impl->doorOpenFraction.size() ? impl->doorOpenFraction[index] : 0.0f;
+        door.desiredOpen = impl->DoorDesiredOpen(static_cast<int>(index));
+        door.blockedClosing =
+            index < impl->doorBlockedClosing.size() && impl->doorBlockedClosing[index];
+        door.valid = impl->initialized && index < impl->doorBodyIds.size()
+            && !impl->doorBodyIds[index].IsInvalid();
+        if (!door.valid || impl->physicsSystem == nullptr)
+        {
+            door.center = world::DoorCenterAtFraction(spec, door.openFraction);
+            continue;
+        }
+        door.center = ToVec3(impl->physicsSystem->GetBodyInterface().GetPosition(
+            impl->doorBodyIds[index]));
+    }
+    return doors;
+}
+
+int PhysicsWorld::DoorBodyCount() const
+{
+    int count = 0;
+    for (const JPH::BodyID id : impl->doorBodyIds)
+    {
+        if (!id.IsInvalid())
+        {
+            ++count;
+        }
+    }
+    return count;
 }
 
 MovingPlatformState PhysicsWorld::GetMovingPlatform() const

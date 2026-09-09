@@ -111,7 +111,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 19> allowed{
+    static constexpr std::array<std::string_view, 20> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -129,6 +129,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "goal",
         "dynamic_box",
         "pressure_plate",
+        "door",
         "static_prop",
         "camera"};
 
@@ -406,6 +407,7 @@ int main()
     Expect(CountRecords(written, "goal") == 1, "writer goal count");
     Expect(CountRecords(written, "dynamic_box") == 0, "writer dynamic_box count");
     Expect(CountRecords(written, "pressure_plate") == 0, "writer pressure_plate count");
+    Expect(CountRecords(written, "door") == 0, "writer door count");
     Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
@@ -1010,8 +1012,55 @@ int main()
             Expect(
                 physics::AuthoredPhysicsBodiesWithinBudget(
                     static_cast<int>(manyPlates.elevatedPlatforms.size()),
-                    static_cast<int>(manyPlates.dynamicBoxes.size())),
+                    static_cast<int>(manyPlates.dynamicBoxes.size()),
+                    static_cast<int>(manyPlates.doors.size())),
                 "Pressure Plates do not consume physics leftover");
+        }
+
+        {
+            const std::string oneDoor = canonical + "door 4 1.5 0 1.2 3 2.4 3.2\n";
+            const world::ParseLevelFileResult one = world::ParseLevelText(oneDoor);
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one door loads");
+            Expect(one.level.doors.size() == 1, "one door count");
+            Expect(one.level.doors[0].center.x == 4.0f, "one door center x");
+            Expect(one.level.doors[0].openDistance == 3.2f, "one door openDistance");
+            const std::string writtenOne = world::SerializeLevelText(one.level);
+            Expect(CountRecords(writtenOne, "door") == 1, "writer one door");
+            Expect(
+                world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
+                "one door round trip");
+            Expect(writtenOne.find("openFraction") == std::string::npos, "writer omits openFraction");
+
+            const std::string twoDoors =
+                canonical + "door 4 1.5 0 1.2 3 2.4 3.2\ndoor 8 1.5 0 1.2 3 2.4 3.2\n";
+            Expect(world::ParseLevelText(twoDoors).level.doors.size() == 2, "two doors load");
+            Expect(
+                world::ParseLevelText(canonical + "door nan 1.5 0 1.2 3 2.4 3.2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN door position rejected");
+            Expect(
+                world::ParseLevelText(canonical + "door 4 1.5 0 0 3 2.4 3.2\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero door size rejected");
+            Expect(
+                world::ParseLevelText(canonical + "door 4 1.5 0 1.2 3 2.4 0\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero openDistance rejected");
+
+            const std::string noLink = canonical + "pressure_plate 2 0.1 0 2 0.2 2\n";
+            Expect(
+                world::ParseLevelText(noLink).level.pressurePlates[0].linkedDoorIndex
+                    == world::kNoLinkedDoor,
+                "7-token pressure_plate is no-link");
+            const std::string linked =
+                canonical + "door 4 1.5 0 1.2 3 2.4 3.2\npressure_plate 2 0.1 0 2 0.2 2 0\n";
+            Expect(
+                world::ParseLevelText(linked).level.pressurePlates[0].linkedDoorIndex == 0,
+                "8-token pressure_plate Door 0 link");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Door link without Doors rejected");
         }
 
         {

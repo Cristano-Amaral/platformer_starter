@@ -155,6 +155,7 @@ add_executable(Platformer3D
     game/source/world/LevelWriter.h
     game/source/world/MovingPlatform.h
     game/source/world/PressurePlate.h
+    game/source/world/Door.h
     game/source/world/RespawnWorld.h
     game/source/world/Slope.h
 )
@@ -548,6 +549,43 @@ else()
     target_compile_options(PressurePlateTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(PressurePlateTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Focused Milestone 53 Door / Pressure Plate link harness. Not shipped. Jolt only; no raylib.
+add_executable(DoorTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/physics/DynamicBoxGrab.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/physics/DoorTest.cpp
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
+    game/source/platform/FileReplace.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/Door.h
+    game/source/world/PressurePlate.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+)
+if(WIN32)
+    target_sources(DoorTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(DoorTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(DoorTest PRIVATE game/source)
+target_link_libraries(DoorTest PRIVATE Jolt)
+if(MSVC)
+    target_compile_options(DoorTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(DoorTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(DoorTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 

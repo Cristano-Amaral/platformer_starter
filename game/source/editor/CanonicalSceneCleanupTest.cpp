@@ -66,14 +66,20 @@ int main()
         physics::kMaxAuthoredPhysicsBodies == 59,
         "shared authored-body leftover is 59");
     Expect(
-        physics::AuthoredPhysicsBodiesWithinBudget(59, 0),
+        physics::AuthoredPhysicsBodiesWithinBudget(59, 0, 0),
         "59 platforms and 0 boxes fit");
     Expect(
-        physics::AuthoredPhysicsBodiesWithinBudget(0, 59),
+        physics::AuthoredPhysicsBodiesWithinBudget(0, 59, 0),
         "0 platforms and 59 boxes fit");
     Expect(
-        !physics::AuthoredPhysicsBodiesWithinBudget(59, 1),
+        !physics::AuthoredPhysicsBodiesWithinBudget(59, 1, 0),
         "59 platforms and 1 box overflow");
+    Expect(
+        physics::AuthoredPhysicsBodiesWithinBudget(0, 0, 59),
+        "0 platforms and 59 doors fit");
+    Expect(
+        !physics::AuthoredPhysicsBodiesWithinBudget(58, 0, 2),
+        "58 platforms and 2 doors overflow");
     Expect(!render::kCanonicalSceneInstantiatesCookerProbes, "cooker probes are not in the scene");
 
     Expect(
@@ -91,6 +97,9 @@ int main()
     Expect(
         !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::PressurePlate),
         "PressurePlate is not a placement surface");
+    Expect(
+        !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::Door),
+        "Door is not a placement surface");
     Expect(
         !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::StaticProp),
         "StaticProp is not a placement surface");
@@ -111,10 +120,17 @@ int main()
     Expect(
         editor::IsEditableSelection({editor::EditorObjectKind::PressurePlate, 0}),
         "Pressure Plate has an Inspector path");
+    Expect(
+        !editor::IsValidSelection(level, {editor::EditorObjectKind::Door, 0}),
+        "empty Doors collection is not selectable");
+    Expect(
+        editor::IsEditableSelection({editor::EditorObjectKind::Door, 0}),
+        "Door has an Inspector path");
 
     const std::vector<editor::HierarchyEntry> hierarchy = editor::BuildHierarchyEntries(level);
     bool hierarchyHasDynamicBox = false;
     bool hierarchyHasPressurePlate = false;
+    bool hierarchyHasDoor = false;
     bool hierarchyHasStaticProp = false;
     bool hierarchyHasSlope0 = false;
     bool hierarchyHasSlope1 = false;
@@ -133,6 +149,8 @@ int main()
             hierarchyHasDynamicBox || entry.selection.kind == editor::EditorObjectKind::DynamicBox;
         hierarchyHasPressurePlate =
             hierarchyHasPressurePlate || entry.selection.kind == editor::EditorObjectKind::PressurePlate;
+        hierarchyHasDoor =
+            hierarchyHasDoor || entry.selection.kind == editor::EditorObjectKind::Door;
         hierarchyHasStaticProp =
             hierarchyHasStaticProp || entry.selection.kind == editor::EditorObjectKind::StaticProp;
         hierarchyHasMovingPlatform = hierarchyHasMovingPlatform
@@ -162,6 +180,7 @@ int main()
     }
     Expect(!hierarchyHasDynamicBox, "empty collection has no Dynamic Box hierarchy rows");
     Expect(!hierarchyHasPressurePlate, "empty collection has no Pressure Plate hierarchy rows");
+    Expect(!hierarchyHasDoor, "empty collection has no Door hierarchy rows");
     Expect(!hierarchyHasStaticProp, "empty collection has no Static Prop hierarchy rows");
     Expect(hierarchyHasSpawn, "Hierarchy lists Player Spawn");
     Expect(hierarchyHasCamera, "Hierarchy lists Camera");
@@ -185,6 +204,7 @@ int main()
     bool pickHasSlope = false;
     bool pickHasDynamicBox = false;
     bool pickHasPressurePlate = false;
+    bool pickHasDoor = false;
     bool pickHasStaticProp = false;
     bool pickHasMovingPlatform = false;
     for (const editor::PickingProxy& proxy : set.proxies)
@@ -197,6 +217,7 @@ int main()
             pickHasDynamicBox || proxy.selection.kind == editor::EditorObjectKind::DynamicBox;
         pickHasPressurePlate =
             pickHasPressurePlate || proxy.selection.kind == editor::EditorObjectKind::PressurePlate;
+        pickHasDoor = pickHasDoor || proxy.selection.kind == editor::EditorObjectKind::Door;
         pickHasStaticProp =
             pickHasStaticProp || proxy.selection.kind == editor::EditorObjectKind::StaticProp;
         pickHasMovingPlatform = pickHasMovingPlatform
@@ -208,6 +229,7 @@ int main()
     Expect(pickHasMovingPlatform, "picking includes moving platform");
     Expect(!pickHasDynamicBox, "empty collection has no Dynamic Box pick proxy");
     Expect(!pickHasPressurePlate, "empty collection has no Pressure Plate pick proxy");
+    Expect(!pickHasDoor, "empty collection has no Door pick proxy");
     Expect(!pickHasStaticProp, "empty collection has no Static Prop pick proxy");
 
     const editor::Ray3 atAuthoredCrate{{0.0f, 5.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};

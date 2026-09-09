@@ -44,6 +44,7 @@ constexpr Color kDynamicBoxCarryFill{96, 168, 214, 255};
 constexpr Color kDynamicBoxCarryWire{72, 214, 236, 255};
 constexpr Color kPressurePlateInactive{86, 98, 124, 255};
 constexpr Color kPressurePlateActive{56, 188, 92, 255};
+constexpr Color kDoorColor{136, 96, 68, 255};
 constexpr Color kStaticPropFallbackColor{120, 72, 88, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
@@ -687,6 +688,17 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             overlay.pendingDeletePressurePlateSizes[index],
             kPressurePlateInactive);
     }
+    for (std::size_t index = 0; index < overlay.pendingDeleteDoorCenters.size(); ++index)
+    {
+        if (index >= overlay.pendingDeleteDoorSizes.size())
+        {
+            break;
+        }
+        DrawPendingDeleteSolid(
+            overlay.pendingDeleteDoorCenters[index],
+            overlay.pendingDeleteDoorSizes[index],
+            kDoorColor);
+    }
     for (std::size_t index = 0; index < overlay.pendingDeleteStaticPropCenters.size(); ++index)
     {
         if (index >= overlay.pendingDeleteStaticPropSizes.size())
@@ -1114,6 +1126,7 @@ void Renderer::DrawWorld(
     const world::LevelDefinition& level,
     const std::vector<DynamicBoxDrawState>& dynamicBoxes,
     const std::vector<PressurePlateDrawState>& pressurePlates,
+    const std::vector<DoorDrawState>& doors,
     core::Vec3 movingPlatformPosition,
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,
@@ -1197,6 +1210,14 @@ void Renderer::DrawWorld(
             pressurePlates[index].center,
             pressurePlates[index].size,
             pressurePlates[index].active ? kPressurePlateActive : kPressurePlateInactive);
+    }
+    for (std::size_t index = 0; index < doors.size(); ++index)
+    {
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteDoorIndices, index))
+        {
+            continue;
+        }
+        DrawGreyboxBox(doors[index].center, doors[index].size, kDoorColor);
     }
     if (staticPropModels)
     {

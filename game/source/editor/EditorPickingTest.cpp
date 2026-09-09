@@ -333,6 +333,46 @@ int main()
         Expect(sawPlate, "Hierarchy lists Pressure Plates");
     }
 
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        Expect(
+            !editor::IsValidSelection(level, {editor::EditorObjectKind::Door, 0}),
+            "empty Doors collection is not selectable");
+        Expect(
+            editor::IsEditableSelection({editor::EditorObjectKind::Door, 0}),
+            "Door is inspector-editable");
+        world::DoorSpec door{};
+        door.center = {6.0f, 1.5f, 0.0f};
+        door.size = world::kDefaultDoorSize;
+        door.openDistance = world::kDefaultDoorOpenDistance;
+        level.doors.push_back(door);
+        Expect(
+            editor::IsValidSelection(level, {editor::EditorObjectKind::Door, 0}),
+            "authored Door is selectable");
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::Ray3 atDoor{{6.0f, 1.5f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atDoor, set).kind == editor::EditorObjectKind::Door,
+            "Door AABB is pickable");
+        bool sawDoor = false;
+        for (const editor::HierarchyEntry& entry : editor::BuildHierarchyEntries(level))
+        {
+            sawDoor = sawDoor
+                || (entry.selection.kind == editor::EditorObjectKind::Door
+                    && std::strcmp(entry.group, "Doors") == 0);
+        }
+        Expect(sawDoor, "Hierarchy lists Doors");
+        editor::EditorPickingWorldState worldState = editor::AuthoredPickingWorldState(level);
+        worldState.doorCenters[0] = {9.0f, 1.5f, 0.0f};
+        worldState.doorSizes[0] = door.size;
+        const editor::EditorPickingSet runtimeSet = editor::BuildPickingSet(level, worldState);
+        const editor::Ray3 atRuntime{{9.0f, 1.5f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atRuntime, runtimeSet).kind == editor::EditorObjectKind::Door,
+            "active Door picks the runtime pose");
+    }
+
     // ---- camera is not a world proxy; spawn is ----
     {
         const world::LevelDefinition level = MakeStubLevel();
@@ -343,6 +383,7 @@ int main()
         bool sawPlayerKind = false;
         bool sawDynamicBox = false;
         bool sawPressurePlate = false;
+        bool sawDoor = false;
         for (const editor::PickingProxy& proxy : set.proxies)
         {
             sawCamera = sawCamera || proxy.selection.kind == editor::EditorObjectKind::Camera;
@@ -351,12 +392,14 @@ int main()
                 sawDynamicBox || proxy.selection.kind == editor::EditorObjectKind::DynamicBox;
             sawPressurePlate =
                 sawPressurePlate || proxy.selection.kind == editor::EditorObjectKind::PressurePlate;
+            sawDoor = sawDoor || proxy.selection.kind == editor::EditorObjectKind::Door;
         }
         Expect(!sawCamera, "authored camera has no world picking proxy");
         Expect(sawSpawn, "player spawn has a world picking proxy");
         Expect(!sawPlayerKind, "runtime Player is not a selectable authored object");
         Expect(!sawDynamicBox, "empty Dynamic Boxes collection has no world picking proxy");
         Expect(!sawPressurePlate, "empty Pressure Plates collection has no world picking proxy");
+        Expect(!sawDoor, "empty Doors collection has no world picking proxy");
         Expect(
             set.proxies.size() == 19,
             "19 world proxies: hierarchy minus Camera");

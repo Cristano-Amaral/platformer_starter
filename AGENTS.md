@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 52 — Pressure Plate / Dynamic Box Trigger
-(Authored Pressure Plate; runtime Active iff a Dynamic Box overlaps
-the applied trigger AABB; awaiting manual acceptance).
-Milestone 51 is complete. Milestone 53 has not started.
+Milestone 53 — Authored Door & Pressure Plate Link
+(Authored Door; Pressure Plate → one Door index; kinematic solid;
+OR desiredOpen from M52 Active; awaiting manual acceptance).
+Milestone 52 is complete. Milestone 54 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -134,13 +134,13 @@ their cooker/staging tests remain. Both authored slopes and the moving platform
 remain. M45 turns `dynamic_box` into a repeatable authored Dynamic Box
 (`center`, `size`, `massKg`) with a real Jolt dynamic body. Canonical Level 01
 has 0 Dynamic Boxes. Shared leftover is 59 bodies for platforms plus Dynamic
-Boxes (`kPhysicsMaxBodies` 64 minus 5 fixed bodies).
+Boxes plus Doors (`kPhysicsMaxBodies` 64 minus 5 fixed bodies).
 M46 recovers each active Dynamic Box whose runtime Jolt body center Y is
 strictly below `active.killPlane` back to its currently applied authored
 transform, with identity orientation and zero linear/angular velocity. Recovery
 is per body and does not rebuild PhysicsWorld or mutate authoring state.
 Do not add Undo/Redo, a probe framework, Level Format v2,
-or Milestone 53.
+or Milestone 54.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -214,8 +214,10 @@ complete. Milestone 51 adds gameplay Grab / Carry for authored Dynamic Boxes
 only (`E` toggles Grab/Drop). Carry is runtime-only: it does not mutate
 `workingCopy`, active authored definitions, Modified/Dirty, or Level Format.
 Static Props stay visual and non-grabbable. Milestone 52 adds repeatable
-authored Pressure Plates (`center`, `size`). Runtime Active is derived from
+authored Pressure Plates (`center`, `size`, optional `linkedDoorIndex`). Runtime Active is derived from
 current Dynamic Box AABB overlap with the applied plate AABB (no Jolt sensor
-body, no generic trigger/action framework, no door/output). Canonical Level 01
-has 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props. Do not start
-Milestone 53.
+body, no generic trigger/action framework). Milestone 53 adds repeatable
+authored Doors (`center`, `size`, `openDistance`) and a Pressure Plate → one
+Door index. Runtime Doors are kinematic solids that open +Y when any linked
+plate is Active. Canonical Level 01 has 0 Pressure Plates, 0 Doors, 0 Dynamic
+Boxes, and 0 Static Props. Do not start Milestone 54.

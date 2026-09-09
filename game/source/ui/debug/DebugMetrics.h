@@ -63,6 +63,9 @@ struct DebugMetricsSnapshot
     int physicsDynamicBoxCount = 0;
     int physicsPressurePlateCount = 0;
     int physicsActivePressurePlateCount = 0;
+    int physicsDoorCount = 0;
+    int physicsDoorBodyCount = 0;
+    int physicsDesiredOpenDoorCount = 0;
     bool dynamicTestBodyValid = false;
     bool grabHasTarget = false;
     int grabTargetIndex = -1;
@@ -147,6 +150,7 @@ struct DebugMetricsSnapshot
     bool levelHasMovingPlatform = false;
     int levelDynamicBoxCount = 0;
     int levelPressurePlateCount = 0;
+    int levelDoorCount = 0;
     core::Vec3 levelCameraOffset{};
     float levelCameraFieldOfViewY = 0.0f;
 };

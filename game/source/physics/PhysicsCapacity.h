@@ -12,8 +12,8 @@ namespace physics
 inline constexpr unsigned int kPhysicsMaxBodies = 64;
 
 // ground, 2 slopes, kinematic moving platform, CharacterVirtual inner body.
-// CharacterVirtual itself is not a Jolt body. Elevated platforms and
-// Dynamic Boxes share the leftover. Pressure Plates and Static Props
+// CharacterVirtual itself is not a Jolt body. Elevated platforms, Dynamic
+// Boxes, and Doors share the leftover. Pressure Plates and Static Props
 // do not consume body slots.
 inline constexpr int kPhysicsFixedBodyCount = 5;
 inline constexpr int kPhysicsNonPlatformBodyCount = kPhysicsFixedBodyCount;
@@ -21,23 +21,25 @@ inline constexpr int kPhysicsNonPlatformBodyCount = kPhysicsFixedBodyCount;
 inline constexpr int kMaxAuthoredPhysicsBodies =
     static_cast<int>(kPhysicsMaxBodies) - kPhysicsFixedBodyCount;
 
-// Historical name: max platforms when Dynamic Box count is 0.
+// Historical name: max platforms when Dynamic Box and Door counts are 0.
 inline constexpr int kMaxPhysicsElevatedPlatformCount = kMaxAuthoredPhysicsBodies;
 
 inline constexpr bool AuthoredPhysicsBodiesWithinBudget(
     int elevatedPlatformCount,
-    int dynamicBoxCount)
+    int dynamicBoxCount,
+    int doorCount)
 {
-    if (elevatedPlatformCount < 0 || dynamicBoxCount < 0)
+    if (elevatedPlatformCount < 0 || dynamicBoxCount < 0 || doorCount < 0)
     {
         return false;
     }
     if (elevatedPlatformCount > kMaxAuthoredPhysicsBodies
-        || dynamicBoxCount > kMaxAuthoredPhysicsBodies)
+        || dynamicBoxCount > kMaxAuthoredPhysicsBodies
+        || doorCount > kMaxAuthoredPhysicsBodies)
     {
         return false;
     }
-    return elevatedPlatformCount + dynamicBoxCount <= kMaxAuthoredPhysicsBodies;
+    return elevatedPlatformCount + dynamicBoxCount + doorCount <= kMaxAuthoredPhysicsBodies;
 }
 
 static_assert(kPhysicsFixedBodyCount == 5);

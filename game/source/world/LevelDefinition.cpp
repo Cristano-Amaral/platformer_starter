@@ -62,7 +62,9 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     }
     const int platformCount = static_cast<int>(level.elevatedPlatforms.size());
     if (!physics::AuthoredPhysicsBodiesWithinBudget(
-            platformCount, static_cast<int>(level.dynamicBoxes.size())))
+            platformCount,
+            static_cast<int>(level.dynamicBoxes.size()),
+            static_cast<int>(level.doors.size())))
     {
         return false;
     }
@@ -124,7 +126,15 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     }
     for (const PressurePlateSpec& plate : level.pressurePlates)
     {
-        if (!PressurePlateSpecIsValid(plate))
+        if (!PressurePlateSpecIsValid(plate)
+            || !PressurePlateDoorLinkIsValid(plate.linkedDoorIndex, level.doors.size()))
+        {
+            return false;
+        }
+    }
+    for (const DoorSpec& door : level.doors)
+    {
+        if (!DoorSpecIsValid(door))
         {
             return false;
         }
@@ -157,6 +167,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.collectibles.size() != b.collectibles.size()
         || a.dynamicBoxes.size() != b.dynamicBoxes.size()
         || a.pressurePlates.size() != b.pressurePlates.size()
+        || a.doors.size() != b.doors.size()
         || a.staticProps.size() != b.staticProps.size())
     {
         return false;
@@ -217,7 +228,17 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
     for (std::size_t index = 0; index < a.pressurePlates.size(); ++index)
     {
         if (!Vec3Equal(a.pressurePlates[index].center, b.pressurePlates[index].center)
-            || !Vec3Equal(a.pressurePlates[index].size, b.pressurePlates[index].size))
+            || !Vec3Equal(a.pressurePlates[index].size, b.pressurePlates[index].size)
+            || a.pressurePlates[index].linkedDoorIndex != b.pressurePlates[index].linkedDoorIndex)
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.doors.size(); ++index)
+    {
+        if (!Vec3Equal(a.doors[index].center, b.doors[index].center)
+            || !Vec3Equal(a.doors[index].size, b.doors[index].size)
+            || a.doors[index].openDistance != b.doors[index].openDistance)
         {
             return false;
         }

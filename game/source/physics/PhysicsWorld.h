@@ -3,6 +3,7 @@
 #include "core/Vec3.h"
 #include "physics/DynamicBoxGrab.h"
 #include "physics/PhysicsCapacity.h"
+#include "world/Door.h"
 #include "world/PressurePlate.h"
 
 #include <memory>
@@ -35,6 +36,18 @@ struct PressurePlateRuntimeState
     core::Vec3 center{};
     core::Vec3 size{};
     bool active = false;
+};
+
+struct DoorRuntimeState
+{
+    core::Vec3 closedCenter{};
+    core::Vec3 center{};
+    core::Vec3 size{};
+    float openDistance = 0.0f;
+    float openFraction = 0.0f;
+    bool desiredOpen = false;
+    bool blockedClosing = false;
+    bool valid = false;
 };
 
 enum class PlayerGroundSupport
@@ -130,6 +143,8 @@ public:
     int DynamicBodyCount() const;
     std::vector<DynamicBoxRuntimeState> GetDynamicBoxes() const;
     std::vector<PressurePlateRuntimeState> GetPressurePlates() const;
+    std::vector<DoorRuntimeState> GetDoors() const;
+    int DoorBodyCount() const;
     MovingPlatformState GetMovingPlatform() const;
     PlayerPhysicsState GetPlayerPhysicsState() const;
 

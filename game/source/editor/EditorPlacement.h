@@ -23,6 +23,7 @@ enum class PlacementMode
     Collectible,
     DynamicBox,
     PressurePlate,
+    Door,
 };
 
 // Transient, not authored, not Level Format.

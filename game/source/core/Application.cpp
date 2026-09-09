@@ -135,10 +135,26 @@ std::vector<render::PressurePlateDrawState> MakePressurePlateDrawStates(
     return draw;
 }
 
+std::vector<render::DoorDrawState> MakeDoorDrawStates(
+    const std::vector<physics::DoorRuntimeState>& doors)
+{
+    std::vector<render::DoorDrawState> draw;
+    draw.reserve(doors.size());
+    for (const physics::DoorRuntimeState& door : doors)
+    {
+        render::DoorDrawState item{};
+        item.center = door.center;
+        item.size = door.size;
+        draw.push_back(item);
+    }
+    return draw;
+}
+
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 editor::EditorPickingWorldState MakeRuntimePickingWorldState(
     const physics::MovingPlatformState& movingPlatform,
-    const std::vector<physics::DynamicBoxRuntimeState>& boxes)
+    const std::vector<physics::DynamicBoxRuntimeState>& boxes,
+    const std::vector<physics::DoorRuntimeState>& doors)
 {
     editor::EditorPickingWorldState state{};
     state.movingPlatformCenter = movingPlatform.position;
@@ -149,6 +165,13 @@ editor::EditorPickingWorldState MakeRuntimePickingWorldState(
     {
         state.dynamicBoxCenters.push_back(box.center);
         state.dynamicBoxSizes.push_back(box.size);
+    }
+    state.doorCenters.reserve(doors.size());
+    state.doorSizes.reserve(doors.size());
+    for (const physics::DoorRuntimeState& door : doors)
+    {
+        state.doorCenters.push_back(door.valid ? door.center : door.closedCenter);
+        state.doorSizes.push_back(door.size);
     }
     return state;
 }
@@ -556,6 +579,17 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
             ++snapshot.physicsActivePressurePlateCount;
         }
     }
+    const std::vector<physics::DoorRuntimeState> doors = physicsWorld.GetDoors();
+    snapshot.physicsDoorCount = static_cast<int>(doors.size());
+    snapshot.physicsDoorBodyCount = physicsWorld.DoorBodyCount();
+    snapshot.physicsDesiredOpenDoorCount = 0;
+    for (const physics::DoorRuntimeState& door : doors)
+    {
+        if (door.desiredOpen)
+        {
+            ++snapshot.physicsDesiredOpenDoorCount;
+        }
+    }
 
     snapshot.characterVirtualInitialized = player.CharacterVirtualInitialized();
     snapshot.playerGroundSupport = GroundSupportName(player.GroundSupport());
@@ -686,6 +720,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
         && level.movingPlatform.speed > 0.0f;
     snapshot.levelDynamicBoxCount = static_cast<int>(level.dynamicBoxes.size());
     snapshot.levelPressurePlateCount = static_cast<int>(level.pressurePlates.size());
+    snapshot.levelDoorCount = static_cast<int>(level.doors.size());
     snapshot.levelCameraOffset = level.camera.offset;
     snapshot.levelCameraFieldOfViewY = level.camera.fieldOfViewY;
     return snapshot;
@@ -830,6 +865,8 @@ int Application::Run()
             MakeDynamicBoxDrawStates(dynamicBoxes, grabState);
         const std::vector<render::PressurePlateDrawState> pressurePlateDraw =
             MakePressurePlateDrawStates(physicsWorld.GetPressurePlates());
+        const std::vector<physics::DoorRuntimeState> runtimeDoors = physicsWorld.GetDoors();
+        const std::vector<render::DoorDrawState> doorDraw = MakeDoorDrawStates(runtimeDoors);
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         render::CameraView cameraView = MakeGameplayCameraView(camera);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
@@ -871,7 +908,7 @@ int Application::Run()
             overlay.spawnSize = world::kPlayerVisualSize;
 
             const editor::EditorPickingWorldState pickingWorld =
-                MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes);
+                MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors);
             const editor::EditorHighlightRequest highlight = editor::MakeHighlightRequest(
                 editor::HighlightSelectionFromWorking(
                     levelEditorState.selection, levelEditorState.structuralMap),
@@ -929,6 +966,9 @@ int Application::Run()
                     break;
                 case editor::EditorObjectKind::PressurePlate:
                     item.kind = 6;
+                    break;
+                case editor::EditorObjectKind::Door:
+                    item.kind = 7;
                     break;
                 default:
                     continue;
@@ -1025,6 +1065,9 @@ int Application::Run()
                 case editor::EditorObjectKind::PressurePlate:
                     overlay.placementCandidateKind = 6;
                     break;
+                case editor::EditorObjectKind::Door:
+                    overlay.placementCandidateKind = 7;
+                    break;
                 default:
                     overlay.placementCandidateKind = 0;
                     break;
@@ -1091,6 +1134,29 @@ int Application::Run()
             {
                 overlay.pendingDeletePressurePlateCenters.push_back(plate.center);
                 overlay.pendingDeletePressurePlateSizes.push_back(plate.size);
+            }
+            overlay.pendingDeleteDoorIndices = pendingDelete.doorIndices;
+            overlay.pendingDeleteDoorCenters.clear();
+            overlay.pendingDeleteDoorSizes.clear();
+            overlay.pendingDeleteDoorCenters.reserve(pendingDelete.doors.size());
+            overlay.pendingDeleteDoorSizes.reserve(pendingDelete.doors.size());
+            for (std::size_t index = 0; index < pendingDelete.doorIndices.size(); ++index)
+            {
+                const int activeIndex = pendingDelete.doorIndices[index];
+                if (activeIndex >= 0
+                    && static_cast<std::size_t>(activeIndex) < runtimeDoors.size())
+                {
+                    overlay.pendingDeleteDoorCenters.push_back(
+                        runtimeDoors[static_cast<std::size_t>(activeIndex)].center);
+                    overlay.pendingDeleteDoorSizes.push_back(
+                        runtimeDoors[static_cast<std::size_t>(activeIndex)].size);
+                    continue;
+                }
+                if (index < pendingDelete.doors.size())
+                {
+                    overlay.pendingDeleteDoorCenters.push_back(pendingDelete.doors[index].center);
+                    overlay.pendingDeleteDoorSizes.push_back(pendingDelete.doors[index].size);
+                }
             }
             overlay.pendingDeleteStaticPropIndices = pendingDelete.staticPropIndices;
             overlay.pendingDeleteStaticPropCenters.clear();
@@ -1192,6 +1258,7 @@ int Application::Run()
             levelDefinition,
             dynamicDraw,
             pressurePlateDraw,
+            doorDraw,
             movingPlatform.position,
             movingPlatform.size,
             MakeCheckpointVisuals(
@@ -1487,7 +1554,7 @@ int Application::Run()
                         ray,
                         editor::BuildPickingSet(
                             levelDefinition,
-                            MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes)),
+                            MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors)),
                         localMin,
                         localMax);
                 const bool canAdd = editor::CanIssueAuthoredLifecycleRequest(
@@ -1534,7 +1601,7 @@ int Application::Run()
                     ray,
                     editor::BuildPickingSet(
                         levelDefinition,
-                        MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes)),
+                        MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors)),
                     editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
                 editor::HandleAuthoredLifecycleRequest(
                     levelEditorState,
@@ -1553,7 +1620,7 @@ int Application::Run()
                     gizmoConsumedPointer))
             {
                 const editor::EditorPickingWorldState pickingWorld =
-                    MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes);
+                    MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors);
                 const std::vector<editor::PendingPickProxy> pendingProxies =
                     editor::BuildPendingPickProxies(editor::CollectPendingAuthoringVisuals(
                         levelDefinition,

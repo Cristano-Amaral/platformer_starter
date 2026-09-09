@@ -151,7 +151,8 @@ int main()
         Expect(
             physics::AuthoredPhysicsBodiesWithinBudget(
                 static_cast<int>(twoPlates.elevatedPlatforms.size()),
-                static_cast<int>(twoPlates.dynamicBoxes.size())),
+                static_cast<int>(twoPlates.dynamicBoxes.size()),
+                static_cast<int>(twoPlates.doors.size())),
             "plates are outside the authored body leftover");
     }
 

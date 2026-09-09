@@ -52,6 +52,10 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
     {
         entries.push_back({{EditorObjectKind::PressurePlate, index}, "Pressure Plates"});
     }
+    for (std::size_t index = 0; index < level.doors.size(); ++index)
+    {
+        entries.push_back({{EditorObjectKind::Door, index}, "Doors"});
+    }
     for (std::size_t index = 0; index < level.staticProps.size(); ++index)
     {
         entries.push_back({{EditorObjectKind::StaticProp, index}, "Static Props"});
