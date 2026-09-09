@@ -4,6 +4,7 @@
 #include "editor/EditorGizmo.h"
 
 #include <string>
+#include <string_view>
 
 namespace editor
 {
@@ -23,6 +24,8 @@ EditorObjectKind AddKindForRequest(LevelEditorRequest request)
         return EditorObjectKind::Collectible;
     case LevelEditorRequest::AddDynamicBox:
         return EditorObjectKind::DynamicBox;
+    case LevelEditorRequest::AddStaticProp:
+        return EditorObjectKind::StaticProp;
     default:
         return EditorObjectKind::None;
     }
@@ -42,6 +45,8 @@ const char* LifecycleCategoryLabel(EditorObjectKind kind)
         return "Collectible";
     case EditorObjectKind::DynamicBox:
         return "Dynamic Box";
+    case EditorObjectKind::StaticProp:
+        return "Static Prop";
     default:
         return "Object";
     }
@@ -63,6 +68,7 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
         case EditorObjectKind::Checkpoint:
         case EditorObjectKind::Hazard:
         case EditorObjectKind::Collectible:
+        case EditorObjectKind::StaticProp:
             return "Level file record limit reached.";
         case EditorObjectKind::DynamicBox:
             return "Physics body capacity reached.";
@@ -73,6 +79,8 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
         return "Delete blocked: Platform is referenced by level support metadata.";
     case LifecycleEditStatus::MinimumCount:
         return "At least one Platform is required.";
+    case LifecycleEditStatus::InvalidAssetReference:
+        return "Add Static Prop requires a valid Content Browser static model selection.";
     case LifecycleEditStatus::Success:
         break;
     }
@@ -84,7 +92,8 @@ LifecycleEditResult RunLifecycleMutation(
     EditorSelection selection,
     LevelEditorRequest request,
     core::Vec3 placementAnchor,
-    bool worldCenterPlacement)
+    bool worldCenterPlacement,
+    std::string_view staticPropIdentity)
 {
     switch (request)
     {
@@ -103,6 +112,10 @@ LifecycleEditResult RunLifecycleMutation(
     case LevelEditorRequest::AddDynamicBox:
         return worldCenterPlacement ? AddDynamicBoxAt(workingCopy, placementAnchor)
                                     : AddDynamicBox(workingCopy, placementAnchor);
+    case LevelEditorRequest::AddStaticProp:
+        return worldCenterPlacement
+            ? AddStaticPropAt(workingCopy, placementAnchor, staticPropIdentity)
+            : AddStaticProp(workingCopy, placementAnchor, staticPropIdentity);
     case LevelEditorRequest::DuplicateSelected:
         return DuplicateSelected(workingCopy, selection);
     case LevelEditorRequest::DeleteSelected:
@@ -126,6 +139,7 @@ void SetSuccessMessage(LevelEditorState& state, LevelEditorRequest request, Edit
     case LevelEditorRequest::AddHazard:
     case LevelEditorRequest::AddCollectible:
     case LevelEditorRequest::AddDynamicBox:
+    case LevelEditorRequest::AddStaticProp:
         state.lastMessage = std::string(label) + " added.";
         return;
     case LevelEditorRequest::DuplicateSelected:
@@ -150,6 +164,7 @@ bool IsAuthoredLifecycleRequest(LevelEditorRequest request)
     case LevelEditorRequest::AddHazard:
     case LevelEditorRequest::AddCollectible:
     case LevelEditorRequest::AddDynamicBox:
+    case LevelEditorRequest::AddStaticProp:
     case LevelEditorRequest::DuplicateSelected:
     case LevelEditorRequest::DeleteSelected:
         return true;
@@ -172,6 +187,8 @@ LevelEditorRequest EditAddMenuRequest(EditorObjectKind kind)
         return LevelEditorRequest::AddCollectible;
     case EditorObjectKind::DynamicBox:
         return LevelEditorRequest::AddDynamicBox;
+    case EditorObjectKind::StaticProp:
+        return LevelEditorRequest::AddStaticProp;
     default:
         return LevelEditorRequest::None;
     }
@@ -182,7 +199,8 @@ bool CanIssueAuthoredLifecycleRequest(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging,
-    LevelEditorRequest request)
+    LevelEditorRequest request,
+    std::string_view staticPropIdentity)
 {
     switch (request)
     {
@@ -193,6 +211,10 @@ bool CanIssueAuthoredLifecycleRequest(
     case LevelEditorRequest::AddDynamicBox:
         return CanAddLifecycleObject(
             authoringAvailable, workingCopy, AddKindForRequest(request), gizmoDragging);
+    case LevelEditorRequest::AddStaticProp:
+        return CanAddLifecycleObject(
+                   authoringAvailable, workingCopy, EditorObjectKind::StaticProp, gizmoDragging)
+            && world::StaticPropIdentityIsValid(staticPropIdentity);
     case LevelEditorRequest::DuplicateSelected:
         return CanDuplicateSelected(authoringAvailable, workingCopy, selection, gizmoDragging);
     case LevelEditorRequest::DeleteSelected:
@@ -200,6 +222,54 @@ bool CanIssueAuthoredLifecycleRequest(
     default:
         return false;
     }
+}
+
+std::string AddStaticPropMenuHint(std::string_view staticPropIdentity)
+{
+    if (!world::StaticPropIdentityIsValid(staticPropIdentity))
+    {
+        return std::string("select asset");
+    }
+    const std::size_t nameStart = staticPropIdentity.find_last_of('/');
+    return std::string(
+        nameStart == std::string_view::npos
+            ? staticPropIdentity
+            : staticPropIdentity.substr(nameStart + 1));
+}
+
+const char* AddStaticPropDisableReason(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    bool gizmoDragging,
+    std::string_view staticPropIdentity)
+{
+    if (CanIssueAuthoredLifecycleRequest(
+            authoringAvailable,
+            workingCopy,
+            {},
+            gizmoDragging,
+            LevelEditorRequest::AddStaticProp,
+            staticPropIdentity))
+    {
+        return nullptr;
+    }
+    if (!authoringAvailable)
+    {
+        return "Lifecycle editing is available in Development only.";
+    }
+    if (gizmoDragging)
+    {
+        return "Lifecycle blocked: finish the gizmo drag first.";
+    }
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::StaticProp))
+    {
+        return RejectionMessage(LifecycleEditStatus::AtLimit, EditorObjectKind::StaticProp);
+    }
+    if (!world::StaticPropIdentityIsValid(staticPropIdentity))
+    {
+        return "Select a static model in the Content Browser first.";
+    }
+    return RejectionMessage(LifecycleEditStatus::InvalidAssetReference, EditorObjectKind::StaticProp);
 }
 
 bool HandleAuthoredLifecycleRequest(
@@ -229,7 +299,8 @@ bool HandleAuthoredLifecycleRequest(
             state.workingCopy,
             state.selection,
             state.gizmo.dragging,
-            request))
+            request,
+            state.contentBrowser.selectedIdentity))
     {
         ResetLevelActionStatuses(state);
         if (!authoringAvailable)
@@ -269,9 +340,15 @@ bool HandleAuthoredLifecycleRequest(
                 || request == LevelEditorRequest::AddHazard
                 || request == LevelEditorRequest::AddCollectible
                 || request == LevelEditorRequest::AddDynamicBox
+                || request == LevelEditorRequest::AddStaticProp
                 || request == LevelEditorRequest::DuplicateSelected))
         {
             state.lastMessage = RejectionMessage(LifecycleEditStatus::AtLimit, affectedKind);
+        }
+        else if (request == LevelEditorRequest::AddStaticProp)
+        {
+            state.lastMessage =
+                RejectionMessage(LifecycleEditStatus::InvalidAssetReference, affectedKind);
         }
         else
         {
@@ -284,7 +361,12 @@ bool HandleAuthoredLifecycleRequest(
 
     EnsureStructuralIndexMap(state.structuralMap, activeLevel);
     const LifecycleEditResult result = RunLifecycleMutation(
-        state.workingCopy, previousSelection, request, placementAnchor, worldCenterPlacement);
+        state.workingCopy,
+        previousSelection,
+        request,
+        placementAnchor,
+        worldCenterPlacement,
+        state.contentBrowser.selectedIdentity);
     if (!result.succeeded)
     {
         state.selection = previousSelection;

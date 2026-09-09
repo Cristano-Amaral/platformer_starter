@@ -4,6 +4,7 @@
 #include "assets/StaticModelDelete.h"
 #include "editor/ContentBrowser.h"
 #include "editor/ContentBrowserView.h"
+#include "editor/StaticPropTransform.h"
 #include "world/LevelDefinition.h"
 
 #include <cstdio>
@@ -318,7 +319,88 @@ int main()
         Expect(!modified && !dirty, "delete does not set Modified or Dirty");
         Expect(workingCopy.elevatedPlatforms.size() == 6, "platform count unchanged");
         Expect(workingCopy.dynamicBoxes.empty(), "no static prop or dynamic box was created");
+        Expect(workingCopy.staticProps.empty(), "unreferenced delete does not create Static Props");
         Expect(workingCopy.camera.fieldOfViewY == 40.0f, "FOV unchanged");
+    }
+
+    {
+        CopyFixture(fixture, sourceRoot / "models" / "referenced.glb");
+        CopyFixture(fixture, cookedRoot / "models" / "referenced.glb");
+        CopyFixture(fixture, stagedDev / "models" / "referenced.glb");
+        world::LevelDefinition empty = MakeAuthoredSnapshot();
+        world::LevelDefinition withWorking = empty;
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/referenced.glb";
+        prop.position = {1.0f, 1.0f, 0.0f};
+        prop.scale = world::kDefaultStaticPropScale;
+        withWorking.staticProps.push_back(prop);
+        world::LevelDefinition withActive = empty;
+        withActive.staticProps.push_back(prop);
+        world::LevelDefinition withSaved = empty;
+        withSaved.staticProps.push_back(prop);
+
+        Expect(
+            !editor::AuthoredLevelsProtectStaticPropIdentity(
+                empty, empty, empty, "models/referenced.glb"),
+            "unreferenced identity is not protected");
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                withWorking, empty, empty, "models/referenced.glb"),
+            "unsaved workingCopy references are protected");
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                empty, withActive, empty, "models/referenced.glb"),
+            "applied active references are protected");
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                empty, empty, withSaved, "models/referenced.glb"),
+            "savedSourceBaseline references are protected");
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                withWorking, withActive, withSaved, "models/referenced.glb"),
+            "union of workingCopy/active/saved is protected");
+        const std::string diagnostic =
+            editor::StaticPropReferencedDeleteMessage("models/referenced.glb");
+        Expect(
+            diagnostic.find("models/referenced.glb") != std::string::npos
+                && diagnostic.find("Static Props") != std::string::npos,
+            "rejection diagnostic names the identity and Static Props");
+
+        ContentBrowserState browser{};
+        editor::RefreshContentBrowser(browser, sourceRoot);
+        editor::SelectContentBrowserIdentity(browser, "models/referenced.glb");
+        if (editor::AuthoredLevelsProtectStaticPropIdentity(
+                withWorking, empty, empty, browser.selectedIdentity))
+        {
+            browser.statusMessage = diagnostic;
+        }
+        else
+        {
+            assets::DeleteStaticModel(
+                browser.selectedIdentity,
+                MakeRoots(sourceRoot, cookedRoot, {stagedDev}),
+                &browser.catalog);
+        }
+        Expect(
+            PathIsRegularFile(sourceRoot / "models" / "referenced.glb"),
+            "referenced delete leaves source");
+        Expect(
+            PathIsRegularFile(cookedRoot / "models" / "referenced.glb"),
+            "referenced delete leaves cooked");
+        Expect(
+            PathIsRegularFile(stagedDev / "models" / "referenced.glb"),
+            "referenced delete leaves staged");
+        editor::RefreshContentBrowser(browser, sourceRoot);
+        Expect(
+            browser.catalog.Find("models/referenced.glb") != nullptr,
+            "referenced delete leaves catalog");
+        Expect(
+            browser.selectedIdentity == "models/referenced.glb",
+            "referenced delete leaves Content Browser selection");
+        Expect(withWorking.staticProps.size() == 1, "referencing Static Prop remains");
+        Expect(
+            withWorking.staticProps[0].modelIdentity == "models/referenced.glb",
+            "referencing identity is unchanged");
     }
 
     {

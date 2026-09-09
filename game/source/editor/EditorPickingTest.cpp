@@ -5,6 +5,7 @@
 #include "editor/EditorPicking.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorWorkspace.h"
+#include "editor/StaticPropTransform.h"
 #include "gameplay/CollectibleRunState.h"
 #include "world/LevelDefinition.h"
 
@@ -1009,6 +1010,62 @@ int main()
             editor::PickNearestPending(atPending, pending).kind
                 == editor::EditorObjectKind::DynamicBox,
             "pending Dynamic Box pick hits authored ghost");
+    }
+
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {40.0f, 8.0f, 0.0f};
+        prop.rotationDegrees = {0.0f, 90.0f, 0.0f};
+        prop.scale = {2.0f, 1.0f, 1.0f};
+        level.staticProps.push_back(prop);
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::PickingProxy* proxy =
+            FindProxy(set, editor::EditorObjectKind::StaticProp, 0);
+        Expect(proxy != nullptr, "applied Static Prop has a picking proxy");
+        Expect(proxy != nullptr && proxy->usesStaticPropTransform, "picking uses authored transform");
+        const editor::Ray3 atCenter{{40.0f, 8.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        const editor::EditorSelection picked = editor::PickNearest(atCenter, set);
+        Expect(picked.kind == editor::EditorObjectKind::StaticProp, "viewport can pick Static Prop");
+        Expect(picked.index == 0, "picked instance is Static Prop 0");
+
+        const editor::RayHit localHit = editor::IntersectRayStaticProp(
+            atCenter, prop, editor::kStaticPropDefaultLocalMin, editor::kStaticPropDefaultLocalMax);
+        Expect(localHit.hit, "transformed local AABB is hit at authored position");
+
+        world::StaticPropSpec moved = prop;
+        moved.position.x = 20.0f;
+        const editor::RayHit missMoved = editor::IntersectRayStaticProp(
+            atCenter,
+            moved,
+            editor::kStaticPropDefaultLocalMin,
+            editor::kStaticPropDefaultLocalMax);
+        Expect(!missMoved.hit, "picking respects position");
+
+        world::StaticPropSpec scaled = prop;
+        scaled.position = {0.0f, 0.0f, 0.0f};
+        scaled.rotationDegrees = {};
+        scaled.scale = {0.2f, 0.2f, 0.2f};
+        const editor::Ray3 far{{2.0f, 0.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            !editor::IntersectRayStaticProp(
+                 far,
+                 scaled,
+                 editor::kStaticPropDefaultLocalMin,
+                 editor::kStaticPropDefaultLocalMax)
+                 .hit,
+            "picking respects scale");
+        const editor::Ray3 nearOrigin{{0.0f, 0.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::IntersectRayStaticProp(
+                nearOrigin,
+                scaled,
+                editor::kStaticPropDefaultLocalMin,
+                editor::kStaticPropDefaultLocalMax)
+                .hit,
+            "small scale still pickable at origin");
     }
 
     if (gFailures != 0)

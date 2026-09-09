@@ -2,7 +2,9 @@
 
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorMath.h"
+#include "editor/StaticPropTransform.h"
 #include "world/RespawnWorld.h"
+#include "world/StaticProp.h"
 
 #include <cmath>
 #include <limits>
@@ -221,6 +223,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::StaticProp:
         return true;
     default:
         return false;
@@ -239,6 +242,11 @@ bool IsResizeSelection(EditorSelection selection)
     default:
         return false;
     }
+}
+
+bool IsScaleSelection(EditorSelection selection)
+{
+    return selection.kind == EditorObjectKind::StaticProp;
 }
 
 core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection selection)
@@ -285,6 +293,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.dynamicBoxes.size())
         {
             return &level.dynamicBoxes[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::StaticProp:
+        if (selection.index < level.staticProps.size())
+        {
+            return &level.staticProps[selection.index].position;
         }
         break;
     default:
@@ -339,6 +353,12 @@ const core::Vec3* GetEditablePosition(
         if (selection.index < level.dynamicBoxes.size())
         {
             return &level.dynamicBoxes[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::StaticProp:
+        if (selection.index < level.staticProps.size())
+        {
+            return &level.staticProps[selection.index].position;
         }
         break;
     default:
@@ -401,6 +421,28 @@ const core::Vec3* GetEditableSize(
         break;
     default:
         break;
+    }
+    return nullptr;
+}
+
+core::Vec3* GetEditableScale(world::LevelDefinition& level, EditorSelection selection)
+{
+    if (selection.kind == EditorObjectKind::StaticProp
+        && selection.index < level.staticProps.size())
+    {
+        return &level.staticProps[selection.index].scale;
+    }
+    return nullptr;
+}
+
+const core::Vec3* GetEditableScale(
+    const world::LevelDefinition& level,
+    EditorSelection selection)
+{
+    if (selection.kind == EditorObjectKind::StaticProp
+        && selection.index < level.staticProps.size())
+    {
+        return &level.staticProps[selection.index].scale;
     }
     return nullptr;
 }
@@ -488,6 +530,18 @@ bool GetGizmoPreviewBox(
             const world::DynamicBoxSpec& box = workingCopy.dynamicBoxes[selection.index];
             center = box.center;
             size = box.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::StaticProp:
+        if (selection.index < workingCopy.staticProps.size())
+        {
+            StaticPropWorldAabb(
+                workingCopy.staticProps[selection.index],
+                kStaticPropDefaultLocalMin,
+                kStaticPropDefaultLocalMax,
+                center,
+                size);
             return true;
         }
         break;
@@ -674,6 +728,27 @@ bool AuthoredGeometryDiffers(
         return Vec3Differs(activeBox.center, workingBox.center)
             || Vec3Differs(activeBox.size, workingBox.size)
             || activeBox.massKg != workingBox.massKg;
+    }
+    case EditorObjectKind::StaticProp:
+    {
+        if (selection.index >= workingCopy.staticProps.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::StaticProp, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.staticProps.size())
+        {
+            return true;
+        }
+        const world::StaticPropSpec& activeProp =
+            active.staticProps[static_cast<std::size_t>(activeIndex)];
+        const world::StaticPropSpec& workingProp = workingCopy.staticProps[selection.index];
+        return activeProp.modelIdentity != workingProp.modelIdentity
+            || Vec3Differs(activeProp.position, workingProp.position)
+            || Vec3Differs(activeProp.rotationDegrees, workingProp.rotationDegrees)
+            || Vec3Differs(activeProp.scale, workingProp.scale);
     }
     default:
         return false;
@@ -870,7 +945,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::Checkpoint,
         EditorObjectKind::Hazard,
         EditorObjectKind::Collectible,
-        EditorObjectKind::DynamicBox};
+        EditorObjectKind::DynamicBox,
+        EditorObjectKind::StaticProp};
     for (const EditorObjectKind kind : kinds)
     {
         const std::size_t count = [&]() -> std::size_t {
@@ -886,6 +962,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.collectibles.size();
             case EditorObjectKind::DynamicBox:
                 return workingCopy.dynamicBoxes.size();
+            case EditorObjectKind::StaticProp:
+                return workingCopy.staticProps.size();
             default:
                 return 0;
             }
@@ -1068,6 +1146,7 @@ void EndGizmoDrag(GizmoInteractionState& state)
     state.dragStartPosition = {};
     state.dragStartAxisParameter = 0.0f;
     state.dragStartSize = {};
+    state.dragStartScale = {};
     state.dragHandleSign = 1;
 }
 
@@ -1284,6 +1363,194 @@ bool UpdateResizeInteraction(
         pick.sign,
         *origin,
         *size,
+        mouseRay,
+        view);
+}
+
+GizmoDrawRequest MakeScaleGizmoDrawRequest(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    const GizmoInteractionState& interaction)
+{
+    GizmoDrawRequest request{};
+    const core::Vec3* origin = GetEditablePosition(workingCopy, selection);
+    if (origin == nullptr || !IsScaleSelection(selection)
+        || GetEditableScale(workingCopy, selection) == nullptr)
+    {
+        return request;
+    }
+
+    request.visible = true;
+    request.origin = *origin;
+    request.axisLength = GizmoWorldLength(view, request.origin);
+    request.hovered = interaction.hovered;
+    request.hoveredSign = interaction.hoveredSign;
+    request.active = interaction.dragging ? interaction.active : EditorAxis::None;
+    request.activeSign = interaction.dragging ? interaction.dragHandleSign : 1;
+    return request;
+}
+
+bool BeginScaleDrag(
+    GizmoInteractionState& state,
+    EditorSelection selection,
+    EditorAxis axis,
+    int handleSign,
+    core::Vec3 workingPosition,
+    core::Vec3 workingScale,
+    Ray3 mouseRay,
+    const render::CameraView& view)
+{
+    if (!IsScaleSelection(selection) || axis == EditorAxis::None || handleSign == 0
+        || !IsFiniteVec3(workingPosition) || !world::StaticPropScaleIsValid(workingScale))
+    {
+        return false;
+    }
+
+    float parameter = 0.0f;
+    if (!AxisParameterFromRay(
+            mouseRay, workingPosition, EditorAxisDirection(axis), view, parameter))
+    {
+        return false;
+    }
+
+    state.dragging = true;
+    state.active = axis;
+    state.hovered = axis;
+    state.dragTarget = selection;
+    state.dragStartPosition = workingPosition;
+    state.dragStartAxisParameter = parameter;
+    state.dragStartScale = workingScale;
+    state.dragHandleSign = handleSign > 0 ? 1 : -1;
+    state.hoveredSign = state.dragHandleSign;
+    return true;
+}
+
+core::Vec3 GizmoScaleSize(
+    const GizmoInteractionState& state,
+    Ray3 mouseRay,
+    const render::CameraView& view)
+{
+    if (!state.dragging || state.active == EditorAxis::None
+        || !world::StaticPropScaleIsValid(state.dragStartScale))
+    {
+        return state.dragStartScale;
+    }
+
+    float parameter = 0.0f;
+    if (!AxisParameterFromRay(
+            mouseRay,
+            state.dragStartPosition,
+            EditorAxisDirection(state.active),
+            view,
+            parameter))
+    {
+        return state.dragStartScale;
+    }
+
+    const float delta = parameter - state.dragStartAxisParameter;
+    if (!std::isfinite(delta))
+    {
+        return state.dragStartScale;
+    }
+
+    const float signedDelta = static_cast<float>(state.dragHandleSign) * delta;
+    const float change = kScaleFromAxisDelta * signedDelta;
+    core::Vec3 scale = state.dragStartScale;
+    switch (state.active)
+    {
+    case EditorAxis::X:
+        scale.x = world::ClampStaticPropScaleAxis(state.dragStartScale.x + change);
+        break;
+    case EditorAxis::Y:
+        scale.y = world::ClampStaticPropScaleAxis(state.dragStartScale.y + change);
+        break;
+    case EditorAxis::Z:
+        scale.z = world::ClampStaticPropScaleAxis(state.dragStartScale.z + change);
+        break;
+    case EditorAxis::None:
+        break;
+    }
+    if (!world::StaticPropScaleIsValid(scale) || !IsFiniteVec3(scale))
+    {
+        return state.dragStartScale;
+    }
+    return scale;
+}
+
+bool UpdateScaleInteraction(
+    GizmoInteractionState& state,
+    EditorSelection currentSelection,
+    world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    Ray3 mouseRay,
+    bool imguiWantsMouse,
+    bool lookHeld,
+    bool selectPressed,
+    bool selectHeld,
+    bool selectReleased)
+{
+    if (state.dragging)
+    {
+        if (selectReleased || !selectHeld)
+        {
+            EndGizmoDrag(state);
+            return true;
+        }
+
+        core::Vec3* scale = GetEditableScale(workingCopy, state.dragTarget);
+        if (scale == nullptr)
+        {
+            ClearGizmoInteraction(state);
+            return true;
+        }
+
+        *scale = GizmoScaleSize(state, mouseRay, view);
+        state.hovered = state.active;
+        state.hoveredSign = state.dragHandleSign;
+        return true;
+    }
+
+    if (imguiWantsMouse)
+    {
+        state.hovered = EditorAxis::None;
+        state.hoveredSign = 1;
+        return false;
+    }
+
+    if (!IsScaleSelection(currentSelection))
+    {
+        state.hovered = EditorAxis::None;
+        state.hoveredSign = 1;
+        return false;
+    }
+
+    const core::Vec3* origin = GetEditablePosition(workingCopy, currentSelection);
+    const core::Vec3* scale = GetEditableScale(workingCopy, currentSelection);
+    if (origin == nullptr || scale == nullptr)
+    {
+        state.hovered = EditorAxis::None;
+        state.hoveredSign = 1;
+        return false;
+    }
+
+    const float axisLength = GizmoWorldLength(view, *origin);
+    const ResizeHandlePick pick =
+        PickResizeHandle(mouseRay, *origin, axisLength, axisLength * kResizeHandleHitFraction);
+    state.hovered = pick.axis;
+    state.hoveredSign = pick.sign;
+    if (lookHeld || !selectPressed || pick.axis == EditorAxis::None)
+    {
+        return false;
+    }
+
+    return BeginScaleDrag(
+        state,
+        currentSelection,
+        pick.axis,
+        pick.sign,
+        *origin,
+        *scale,
         mouseRay,
         view);
 }

@@ -204,6 +204,19 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out += '\n';
     }
 
+    for (const StaticPropSpec& prop : level.staticProps)
+    {
+        out += "static_prop ";
+        AppendVec3(out, prop.position);
+        out += ' ';
+        AppendVec3(out, prop.rotationDegrees);
+        out += ' ';
+        AppendVec3(out, prop.scale);
+        out += ' ';
+        out.append(prop.modelIdentity);
+        out += '\n';
+    }
+
     out += "camera ";
     AppendVec3(out, level.camera.offset);
     out += ' ';

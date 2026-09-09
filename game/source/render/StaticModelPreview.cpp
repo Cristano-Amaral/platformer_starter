@@ -217,6 +217,7 @@ bool StaticModelPreviewRenderer::Render(
     DrawModel(gpu->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     EndMode3D();
     EndTextureMode();
+    rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     return gpu->target.texture.id != 0;
 }
 

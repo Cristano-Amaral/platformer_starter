@@ -24,6 +24,7 @@ enum class EditorObjectKind
     Collectible,
     Goal,
     DynamicBox,
+    StaticProp,
 };
 
 struct EditorSelection

@@ -175,6 +175,7 @@ struct ParseState
     std::vector<HazardSpec> hazards;
     std::vector<CollectibleSpec> collectibles;
     std::vector<DynamicBoxSpec> dynamicBoxes;
+    std::vector<StaticPropSpec> staticProps;
 };
 
 bool RequireTokenCount(
@@ -543,6 +544,35 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.dynamicBoxes.push_back(box);
             continue;
         }
+        if (keyword == "static_prop")
+        {
+            if (tokens.size() < 11)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
+            }
+            StaticPropSpec prop{};
+            if (!ParseVec3(tokens, 1, prop.position)
+                || !ParseVec3(tokens, 4, prop.rotationDegrees)
+                || !ParseVec3(tokens, 7, prop.scale))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid static_prop");
+            }
+            prop.modelIdentity = std::string(tokens[10]);
+            for (std::size_t index = 11; index < tokens.size(); ++index)
+            {
+                prop.modelIdentity.push_back(' ');
+                prop.modelIdentity.append(tokens[index]);
+            }
+            if (!StaticPropSpecIsValid(prop))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid static_prop");
+            }
+            state.staticProps.push_back(prop);
+            continue;
+        }
         if (keyword == "camera")
         {
             if (!RequireSingleton(state.seenCamera, failure, lineNumber, "duplicate camera")
@@ -585,6 +615,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.hazards = std::move(state.hazards);
     loaded.level.collectibles = std::move(state.collectibles);
     loaded.level.dynamicBoxes = std::move(state.dynamicBoxes);
+    loaded.level.staticProps = std::move(state.staticProps);
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(loaded.level.elevatedPlatforms.size()),

@@ -3,6 +3,7 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorWorkspace.h"
+#include "editor/StaticPropTransform.h"
 #include "world/RespawnWorld.h"
 
 #include <cmath>
@@ -33,6 +34,10 @@ void AddProxy(
 
 RayHit IntersectProxy(Ray3 ray, const PickingProxy& proxy)
 {
+    if (proxy.usesStaticPropTransform)
+    {
+        return IntersectRayStaticProp(ray, proxy.staticProp, proxy.localMin, proxy.localMax);
+    }
     if (proxy.rotationZDegrees != 0.0f)
     {
         return IntersectRayOrientedAabb(
@@ -269,6 +274,19 @@ EditorPickingSet BuildPickingSet(
             ? worldState.dynamicBoxSizes[index]
             : appliedLevel.dynamicBoxes[index].size;
         AddProxy(set, EditorObjectKind::DynamicBox, index, center, size, 0.0f);
+    }
+    for (std::size_t index = 0; index < appliedLevel.staticProps.size(); ++index)
+    {
+        const world::StaticPropSpec& prop = appliedLevel.staticProps[index];
+        PickingProxy proxy{};
+        proxy.selection = {EditorObjectKind::StaticProp, index};
+        proxy.usesStaticPropTransform = true;
+        proxy.staticProp = prop;
+        proxy.localMin = kStaticPropDefaultLocalMin;
+        proxy.localMax = kStaticPropDefaultLocalMax;
+        StaticPropWorldAabb(
+            prop, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
+        set.proxies.push_back(proxy);
     }
     return set;
 }

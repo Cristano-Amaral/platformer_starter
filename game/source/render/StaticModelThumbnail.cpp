@@ -166,6 +166,7 @@ bool StaticModelThumbnailStore::Generate(
     DrawModel(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     EndMode3D();
     EndTextureMode();
+    rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     UnloadModel(model);
 
     Image image = LoadImageFromTexture(target.texture);

@@ -106,6 +106,7 @@ int main()
         Expect(editor::IsGizmoSelection({EditorObjectKind::Collectible, 0}), "collectible translate gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal has no gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box has gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::StaticProp, 0}), "Static Prop has Translate gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::None, 0}), "none is not gizmo");
     }
 
@@ -160,6 +161,41 @@ int main()
         }
         Expect(NearlyEqual(level.dynamicBoxes[0].size.x, 2.0f), "Resize mutates working size");
         Expect(level.dynamicBoxes[0].massKg == 30.0f, "gizmo does not rewrite mass");
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {3.0f, 1.0f, 0.0f};
+        prop.rotationDegrees = {0.0f, 15.0f, 0.0f};
+        prop.scale = {1.0f, 2.0f, 1.0f};
+        level.staticProps.push_back(prop);
+        core::Vec3* propPosition =
+            editor::GetEditablePosition(level, {EditorObjectKind::StaticProp, 0});
+        Expect(propPosition != nullptr, "Static Prop has translate origin");
+        if (propPosition != nullptr)
+        {
+            propPosition->x = 9.0f;
+        }
+        Expect(NearlyEqual(level.staticProps[0].position.x, 9.0f), "Translate mutates Static Prop position");
+        Expect(NearlyEqual(level.staticProps[0].rotationDegrees.y, 15.0f), "Translate leaves rotation");
+        Expect(NearlyEqual(level.staticProps[0].scale.y, 2.0f), "Translate leaves scale");
+        Expect(
+            editor::GetEditableSize(level, {EditorObjectKind::StaticProp, 0}) == nullptr,
+            "Static Prop has no primitive Resize size");
+        Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is Scale");
+        Expect(
+            !editor::IsScaleSelection({EditorObjectKind::Ground, 0}),
+            "Ground is not Static Prop Scale");
+        Expect(
+            !editor::IsScaleSelection({EditorObjectKind::DynamicBox, 0}),
+            "Dynamic Box is not Static Prop Scale");
+        core::Vec3* propScale = editor::GetEditableScale(level, {EditorObjectKind::StaticProp, 0});
+        Expect(propScale != nullptr, "Static Prop has editable scale");
+        if (propScale != nullptr)
+        {
+            propScale->x = 3.0f;
+        }
+        Expect(NearlyEqual(level.staticProps[0].scale.x, 3.0f), "Scale lookup mutates working scale");
+        Expect(NearlyEqual(level.staticProps[0].position.x, 9.0f), "Scale lookup leaves position");
+        Expect(NearlyEqual(level.staticProps[0].rotationDegrees.y, 15.0f), "Scale lookup leaves rotation");
     }
 
     // ---- X/Y/Z constrained drag ----
@@ -555,6 +591,10 @@ int main()
         Expect(!editor::IsResizeSelection({EditorObjectKind::Hazard, 0}), "hazard is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Collectible, 0}), "collectible is not resize");
         Expect(editor::IsResizeSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box is resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is not primitive Resize");
+        Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is Scale selection");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::Spawn, 0}), "spawn is not Scale");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::ElevatedPlatform, 0}), "platform is not Scale");
         world::LevelDefinition level = MakeStubLevel();
         Expect(
             editor::GetEditableSize(level, {EditorObjectKind::Spawn, 0}) == nullptr,
@@ -759,6 +799,163 @@ int main()
             "platform has resize gizmo request");
     }
 
+    // ---- M49 Static Prop Scale gizmo ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {3.0f, 1.0f, 0.0f};
+        prop.rotationDegrees = {5.0f, 15.0f, 25.0f};
+        prop.scale = {1.0f, 2.0f, 1.0f};
+        working.staticProps.push_back(prop);
+        world::StaticPropSpec other = prop;
+        other.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(other);
+        const world::LevelDefinition active = working;
+        const render::CameraView view = MakeView({20.0f, 8.0f, 20.0f}, {3.0f, 1.0f, 0.0f});
+        EditorSelection prop0{EditorObjectKind::StaticProp, 0};
+        const core::Vec3 origin = working.staticProps[0].position;
+        const core::Vec3 startScale = working.staticProps[0].scale;
+        const core::Vec3 startRotation = working.staticProps[0].rotationDegrees;
+        const float length = editor::GizmoWorldLength(view, origin);
+
+        Expect(
+            editor::MakeScaleGizmoDrawRequest(prop0, working, view, {}).visible,
+            "Static Prop has Scale gizmo request");
+        Expect(
+            !editor::MakeScaleGizmoDrawRequest(
+                 {EditorObjectKind::ElevatedPlatform, 0}, working, view, {})
+                 .visible,
+            "platform has no Scale gizmo request");
+        editor::GizmoInteractionState rejected{};
+        Expect(
+            !editor::BeginScaleDrag(
+                rejected,
+                {EditorObjectKind::Ground, 0},
+                EditorAxis::X,
+                1,
+                origin,
+                startScale,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                view),
+            "non-Static-Prop cannot begin Scale drag");
+
+        editor::GizmoInteractionState state{};
+        Expect(
+            editor::BeginScaleDrag(
+                state,
+                prop0,
+                EditorAxis::X,
+                1,
+                origin,
+                startScale,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                view),
+            "begin +X Scale");
+        const core::Vec3 scaleX = editor::GizmoScaleSize(
+            state, RayThrough(view, {origin.x + length + 1.0f, origin.y, origin.z}), view);
+        Expect(scaleX.x > startScale.x, "Scale X changes scale.x");
+        Expect(NearlyEqual(scaleX.y, startScale.y), "Scale X keeps scale.y");
+        Expect(NearlyEqual(scaleX.z, startScale.z), "Scale X keeps scale.z");
+        Expect(world::StaticPropScaleIsValid(scaleX), "Scale X result is valid");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginScaleDrag(
+                state,
+                prop0,
+                EditorAxis::Y,
+                1,
+                origin,
+                startScale,
+                RayThrough(view, {origin.x, origin.y + length, origin.z}),
+                view),
+            "begin +Y Scale");
+        const core::Vec3 scaleY = editor::GizmoScaleSize(
+            state, RayThrough(view, {origin.x, origin.y + length + 1.0f, origin.z}), view);
+        Expect(NearlyEqual(scaleY.x, startScale.x), "Scale Y keeps scale.x");
+        Expect(scaleY.y > startScale.y, "Scale Y changes scale.y");
+        Expect(NearlyEqual(scaleY.z, startScale.z), "Scale Y keeps scale.z");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginScaleDrag(
+                state,
+                prop0,
+                EditorAxis::Z,
+                1,
+                origin,
+                startScale,
+                RayThrough(view, {origin.x, origin.y, origin.z + length}),
+                view),
+            "begin +Z Scale");
+        const core::Vec3 scaleZ = editor::GizmoScaleSize(
+            state, RayThrough(view, {origin.x, origin.y, origin.z + length + 1.0f}), view);
+        Expect(NearlyEqual(scaleZ.x, startScale.x), "Scale Z keeps scale.x");
+        Expect(NearlyEqual(scaleZ.y, startScale.y), "Scale Z keeps scale.y");
+        Expect(scaleZ.z > startScale.z, "Scale Z changes scale.z");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginScaleDrag(
+                state,
+                prop0,
+                EditorAxis::X,
+                1,
+                origin,
+                startScale,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                view),
+            "begin shrink Scale X");
+        const core::Vec3 shrunk = editor::GizmoScaleSize(
+            state,
+            RayThrough(view, {origin.x + length - 100.0f, origin.y, origin.z}),
+            view);
+        Expect(shrunk.x >= world::kMinStaticPropScale, "Scale respects minimum clamp");
+        Expect(world::StaticPropScaleIsValid(shrunk), "clamped Scale stays valid");
+        Expect(!(shrunk.x <= 0.0f), "Scale drag never reaches zero");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::UpdateScaleInteraction(
+                state,
+                prop0,
+                working,
+                view,
+                RayThrough(view, {origin.x + length, origin.y, origin.z}),
+                false,
+                false,
+                true,
+                true,
+                false),
+            "Scale press consumes pointer");
+        Expect(
+            editor::UpdateScaleInteraction(
+                state,
+                {EditorObjectKind::Ground, 0},
+                working,
+                view,
+                RayThrough(view, {origin.x + length + 1.0f, origin.y, origin.z}),
+                false,
+                false,
+                false,
+                true,
+                false),
+            "Scale drag ignores incidental selection");
+        Expect(working.staticProps[0].scale.x > startScale.x, "Scale writes workingCopy scale.x");
+        Expect(Vec3Near(working.staticProps[0].position, origin), "Scale leaves position");
+        Expect(
+            Vec3Near(working.staticProps[0].rotationDegrees, startRotation),
+            "Scale leaves rotation");
+        Expect(Vec3Near(active.staticProps[0].scale, startScale), "Scale does not mutate active");
+        Expect(
+            Vec3Near(working.staticProps[1].scale, {1.0f, 1.0f, 1.0f}),
+            "shared-asset sibling keeps independent Scale");
+        Expect(
+            editor::AuthoredGeometryDiffers(active, working, prop0),
+            "Scale drag is a pending authored edit");
+    }
+
     // ---- M35 Phase A nudge ----
     {
         Expect(NearlyEqual(editor::NudgeStep(false), 0.10f, 0.0001f), "normal nudge is 0.10");
@@ -795,6 +992,9 @@ int main()
         Expect(
             !editor::NudgeAllowed(editor::EditorTransformMode::Resize, false, false),
             "nudge blocked in Resize mode");
+        Expect(
+            !editor::NudgeAllowed(editor::EditorTransformMode::Scale, false, false),
+            "nudge blocked in Scale mode");
         Expect(
             !editor::NudgeAllowed(editor::EditorTransformMode::Translate, true, false),
             "nudge blocked when ImGui wants keyboard");

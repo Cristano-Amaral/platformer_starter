@@ -386,7 +386,15 @@ int main()
         Expect(!modified && !dirty, "preview does not set Modified or Dirty");
         Expect(scene.kind == editor::EditorObjectKind::ElevatedPlatform, "scene selection untouched");
         Expect(workingCopy.dynamicBoxes.empty(), "no static prop created");
+        Expect(workingCopy.staticProps.empty(), "preview does not instantiate Static Props");
         Expect(workingCopy.camera.fieldOfViewY == 40.0f, "FOV unchanged");
+        editor::ContentBrowserState previewBrowser{};
+        previewBrowser.selectedIdentity = "models/test_static.glb";
+        editor::EditorSelection propScene{editor::EditorObjectKind::StaticProp, 0};
+        Expect(
+            previewBrowser.selectedIdentity == "models/test_static.glb",
+            "Static Prop scene selection does not hijack Model Preview identity");
+        Expect(propScene.kind == editor::EditorObjectKind::StaticProp, "scene kind stays independent");
     }
 
     {

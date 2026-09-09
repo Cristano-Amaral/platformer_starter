@@ -80,3 +80,15 @@ Milestone 48.2 Model Preview:
 - Name/type/identity/bounds are in a collapsed-by-default Asset Details header below the preview
 - model lifetime is independent of render-target size
 - delete cancel leaves preview; successful delete of the selection clears it
+
+Milestone 49 authored Static Props:
+- Static Prop is a level instance (`static_prop` record); the GLB remains a reusable Static Model Asset
+- identity is the same canonical `models/<filename>.glb` string; the level does not embed GLB bytes
+- Development Content Browser **Add Static Prop** (primary) and **Edit > Add > Static Prop** share the same direct-add request
+- Import alone never stages: a newly imported model draws a placeholder cube until **Build > Cook & Stage**, and the editor says so
+- cook/stage still discover valid `source/models/*.glb` and copy them as `copy` / staged `assets/models/`
+- runtime scene lookup is staged `platform::RuntimeAssetPath(identity)` only (no Development source fallback)
+- authored Scale `(1,1,1)` is the loaded GLB size after node-transform bake; the Inspector reports that size and warns if the gameplay camera is inside the AABB
+- Delete Asset refuses an identity referenced by workingCopy, active, or savedSourceBaseline Static Props
+- unreferenced disposable models still delete through the existing M48 path
+- canonical Level 01 has zero `static_prop` records

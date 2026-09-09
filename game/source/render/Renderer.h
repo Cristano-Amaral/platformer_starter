@@ -7,6 +7,7 @@
 #include "world/RespawnWorld.h"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace gameplay
@@ -35,7 +36,7 @@ struct DebugWorldOverlay
     // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
     struct PendingAuthoringOverlayItem
     {
-        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop
         bool selected = false;
         core::Vec3 boundsCenter{};
         core::Vec3 boundsSize{};
@@ -71,6 +72,9 @@ struct DebugWorldOverlay
     std::vector<int> pendingDeleteDynamicBoxIndices;
     std::vector<core::Vec3> pendingDeleteDynamicBoxCenters;
     std::vector<core::Vec3> pendingDeleteDynamicBoxSizes;
+    std::vector<int> pendingDeleteStaticPropIndices;
+    std::vector<core::Vec3> pendingDeleteStaticPropCenters;
+    std::vector<core::Vec3> pendingDeleteStaticPropSizes;
     // Translation gizmo at the working-copy origin. hovered/active: 0 none,
     // 1 X, 2 Y, 3 Z (matches editor::EditorAxis).
     bool drawTranslationGizmo = false;
@@ -80,6 +84,8 @@ struct DebugWorldOverlay
     int gizmoActiveAxis = 0;
     // Resize cubes at +/- axisLength. Sign is +1 / -1; ignored for translate.
     bool drawResizeGizmo = false;
+    // Static Prop Scale uses the same cube handles; edits visual scale, not size.
+    bool drawScaleGizmo = false;
     int gizmoHoveredSign = 1;
     int gizmoActiveSign = 1;
 };
@@ -120,6 +126,8 @@ struct DynamicBoxDrawState
     float rotationW = 1.0f;
 };
 
+class StaticModelSceneStore;
+
 class Renderer
 {
 public:
@@ -133,6 +141,9 @@ public:
 
     void LoadRuntimeAssets();
     void UnloadRuntimeAssets();
+    void SyncStaticPropModels(const world::LevelDefinition& level);
+    StaticModelSceneStore* StaticPropModels();
+    const StaticModelSceneStore* StaticPropModels() const;
 
     // Cooker inventory ids. M44 does not load or draw these in the scene.
     bool IsTestTextureLoaded() const;
@@ -178,5 +189,8 @@ public:
         bool fallback,
         float topInset);
     void EndFrame();
+
+private:
+    std::unique_ptr<StaticModelSceneStore> staticPropModels;
 };
 }

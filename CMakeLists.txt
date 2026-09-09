@@ -130,6 +130,8 @@ add_executable(Platformer3D
     game/source/render/StaticModelThumbnail.h
     game/source/render/StaticModelPreview.cpp
     game/source/render/StaticModelPreview.h
+    game/source/render/StaticModelScene.cpp
+    game/source/render/StaticModelScene.h
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
@@ -141,6 +143,8 @@ add_executable(Platformer3D
     game/source/world/HazardWorld.h
     game/source/world/LevelDefinition.h
     game/source/world/LevelDefinition.cpp
+    game/source/world/StaticProp.h
+    game/source/world/StaticProp.cpp
     game/source/world/LevelGoal.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h
@@ -297,6 +301,8 @@ add_executable(ContentBrowserTest
     game/source/editor/ContentBrowserTest.cpp
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 target_include_directories(ContentBrowserTest PRIVATE game/source)
 if(MSVC)
@@ -337,6 +343,8 @@ add_executable(ContentBrowserThumbnailTest
     game/source/platform/RuntimePaths.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 if(WIN32)
     target_sources(ContentBrowserThumbnailTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
@@ -387,6 +395,8 @@ add_executable(StaticModelPreviewTest
     game/source/render/CameraView.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 if(WIN32)
     target_sources(StaticModelPreviewTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
@@ -412,6 +422,8 @@ target_compile_definitions(StaticModelPreviewTest PRIVATE
 # instead of duplicating ReplaceFileW/MoveFileExW. M39 reload prepare/reconcile
 # lives here so candidate parse can be tested without the game.
 add_executable(LevelFileTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
@@ -424,6 +436,8 @@ add_executable(LevelFileTest
     game/source/world/LevelFileTest.cpp
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
     game/source/world/LevelWriter.cpp
     game/source/world/LevelWriter.h
 )
@@ -449,6 +463,8 @@ target_compile_definitions(LevelFileTest PRIVATE
 # Links Jolt because that is exactly what is being validated; no raylib/ImGui.
 # It only reads the canonical level and never writes a file.
 add_executable(PhysicsRebuildTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
@@ -459,6 +475,8 @@ add_executable(PhysicsRebuildTest
     game/source/physics/PhysicsWorld.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h
 )
@@ -477,6 +495,8 @@ target_compile_definitions(PhysicsRebuildTest PRIVATE
 # Jolt, or ImGui: the editor must pick authored proxies with project-owned CPU
 # math rather than Jolt raycasts.
 add_executable(EditorPickingTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorCamera.cpp
@@ -496,6 +516,8 @@ add_executable(EditorPickingTest
     game/source/render/CameraView.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 target_include_directories(EditorPickingTest PRIVATE game/source)
 if(MSVC)
@@ -507,6 +529,8 @@ endif()
 # Milestone 34 translation-gizmo math and editor-layout path. No window, raylib,
 # Jolt, or ImGui: live drag/render is exercised by Platformer3D, not this test.
 add_executable(EditorGizmoTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorGizmo.cpp
@@ -525,6 +549,8 @@ add_executable(EditorGizmoTest
     game/source/render/CameraView.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 if(WIN32)
     target_sources(EditorGizmoTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
@@ -601,6 +627,8 @@ endif()
 
 # Milestone 41 Phase A: pure working-copy Add/Duplicate/Delete. No ImGui.
 add_executable(AuthoredObjectLifecycleTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/AuthoredObjectLifecycleTest.cpp
@@ -608,6 +636,8 @@ add_executable(AuthoredObjectLifecycleTest
     game/source/editor/EditorSelection.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 target_include_directories(AuthoredObjectLifecycleTest PRIVATE game/source)
 if(MSVC)
@@ -618,6 +648,8 @@ endif()
 
 # Milestone 42: Object Palette placement mode and candidate resolution. No ImGui.
 add_executable(EditorPlacementTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorPicking.cpp
@@ -631,6 +663,8 @@ add_executable(EditorPlacementTest
     game/source/editor/EditorWorkspace.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 target_include_directories(EditorPlacementTest PRIVATE game/source)
 if(MSVC)
@@ -642,6 +676,8 @@ endif()
 # Milestone 43: Quick Toolbar mapping, chrome geometry, and build preference.
 # No window, raylib, or ImGui.
 add_executable(EditorQuickToolbarTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorBuildPreference.cpp
@@ -672,6 +708,8 @@ add_executable(EditorQuickToolbarTest
     game/source/render/CameraView.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 if(WIN32)
     target_sources(EditorQuickToolbarTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
@@ -690,6 +728,8 @@ endif()
 
 # Milestone 44: scene-cleanup invariants. No window, raylib, or Jolt.
 add_executable(CanonicalSceneCleanupTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/CanonicalSceneCleanupTest.cpp
@@ -706,6 +746,8 @@ add_executable(CanonicalSceneCleanupTest
     game/source/render/Renderer.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 target_include_directories(CanonicalSceneCleanupTest PRIVATE game/source)
 if(MSVC)
@@ -716,6 +758,8 @@ endif()
 
 # Milestone 41 Phase B: owner-side lifecycle requests without ImGui.
 add_executable(AuthoredLifecycleIntegrationTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
     game/source/editor/AuthoredLifecycleCommands.cpp
     game/source/editor/AuthoredLifecycleCommands.h
     game/source/editor/AuthoredObjectLifecycle.cpp
@@ -737,6 +781,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorWorkspace.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
 )
 target_include_directories(AuthoredLifecycleIntegrationTest PRIVATE game/source)
 if(MSVC)
@@ -744,6 +790,100 @@ if(MSVC)
 else()
     target_compile_options(AuthoredLifecycleIntegrationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Milestone 49 Correction 2: Static Prop render transform composition, shared
+# model isolation and staged-runtime diagnostic policy. No raylib/GL: the draw
+# path is pinned at the authored-transform math boundary.
+add_executable(StaticPropRenderTransformTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/StaticPropRenderTransformTest.cpp
+    game/source/editor/StaticPropTransform.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(StaticPropRenderTransformTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(StaticPropRenderTransformTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(StaticPropRenderTransformTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 49 Correction 4: Static Prop Add/Apply/Delete active promotion.
+# No window or raylib. Apply is the Application copy of workingCopy into active.
+add_executable(StaticPropLifecycleTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/StaticPropLifecycleTest.cpp
+    game/source/editor/StaticPropTransform.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(StaticPropLifecycleTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(StaticPropLifecycleTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(StaticPropLifecycleTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 49 Correction 3: hidden-window LoadModel isolation. Uses the
+# repository test GLB always, and the imported Chest/Barrel when present.
+# Not shipped.
+add_executable(StaticPropSceneIsolationTest
+    game/source/editor/StaticPropSceneIsolationTest.cpp
+)
+target_include_directories(StaticPropSceneIsolationTest PRIVATE game/source)
+target_link_libraries(StaticPropSceneIsolationTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(StaticPropSceneIsolationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(StaticPropSceneIsolationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/Chest by Quaternius - O72u4Drp8k.glb"
+    PLATFORMER_CHEST_GLB)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/Barrel by HFJAKI92 - wrYrHLVtxg.glb"
+    PLATFORMER_BARREL_GLB)
+target_compile_definitions(StaticPropSceneIsolationTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+    "PLATFORMER_CHEST_GLB=\"${PLATFORMER_CHEST_GLB}\""
+    "PLATFORMER_BARREL_GLB=\"${PLATFORMER_BARREL_GLB}\""
+)
+
+# Milestone 49 clip-plane regression: default-framebuffer greybox after
+# Preview-like clip leak vs Gameplay BeginMode3D. Hidden window. Not shipped.
+add_executable(GreyboxImmediateStateTest
+    game/source/render/GreyboxImmediateStateTest.cpp
+)
+target_include_directories(GreyboxImmediateStateTest PRIVATE game/source)
+target_link_libraries(GreyboxImmediateStateTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(GreyboxImmediateStateTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(GreyboxImmediateStateTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(GreyboxImmediateStateTest PRIVATE
+    "PLATFORMER_CHEST_GLB=\"${PLATFORMER_CHEST_GLB}\""
+    "PLATFORMER_BARREL_GLB=\"${PLATFORMER_BARREL_GLB}\""
+)
 
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or
 # HostProcess. Shares enable helpers with EditorWorkspaceTest.

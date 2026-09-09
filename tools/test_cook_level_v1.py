@@ -32,10 +32,15 @@ class LevelV1HeaderTests(unittest.TestCase):
         with self.assertRaises(cooker.CookError):
             cooker.validate_level_v1_header(b"\xef\xbb\xbfPLATFORMER_LEVEL 1\n")
 
-    def test_valid_header_preserves_caller_copy_contract(self) -> None:
-        payload = b"PLATFORMER_LEVEL 1\nid level_01\n"
+    def test_static_prop_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"static_prop 1 2 3 0 45 0 1 1 1 models/test_static.glb\n"
+        )
         cooker.validate_level_v1_header(payload)
-        self.assertEqual(payload, b"PLATFORMER_LEVEL 1\nid level_01\n")
+        self.assertIn(b"static_prop 1 2 3", payload)
+        self.assertIn(b"models/test_static.glb", payload)
 
 
 if __name__ == "__main__":

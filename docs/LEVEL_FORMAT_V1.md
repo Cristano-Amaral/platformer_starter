@@ -55,7 +55,7 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`dynamic_box`) is the array order in `LevelDefinition`. Singleton records must
+`dynamic_box`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
 appear exactly once. Unknown keywords and trailing unrecognized content are
 `Invalid`.
 
@@ -80,7 +80,7 @@ parser and writer accept any valid identifier.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Static Props are visual-only and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -89,6 +89,7 @@ checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
 hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
+static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
 
 `support_index_*` are 0-based indices into the `platform` array (M30
@@ -114,6 +115,20 @@ Level 01 intentionally has **zero** Dynamic Boxes (M45 removed the legacy
 probe line; this is not the historical EOL artifact). Save serializes authored
 `center`, never the live Jolt pose.
 
+`static_prop` is a visual authored instance, not a physics body. Identity is
+the canonical project-relative Static Model Asset path (`models/<file>.glb`),
+always last on the line so remaining tokens join with spaces if a filename
+ever contains spaces (current `TryParseStaticModelIdentity` still rejects
+unsafe names). Position is world XYZ. Rotation is Euler XYZ degrees (Rx then
+Ry then Rz, matching renderer `rlRotate`). Scale is visual model scale, finite
+and `> 0` on every axis — not primitive `size`. Authored Scale `(1,1,1)` keeps
+the size produced by the runtime loader after glTF node transforms are baked;
+the engine does not normalize imported models to a unit cube. Parse/Apply validate grammar,
+finite transforms, positive scale, and identity safety. They do **not** require
+the GLB to exist on disk. Missing staged runtime files draw a fallback cube.
+Zero, one, or many `static_prop` records are valid. Canonical Level 01 has
+**zero** Static Props.
+
 Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
 ## Not in the file
@@ -130,7 +145,7 @@ CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
 Camera follow policy: dead zone X/Y, follow sharpness.
 
 `LevelFileTest` asserts this by whitelist: every keyword the writer emits must
-be one of the 17 v1 keywords, so no runtime state can appear in output.
+be one of the 18 v1 keywords, so no runtime state can appear in output.
 
 ## Cooker
 
@@ -198,6 +213,7 @@ hazard              variable, hazards index order
 collectible         variable, collectibles index order
 goal
 dynamic_box         variable, dynamicBoxes index order
+static_prop         variable, staticProps index order
 camera
 ```
 

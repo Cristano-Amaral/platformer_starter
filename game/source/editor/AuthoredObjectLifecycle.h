@@ -8,13 +8,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace editor
 {
 // World +X offset applied to a duplicated object's center (and checkpoint
-// respawn). One policy for all four categories; 1 unit is smaller than a
-// Level 01 platform (~4) and visible next to a collectible (~1).
+// respawn). One policy for lifecycle categories; 1 unit is smaller than a
+// Level 01 platform (~4) and visible next to a collectible (~1). Static Prop
+// duplicates offset position.x the same way.
 inline constexpr float kLifecycleDuplicateOffsetX = 1.0f;
 
 // Add uses camera-local X/Y from placementAnchor and gameplay-lane Z from
@@ -32,6 +34,7 @@ inline constexpr core::Vec3 kDefaultAddedHazardSize{1.4f, 1.0f, 2.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleSize{1.0f, 1.2f, 1.0f};
 inline constexpr core::Vec3 kDefaultAddedDynamicBoxOffset{0.0f, 0.0f, 0.0f};
+inline constexpr core::Vec3 kDefaultAddedStaticPropOffset{0.0f, 0.0f, 0.0f};
 
 struct CategoryStructuralPending
 {
@@ -40,6 +43,7 @@ struct CategoryStructuralPending
     bool hazards = false;
     bool collectibles = false;
     bool dynamicBoxes = false;
+    bool staticProps = false;
 };
 
 inline void ClearCategoryStructuralPending(CategoryStructuralPending& pending)
@@ -63,6 +67,7 @@ struct StructuralIndexMap
     CategoryIndexMap hazards;
     CategoryIndexMap collectibles;
     CategoryIndexMap dynamicBoxes;
+    CategoryIndexMap staticProps;
 };
 
 struct PendingDeleteVisuals
@@ -77,6 +82,8 @@ struct PendingDeleteVisuals
     std::vector<core::Vec3> collectibleCenters;
     std::vector<int> dynamicBoxIndices;
     std::vector<world::DynamicBoxSpec> dynamicBoxes;
+    std::vector<int> staticPropIndices;
+    std::vector<world::StaticPropSpec> staticProps;
 };
 
 // Tiny editor visual mode. Not a render-state / material architecture.
@@ -128,6 +135,7 @@ enum class LifecycleEditStatus
     AtLimit,
     ReferencedPlatform,
     MinimumCount,
+    InvalidAssetReference,
 };
 
 struct LifecycleEditResult
@@ -233,6 +241,14 @@ LifecycleEditResult AddCollectibleAt(
 LifecycleEditResult AddDynamicBoxAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
+LifecycleEditResult AddStaticProp(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor,
+    std::string_view modelIdentity);
+LifecycleEditResult AddStaticPropAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter,
+    std::string_view modelIdentity);
 
 inline const char* CategoryCapacityReason(EditorObjectKind kind)
 {
@@ -246,6 +262,8 @@ inline const char* CategoryCapacityReason(EditorObjectKind kind)
         return "Level file record limit reached.";
     case EditorObjectKind::DynamicBox:
         return "Physics body capacity reached.";
+    case EditorObjectKind::StaticProp:
+        return "Level file record limit reached.";
     default:
         return "Technical capacity reached.";
     }

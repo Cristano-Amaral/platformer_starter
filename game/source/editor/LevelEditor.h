@@ -29,6 +29,7 @@ namespace render
 {
 class StaticModelThumbnailStore;
 class StaticModelPreviewRenderer;
+class StaticModelSceneStore;
 }
 
 namespace editor
@@ -81,6 +82,7 @@ enum class LevelEditorRequest
     AddHazard,
     AddCollectible,
     AddDynamicBox,
+    AddStaticProp,
     DuplicateSelected,
     DeleteSelected,
 };
@@ -104,6 +106,13 @@ inline LevelEditorRequest QuickToolbarSaveLevelSourceRequest()
 inline LevelEditorRequest ContentBrowserImportRequest()
 {
     return LevelEditorRequest::ImportStaticGlb;
+}
+
+// Content Browser toolbar Add Static Prop. Same request as Edit > Add > Static
+// Prop. Direct authored add, not Object Palette / viewport placement.
+inline LevelEditorRequest ContentBrowserAddStaticPropRequest()
+{
+    return LevelEditorRequest::AddStaticProp;
 }
 
 const char* LevelEditorApplyStatusName(LevelEditorApplyStatus status);
@@ -186,6 +195,9 @@ struct LevelEditorViewContext
     bool recoverOffscreenLayout = false;
     render::StaticModelThumbnailStore* thumbnails = nullptr;
     render::StaticModelPreviewRenderer* modelPreview = nullptr;
+    render::StaticModelSceneStore* staticPropModels = nullptr;
+    core::Vec3 gameplayCameraPosition{};
+    core::Vec3 gameplayCameraTarget{};
 };
 
 class EditorToolRunner;

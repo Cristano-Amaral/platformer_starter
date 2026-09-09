@@ -75,6 +75,7 @@ int main()
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Slope), "slope unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::MovingPlatform), "moving unsupported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic box supported");
+    Expect(editor::SupportsLifecycle(EditorObjectKind::StaticProp), "static prop supported");
 
     {
         world::LevelDefinition working = MakeBaseLevel();
@@ -1172,6 +1173,76 @@ int main()
         Expect(
             editor::CategoryAtCountLimit(shared, EditorObjectKind::DynamicBox),
             "Dynamic Box AtLimit with shared budget");
+        Expect(
+            !editor::CategoryAtCountLimit(shared, EditorObjectKind::StaticProp),
+            "Static Prop does not consume physics leftover");
+        Expect(
+            editor::AddStaticProp(shared, kTestPlacementA, "models/test_static.glb").succeeded,
+            "Static Prop still adds when physics leftover is full");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const std::size_t platformsBefore = working.elevatedPlatforms.size();
+        Expect(
+            !editor::AddStaticProp(working, kTestPlacementA, "").succeeded,
+            "empty identity is rejected");
+        Expect(
+            !editor::AddStaticProp(working, kTestPlacementA, "../models/crate.glb").succeeded,
+            "traversal identity is rejected");
+        Expect(
+            !editor::AddStaticProp(working, kTestPlacementA, "C:/temp/crate.glb").succeeded,
+            "absolute identity is rejected");
+        Expect(working.staticProps.empty(), "invalid Add leaves workingCopy props empty");
+        const editor::LifecycleEditResult added =
+            editor::AddStaticProp(working, kTestPlacementA, "models/test_static.glb");
+        Expect(added.succeeded, "Add Static Prop");
+        Expect(working.staticProps.size() == 1, "one Static Prop after Add");
+        Expect(working.elevatedPlatforms.size() == platformsBefore, "Add Prop does not add platforms");
+        Expect(
+            working.staticProps[0].modelIdentity == "models/test_static.glb",
+            "Add stores canonical identity");
+        Expect(
+            Vec3Near(working.staticProps[0].rotationDegrees, world::kDefaultStaticPropRotationDegrees),
+            "default rotation is 0,0,0");
+        Expect(
+            Vec3Near(working.staticProps[0].scale, world::kDefaultStaticPropScale),
+            "default scale is 1,1,1");
+        Expect(
+            Vec3Near(
+                working.staticProps[0].position,
+                {kTestPlacementA.x, kTestPlacementA.y, working.initialSpawnVisualCenter.z}),
+            "Add uses camera X/Y and spawn-lane Z");
+        Expect(added.selection.kind == EditorObjectKind::StaticProp, "Add selects Static Prop");
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelected(working, added.selection);
+        Expect(duplicated.succeeded, "Duplicate Static Prop");
+        Expect(working.staticProps.size() == 2, "two Static Props after Duplicate");
+        Expect(
+            working.staticProps[1].modelIdentity == working.staticProps[0].modelIdentity,
+            "Duplicate preserves asset reference");
+        Expect(
+            Vec3Near(working.staticProps[1].rotationDegrees, working.staticProps[0].rotationDegrees)
+                && Vec3Near(working.staticProps[1].scale, working.staticProps[0].scale),
+            "Duplicate preserves rotation and scale");
+        Expect(
+            NearlyEqual(
+                working.staticProps[1].position.x,
+                working.staticProps[0].position.x + editor::kLifecycleDuplicateOffsetX),
+            "Duplicate offsets +1 X");
+        working.staticProps[0].rotationDegrees.y = 90.0f;
+        working.staticProps[0].scale.x = 2.0f;
+        Expect(
+            working.staticProps[0].rotationDegrees.y == 90.0f
+                && working.staticProps[0].scale.x == 2.0f,
+            "Inspector transform edit is workingCopy only");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::StaticProp, 1}).succeeded,
+            "Delete Static Prop instance");
+        Expect(working.staticProps.size() == 1, "one Static Prop after Delete");
+        Expect(
+            working.staticProps[0].modelIdentity == "models/test_static.glb",
+            "Delete instance does not clear remaining identity");
     }
 
     if (gFailures != 0)

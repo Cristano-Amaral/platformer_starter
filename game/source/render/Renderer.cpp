@@ -4,6 +4,7 @@
 #include "core/Vec3.h"
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
+#include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
@@ -20,6 +21,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -36,6 +38,7 @@ constexpr Color kMovingPlatformColor{168, 132, 72, 255};
 constexpr Color kWalkableSlopeColor{132, 148, 92, 255};
 constexpr Color kSteepSlopeColor{148, 92, 84, 255};
 constexpr Color kDynamicBoxColor{158, 162, 170, 255};
+constexpr Color kStaticPropFallbackColor{120, 72, 88, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
 constexpr Color kCheckpointFutureBeacon{140, 148, 168, 255};
@@ -479,7 +482,8 @@ void DrawTranslationGizmo(const DebugWorldOverlay& overlay)
 
 void DrawResizeGizmo(const DebugWorldOverlay& overlay)
 {
-    if (!overlay.drawResizeGizmo || !(overlay.gizmoAxisLength > 0.0f))
+    if ((!overlay.drawResizeGizmo && !overlay.drawScaleGizmo)
+        || !(overlay.gizmoAxisLength > 0.0f))
     {
         return;
     }
@@ -648,6 +652,17 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             overlay.pendingDeleteDynamicBoxCenters[index],
             overlay.pendingDeleteDynamicBoxSizes[index],
             kDynamicBoxColor);
+    }
+    for (std::size_t index = 0; index < overlay.pendingDeleteStaticPropCenters.size(); ++index)
+    {
+        if (index >= overlay.pendingDeleteStaticPropSizes.size())
+        {
+            break;
+        }
+        DrawPendingDeleteSolid(
+            overlay.pendingDeleteStaticPropCenters[index],
+            overlay.pendingDeleteStaticPropSizes[index],
+            kStaticPropFallbackColor);
     }
     const auto drawPendingAuthoring = [&](bool selectedPass) {
         for (const DebugWorldOverlay::PendingAuthoringOverlayItem& item : overlay.pendingAuthoring)
@@ -921,9 +936,36 @@ void DrawLevelCompleteMessage()
 
 }
 
-Renderer::Renderer() = default;
+Renderer::Renderer()
+    : staticPropModels(std::make_unique<StaticModelSceneStore>())
+{
+}
 
-Renderer::~Renderer() = default;
+Renderer::~Renderer()
+{
+    if (staticPropModels)
+    {
+        staticPropModels->Shutdown();
+    }
+}
+
+void Renderer::SyncStaticPropModels(const world::LevelDefinition& level)
+{
+    if (staticPropModels)
+    {
+        staticPropModels->Sync(level);
+    }
+}
+
+StaticModelSceneStore* Renderer::StaticPropModels()
+{
+    return staticPropModels.get();
+}
+
+const StaticModelSceneStore* Renderer::StaticPropModels() const
+{
+    return staticPropModels.get();
+}
 
 void Renderer::LoadRuntimeAssets()
 {
@@ -931,6 +973,10 @@ void Renderer::LoadRuntimeAssets()
 
 void Renderer::UnloadRuntimeAssets()
 {
+    if (staticPropModels)
+    {
+        staticPropModels->Shutdown();
+    }
 }
 
 bool Renderer::IsTestTextureLoaded() const
@@ -1033,6 +1079,11 @@ void Renderer::DrawWorld(
 {
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
+
+    // BeginMode3D reads rlGetCullDistanceNear/Far. Model Preview / thumbnails
+    // set those to a tight model frame and must not leak into Gameplay.
+    rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+
     if (subViewport)
     {
         BeginMode3DInRect(view, viewRect);
@@ -1041,6 +1092,8 @@ void Renderer::DrawWorld(
     {
         BeginMode3D(view);
     }
+
+    RestoreGreyboxImmediateState();
 
     DrawGrid(kGridSlices, kGridSpacing);
     DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
@@ -1068,6 +1121,21 @@ void Renderer::DrawWorld(
             continue;
         }
         DrawRuntimeDynamicBox(dynamicBoxes[index], kDynamicBoxColor);
+    }
+    if (staticPropModels)
+    {
+        staticPropModels->ResetDrawStats();
+    }
+    for (std::size_t index = 0; index < level.staticProps.size(); ++index)
+    {
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteStaticPropIndices, index))
+        {
+            continue;
+        }
+        if (staticPropModels)
+        {
+            staticPropModels->DrawProp(level.staticProps[index]);
+        }
     }
     DrawOrientedGreyboxBox(
         level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],

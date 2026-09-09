@@ -76,11 +76,12 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 48.2 — Interactive Static Model Preview
-(Development Model Preview of the Content Browser selected static GLB:
-real-model orbit/zoom, bounds framing, independent of thumbnail cache;
-awaiting manual acceptance).
-Milestone 48.1 is complete. Milestone 49 has not started.
+Milestone 49 — Authored Static Props
+(Development-authored Static Prop instances referencing canonical
+`models/<file>.glb` identities, with complete position/rotation/scale,
+Hierarchy/Inspector/Translate/Scale gizmos, staged GLB rendering, and Delete Asset
+reference safety; awaiting manual acceptance).
+Milestone 48.2 is complete. Milestone 50 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -123,7 +124,7 @@ previews use a quieter wire style. F2 close / successful Apply / Revert /
 successful Reload cancel placement. Debug has no Object Palette. Release has
 no editor.
 M43 is complete: Development-only Quick Toolbar fixed below the menu bar:
-Translate/Resize (canonical TransformMode), Apply/Revert/Save (canonical
+Translate/Resize/Scale (canonical TransformMode), Apply/Revert/Save (canonical
 LevelEditorRequest), and a persisted build selector (Debug/Development/Release/All,
 default Development) that Run maps through EditorToolRunner. View > Quick Toolbar
 shares workspace visibility. Reset Editor Layout restores toolbar visibility and
@@ -140,8 +141,8 @@ M46 recovers each active Dynamic Box whose runtime Jolt body center Y is
 strictly below `active.killPlane` back to its currently applied authored
 transform, with identity orientation and zero linear/angular velocity. Recovery
 is per body and does not rebuild PhysicsWorld or mutate authoring state.
-Do not add Undo/Redo, a probe framework, Level Format v2, Static Props,
-or Milestone 49.
+Do not add Undo/Redo, a probe framework, Level Format v2,
+or Milestone 50.
 
 Milestone 31 is complete and merged. One playable level (`level_01`). The sole
 live authored source is `game/assets/source/levels/level_01.level` → cooker →
@@ -179,5 +180,30 @@ Thumbnails grid, optional List mode, local derived cache under
 `%LOCALAPPDATA%\Platformer3D\thumbnails\`, and Reset Editor Layout restoring
 Thumbnails. M48.2 adds a Development Model Preview window that renders the
 real selected static GLB (orbit/zoom/Reset View) without instantiating it.
-Debug has the visual editor but cannot author. Release has
-no editor.
+M49 adds repeatable authored Static Props (`world::StaticPropSpec`: canonical
+identity plus position, Euler XYZ degrees, and visual scale). The primary
+direct-add UI is Development Content Browser **Add Static Prop**;
+`Edit > Add > Static Prop` is retained and routes the same
+`LevelEditorRequest::AddStaticProp`. Both consume the Content Browser selected
+identity, and the Edit row states that asset (or `select asset`) so the
+cross-window dependency is visible. It is not Object Palette /
+ghost / click-to-place (M50). Props are visual only (no Jolt body). Scene
+rendering resolves staged runtime assets only; a missing staged model draws a
+placeholder cube and the editor says to run Cook & Stage (no source fallback,
+no automatic cook/stage). Authored `Scale (1,1,1)` keeps the model's raw GLB
+size after the runtime loader bakes glTF node transforms; nothing normalizes
+imported geometry. The Inspector reports that loaded size and warns if the
+gameplay camera sits inside the prop AABB. Inspector edits position, rotation,
+and scale. Translate gizmo edits position; Scale gizmo edits visual model
+scale; rotation remains Inspector-only. Primitive Resize still edits authored
+box size and is not Static Prop Scale. `DrawProp` restores default shader
+`colDiffuse`/texture0 after each model for later greybox draws in the same
+3D pass. Model Preview and thumbnails may set tight `rlSetClipPlanes` for a
+model frame; they restore `RL_CULL_DISTANCE_NEAR/FAR` after the offscreen pass,
+and `DrawWorld` establishes those same planes again before Gameplay
+`BeginMode3D`. A leaked Chest-like far plane (~6) clips the gameplay camera.
+Delete
+Asset refuses identities referenced by `workingCopy`, `active`, or
+`savedSourceBaseline`. Canonical Level 01 still has 0 Static Props. Debug has
+the visual editor but cannot author. Release has no editor. Temporary Correction 5
+Gameplay framebuffer capture was removed after the clip-plane fix. M49 is not closed.

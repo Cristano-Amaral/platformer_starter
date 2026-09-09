@@ -73,6 +73,7 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
         && Vec3Equal(level.goal.center, {-21.0f, 3.8f, 0.0f})
         && level.dynamicBoxes.empty()
+        && level.staticProps.empty()
         && Vec3Equal(level.camera.offset, {2.0f, 3.5f, 12.0f})
         && level.camera.fieldOfViewY == 40.0f;
 }
@@ -109,7 +110,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 17> allowed{
+    static constexpr std::array<std::string_view, 18> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -126,6 +127,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "collectible",
         "goal",
         "dynamic_box",
+        "static_prop",
         "camera"};
 
     std::size_t cursor = 0;
@@ -401,6 +403,7 @@ int main()
         "writer collectible count");
     Expect(CountRecords(written, "goal") == 1, "writer goal count");
     Expect(CountRecords(written, "dynamic_box") == 0, "writer dynamic_box count");
+    Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
 
@@ -922,6 +925,127 @@ int main()
             Expect(
                 !world::LevelDefinitionHasRequiredAuthoredContent(combined),
                 "one body over combined capacity is invalid");
+        }
+
+        {
+            const std::string oneProp =
+                canonical + "static_prop 3 1.5 0 0 45 0 1 2 1 models/test_static.glb\n";
+            const world::ParseLevelFileResult one = world::ParseLevelText(oneProp);
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one static_prop loads");
+            Expect(one.level.staticProps.size() == 1, "one static_prop count");
+            Expect(one.level.staticProps[0].modelIdentity == "models/test_static.glb",
+                "one static_prop identity");
+            Expect(one.level.staticProps[0].position.x == 3.0f, "one static_prop position x");
+            Expect(one.level.staticProps[0].rotationDegrees.y == 45.0f, "one static_prop rotation y");
+            Expect(one.level.staticProps[0].scale.y == 2.0f, "one static_prop scale y");
+            const std::string writtenOne = world::SerializeLevelText(one.level);
+            Expect(CountRecords(writtenOne, "static_prop") == 1, "writer one static_prop");
+            Expect(
+                world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
+                "one static_prop round trip");
+
+            const std::string twoProps = canonical
+                + "static_prop 3 1.5 0 0 45 0 1 2 1 models/test_static.glb\n"
+                  "static_prop -2 0.5 1 10 0 90 0.5 0.5 0.5 models/test_authored.glb\n";
+            const world::ParseLevelFileResult two = world::ParseLevelText(twoProps);
+            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two static_prop loads");
+            Expect(two.level.staticProps.size() == 2, "two static_prop count");
+            Expect(
+                two.level.staticProps[0].modelIdentity == "models/test_static.glb",
+                "encounter order first identity");
+            Expect(
+                two.level.staticProps[1].modelIdentity == "models/test_authored.glb",
+                "encounter order second identity");
+            Expect(
+                CountRecords(world::SerializeLevelText(two.level), "static_prop") == 2,
+                "writer two static_prop");
+            Expect(
+                world::AuthoredLevelDataEqual(two.level, world::ParseLevelText(
+                    world::SerializeLevelText(two.level)).level),
+                "two static_prop round trip");
+
+            Expect(
+                world::ParseLevelText(canonical).status == world::LoadLevelFileStatus::Loaded
+                    && world::ParseLevelText(canonical).level.staticProps.empty(),
+                "old levels with zero static_prop remain valid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 1 1 1 models/missing_not_on_disk.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded,
+                "missing on-disk asset is still a valid authored identity");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 1 1 1 models/../secret.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "traversal identity rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 1 1 1 C:/temp/crate.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "absolute identity rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 1 1 1 models/crate.txt\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-glb identity rejected");
+            Expect(
+                world::ParseLevelText(canonical + "static_prop 0 1 0 0 0 0 1 1 1\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "missing identity rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop nan 1 0 0 0 0 1 1 1 models/test_static.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN position rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 inf 0 0 0 0 1 1 1 models/test_static.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Inf position rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 nan 0 0 1 1 1 models/test_static.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN rotation rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 0 1 1 models/test_static.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero scale rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 -1 1 1 models/test_static.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative scale rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "static_prop 0 1 0 0 0 0 inf 1 1 models/test_static.glb\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Inf scale rejected");
+
+            world::LevelDefinition saveAuthored = parsed.level;
+            world::StaticPropSpec authoredProp{};
+            authoredProp.modelIdentity = "models/test_static.glb";
+            authoredProp.position = {4.0f, 2.0f, 1.0f};
+            authoredProp.rotationDegrees = {15.0f, 30.0f, 45.0f};
+            authoredProp.scale = {0.5f, 2.0f, 1.5f};
+            saveAuthored.staticProps.push_back(authoredProp);
+            const std::string saved = world::SerializeLevelText(saveAuthored);
+            Expect(saved.find("static_prop 4 ") != std::string::npos, "Save writes authored position");
+            Expect(saved.find("models/test_static.glb") != std::string::npos, "Save writes identity");
+            Expect(
+                saved.find("15") != std::string::npos && saved.find("0.5") != std::string::npos,
+                "Save writes rotation and scale");
         }
 
         std::error_code cleanupError;

@@ -122,6 +122,13 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    for (const StaticPropSpec& prop : level.staticProps)
+    {
+        if (!StaticPropSpecIsValid(prop))
+        {
+            return false;
+        }
+    }
 
     return true;
 }
@@ -141,7 +148,8 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.checkpoints.size() != b.checkpoints.size()
         || a.hazards.size() != b.hazards.size()
         || a.collectibles.size() != b.collectibles.size()
-        || a.dynamicBoxes.size() != b.dynamicBoxes.size())
+        || a.dynamicBoxes.size() != b.dynamicBoxes.size()
+        || a.staticProps.size() != b.staticProps.size())
     {
         return false;
     }
@@ -194,6 +202,16 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         if (!Vec3Equal(a.dynamicBoxes[index].center, b.dynamicBoxes[index].center)
             || !Vec3Equal(a.dynamicBoxes[index].size, b.dynamicBoxes[index].size)
             || a.dynamicBoxes[index].massKg != b.dynamicBoxes[index].massKg)
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.staticProps.size(); ++index)
+    {
+        if (a.staticProps[index].modelIdentity != b.staticProps[index].modelIdentity
+            || !Vec3Equal(a.staticProps[index].position, b.staticProps[index].position)
+            || !Vec3Equal(a.staticProps[index].rotationDegrees, b.staticProps[index].rotationDegrees)
+            || !Vec3Equal(a.staticProps[index].scale, b.staticProps[index].scale))
         {
             return false;
         }

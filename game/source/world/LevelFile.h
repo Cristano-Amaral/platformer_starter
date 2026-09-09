@@ -29,7 +29,8 @@ inline int CountLevelV1RecordLines(const LevelDefinition& level)
     return kLevelV1FixedRecordLineCount + static_cast<int>(level.elevatedPlatforms.size())
         + static_cast<int>(level.checkpoints.size()) + static_cast<int>(level.hazards.size())
         + static_cast<int>(level.collectibles.size())
-        + static_cast<int>(level.dynamicBoxes.size());
+        + static_cast<int>(level.dynamicBoxes.size())
+        + static_cast<int>(level.staticProps.size());
 }
 
 enum class LoadLevelFileStatus

@@ -1,7 +1,7 @@
 #pragma once
 
 // Milestone 34 translation gizmo + Milestone 35 resize math/live handles.
-// No rotation, generic Transform scale, snapping, or transform framework.
+// Milestone 49 Scale gizmo edits Static Prop visual scale only. No Rotate.
 
 #include "core/Vec3.h"
 #include "editor/EditorPicking.h"
@@ -28,6 +28,7 @@ enum class EditorTransformMode
 {
     Translate,
     Resize,
+    Scale,
 };
 
 struct ResizeHandlePick
@@ -47,6 +48,8 @@ struct GizmoInteractionState
     float dragStartAxisParameter = 0.0f;
     // Resize-only. Translation ignores these.
     core::Vec3 dragStartSize{};
+    // Scale-only. Visual model multiplier, not primitive size.
+    core::Vec3 dragStartScale{};
     int dragHandleSign = 1;
     int hoveredSign = 1;
 };
@@ -125,6 +128,8 @@ inline constexpr float kGizmoPickHubSkipFraction = 0.12f;
 inline constexpr float kGizmoParallelEpsilon = 0.05f;
 // Center-preserving: 1 world unit of +/- handle travel changes total size by 2.
 inline constexpr float kResizeSizeFromAxisDelta = 2.0f;
+// 1 world unit of +/- handle travel changes authored scale by 1.
+inline constexpr float kScaleFromAxisDelta = 1.0f;
 // Jolt BoxShape default convex radius is 0.05, so half-extent must stay above
 // that. 0.12 full-size is still smaller than any Level 01 authored box (0.4+).
 inline constexpr float kMinAuthoredBoxExtent = 0.12f;
@@ -137,6 +142,7 @@ void ClearGizmoInteraction(GizmoInteractionState& state);
 
 bool IsGizmoSelection(EditorSelection selection);
 bool IsResizeSelection(EditorSelection selection);
+bool IsScaleSelection(EditorSelection selection);
 
 // Mutable authored position in workingCopy. Null for Camera and remaining
 // read-only kinds. Checkpoint, Hazard, and Collectible are Translate-only.
@@ -152,6 +158,14 @@ core::Vec3* GetEditableSize(
     world::LevelDefinition& level,
     EditorSelection selection);
 const core::Vec3* GetEditableSize(
+    const world::LevelDefinition& level,
+    EditorSelection selection);
+
+// Mutable authored visual scale. Static Prop only. Not primitive size.
+core::Vec3* GetEditableScale(
+    world::LevelDefinition& level,
+    EditorSelection selection);
+const core::Vec3* GetEditableScale(
     const world::LevelDefinition& level,
     EditorSelection selection);
 
@@ -359,6 +373,40 @@ core::Vec3 GizmoResizeSize(
 // Live resize interaction. Returns true when this frame's LMB must not also
 // world-pick (active drag, drag start, or drag end).
 bool UpdateResizeInteraction(
+    GizmoInteractionState& state,
+    EditorSelection currentSelection,
+    world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    Ray3 mouseRay,
+    bool imguiWantsMouse,
+    bool lookHeld,
+    bool selectPressed,
+    bool selectHeld,
+    bool selectReleased);
+
+GizmoDrawRequest MakeScaleGizmoDrawRequest(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    const GizmoInteractionState& interaction);
+
+bool BeginScaleDrag(
+    GizmoInteractionState& state,
+    EditorSelection selection,
+    EditorAxis axis,
+    int handleSign,
+    core::Vec3 workingPosition,
+    core::Vec3 workingScale,
+    Ray3 mouseRay,
+    const render::CameraView& view);
+
+// Independent axis scale. Only the active axis component changes.
+core::Vec3 GizmoScaleSize(
+    const GizmoInteractionState& state,
+    Ray3 mouseRay,
+    const render::CameraView& view);
+
+bool UpdateScaleInteraction(
     GizmoInteractionState& state,
     EditorSelection currentSelection,
     world::LevelDefinition& workingCopy,

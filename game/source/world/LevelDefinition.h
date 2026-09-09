@@ -12,6 +12,7 @@
 #include "world/MovingPlatform.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
+#include "world/StaticProp.h"
 
 #include <array>
 #include <string>
@@ -68,6 +69,7 @@ struct LevelDefinition
     std::vector<CollectibleSpec> collectibles{};
     LevelGoalSpec goal{};
     std::vector<DynamicBoxSpec> dynamicBoxes{};
+    std::vector<StaticPropSpec> staticProps{};
     LevelCameraSpec camera{};
 };
 

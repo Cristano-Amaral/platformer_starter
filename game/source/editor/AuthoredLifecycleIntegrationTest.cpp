@@ -5,6 +5,7 @@
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
 #include "editor/EditorSelection.h"
+#include "editor/StaticPropTransform.h"
 #include "gameplay/CollectibleRunState.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/LevelDefinition.h"
@@ -105,6 +106,22 @@ int main()
     Expect(
         editor::EditAddMenuRequest(EditorObjectKind::DynamicBox) == LevelEditorRequest::AddDynamicBox,
         "Edit > Add > Dynamic Box maps to AddDynamicBox");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::StaticProp) == LevelEditorRequest::AddStaticProp,
+        "Edit > Add > Static Prop maps to AddStaticProp");
+    Expect(
+        editor::ContentBrowserAddStaticPropRequest() == LevelEditorRequest::AddStaticProp,
+        "Content Browser Add Static Prop maps to AddStaticProp");
+    Expect(
+        editor::ContentBrowserAddStaticPropRequest()
+            == editor::EditAddMenuRequest(EditorObjectKind::StaticProp),
+        "Content Browser button and Edit > Add > Static Prop share AddStaticProp");
+    Expect(
+        editor::IsAuthoredLifecycleRequest(editor::EditAddMenuRequest(EditorObjectKind::StaticProp)),
+        "Edit Add Static Prop is owner-dispatched lifecycle");
+    Expect(
+        editor::IsAuthoredLifecycleRequest(editor::ContentBrowserAddStaticPropRequest()),
+        "Content Browser Add Static Prop is owner-dispatched lifecycle");
     Expect(
         editor::IsAuthoredLifecycleRequest(editor::EditAddMenuRequest(EditorObjectKind::DynamicBox)),
         "Edit Add Dynamic Box is owner-dispatched lifecycle");
@@ -956,6 +973,270 @@ int main()
             "AtLimit still handled as lifecycle");
         Expect(limitState.workingCopy.dynamicBoxes.empty(), "AtLimit does not append a Dynamic Box");
         Expect(atLimit.dynamicBoxes.empty(), "AtLimit does not mutate active");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        const std::string kIdentity = "models/test_static.glb";
+        state.contentBrowser.selectedIdentity = kIdentity;
+        Expect(active.staticProps.empty(), "fixture starts with zero Static Props");
+        Expect(
+            HierarchyKindCount(active, EditorObjectKind::StaticProp) == 0,
+            "empty collection has no Hierarchy Static Prop rows");
+        const LevelEditorRequest editAdd =
+            editor::EditAddMenuRequest(EditorObjectKind::StaticProp);
+        const LevelEditorRequest browserAdd = editor::ContentBrowserAddStaticPropRequest();
+        Expect(editAdd == LevelEditorRequest::AddStaticProp, "menu action is AddStaticProp");
+        Expect(browserAdd == editAdd, "button and menu emit the same request");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(true, active, {}, false, editAdd),
+            "Add Static Prop disabled without Content Browser identity");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(true, active, {}, false, browserAdd),
+            "Content Browser Add Static Prop disabled without selection");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true, active, {}, false, editAdd, kIdentity),
+            "Development can add Static Prop with valid identity");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true, active, {}, false, browserAdd, kIdentity),
+            "valid Content Browser selection enables Add Static Prop");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                false, active, {}, false, editAdd, kIdentity),
+            "Debug authoring cannot add Static Prop");
+        Expect(
+            editor::AddStaticPropDisableReason(true, active, false, "") != nullptr,
+            "empty identity has a disable reason");
+        Expect(
+            std::string(editor::AddStaticPropDisableReason(true, active, false, ""))
+                == "Select a static model in the Content Browser first.",
+            "disabled copy asks for a Content Browser selection");
+        Expect(
+            editor::AddStaticPropDisableReason(true, active, false, kIdentity) == nullptr,
+            "valid identity has no disable reason");
+        Expect(
+            editor::PlacementModeFromKind(EditorObjectKind::StaticProp) == editor::PlacementMode::None,
+            "Static Prop has no Object Palette placement mode");
+        // Correction 2: the Edit menu row states the Content Browser asset it
+        // would consume, so the command stops reading as unavailable.
+        Expect(
+            editor::AddStaticPropMenuHint("") == "select asset",
+            "Edit menu row names the missing Content Browser selection");
+        Expect(
+            editor::AddStaticPropMenuHint("barrel.glb") == "select asset",
+            "non-canonical identity is not advertised as usable");
+        Expect(
+            editor::AddStaticPropMenuHint(kIdentity) == "test_static.glb",
+            "Edit menu row names the selected asset file");
+        Expect(
+            (editor::AddStaticPropMenuHint(kIdentity) != "select asset")
+                == editor::CanIssueAuthoredLifecycleRequest(
+                    true, active, {}, false, editAdd, kIdentity),
+            "menu row copy agrees with actual command availability");
+
+        const core::Vec3 cameraAnchor{12.0f, 5.0f, -6.0f};
+        editor::LevelEditorState buttonState{};
+        SeedEditor(buttonState, active);
+        buttonState.contentBrowser.selectedIdentity = kIdentity;
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                buttonState, active, browserAdd, true, cameraAnchor),
+            "Content Browser Add Static Prop reaches workingCopy mutation");
+        Expect(
+            buttonState.workingCopy.staticProps.size() == 1,
+            "button creates exactly one Static Prop");
+        Expect(active.staticProps.empty(), "button Add does not mutate active");
+        Expect(
+            buttonState.workingCopy.staticProps[0].modelIdentity == kIdentity,
+            "button uses the selected Content Browser identity");
+        Expect(
+            buttonState.contentBrowser.selectedIdentity == kIdentity,
+            "button preserves Content Browser selection");
+        Expect(
+            buttonState.workingCopy.staticProps[0].position.x == cameraAnchor.x
+                && buttonState.workingCopy.staticProps[0].position.y == cameraAnchor.y
+                && buttonState.workingCopy.staticProps[0].position.z
+                    == active.initialSpawnVisualCenter.z,
+            "button uses the existing M49 default position");
+        Expect(
+            buttonState.workingCopy.staticProps[0].rotationDegrees.x
+                    == world::kDefaultStaticPropRotationDegrees.x
+                && buttonState.workingCopy.staticProps[0].rotationDegrees.y
+                    == world::kDefaultStaticPropRotationDegrees.y
+                && buttonState.workingCopy.staticProps[0].rotationDegrees.z
+                    == world::kDefaultStaticPropRotationDegrees.z
+                && buttonState.workingCopy.staticProps[0].scale.x == world::kDefaultStaticPropScale.x
+                && buttonState.workingCopy.staticProps[0].scale.y == world::kDefaultStaticPropScale.y
+                && buttonState.workingCopy.staticProps[0].scale.z == world::kDefaultStaticPropScale.z,
+            "button uses complete default rotation and scale");
+        Expect(
+            buttonState.selection.kind == EditorObjectKind::StaticProp
+                && buttonState.selection.index == 0,
+            "button selects the new authored Static Prop");
+        Expect(buttonState.placementMode == editor::PlacementMode::None, "button does not enter placement");
+        Expect(!editor::PlacementModeIsActive(buttonState.placementMode), "no placement state after button add");
+        Expect(buttonState.modified, "button Add is Modified");
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                buttonState.workingCopy,
+                active,
+                buttonState.savedSourceBaseline,
+                kIdentity),
+            "direct-add immediately protects Delete Asset");
+        Expect(
+            !world::LevelReferencesStaticPropIdentity(active, kIdentity),
+            "active remains unreferenced until Apply");
+
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(state, active, editAdd, true, cameraAnchor),
+            "Edit > Add > Static Prop reaches workingCopy mutation");
+        Expect(state.workingCopy.staticProps.size() == 1, "workingCopy gains exactly one Static Prop");
+        Expect(active.staticProps.empty(), "Edit Add does not mutate active");
+        Expect(
+            state.workingCopy.staticProps[0].modelIdentity == kIdentity,
+            "Add uses Content Browser identity");
+        Expect(
+            state.contentBrowser.selectedIdentity == kIdentity,
+            "Add does not clear Content Browser selection");
+        Expect(
+            state.workingCopy.staticProps[0].position.x == cameraAnchor.x
+                && state.workingCopy.staticProps[0].position.y == cameraAnchor.y,
+            "Edit Add uses camera-region X/Y");
+        Expect(
+            state.workingCopy.staticProps[0].position.z == active.initialSpawnVisualCenter.z,
+            "Edit Add uses spawn-lane Z");
+        Expect(
+            state.workingCopy.staticProps[0].rotationDegrees.x == 0.0f
+                && state.workingCopy.staticProps[0].scale.x == 1.0f,
+            "default rotation 0 and scale 1");
+        Expect(state.selection.kind == EditorObjectKind::StaticProp, "new Static Prop is selected");
+        Expect(state.placementMode == editor::PlacementMode::None, "Edit Add does not enter palette mode");
+        Expect(state.modified, "pending Add is Modified");
+        Expect(
+            editor::MappedActiveIndex(state.structuralMap, EditorObjectKind::StaticProp, 0)
+                == editor::kNoStructuralIndex,
+            "pending Add has no active counterpart");
+
+        bool hierarchyHasGroup = false;
+        for (const editor::HierarchyEntry& entry : editor::BuildHierarchyEntries(state.workingCopy))
+        {
+            if (entry.selection.kind == EditorObjectKind::StaticProp && entry.selection.index == 0)
+            {
+                hierarchyHasGroup = std::strcmp(entry.group, "Static Props") == 0;
+            }
+        }
+        Expect(hierarchyHasGroup, "0 -> 1 shows Static Props / Static Prop 0");
+        Expect(editor::IsEditableSelection(state.selection), "Static Prop is Inspector-editable");
+        Expect(
+            editor::GetEditablePosition(state.workingCopy, state.selection) != nullptr,
+            "Translate gizmo can edit Static Prop position");
+        Expect(
+            editor::GetEditableSize(state.workingCopy, state.selection) == nullptr,
+            "primitive Resize is not Static Prop Scale");
+        Expect(!editor::IsResizeSelection(state.selection), "Static Prop is not a Resize selection");
+        Expect(editor::IsScaleSelection(state.selection), "Static Prop supports Scale tool");
+        Expect(
+            editor::GetEditableScale(state.workingCopy, state.selection) != nullptr,
+            "Scale gizmo edits Static Prop scale");
+        Expect(
+            editor::GetEditableScale(state.workingCopy, {EditorObjectKind::ElevatedPlatform, 0})
+                == nullptr,
+            "Platform is not routed through Static Prop Scale");
+
+        state.workingCopy.staticProps[0].rotationDegrees = {10.0f, 20.0f, 30.0f};
+        state.workingCopy.staticProps[0].scale = {2.0f, 0.5f, 3.0f};
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "Inspector rotation/scale edits keep Modified");
+        Expect(
+            state.workingCopy.staticProps[0].rotationDegrees.y == 20.0f
+                && state.workingCopy.staticProps[0].scale.z == 3.0f,
+            "Inspector transform fields are workingCopy");
+        Expect(active.staticProps.empty(), "Inspector edits do not mutate active");
+
+        editor::LevelEditorState isolated{};
+        SeedEditor(isolated, active);
+        isolated.contentBrowser.selectedIdentity = kIdentity;
+        isolated.selection = {EditorObjectKind::StaticProp, 0};
+        Expect(
+            isolated.contentBrowser.selectedIdentity == kIdentity,
+            "scene selection assignment does not consume Content Browser identity");
+        isolated.contentBrowser.selectedIdentity = "models/test_authored.glb";
+        Expect(
+            isolated.selection.kind == EditorObjectKind::StaticProp,
+            "Content Browser selection does not change scene selection");
+
+        world::LevelDefinition invalidApply = state.workingCopy;
+        invalidApply.staticProps[0].scale.x = 0.0f;
+        Expect(
+            !world::StaticPropSpecIsValid(invalidApply.staticProps[0]),
+            "zero scale is not Apply-valid");
+        Expect(
+            world::StaticPropSpecIsValid(state.workingCopy.staticProps[0]),
+            "valid workingCopy props can Apply");
+
+        editor::LevelEditorState revertState{};
+        SeedEditor(revertState, active);
+        revertState.contentBrowser.selectedIdentity = kIdentity;
+        editor::HandleAuthoredLifecycleRequest(
+            revertState, active, editAdd, true, cameraAnchor);
+        Expect(revertState.modified, "pending Static Prop Add is Modified");
+        revertState.workingCopy = active;
+        editor::ClearCategoryStructuralPending(revertState.structuralPending);
+        editor::ResetStructuralIndexMap(revertState.structuralMap, active);
+        revertState.selection = editor::ReconcileSelection(revertState.workingCopy, revertState.selection);
+        editor::RefreshLevelEditorDerivedFlags(revertState, active);
+        Expect(world::AuthoredLevelDataEqual(revertState.workingCopy, active), "Revert after Add restores");
+        Expect(!revertState.modified, "Revert after Add clears Modified");
+        Expect(revertState.workingCopy.staticProps.empty(), "Revert drops pending Static Prop");
+        Expect(
+            revertState.contentBrowser.selectedIdentity == kIdentity,
+            "Revert does not hijack Content Browser selection");
+
+        editor::LevelEditorState dupState{};
+        SeedEditor(dupState, active);
+        dupState.contentBrowser.selectedIdentity = kIdentity;
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(dupState, active, editAdd, true, cameraAnchor),
+            "Add before Duplicate Static Prop");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Static Prop request");
+        Expect(dupState.workingCopy.staticProps.size() == 2, "Duplicate appends Static Prop");
+        Expect(
+            dupState.workingCopy.staticProps[1].modelIdentity
+                == dupState.workingCopy.staticProps[0].modelIdentity,
+            "Duplicate keeps the same asset reference");
+        dupState.workingCopy.staticProps[0].scale = {2.0f, 1.0f, 1.0f};
+        dupState.workingCopy.staticProps[1].scale = {1.0f, 3.0f, 1.0f};
+        Expect(
+            dupState.workingCopy.staticProps[0].scale.x == 2.0f
+                && dupState.workingCopy.staticProps[1].scale.y == 3.0f,
+            "Duplicate instances keep independent Scale");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Static Prop request");
+        Expect(dupState.workingCopy.staticProps.size() == 1, "Delete removes working Static Prop");
+        Expect(
+            dupState.contentBrowser.selectedIdentity == kIdentity,
+            "Delete instance does not clear Content Browser identity");
+
+        editor::LevelEditorState missing{};
+        SeedEditor(missing, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(missing, active, editAdd, true, cameraAnchor),
+            "missing identity still handled as lifecycle");
+        Expect(missing.workingCopy.staticProps.empty(), "missing identity does not append");
+        Expect(
+            missing.lastMessage
+                == std::string(
+                    "Add Static Prop requires a valid Content Browser static model selection."),
+            "missing identity diagnostic");
     }
 
     if (gFailures != 0)

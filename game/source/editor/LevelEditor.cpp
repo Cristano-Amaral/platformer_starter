@@ -17,10 +17,13 @@
 #include "editor/EditorPlacement.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorToolRunner.h"
+#include "editor/StaticPropTransform.h"
+#include "platform/RuntimePaths.h"
 #include "imgui.h"
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "editor/StaticModelThumbnailCache.h"
 #include "editor/StaticModelFraming.h"
+#include "render/StaticModelScene.h"
 #include "render/StaticModelThumbnail.h"
 #include "render/StaticModelPreview.h"
 #endif
@@ -177,6 +180,30 @@ void EditVec3(const char* label, core::Vec3& value)
 void ReadOnlyVec3(const char* label, core::Vec3 value)
 {
     ImGui::Text("%s: %.6f  %.6f  %.6f", label, value.x, value.y, value.z);
+}
+
+// Staged runtime assets are the only scene-render authority for Static Props
+// (no canonical-source fallback). This only reports why the placeholder cube
+// is drawn; it never cooks, stages, or loads from source.
+bool StagedStaticModelExists(std::string_view identity)
+{
+    if (!world::StaticPropIdentityIsValid(identity))
+    {
+        return false;
+    }
+    std::error_code error;
+    return std::filesystem::is_regular_file(platform::RuntimeAssetPath(identity), error);
+}
+
+void DrawStaticModelStagingHint(std::string_view identity)
+{
+    const char* message =
+        StaticPropAssetStateMessage(
+            ClassifyStaticPropAsset(identity, StagedStaticModelExists(identity)));
+    if (message != nullptr)
+    {
+        ImGui::TextWrapped("%s", message);
+    }
 }
 
 void ReadOnlyFloat(const char* label, float value)
@@ -347,6 +374,63 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::InputFloat("Mass (kg)", &box.massKg, 0.0f, 0.0f, kFloatFormat);
         }
         break;
+    case EditorObjectKind::StaticProp:
+        if (state.selection.index < level.staticProps.size())
+        {
+            world::StaticPropSpec& prop = level.staticProps[state.selection.index];
+            ImGui::TextWrapped("%s", prop.modelIdentity.c_str());
+            ImGui::TextUnformatted("Referenced Static Model Asset (not scene selection).");
+            DrawStaticModelStagingHint(prop.modelIdentity);
+            ImGui::TextUnformatted("Scale is visual model scale, not primitive Resize.");
+            ImGui::TextUnformatted("Translate gizmo edits Position. Scale gizmo edits Scale. Rotation is Inspector-only.");
+            ImGui::TextUnformatted("Model Preview auto-frames and is not world size.");
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+            if (view.staticPropModels != nullptr)
+            {
+                core::Vec3 localMin{};
+                core::Vec3 localMax{};
+                if (view.staticPropModels->TryGetLoadedLocalBounds(
+                        prop.modelIdentity, localMin, localMax))
+                {
+                    const core::Vec3 loadedSize{
+                        localMax.x - localMin.x,
+                        localMax.y - localMin.y,
+                        localMax.z - localMin.z};
+                    ImGui::Text(
+                        "Loaded staged size at Scale (1,1,1): %.2f x %.2f x %.2f",
+                        loadedSize.x,
+                        loadedSize.y,
+                        loadedSize.z);
+                    core::Vec3 worldCenter{};
+                    core::Vec3 worldSize{};
+                    StaticPropWorldAabb(prop, localMin, localMax, worldCenter, worldSize);
+                    ImGui::Text(
+                        "Current visual size: %.2f x %.2f x %.2f",
+                        worldSize.x,
+                        worldSize.y,
+                        worldSize.z);
+                    if (StaticPropContainsWorldPoint(
+                            prop, localMin, localMax, view.gameplayCameraPosition)
+                        || StaticPropContainsWorldPoint(
+                            prop, localMin, localMax, view.gameplayCameraTarget))
+                    {
+                        ImGui::TextWrapped(
+                            "Gameplay camera is inside this model's bounds, so Gameplay can look "
+                            "like the sky. Move Position or reduce Scale.");
+                    }
+                }
+                else
+                {
+                    ImGui::TextWrapped(
+                        "Apply Preview to load the staged model and see its world size.");
+                }
+            }
+#endif
+            EditVec3("Position X Y Z", prop.position);
+            EditVec3("Rotation X Y Z (deg)", prop.rotationDegrees);
+            EditVec3("Scale X Y Z", prop.scale);
+        }
+        break;
     case EditorObjectKind::Goal:
         ImGui::TextUnformatted("Read-only in M33.");
         ReadOnlyVec3("Center", level.goal.center);
@@ -435,7 +519,10 @@ LevelEditorRequest DrawContentBrowser(
     const std::filesystem::path sourceRoot = AuthoringSourceRoot();
 
     ImGui::TextUnformatted("Registered static GLB assets. Selection is not a level object.");
-    ImGui::TextWrapped("Import copies canonical source only. Delete removes source plus matching cooked/staged copies. Neither operation edits the level.");
+    ImGui::TextWrapped(
+        "Add Static Prop creates one authored instance from the selected asset (working copy only; "
+        "not placement). Import copies canonical source only. Delete removes source plus matching "
+        "cooked/staged copies.");
 
     char query[256];
     std::snprintf(query, sizeof(query), "%s", state.contentBrowser.filterQuery.c_str());
@@ -462,6 +549,32 @@ LevelEditorRequest DrawContentBrowser(
     if (ImGui::Button("Import Static GLB"))
     {
         request = ContentBrowserImportRequest();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    const bool canAddStaticProp = CanIssueAuthoredLifecycleRequest(
+        authoringAvailable,
+        state.workingCopy,
+        state.selection,
+        state.gizmo.dragging,
+        ContentBrowserAddStaticPropRequest(),
+        state.contentBrowser.selectedIdentity);
+    ImGui::BeginDisabled(!canAddStaticProp);
+    if (ImGui::Button("Add Static Prop"))
+    {
+        request = ContentBrowserAddStaticPropRequest();
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        const char* reason = AddStaticPropDisableReason(
+            authoringAvailable,
+            state.workingCopy,
+            state.gizmo.dragging,
+            state.contentBrowser.selectedIdentity);
+        if (reason != nullptr)
+        {
+            ImGui::SetTooltip("%s", reason);
+        }
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
@@ -625,6 +738,7 @@ LevelEditorRequest DrawContentBrowser(
     if (!state.contentBrowser.selectedIdentity.empty())
     {
         ImGui::Text("Selected asset: %s", state.contentBrowser.selectedIdentity.c_str());
+        DrawStaticModelStagingHint(state.contentBrowser.selectedIdentity);
     }
     else
     {
@@ -875,6 +989,12 @@ LevelEditorRequest DrawLevelControls(
             editor::TrySetEditorTransformMode(
                 state.transformMode, state.gizmo.dragging, EditorTransformMode::Resize);
         }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Scale", state.transformMode == EditorTransformMode::Scale))
+        {
+            editor::TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Scale);
+        }
         ImGui::EndDisabled();
         if (state.gizmo.dragging)
         {
@@ -885,6 +1005,12 @@ LevelEditorRequest DrawLevelControls(
             && !IsResizeSelection(state.selection))
         {
             ImGui::TextUnformatted("Selected object is not resizable");
+        }
+        if (state.transformMode == EditorTransformMode::Scale
+            && state.selection.kind != EditorObjectKind::None
+            && !IsScaleSelection(state.selection))
+        {
+            ImGui::TextUnformatted("Selected object is not scalable");
         }
         ImGui::TextWrapped(
             "Nudge (Translate mode): Ctrl+Arrows/PageUp/PageDown. Precision: Ctrl+Shift.");
@@ -974,7 +1100,8 @@ LevelEditorRequest DrawLevelControls(
         ImGui::TextWrapped(
             "RMB look, WASD move, Q/E down/up, Shift faster, wheel speed, Alt+wheel dolly. "
             "Translate: LMB on an X/Y/Z handle moves the working copy. "
-            "Resize: LMB on a cube handle changes authored size; the cyan ghost is the true size.");
+            "Resize: LMB on a cube handle changes authored primitive size; the cyan ghost is the true size. "
+            "Scale: LMB on a cube handle changes Static Prop visual scale (not primitive Resize).");
         ImGui::TextWrapped(
             "The gizmo and pending ghost follow unapplied working-copy edits. "
             "Active render, physics, picking and highlight stay put until Apply Preview.");
@@ -1079,6 +1206,14 @@ LevelEditorRequest DrawEditorMenuBar(
             TrySetEditorTransformMode(
                 state.transformMode, state.gizmo.dragging, EditorTransformMode::Resize);
         }
+        if (ImGui::MenuItem(
+                "Scale",
+                nullptr,
+                state.transformMode == EditorTransformMode::Scale))
+        {
+            TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Scale);
+        }
         ImGui::EndDisabled();
         ImGui::EndMenu();
     }
@@ -1150,6 +1285,38 @@ LevelEditorRequest DrawEditorMenuBar(
                 request = EditAddMenuRequest(EditorObjectKind::DynamicBox);
             }
             ImGui::EndDisabled();
+            // Static Prop is the only Add entry whose enablement depends on
+            // another window, so the row states the asset it would use. The
+            // hidden dependency is what made the command look unavailable.
+            const std::string& propIdentity = state.contentBrowser.selectedIdentity;
+            const std::string propHint = AddStaticPropMenuHint(propIdentity);
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::StaticProp),
+                    propIdentity));
+            if (ImGui::MenuItem("Static Prop", propHint.c_str()))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::StaticProp);
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                const char* reason = AddStaticPropDisableReason(
+                    authoringAvailable,
+                    state.workingCopy,
+                    gizmoDragging,
+                    propIdentity);
+                if (reason != nullptr)
+                {
+                    ImGui::SetTooltip("%s", reason);
+                }
+            }
+            ImGui::EndDisabled();
+            ImGui::Separator();
+            ImGui::TextDisabled("Static Prop uses the Content Browser selection.");
             ImGui::EndMenu();
         }
 
@@ -1416,6 +1583,9 @@ LevelEditorRequest DrawEditorQuickToolbar(
         state, "Translate", "Translate", EditorTransformMode::Translate);
     ImGui::SameLine();
     DrawQuickToolbarTransformButton(state, "Resize", "Resize", EditorTransformMode::Resize);
+    ImGui::SameLine();
+    DrawQuickToolbarTransformButton(
+        state, "Scale", "Scale visual model (Static Prop)", EditorTransformMode::Scale);
 
     ImGui::SameLine();
     ImGui::TextDisabled("|");

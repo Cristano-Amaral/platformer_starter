@@ -32,6 +32,8 @@ const char* EditorObjectKindName(EditorObjectKind kind)
         return "Goal";
     case EditorObjectKind::DynamicBox:
         return "DynamicBox";
+    case EditorObjectKind::StaticProp:
+        return "StaticProp";
     }
     return "None";
 }
@@ -84,6 +86,9 @@ void FormatSelectionDisplayName(
     case EditorObjectKind::DynamicBox:
         std::snprintf(buffer, bufferSize, "Dynamic Box %zu", selection.index);
         return;
+    case EditorObjectKind::StaticProp:
+        std::snprintf(buffer, bufferSize, "Static Prop %zu", selection.index);
+        return;
     }
     std::snprintf(buffer, bufferSize, "(none)");
 }
@@ -108,6 +113,8 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
         return selection.index == 0;
     case EditorObjectKind::DynamicBox:
         return selection.index < level.dynamicBoxes.size();
+    case EditorObjectKind::StaticProp:
+        return selection.index < level.staticProps.size();
     case EditorObjectKind::ElevatedPlatform:
         return selection.index < level.elevatedPlatforms.size();
     case EditorObjectKind::Slope:
@@ -134,6 +141,7 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::StaticProp:
         return true;
     default:
         return false;

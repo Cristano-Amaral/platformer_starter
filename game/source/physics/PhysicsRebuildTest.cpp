@@ -752,6 +752,29 @@ int main()
         Expect(zeroWorld.GetPlayerPhysicsState().characterInitialized, "zero-box player remains");
     }
 
+    {
+        world::LevelDefinition withProps = parsed.level;
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {4.0f, 1.0f, 0.0f};
+        prop.scale = world::kDefaultStaticPropScale;
+        withProps.staticProps.push_back(prop);
+        withProps.staticProps.push_back(prop);
+        physics::PhysicsWorld propWorld;
+        Expect(propWorld.Initialize(withProps), "Static Props Initialize");
+        Expect(
+            propWorld.InitializePlayer(withProps.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "Static Props InitializePlayer");
+        Expect(propWorld.StaticBodyCount() == 9, "Static Props do not add static Jolt bodies");
+        Expect(propWorld.DynamicBodyCount() == 0, "Static Props do not add dynamic Jolt bodies");
+        Expect(
+            propWorld.TryRebuild(
+                withProps, withProps.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "TryRebuild with Static Props");
+        Expect(propWorld.StaticBodyCount() == 9, "rebuild still ignores Static Props");
+        Expect(propWorld.DynamicBodyCount() == 0, "rebuild still has zero Dynamic Boxes");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d physics rebuild test(s) failed.\n", gFailures);

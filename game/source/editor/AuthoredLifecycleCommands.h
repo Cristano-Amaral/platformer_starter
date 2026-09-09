@@ -7,6 +7,9 @@
 
 #include "core/Vec3.h"
 
+#include <string>
+#include <string_view>
+
 namespace editor
 {
 bool IsAuthoredLifecycleRequest(LevelEditorRequest request);
@@ -22,7 +25,22 @@ bool CanIssueAuthoredLifecycleRequest(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging,
-    LevelEditorRequest request);
+    LevelEditorRequest request,
+    std::string_view staticPropIdentity = {});
+
+// Right-hand menu-row copy for Edit > Add > Static Prop. Static Prop is the
+// only Add entry whose enablement comes from another window, so the row names
+// the Content Browser asset it would consume instead of leaving the dependency
+// invisible. Returns the placeholder when nothing usable is selected.
+std::string AddStaticPropMenuHint(std::string_view staticPropIdentity);
+
+// Hover copy for Edit > Add > Static Prop and Content Browser Add Static Prop.
+// nullptr when the shared CanIssueAuthoredLifecycleRequest path is enabled.
+const char* AddStaticPropDisableReason(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    bool gizmoDragging,
+    std::string_view staticPropIdentity);
 
 // Mutates workingCopy, selection, structuralPending, structuralMap, gizmo,
 // derived Modified/Dirty. Duplicate/Delete ignore placementAnchor.

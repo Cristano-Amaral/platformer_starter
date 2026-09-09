@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <string>
 
 namespace editor
 {
@@ -97,6 +98,7 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::StaticProp:
         return true;
     default:
         return false;
@@ -114,6 +116,7 @@ int CategoryMaxCount(EditorObjectKind kind)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::StaticProp:
         return static_cast<int>(world::kMaxLevelLines) - world::kLevelV1FixedRecordLineCount;
     default:
         return 0;
@@ -134,6 +137,8 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.collectibles.size();
     case EditorObjectKind::DynamicBox:
         return level.dynamicBoxes.size();
+    case EditorObjectKind::StaticProp:
+        return level.staticProps.size();
     default:
         return 0;
     }
@@ -182,6 +187,9 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::DynamicBox:
         pending.dynamicBoxes = true;
         break;
+    case EditorObjectKind::StaticProp:
+        pending.staticProps = true;
+        break;
     default:
         break;
     }
@@ -203,6 +211,8 @@ bool CategoryHasStructuralPending(
         return pending.collectibles;
     case EditorObjectKind::DynamicBox:
         return pending.dynamicBoxes;
+    case EditorObjectKind::StaticProp:
+        return pending.staticProps;
     default:
         return false;
     }
@@ -224,6 +234,8 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.collectibles;
     case EditorObjectKind::DynamicBox:
         return &map.dynamicBoxes;
+    case EditorObjectKind::StaticProp:
+        return &map.staticProps;
     default:
         return nullptr;
     }
@@ -243,6 +255,8 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.collectibles;
     case EditorObjectKind::DynamicBox:
         return &map.dynamicBoxes;
+    case EditorObjectKind::StaticProp:
+        return &map.staticProps;
     default:
         return nullptr;
     }
@@ -272,6 +286,7 @@ void ResetStructuralIndexMap(
     FillIdentity(map.hazards, active.hazards.size());
     FillIdentity(map.collectibles, active.collectibles.size());
     FillIdentity(map.dynamicBoxes, active.dynamicBoxes.size());
+    FillIdentity(map.staticProps, active.staticProps.size());
 }
 
 void EnsureStructuralIndexMap(
@@ -282,7 +297,8 @@ void EnsureStructuralIndexMap(
         && CategoryMapMatchesActive(map.checkpoints, active.checkpoints.size())
         && CategoryMapMatchesActive(map.hazards, active.hazards.size())
         && CategoryMapMatchesActive(map.collectibles, active.collectibles.size())
-        && CategoryMapMatchesActive(map.dynamicBoxes, active.dynamicBoxes.size()))
+        && CategoryMapMatchesActive(map.dynamicBoxes, active.dynamicBoxes.size())
+        && CategoryMapMatchesActive(map.staticProps, active.staticProps.size()))
     {
         return;
     }
@@ -439,6 +455,19 @@ PendingDeleteVisuals MakePendingDeleteVisuals(
         }
         visuals.dynamicBoxIndices.push_back(static_cast<int>(index));
         visuals.dynamicBoxes.push_back(active.dynamicBoxes[index]);
+    }
+    const std::size_t staticPropLimit =
+        active.staticProps.size() < map.staticProps.activeToWorking.size()
+        ? active.staticProps.size()
+        : map.staticProps.activeToWorking.size();
+    for (std::size_t index = 0; index < staticPropLimit; ++index)
+    {
+        if (map.staticProps.activeToWorking[index] != kNoStructuralIndex)
+        {
+            continue;
+        }
+        visuals.staticPropIndices.push_back(static_cast<int>(index));
+        visuals.staticProps.push_back(active.staticProps[index]);
     }
     return visuals;
 }
@@ -654,6 +683,43 @@ LifecycleEditResult AddDynamicBox(
             workingCopy.initialSpawnVisualCenter.z));
 }
 
+LifecycleEditResult AddStaticPropAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter,
+    std::string_view modelIdentity)
+{
+    if (!world::StaticPropIdentityIsValid(modelIdentity))
+    {
+        return Fail(LifecycleEditStatus::InvalidAssetReference);
+    }
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::StaticProp))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    world::StaticPropSpec prop{};
+    prop.modelIdentity = std::string(modelIdentity);
+    prop.position = ApplyWorldCenter(worldCenter, {});
+    prop.rotationDegrees = world::kDefaultStaticPropRotationDegrees;
+    prop.scale = world::kDefaultStaticPropScale;
+    workingCopy.staticProps.push_back(prop);
+    return Ok({EditorObjectKind::StaticProp, workingCopy.staticProps.size() - 1});
+}
+
+LifecycleEditResult AddStaticProp(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor,
+    std::string_view modelIdentity)
+{
+    return AddStaticPropAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedStaticPropOffset,
+            workingCopy.initialSpawnVisualCenter.z),
+        modelIdentity);
+}
+
 LifecycleEditResult DuplicateSelected(
     world::LevelDefinition& workingCopy,
     EditorSelection selection)
@@ -709,6 +775,13 @@ LifecycleEditResult DuplicateSelected(
         OffsetX(copy.center, kLifecycleDuplicateOffsetX);
         workingCopy.dynamicBoxes.push_back(copy);
         return Ok({EditorObjectKind::DynamicBox, workingCopy.dynamicBoxes.size() - 1});
+    }
+    case EditorObjectKind::StaticProp:
+    {
+        world::StaticPropSpec copy = workingCopy.staticProps[selection.index];
+        OffsetX(copy.position, kLifecycleDuplicateOffsetX);
+        workingCopy.staticProps.push_back(copy);
+        return Ok({EditorObjectKind::StaticProp, workingCopy.staticProps.size() - 1});
     }
     default:
         break;
@@ -772,6 +845,10 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::DynamicBox:
         workingCopy.dynamicBoxes.erase(
             workingCopy.dynamicBoxes.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::StaticProp:
+        workingCopy.staticProps.erase(
+            workingCopy.staticProps.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     default:
         return Fail(LifecycleEditStatus::UnsupportedType, selection);

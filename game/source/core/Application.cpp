@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
@@ -42,6 +43,7 @@ static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
+#include "editor/StaticPropTransform.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
@@ -774,6 +776,9 @@ int Application::Run()
             MakeDynamicBoxDrawStates(dynamicBoxes);
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
         render::CameraView cameraView = MakeGameplayCameraView(camera);
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        const render::CameraView gameplayCameraView = cameraView;
+#endif
         render::DebugWorldOverlay overlay{};
         render::WorldViewRect worldViewRect{};
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -861,6 +866,9 @@ int Application::Run()
                     break;
                 case editor::EditorObjectKind::DynamicBox:
                     item.kind = 4;
+                    break;
+                case editor::EditorObjectKind::StaticProp:
+                    item.kind = 5;
                     break;
                 default:
                     continue;
@@ -969,6 +977,24 @@ int Application::Run()
                         pendingDelete.dynamicBoxes[index].size);
                 }
             }
+            overlay.pendingDeleteStaticPropIndices = pendingDelete.staticPropIndices;
+            overlay.pendingDeleteStaticPropCenters.clear();
+            overlay.pendingDeleteStaticPropSizes.clear();
+            overlay.pendingDeleteStaticPropCenters.reserve(pendingDelete.staticProps.size());
+            overlay.pendingDeleteStaticPropSizes.reserve(pendingDelete.staticProps.size());
+            for (const world::StaticPropSpec& prop : pendingDelete.staticProps)
+            {
+                core::Vec3 center{};
+                core::Vec3 size{};
+                editor::StaticPropWorldAabb(
+                    prop,
+                    editor::kStaticPropDefaultLocalMin,
+                    editor::kStaticPropDefaultLocalMax,
+                    center,
+                    size);
+                overlay.pendingDeleteStaticPropCenters.push_back(center);
+                overlay.pendingDeleteStaticPropSizes.push_back(size);
+            }
 #endif
 
             const editor::CheckpointEditorOverlay checkpointOverlay =
@@ -988,24 +1014,40 @@ int Application::Run()
                 overlay.drawCheckpointRespawnConnector = (dx * dx + dy * dy + dz * dz) > 1.0e-6f;
             }
 
-            const editor::GizmoDrawRequest gizmo =
-                levelEditorState.transformMode == editor::EditorTransformMode::Resize
-                    ? editor::MakeResizeGizmoDrawRequest(
-                          levelEditorState.selection,
-                          levelEditorState.workingCopy,
-                          cameraView,
-                          levelEditorState.gizmo)
-                    : editor::MakeGizmoDrawRequest(
-                          levelEditorState.selection,
-                          levelEditorState.workingCopy,
-                          cameraView,
-                          levelEditorState.gizmo);
+            editor::GizmoDrawRequest gizmo{};
+            if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
+            {
+                gizmo = editor::MakeResizeGizmoDrawRequest(
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    levelEditorState.gizmo);
+            }
+            else if (levelEditorState.transformMode == editor::EditorTransformMode::Scale)
+            {
+                gizmo = editor::MakeScaleGizmoDrawRequest(
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    levelEditorState.gizmo);
+            }
+            else
+            {
+                gizmo = editor::MakeGizmoDrawRequest(
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    levelEditorState.gizmo);
+            }
             overlay.drawTranslationGizmo =
                 gizmo.visible
                 && levelEditorState.transformMode == editor::EditorTransformMode::Translate;
             overlay.drawResizeGizmo =
                 gizmo.visible
                 && levelEditorState.transformMode == editor::EditorTransformMode::Resize;
+            overlay.drawScaleGizmo =
+                gizmo.visible
+                && levelEditorState.transformMode == editor::EditorTransformMode::Scale;
             overlay.gizmoOrigin = gizmo.origin;
             overlay.gizmoAxisLength = gizmo.axisLength;
             overlay.gizmoHoveredAxis = static_cast<int>(gizmo.hovered);
@@ -1020,6 +1062,7 @@ int Application::Run()
         }
 #endif
         renderer.BeginFrame();
+        renderer.SyncStaticPropModels(levelDefinition);
         renderer.DrawWorld(
             player,
             cameraView,
@@ -1036,7 +1079,8 @@ int Application::Run()
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
             overlay,
-            worldViewRect);
+            worldViewRect
+        );
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
         {
@@ -1096,6 +1140,9 @@ int Application::Run()
             }
         }
         levelEditorView.modelPreview = &modelPreview;
+        levelEditorView.staticPropModels = renderer.StaticPropModels();
+        levelEditorView.gameplayCameraPosition = gameplayCameraView.position;
+        levelEditorView.gameplayCameraTarget = gameplayCameraView.target;
 #endif
         // Cook, Stage & Reload observation lives in Application::Run, not in
         // ImGui Draw, so F2 hide and panel visibility cannot cancel it.
@@ -1216,6 +1263,20 @@ int Application::Run()
             if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
             {
                 gizmoConsumedPointer = editor::UpdateResizeInteraction(
+                    levelEditorState.gizmo,
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    ray,
+                    mouseCaptured,
+                    editorInput.lookHeld,
+                    selectPressedForGizmo,
+                    editorInput.selectHeld,
+                    editorInput.selectReleased);
+            }
+            else if (levelEditorState.transformMode == editor::EditorTransformMode::Scale)
+            {
+                gizmoConsumedPointer = editor::UpdateScaleInteraction(
                     levelEditorState.gizmo,
                     levelEditorState.selection,
                     levelEditorState.workingCopy,
@@ -1704,6 +1765,19 @@ void Application::DeleteContentBrowserAsset()
     roots.cookedRoot = editor::CookedAssetsRoot(repositoryRoot);
     roots.stagedRoots = editor::AuthorizedStaticModelStagedRoots(repositoryRoot);
     const std::string identity = levelEditorState.contentBrowser.selectedIdentity;
+    if (editor::AuthoredLevelsProtectStaticPropIdentity(
+            levelEditorState.workingCopy,
+            levelDefinition,
+            levelEditorState.savedSourceBaseline,
+            identity))
+    {
+        const std::string message = editor::StaticPropReferencedDeleteMessage(identity);
+        levelEditorState.contentBrowser.statusMessage = message;
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::DeleteStaticModel, false, message);
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
     const assets::StaticModelDeleteResult deleted =
         assets::DeleteStaticModel(identity, roots, &levelEditorState.contentBrowser.catalog);
     editor::RefreshContentBrowser(levelEditorState.contentBrowser, sourceRoot);
