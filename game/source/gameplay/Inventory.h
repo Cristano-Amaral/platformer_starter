@@ -37,7 +37,28 @@ struct InventoryEntry
 //   first character [a-z]
 //   remaining characters [a-z0-9_-]
 // Case-sensitive; no folding. Uppercase is rejected, not canonicalized.
-bool IsValidItemId(std::string_view itemId);
+inline bool IsValidItemId(std::string_view itemId)
+{
+    if (itemId.empty() || itemId.size() > kMaxItemIdLength)
+    {
+        return false;
+    }
+    const char first = itemId.front();
+    if (first < 'a' || first > 'z')
+    {
+        return false;
+    }
+    for (const char character : itemId)
+    {
+        const bool ok = (character >= 'a' && character <= 'z')
+            || (character >= '0' && character <= '9') || character == '_' || character == '-';
+        if (!ok)
+        {
+            return false;
+        }
+    }
+    return true;
+}
 
 enum class InventoryLifecycleEvent
 {

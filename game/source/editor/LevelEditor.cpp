@@ -19,6 +19,7 @@
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorToolRunner.h"
 #include "editor/StaticPropTransform.h"
+#include "gameplay/Inventory.h"
 #include "platform/RuntimePaths.h"
 #include "imgui.h"
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
@@ -420,6 +421,55 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::TextUnformatted("Opens +Y from the authored closed position.");
         }
         break;
+    case EditorObjectKind::ItemPickup:
+        if (state.selection.index < level.itemPickups.size())
+        {
+            world::ItemPickupSpec& pickup = level.itemPickups[state.selection.index];
+            EditVec3("Position X Y Z", pickup.position);
+            char itemId[gameplay::kMaxItemIdLength + 1]{};
+            std::snprintf(
+                itemId, sizeof(itemId), "%s", pickup.itemId.c_str());
+            if (ImGui::InputText("Item ID", itemId, sizeof(itemId)))
+            {
+                if (gameplay::IsValidItemId(itemId))
+                {
+                    pickup.itemId = itemId;
+                }
+            }
+            if (ImGui::InputInt("Quantity", &pickup.quantity))
+            {
+                if (pickup.quantity < 1)
+                {
+                    pickup.quantity = 1;
+                }
+                if (pickup.quantity > gameplay::kMaxItemQuantity)
+                {
+                    pickup.quantity = gameplay::kMaxItemQuantity;
+                }
+            }
+            ImGui::TextUnformatted(
+                pickup.modelIdentity.empty() ? "Model: (primitive fallback)" : "Model:");
+            if (!pickup.modelIdentity.empty())
+            {
+                ImGui::TextWrapped("%s", pickup.modelIdentity.c_str());
+                DrawStaticModelStagingHint(pickup.modelIdentity);
+            }
+            if (ImGui::Button("Assign Model from Content Browser"))
+            {
+                const std::string& identity = state.contentBrowser.selectedIdentity;
+                if (world::StaticPropIdentityIsValid(identity))
+                {
+                    pickup.modelIdentity = identity;
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear Model"))
+            {
+                pickup.modelIdentity.clear();
+            }
+            ImGui::TextUnformatted("Optional visual only. Empty uses the primitive fallback.");
+        }
+        break;
     case EditorObjectKind::StaticProp:
         if (state.selection.index < level.staticProps.size())
         {
@@ -532,6 +582,7 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Dynamic Box", PlacementMode::DynamicBox, LevelEditorRequest::AddDynamicBox);
     paletteButton("Pressure Plate", PlacementMode::PressurePlate, LevelEditorRequest::AddPressurePlate);
     paletteButton("Door", PlacementMode::Door, LevelEditorRequest::AddDoor);
+    paletteButton("Item Pickup", PlacementMode::ItemPickup, LevelEditorRequest::AddItemPickup);
 
     ImGui::Separator();
     if (StaticPropPlacementIsActive(state.staticPropPlacement))
@@ -1413,6 +1464,18 @@ LevelEditorRequest DrawEditorMenuBar(
             if (ImGui::MenuItem("Door"))
             {
                 request = EditAddMenuRequest(EditorObjectKind::Door);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::ItemPickup)));
+            if (ImGui::MenuItem("Item Pickup"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::ItemPickup);
             }
             ImGui::EndDisabled();
             // Static Prop is the only Add entry whose enablement depends on

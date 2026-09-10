@@ -104,6 +104,7 @@ int main()
     Expect(parsed.level.pressurePlates.empty(), "canonical Level 01 has 0 Pressure Plates");
     Expect(parsed.level.dynamicBoxes.empty(), "canonical Level 01 has 0 Dynamic Boxes");
     Expect(parsed.level.staticProps.empty(), "canonical Level 01 has 0 Static Props");
+    Expect(parsed.level.itemPickups.empty(), "canonical Level 01 has 0 Item Pickups");
 
     const float groundTop = parsed.level.ground.center.y + parsed.level.ground.size.y * 0.5f;
     const core::Vec3 plateCenter{8.0f, groundTop + world::kDefaultPressurePlateSize.y * 0.5f, 0.0f};

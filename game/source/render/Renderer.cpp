@@ -8,10 +8,12 @@
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
+#include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelGoal.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
+#include "world/StaticProp.h"
 
 #include "raylib.h"
 #include "raymath.h"
@@ -21,6 +23,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -45,6 +48,9 @@ constexpr Color kDynamicBoxCarryWire{72, 214, 236, 255};
 constexpr Color kPressurePlateInactive{86, 98, 124, 255};
 constexpr Color kPressurePlateActive{56, 188, 92, 255};
 constexpr Color kDoorColor{136, 96, 68, 255};
+constexpr Color kItemPickupFill{92, 176, 214, 255};
+constexpr Color kItemPickupTargetFill{198, 188, 96, 255};
+constexpr Color kItemPickupTargetWire{236, 214, 72, 255};
 constexpr Color kStaticPropFallbackColor{120, 72, 88, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
 constexpr Color kCheckpointFuturePost{86, 94, 112, 255};
@@ -287,6 +293,19 @@ void DrawGrabCarryHud(bool carrying, bool hasTarget)
     const int x = (GetScreenWidth() - width) / 2;
     const int y = GetScreenHeight() - font - kTimerHudMargin;
     DrawText(text, x, y, font, carrying ? kGrabHudMuted : kGrabHudText);
+}
+
+void DrawPickupHud(const char* text)
+{
+    if (text == nullptr || text[0] == '\0')
+    {
+        return;
+    }
+    const int font = kTimerHudFontSize;
+    const int width = MeasureText(text, font);
+    const int x = (GetScreenWidth() - width) / 2;
+    const int y = GetScreenHeight() - font - kTimerHudMargin;
+    DrawText(text, x, y, font, kGrabHudText);
 }
 
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
@@ -698,6 +717,17 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             overlay.pendingDeleteDoorCenters[index],
             overlay.pendingDeleteDoorSizes[index],
             kDoorColor);
+    }
+    for (std::size_t index = 0; index < overlay.pendingDeleteItemPickupCenters.size(); ++index)
+    {
+        if (index >= overlay.pendingDeleteItemPickupSizes.size())
+        {
+            break;
+        }
+        DrawPendingDeleteSolid(
+            overlay.pendingDeleteItemPickupCenters[index],
+            overlay.pendingDeleteItemPickupSizes[index],
+            kItemPickupFill);
     }
     for (std::size_t index = 0; index < overlay.pendingDeleteStaticPropCenters.size(); ++index)
     {
@@ -1133,6 +1163,8 @@ void Renderer::DrawWorld(
         bool levelCompleted,
         const std::vector<std::uint8_t>& collectibleCollected,
         int collectedCount,
+        const std::vector<std::uint8_t>& itemPickupCollected,
+        int itemPickupTargetIndex,
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
@@ -1234,6 +1266,64 @@ void Renderer::DrawWorld(
             staticPropModels->DrawProp(level.staticProps[index]);
         }
     }
+    bool pickupHudTarget = false;
+    char pickupHudText[64]{};
+    for (std::size_t index = 0; index < level.itemPickups.size(); ++index)
+    {
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteItemPickupIndices, index))
+        {
+            continue;
+        }
+        if (index < itemPickupCollected.size() && itemPickupCollected[index] != 0)
+        {
+            continue;
+        }
+        const world::ItemPickupSpec& pickup = level.itemPickups[index];
+        const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
+        if (targeted)
+        {
+            pickupHudTarget = true;
+            std::snprintf(
+                pickupHudText,
+                sizeof(pickupHudText),
+                "E Pick Up %s x%d",
+                pickup.itemId.c_str(),
+                pickup.quantity);
+        }
+        const Color fill = targeted ? kItemPickupTargetFill : kItemPickupFill;
+        const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
+        if (!pickup.modelIdentity.empty() && staticPropModels)
+        {
+            world::StaticPropSpec visual{};
+            visual.modelIdentity = pickup.modelIdentity;
+            visual.position = pickup.position;
+            visual.rotationDegrees = world::kDefaultStaticPropRotationDegrees;
+            visual.scale = world::kDefaultStaticPropScale;
+            staticPropModels->DrawProp(visual);
+            if (targeted)
+            {
+                DrawCubeWires(
+                    ToRaylib(pickup.position),
+                    world::kItemPickupVisualSize,
+                    world::kItemPickupVisualSize,
+                    world::kItemPickupVisualSize,
+                    wire);
+            }
+            continue;
+        }
+        DrawCube(
+            ToRaylib(pickup.position),
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            fill);
+        DrawCubeWires(
+            ToRaylib(pickup.position),
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            wire);
+    }
     DrawOrientedGreyboxBox(
         level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],
         kWalkableSlopeColor);
@@ -1304,6 +1394,10 @@ void Renderer::DrawWorld(
     DrawSessionBest(hasBestTime, bestSeconds);
     DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
     DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
+    if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+    {
+        DrawPickupHud(pickupHudText);
+    }
     if (levelCompleted)
     {
         DrawLevelCompleteMessage();

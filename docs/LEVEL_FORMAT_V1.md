@@ -55,7 +55,7 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`dynamic_box`, `pressure_plate`, `door`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
+`dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
 appear exactly once. Unknown keywords and trailing unrecognized content are
 `Invalid`.
 
@@ -80,7 +80,7 @@ parser and writer accept any valid identifier.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes / Pressure Plates / Doors / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box / Pressure Plate / Door / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count plus Door count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Pressure Plates and Static Props are not Jolt bodies and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping. M53 Add/Duplicate append Doors (existing plate Door indices stay valid). Door delete clears links that named D and remaps later plate links `R > D` to `R - 1`. Invalid Door links fail validation; they are never silently retargeted.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes / Pressure Plates / Doors / Item Pickups / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box / Pressure Plate / Door / Item Pickup / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count plus Door count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Pressure Plates, Item Pickups, and Static Props are not Jolt bodies and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping. M53 Add/Duplicate append Doors (existing plate Door indices stay valid). Door delete clears links that named D and remaps later plate links `R > D` to `R - 1`. Invalid Door links fail validation; they are never silently retargeted. M55 Add/Duplicate/Delete Item Pickups have no physics remapping and never serialize runtime collected state.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -91,6 +91,7 @@ collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex>]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance>
+item_pickup <px> <py> <pz> <quantity> <itemId> [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
 
@@ -140,6 +141,17 @@ is `3.2`. Opening direction is fixed **+Y**. Zero, one, or many records are
 valid. Canonical Level 01 has **zero** Doors. Runtime open fraction,
 desiredOpen, obstruction, and live kinematic pose are **not** Level Format
 fields. Save writes the authored closed pose only.
+
+`item_pickup` is a repeatable authored world acquisition volume. Position is
+the world center. `quantity` is a positive integer in the M54 Inventory range
+(`1..kMaxItemQuantity`). `itemId` uses the production M54 `IsValidItemId`
+rule (not a second parser-local grammar). Optional trailing tokens are a
+canonical Static Model identity (`models/<file>.glb`), reassembled with spaces
+like `static_prop`. Omitted identity means the primitive fallback visual; a
+GLB is **not** required to author a valid pickup. Zero, one, or many records
+are valid. Canonical Level 01 has **zero** Item Pickups. Runtime
+available/collected flags are **not** Level Format fields. Save writes
+authored position, quantity, itemId, and optional model identity only.
 
 `static_prop` is a visual authored instance, not a physics body. Identity is
 the canonical project-relative Static Model Asset path (`models/<file>.glb`),
@@ -244,6 +256,7 @@ goal
 dynamic_box         variable, dynamicBoxes index order
 pressure_plate      variable, pressurePlates index order
 door                variable, doors index order
+item_pickup         variable, itemPickups index order
 static_prop         variable, staticProps index order
 camera
 ```

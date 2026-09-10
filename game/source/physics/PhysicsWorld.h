@@ -136,6 +136,9 @@ public:
     void HandleGrabDrop();
     void ClearCarry();
     DynamicBoxGrabState GetGrabState() const;
+    // Solid world LOS used by M51 grab and M55 pickup. Ignores Dynamic Boxes
+    // and the CharacterVirtual inner body. Static Props have no Jolt body.
+    bool WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to) const;
     void Shutdown();
 
     bool IsInitialized() const;

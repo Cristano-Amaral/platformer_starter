@@ -2,6 +2,7 @@
 
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
@@ -64,6 +65,7 @@ private:
     gameplay::LevelCompletionState levelCompletionState;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};
+    gameplay::ItemPickupRunState itemPickupRunState{};
     gameplay::RunTimerState runTimerState;
     gameplay::SessionBestTimeState sessionBestTimeState;
     persistence::LoadBestTimeStatus bestTimeLoadStatus = persistence::LoadBestTimeStatus::Missing;

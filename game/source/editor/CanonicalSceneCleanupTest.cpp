@@ -101,6 +101,9 @@ int main()
         !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::Door),
         "Door is not a placement surface");
     Expect(
+        !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::ItemPickup),
+        "ItemPickup is not a placement surface");
+    Expect(
         !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::StaticProp),
         "StaticProp is not a placement surface");
     Expect(
@@ -126,11 +129,18 @@ int main()
     Expect(
         editor::IsEditableSelection({editor::EditorObjectKind::Door, 0}),
         "Door has an Inspector path");
+    Expect(
+        !editor::IsValidSelection(level, {editor::EditorObjectKind::ItemPickup, 0}),
+        "empty Item Pickups collection is not selectable");
+    Expect(
+        editor::IsEditableSelection({editor::EditorObjectKind::ItemPickup, 0}),
+        "Item Pickup has an Inspector path");
 
     const std::vector<editor::HierarchyEntry> hierarchy = editor::BuildHierarchyEntries(level);
     bool hierarchyHasDynamicBox = false;
     bool hierarchyHasPressurePlate = false;
     bool hierarchyHasDoor = false;
+    bool hierarchyHasItemPickup = false;
     bool hierarchyHasStaticProp = false;
     bool hierarchyHasSlope0 = false;
     bool hierarchyHasSlope1 = false;
@@ -151,6 +161,8 @@ int main()
             hierarchyHasPressurePlate || entry.selection.kind == editor::EditorObjectKind::PressurePlate;
         hierarchyHasDoor =
             hierarchyHasDoor || entry.selection.kind == editor::EditorObjectKind::Door;
+        hierarchyHasItemPickup = hierarchyHasItemPickup
+            || entry.selection.kind == editor::EditorObjectKind::ItemPickup;
         hierarchyHasStaticProp =
             hierarchyHasStaticProp || entry.selection.kind == editor::EditorObjectKind::StaticProp;
         hierarchyHasMovingPlatform = hierarchyHasMovingPlatform
@@ -181,6 +193,7 @@ int main()
     Expect(!hierarchyHasDynamicBox, "empty collection has no Dynamic Box hierarchy rows");
     Expect(!hierarchyHasPressurePlate, "empty collection has no Pressure Plate hierarchy rows");
     Expect(!hierarchyHasDoor, "empty collection has no Door hierarchy rows");
+    Expect(!hierarchyHasItemPickup, "empty collection has no Item Pickup hierarchy rows");
     Expect(!hierarchyHasStaticProp, "empty collection has no Static Prop hierarchy rows");
     Expect(hierarchyHasSpawn, "Hierarchy lists Player Spawn");
     Expect(hierarchyHasCamera, "Hierarchy lists Camera");
@@ -205,6 +218,7 @@ int main()
     bool pickHasDynamicBox = false;
     bool pickHasPressurePlate = false;
     bool pickHasDoor = false;
+    bool pickHasItemPickup = false;
     bool pickHasStaticProp = false;
     bool pickHasMovingPlatform = false;
     for (const editor::PickingProxy& proxy : set.proxies)
@@ -218,6 +232,8 @@ int main()
         pickHasPressurePlate =
             pickHasPressurePlate || proxy.selection.kind == editor::EditorObjectKind::PressurePlate;
         pickHasDoor = pickHasDoor || proxy.selection.kind == editor::EditorObjectKind::Door;
+        pickHasItemPickup =
+            pickHasItemPickup || proxy.selection.kind == editor::EditorObjectKind::ItemPickup;
         pickHasStaticProp =
             pickHasStaticProp || proxy.selection.kind == editor::EditorObjectKind::StaticProp;
         pickHasMovingPlatform = pickHasMovingPlatform
@@ -230,6 +246,7 @@ int main()
     Expect(!pickHasDynamicBox, "empty collection has no Dynamic Box pick proxy");
     Expect(!pickHasPressurePlate, "empty collection has no Pressure Plate pick proxy");
     Expect(!pickHasDoor, "empty collection has no Door pick proxy");
+    Expect(!pickHasItemPickup, "empty collection has no Item Pickup pick proxy");
     Expect(!pickHasStaticProp, "empty collection has no Static Prop pick proxy");
 
     const editor::Ray3 atAuthoredCrate{{0.0f, 5.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};

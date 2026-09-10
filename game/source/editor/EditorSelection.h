@@ -27,6 +27,7 @@ enum class EditorObjectKind
     StaticProp,
     PressurePlate,
     Door,
+    ItemPickup,
 };
 
 struct EditorSelection

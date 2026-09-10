@@ -373,6 +373,38 @@ int main()
             "active Door picks the runtime pose");
     }
 
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        Expect(
+            !editor::IsValidSelection(level, {editor::EditorObjectKind::ItemPickup, 0}),
+            "empty Item Pickups collection is not selectable");
+        Expect(
+            editor::IsEditableSelection({editor::EditorObjectKind::ItemPickup, 0}),
+            "Item Pickup is inspector-editable");
+        world::ItemPickupSpec pickup{};
+        pickup.position = {6.0f, 2.0f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        level.itemPickups.push_back(pickup);
+        Expect(
+            editor::IsValidSelection(level, {editor::EditorObjectKind::ItemPickup, 0}),
+            "authored Item Pickup is selectable");
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::Ray3 atPickup{{6.0f, 2.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atPickup, set).kind == editor::EditorObjectKind::ItemPickup,
+            "Item Pickup AABB is pickable");
+        bool sawPickup = false;
+        for (const editor::HierarchyEntry& entry : editor::BuildHierarchyEntries(level))
+        {
+            sawPickup = sawPickup
+                || (entry.selection.kind == editor::EditorObjectKind::ItemPickup
+                    && std::strcmp(entry.group, "Item Pickups") == 0);
+        }
+        Expect(sawPickup, "Hierarchy lists Item Pickups");
+    }
+
     // ---- camera is not a world proxy; spawn is ----
     {
         const world::LevelDefinition level = MakeStubLevel();

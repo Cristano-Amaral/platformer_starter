@@ -302,6 +302,16 @@ EditorPickingSet BuildPickingSet(
             : appliedLevel.doors[index].size;
         AddProxy(set, EditorObjectKind::Door, index, center, size, 0.0f);
     }
+    for (std::size_t index = 0; index < appliedLevel.itemPickups.size(); ++index)
+    {
+        AddProxy(
+            set,
+            EditorObjectKind::ItemPickup,
+            index,
+            appliedLevel.itemPickups[index].position,
+            world::kItemPickupVisualExtents,
+            0.0f);
+    }
     for (std::size_t index = 0; index < appliedLevel.staticProps.size(); ++index)
     {
         const world::StaticPropSpec& prop = appliedLevel.staticProps[index];

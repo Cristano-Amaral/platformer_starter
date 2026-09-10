@@ -140,9 +140,17 @@ int main()
         editor::PlacementAddRequest(editor::PlacementMode::PressurePlate)
             == LevelEditorRequest::AddPressurePlate,
         "Object Palette Pressure Plate confirms AddPressurePlate");
+        Expect(
+            editor::PlacementAddRequest(editor::PlacementMode::Door) == LevelEditorRequest::AddDoor,
+            "Object Palette Door confirms AddDoor");
     Expect(
-        editor::PlacementAddRequest(editor::PlacementMode::Door) == LevelEditorRequest::AddDoor,
-        "Object Palette Door confirms AddDoor");
+        editor::EditAddMenuRequest(EditorObjectKind::ItemPickup)
+            == LevelEditorRequest::AddItemPickup,
+        "Edit > Add > Item Pickup maps to AddItemPickup");
+    Expect(
+        editor::PlacementAddRequest(editor::PlacementMode::ItemPickup)
+            == LevelEditorRequest::AddItemPickup,
+        "Object Palette Item Pickup confirms AddItemPickup");
 
     {
         const world::LevelDefinition active = MakeActiveLevel();
@@ -1213,6 +1221,134 @@ int main()
             "AtLimit Door request is still handled");
         Expect(limitState.workingCopy.doors.empty(), "AtLimit does not append a Door");
         Expect(atLimit.doors.empty(), "AtLimit does not mutate active");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(active.itemPickups.empty(), "fixture starts with zero Item Pickups");
+        Expect(
+            HierarchyKindCount(active, EditorObjectKind::ItemPickup) == 0,
+            "empty collection has no Hierarchy Item Pickup rows");
+
+        const LevelEditorRequest editAdd =
+            editor::EditAddMenuRequest(EditorObjectKind::ItemPickup);
+        Expect(editAdd == LevelEditorRequest::AddItemPickup, "menu action is AddItemPickup");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(true, active, {}, false, editAdd),
+            "Development can add Item Pickup");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(false, active, {}, false, editAdd),
+            "Debug authoring cannot add Item Pickup");
+
+        const core::Vec3 cameraAnchor{12.0f, 5.0f, -6.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(state, active, editAdd, true, cameraAnchor),
+            "Edit > Add > Item Pickup reaches workingCopy mutation");
+        Expect(state.workingCopy.itemPickups.size() == 1, "workingCopy gains exactly one Item Pickup");
+        Expect(active.itemPickups.empty(), "Edit Add does not mutate active");
+        Expect(
+            state.workingCopy.itemPickups[0].itemId == world::kDefaultItemPickupId
+                && state.workingCopy.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
+                && state.workingCopy.itemPickups[0].modelIdentity.empty(),
+            "default Item Pickup id/quantity/no model");
+        Expect(state.selection.kind == EditorObjectKind::ItemPickup, "new Item Pickup is selected");
+        Expect(
+            HierarchyKindCount(state.workingCopy, EditorObjectKind::ItemPickup) == 1,
+            "Hierarchy lists the pending Item Pickup");
+        Expect(
+            !editor::IsScaleSelection(state.selection),
+            "Item Pickup does not use Scale");
+        Expect(
+            !editor::IsResizeSelection(state.selection),
+            "Item Pickup does not use Resize");
+
+        editor::LevelEditorState palState{};
+        SeedEditor(palState, active);
+        palState.placementMode = editor::PlacementMode::ItemPickup;
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                palState,
+                active,
+                editor::PlacementAddRequest(editor::PlacementMode::ItemPickup),
+                true,
+                {3.0f, 1.5f, 1.0f},
+                true),
+            "palette confirm uses world-center AddItemPickupAt");
+        Expect(palState.workingCopy.itemPickups.size() == 1, "palette confirm adds one Item Pickup");
+        Expect(palState.workingCopy.itemPickups[0].position.x == 3.0f, "palette confirm X");
+
+        editor::LevelEditorState dupState{};
+        SeedEditor(dupState, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState,
+                active,
+                editor::EditAddMenuRequest(EditorObjectKind::ItemPickup),
+                true,
+                cameraAnchor),
+            "seed Item Pickup for Duplicate");
+        dupState.workingCopy.itemPickups[0].itemId = "coin";
+        dupState.workingCopy.itemPickups[0].quantity = 3;
+        dupState.workingCopy.itemPickups[0].modelIdentity = "models/test_static.glb";
+        dupState.selection = {EditorObjectKind::ItemPickup, 0};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Item Pickup request");
+        Expect(dupState.workingCopy.itemPickups.size() == 2, "Duplicate appends Item Pickup");
+        Expect(
+            dupState.workingCopy.itemPickups[1].itemId == "coin"
+                && dupState.workingCopy.itemPickups[1].quantity == 3
+                && dupState.workingCopy.itemPickups[1].modelIdentity
+                    == dupState.workingCopy.itemPickups[0].modelIdentity,
+            "Duplicate preserves itemId/quantity/model");
+        Expect(
+            dupState.workingCopy.itemPickups[1].position.x
+                == dupState.workingCopy.itemPickups[0].position.x + editor::kLifecycleDuplicateOffsetX,
+            "Duplicate offsets +1 X");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                dupState, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Item Pickup request");
+        Expect(dupState.workingCopy.itemPickups.size() == 1, "Delete removes working Item Pickup");
+
+        world::LevelDefinition atPhysicsLimit = active;
+        atPhysicsLimit.elevatedPlatforms.resize(
+            static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies),
+            {{40.0f, 0.75f, 0.0f}, {4.0f, 0.5f, 3.0f}});
+        editor::LevelEditorState physicsLimitState{};
+        SeedEditor(physicsLimitState, atPhysicsLimit);
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                atPhysicsLimit,
+                {},
+                false,
+                editor::EditAddMenuRequest(EditorObjectKind::ItemPickup)),
+            "Item Pickup does not consume the Jolt leftover");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                physicsLimitState,
+                atPhysicsLimit,
+                editor::EditAddMenuRequest(EditorObjectKind::ItemPickup),
+                true,
+                cameraAnchor),
+            "Add Item Pickup at platform body cap");
+        Expect(
+            physicsLimitState.workingCopy.itemPickups.size() == 1,
+            "Item Pickup still adds when leftover is full");
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                physicsLimitState.workingCopy, active, active, "models/test_static.glb")
+                == false,
+            "empty model does not protect a missing identity");
+        physicsLimitState.workingCopy.itemPickups[0].modelIdentity = "models/test_static.glb";
+        Expect(
+            editor::AuthoredLevelsProtectStaticPropIdentity(
+                physicsLimitState.workingCopy, active, active, "models/test_static.glb"),
+            "workingCopy Item Pickup model protects Delete Asset");
     }
 
     {

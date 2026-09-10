@@ -177,6 +177,7 @@ struct ParseState
     std::vector<DynamicBoxSpec> dynamicBoxes;
     std::vector<PressurePlateSpec> pressurePlates;
     std::vector<DoorSpec> doors;
+    std::vector<ItemPickupSpec> itemPickups;
     std::vector<StaticPropSpec> staticProps;
 };
 
@@ -594,6 +595,38 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.doors.push_back(door);
             continue;
         }
+        if (keyword == "item_pickup")
+        {
+            if (tokens.size() < 6)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
+            }
+            ItemPickupSpec pickup{};
+            if (!ParseVec3(tokens, 1, pickup.position)
+                || !ParseIntToken(tokens[4], pickup.quantity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup");
+            }
+            pickup.itemId = std::string(tokens[5]);
+            if (tokens.size() > 6)
+            {
+                pickup.modelIdentity = std::string(tokens[6]);
+                for (std::size_t index = 7; index < tokens.size(); ++index)
+                {
+                    pickup.modelIdentity.push_back(' ');
+                    pickup.modelIdentity.append(tokens[index]);
+                }
+            }
+            if (!ItemPickupSpecIsValid(pickup))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup");
+            }
+            state.itemPickups.push_back(pickup);
+            continue;
+        }
         if (keyword == "static_prop")
         {
             if (tokens.size() < 11)
@@ -667,6 +700,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.dynamicBoxes = std::move(state.dynamicBoxes);
     loaded.level.pressurePlates = std::move(state.pressurePlates);
     loaded.level.doors = std::move(state.doors);
+    loaded.level.itemPickups = std::move(state.itemPickups);
     loaded.level.staticProps = std::move(state.staticProps);
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(

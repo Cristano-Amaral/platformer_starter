@@ -1354,6 +1354,48 @@ int main()
         Expect(working.doors.back().center.z == 4.0f, "AddDoorAt does not snap to spawn.z");
     }
 
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const editor::LifecycleEditResult added = editor::AddItemPickup(working, kTestPlacementA);
+        Expect(added.succeeded, "Add Item Pickup");
+        Expect(working.itemPickups.size() == 1, "one Item Pickup after Add");
+        Expect(
+            working.itemPickups[0].itemId == world::kDefaultItemPickupId
+                && working.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
+                && working.itemPickups[0].modelIdentity.empty(),
+            "default Item Pickup id/quantity/no model");
+        Expect(added.selection.kind == EditorObjectKind::ItemPickup, "Add selects Item Pickup");
+        working.itemPickups[0].itemId = "coin";
+        working.itemPickups[0].quantity = 4;
+        working.itemPickups[0].modelIdentity = "models/test_static.glb";
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelected(working, added.selection);
+        Expect(duplicated.succeeded, "Duplicate Item Pickup");
+        Expect(working.itemPickups.size() == 2, "two Item Pickups after Duplicate");
+        Expect(
+            working.itemPickups[1].position.x
+                == working.itemPickups[0].position.x + editor::kLifecycleDuplicateOffsetX,
+            "Duplicate Item Pickup offsets +1 X");
+        Expect(
+            working.itemPickups[1].itemId == working.itemPickups[0].itemId
+                && working.itemPickups[1].quantity == working.itemPickups[0].quantity
+                && working.itemPickups[1].modelIdentity == working.itemPickups[0].modelIdentity,
+            "Duplicate preserves itemId/quantity/model");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::ItemPickup, 0}).succeeded,
+            "Delete earlier Item Pickup");
+        Expect(working.itemPickups.size() == 1, "one Item Pickup after deleting earlier");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::ItemPickup, 0}).succeeded,
+            "Delete last Item Pickup");
+        Expect(working.itemPickups.empty(), "no Item Pickups after last delete");
+        Expect(
+            editor::AddItemPickupAt(working, {9.0f, 1.5f, 4.0f}).succeeded,
+            "AddItemPickupAt uses world center");
+        Expect(working.itemPickups.back().position.x == 9.0f, "AddItemPickupAt X");
+        Expect(working.itemPickups.back().position.z == 4.0f, "AddItemPickupAt does not snap to spawn.z");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d authored object lifecycle test(s) failed.\n", gFailures);

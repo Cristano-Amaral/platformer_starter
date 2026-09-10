@@ -75,6 +75,7 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && level.dynamicBoxes.empty()
         && level.pressurePlates.empty()
         && level.doors.empty()
+        && level.itemPickups.empty()
         && level.staticProps.empty()
         && Vec3Equal(level.camera.offset, {2.0f, 3.5f, 12.0f})
         && level.camera.fieldOfViewY == 40.0f;
@@ -112,7 +113,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 20> allowed{
+    static constexpr std::array<std::string_view, 21> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -131,6 +132,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "dynamic_box",
         "pressure_plate",
         "door",
+        "item_pickup",
         "static_prop",
         "camera"};
 
@@ -409,6 +411,7 @@ int main()
     Expect(CountRecords(written, "dynamic_box") == 0, "writer dynamic_box count");
     Expect(CountRecords(written, "pressure_plate") == 0, "writer pressure_plate count");
     Expect(CountRecords(written, "door") == 0, "writer door count");
+    Expect(CountRecords(written, "item_pickup") == 0, "writer item_pickup count");
     Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(CountRecords(written, "inventory") == 0, "writer emits no inventory records");
@@ -1063,6 +1066,69 @@ int main()
                 world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0\n").status
                     == world::LoadLevelFileStatus::Invalid,
                 "Door link without Doors rejected");
+        }
+
+        {
+            const std::string onePickup = canonical + "item_pickup 2 0.5 0 1 key\n";
+            const world::ParseLevelFileResult one = world::ParseLevelText(onePickup);
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one item_pickup loads");
+            Expect(one.level.itemPickups.size() == 1, "one item_pickup count");
+            Expect(one.level.itemPickups[0].itemId == "key", "one item_pickup itemId");
+            Expect(one.level.itemPickups[0].quantity == 1, "one item_pickup quantity");
+            Expect(one.level.itemPickups[0].position.x == 2.0f, "one item_pickup position x");
+            Expect(one.level.itemPickups[0].modelIdentity.empty(), "one item_pickup has no model");
+            const std::string writtenOne = world::SerializeLevelText(one.level);
+            Expect(CountRecords(writtenOne, "item_pickup") == 1, "writer one item_pickup");
+            Expect(
+                world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
+                "one item_pickup round trip");
+            Expect(writtenOne.find("collected") == std::string::npos,
+                "writer omits collected runtime state");
+
+            const std::string modeled =
+                canonical + "item_pickup 3 1 0 2 coin models/test_static.glb\n";
+            const world::ParseLevelFileResult modeledParsed = world::ParseLevelText(modeled);
+            Expect(modeledParsed.status == world::LoadLevelFileStatus::Loaded,
+                "item_pickup with model loads");
+            Expect(
+                modeledParsed.level.itemPickups[0].modelIdentity == "models/test_static.glb",
+                "optional model identity");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    modeledParsed.level,
+                    world::ParseLevelText(world::SerializeLevelText(modeledParsed.level)).level),
+                "modeled item_pickup round trip");
+
+            const std::string twoPickups = canonical
+                + "item_pickup 2 0.5 0 1 key\n"
+                  "item_pickup 4 0.5 0 5 coin\n";
+            const world::ParseLevelFileResult two = world::ParseLevelText(twoPickups);
+            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two item_pickup load");
+            Expect(two.level.itemPickups.size() == 2, "two item_pickup count");
+            Expect(two.level.itemPickups[1].itemId == "coin", "encounter order second itemId");
+
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup nan 0.5 0 1 key\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-finite item_pickup position rejected");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 Key\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "invalid M54 itemId rejected");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 0 key\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero item_pickup quantity rejected");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 -1 key\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative item_pickup quantity rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key models/missing.txt\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "invalid item_pickup model identity rejected");
         }
 
         {

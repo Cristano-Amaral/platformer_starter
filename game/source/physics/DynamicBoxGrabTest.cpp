@@ -115,6 +115,7 @@ int main()
     }
     Expect(parsed.level.dynamicBoxes.empty(), "canonical Level 01 has 0 Dynamic Boxes");
     Expect(parsed.level.staticProps.empty(), "canonical Level 01 has 0 Static Props");
+    Expect(parsed.level.itemPickups.empty(), "canonical Level 01 has 0 Item Pickups");
 
     const core::Vec3 spawn = parsed.level.initialSpawnVisualCenter;
     const float groundTop =

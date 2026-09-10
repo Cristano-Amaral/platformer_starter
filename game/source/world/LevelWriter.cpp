@@ -226,6 +226,22 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out += '\n';
     }
 
+    for (const ItemPickupSpec& pickup : level.itemPickups)
+    {
+        out += "item_pickup ";
+        AppendVec3(out, pickup.position);
+        out += ' ';
+        AppendInt(out, pickup.quantity);
+        out += ' ';
+        out.append(pickup.itemId);
+        if (!pickup.modelIdentity.empty())
+        {
+            out += ' ';
+            out.append(pickup.modelIdentity);
+        }
+        out += '\n';
+    }
+
     for (const StaticPropSpec& prop : level.staticProps)
     {
         out += "static_prop ";

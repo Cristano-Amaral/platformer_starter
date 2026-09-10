@@ -31,6 +31,13 @@ bool LevelReferencesStaticPropIdentity(
             return true;
         }
     }
+    for (const ItemPickupSpec& pickup : level.itemPickups)
+    {
+        if (pickup.modelIdentity == identity)
+        {
+            return true;
+        }
+    }
     return false;
 }
 }

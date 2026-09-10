@@ -76,11 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 54 — Player Inventory System v1
-(itemId → quantity → TryAdd / TryRemove / Query / Clear; Application-owned
-runtime inventory; Development F1 inspection harness; awaiting manual
-acceptance).
-Milestone 53 is complete. Milestone 55 has not started.
+Milestone 55 — World Item Pickup & Inventory Integration
+(authored Item Pickup; runtime available/collected; M51 E arbitration;
+M54 TryAdd collection; Development F1 Inventory harness for inspection;
+awaiting manual acceptance).
+Milestone 54 is complete. Milestone 56 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -223,5 +223,12 @@ Door index. Runtime Doors are kinematic solids that open +Y when any linked
 plate is Active. Canonical Level 01 has 0 Pressure Plates, 0 Doors, 0 Dynamic
 Boxes, and 0 Static Props. Milestone 54 adds Application-owned runtime player
 Inventory (`itemId` → quantity) with TryAdd / TryRemove / Query / Clear.
-Inventory is not Level authored state, is not serialized, and has no world
-pickup. Development F1 Metrics hosts a test harness. Do not start Milestone 55.
+Inventory is not Level authored state, is not serialized, and is not a world
+collectible. Development F1 Metrics hosts a test harness. Milestone 55 adds
+repeatable authored Item Pickups (`position`, `itemId`, `quantity`, optional
+`modelIdentity`). Runtime available/collected is Application-owned, not
+serialized, and never deletes authored definitions. Semantic `E`
+(`grabDropPressed`) drops a carried Dynamic Box, else grabs a box target, else
+collects a valid pickup via `Inventory::TryAdd`. Canonical Level 01 has 0 Item
+Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props. Do
+not start Milestone 56.

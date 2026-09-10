@@ -140,12 +140,19 @@ void StaticModelSceneStore::Sync(const world::LevelDefinition& level, std::strin
     }
 
     std::unordered_set<std::string> needed;
-    needed.reserve(level.staticProps.size() + 1);
+    needed.reserve(level.staticProps.size() + level.itemPickups.size() + 1);
     for (const world::StaticPropSpec& prop : level.staticProps)
     {
         if (world::StaticPropIdentityIsValid(prop.modelIdentity))
         {
             needed.insert(prop.modelIdentity);
+        }
+    }
+    for (const world::ItemPickupSpec& pickup : level.itemPickups)
+    {
+        if (world::StaticPropIdentityIsValid(pickup.modelIdentity))
+        {
+            needed.insert(pickup.modelIdentity);
         }
     }
     if (world::StaticPropIdentityIsValid(extraIdentity))

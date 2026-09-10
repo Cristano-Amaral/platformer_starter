@@ -60,6 +60,16 @@ class LevelV1HeaderTests(unittest.TestCase):
         cooker.validate_level_v1_header(payload)
         self.assertIn(b"door 4 1.5 0", payload)
 
+    def test_item_pickup_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"item_pickup 2 1 0 1 key\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"item_pickup 2 1 0", payload)
+        self.assertIn(b"key", payload)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -139,6 +139,13 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    for (const ItemPickupSpec& pickup : level.itemPickups)
+    {
+        if (!ItemPickupSpecIsValid(pickup))
+        {
+            return false;
+        }
+    }
     for (const StaticPropSpec& prop : level.staticProps)
     {
         if (!StaticPropSpecIsValid(prop))
@@ -168,6 +175,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.dynamicBoxes.size() != b.dynamicBoxes.size()
         || a.pressurePlates.size() != b.pressurePlates.size()
         || a.doors.size() != b.doors.size()
+        || a.itemPickups.size() != b.itemPickups.size()
         || a.staticProps.size() != b.staticProps.size())
     {
         return false;
@@ -239,6 +247,16 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         if (!Vec3Equal(a.doors[index].center, b.doors[index].center)
             || !Vec3Equal(a.doors[index].size, b.doors[index].size)
             || a.doors[index].openDistance != b.doors[index].openDistance)
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.itemPickups.size(); ++index)
+    {
+        if (!Vec3Equal(a.itemPickups[index].position, b.itemPickups[index].position)
+            || a.itemPickups[index].itemId != b.itemPickups[index].itemId
+            || a.itemPickups[index].quantity != b.itemPickups[index].quantity
+            || a.itemPickups[index].modelIdentity != b.itemPickups[index].modelIdentity)
         {
             return false;
         }

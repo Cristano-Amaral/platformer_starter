@@ -11,6 +11,7 @@
 #include "world/LevelGoal.h"
 #include "world/MovingPlatform.h"
 #include "world/Door.h"
+#include "world/ItemPickup.h"
 #include "world/PressurePlate.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
@@ -73,6 +74,7 @@ struct LevelDefinition
     std::vector<DynamicBoxSpec> dynamicBoxes{};
     std::vector<PressurePlateSpec> pressurePlates{};
     std::vector<DoorSpec> doors{};
+    std::vector<ItemPickupSpec> itemPickups{};
     std::vector<StaticPropSpec> staticProps{};
     LevelCameraSpec camera{};
 };

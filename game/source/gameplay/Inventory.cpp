@@ -7,29 +7,6 @@
 
 namespace gameplay
 {
-bool IsValidItemId(std::string_view itemId)
-{
-    if (itemId.empty() || itemId.size() > kMaxItemIdLength)
-    {
-        return false;
-    }
-    const char first = itemId.front();
-    if (first < 'a' || first > 'z')
-    {
-        return false;
-    }
-    for (const char character : itemId)
-    {
-        const bool ok = (character >= 'a' && character <= 'z')
-            || (character >= '0' && character <= '9') || character == '_' || character == '-';
-        if (!ok)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 namespace
 {
 bool QuantityInRange(int quantity)

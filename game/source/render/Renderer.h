@@ -37,7 +37,7 @@ struct DebugWorldOverlay
     // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
     struct PendingAuthoringOverlayItem
     {
-        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate, 7 Door
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate, 7 Door, 8 Item Pickup
         bool selected = false;
         core::Vec3 boundsCenter{};
         core::Vec3 boundsSize{};
@@ -84,6 +84,9 @@ struct DebugWorldOverlay
     std::vector<int> pendingDeleteDoorIndices;
     std::vector<core::Vec3> pendingDeleteDoorCenters;
     std::vector<core::Vec3> pendingDeleteDoorSizes;
+    std::vector<int> pendingDeleteItemPickupIndices;
+    std::vector<core::Vec3> pendingDeleteItemPickupCenters;
+    std::vector<core::Vec3> pendingDeleteItemPickupSizes;
     std::vector<int> pendingDeleteStaticPropIndices;
     std::vector<core::Vec3> pendingDeleteStaticPropCenters;
     std::vector<core::Vec3> pendingDeleteStaticPropSizes;
@@ -214,6 +217,8 @@ public:
         bool levelCompleted,
         const std::vector<std::uint8_t>& collectibleCollected,
         int collectedCount,
+        const std::vector<std::uint8_t>& itemPickupCollected,
+        int itemPickupTargetIndex,
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,

@@ -4,6 +4,7 @@
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
@@ -13,6 +14,7 @@
 #include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
 #include "world/HazardWorld.h"
+#include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/LevelGoal.h"
@@ -759,6 +761,7 @@ int Application::Run()
         bool hazardContactThisFrame = false;
         int collectedThisFrameIndex = world::kNoCollectibleIndex;
         bool restartedThisFrame = false;
+        int itemPickupTargetIndex = gameplay::kNoItemPickupIndex;
 
         // Single simulation guard. Everything inside keeps the exact M31 order
         // and content; the editor pauses it wholesale rather than scaling time.
@@ -850,9 +853,40 @@ int Application::Run()
             }
 
             physicsWorld.SetGrabAim(player.Position(), player.FacingX());
+            {
+                const std::size_t pickupCount = levelDefinition.itemPickups.size();
+                std::vector<std::uint8_t> losBlocked(pickupCount, 0);
+                for (std::size_t index = 0; index < pickupCount; ++index)
+                {
+                    if (!gameplay::ItemPickupIsAvailable(itemPickupRunState, index))
+                    {
+                        continue;
+                    }
+                    if (physicsWorld.WorldSolidBlocksSegment(
+                            player.Position(), levelDefinition.itemPickups[index].position))
+                    {
+                        losBlocked[index] = 1;
+                    }
+                }
+                itemPickupTargetIndex = gameplay::FindItemPickupTargetIndex(
+                    player.Position(),
+                    player.FacingX(),
+                    levelDefinition.itemPickups,
+                    itemPickupRunState.collected,
+                    losBlocked);
+            }
             if (!respawnedThisFrame && !restartedThisFrame && inputState.grabDropPressed)
             {
+                const bool wasCarrying = physicsWorld.GetGrabState().carrying;
                 physicsWorld.HandleGrabDrop();
+                if (!wasCarrying && !physicsWorld.GetGrabState().carrying)
+                {
+                    (void)gameplay::TryCollectItemPickup(
+                        inventory,
+                        itemPickupRunState,
+                        levelDefinition.itemPickups,
+                        itemPickupTargetIndex);
+                }
             }
 
             physicsWorld.Update(deltaSeconds);
@@ -974,6 +1008,9 @@ int Application::Run()
                 case editor::EditorObjectKind::Door:
                     item.kind = 7;
                     break;
+                case editor::EditorObjectKind::ItemPickup:
+                    item.kind = 8;
+                    break;
                 default:
                     continue;
                 }
@@ -1072,6 +1109,9 @@ int Application::Run()
                 case editor::EditorObjectKind::Door:
                     overlay.placementCandidateKind = 7;
                     break;
+                case editor::EditorObjectKind::ItemPickup:
+                    overlay.placementCandidateKind = 8;
+                    break;
                 default:
                     overlay.placementCandidateKind = 0;
                     break;
@@ -1161,6 +1201,16 @@ int Application::Run()
                     overlay.pendingDeleteDoorCenters.push_back(pendingDelete.doors[index].center);
                     overlay.pendingDeleteDoorSizes.push_back(pendingDelete.doors[index].size);
                 }
+            }
+            overlay.pendingDeleteItemPickupIndices = pendingDelete.itemPickupIndices;
+            overlay.pendingDeleteItemPickupCenters.clear();
+            overlay.pendingDeleteItemPickupSizes.clear();
+            overlay.pendingDeleteItemPickupCenters.reserve(pendingDelete.itemPickups.size());
+            overlay.pendingDeleteItemPickupSizes.reserve(pendingDelete.itemPickups.size());
+            for (const world::ItemPickupSpec& pickup : pendingDelete.itemPickups)
+            {
+                overlay.pendingDeleteItemPickupCenters.push_back(pickup.position);
+                overlay.pendingDeleteItemPickupSizes.push_back(world::kItemPickupVisualExtents);
             }
             overlay.pendingDeleteStaticPropIndices = pendingDelete.staticPropIndices;
             overlay.pendingDeleteStaticPropCenters.clear();
@@ -1270,6 +1320,8 @@ int Application::Run()
             levelCompletionState.completed,
             collectibleRunState.collected,
             gameplay::CollectedCount(collectibleRunState),
+            itemPickupRunState.collected,
+            itemPickupTargetIndex,
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
@@ -1767,6 +1819,8 @@ void Application::Initialize()
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     collectibleRunState =
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    itemPickupRunState =
+        gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
 
     renderer.LoadRuntimeAssets();
@@ -1866,6 +1920,8 @@ void Application::RestartRun()
     levelCompletionState.completed = false;
     collectibleRunState =
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    itemPickupRunState =
+        gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
@@ -2383,6 +2439,8 @@ void Application::ResetGameplayAfterCommittedLevel()
     levelCompletionState = gameplay::LevelCompletionState{};
     collectibleRunState =
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    itemPickupRunState =
+        gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
     runTimerState = gameplay::RunTimerState{};

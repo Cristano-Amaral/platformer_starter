@@ -4,6 +4,7 @@
 #include "editor/EditorMath.h"
 #include "editor/StaticPropTransform.h"
 #include "world/RespawnWorld.h"
+#include "world/ItemPickup.h"
 #include "world/StaticProp.h"
 
 #include <cmath>
@@ -225,6 +226,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
+    case EditorObjectKind::ItemPickup:
     case EditorObjectKind::StaticProp:
         return true;
     default:
@@ -311,6 +313,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
             return &level.doors[selection.index].center;
         }
         break;
+    case EditorObjectKind::ItemPickup:
+        if (selection.index < level.itemPickups.size())
+        {
+            return &level.itemPickups[selection.index].position;
+        }
+        break;
     case EditorObjectKind::StaticProp:
         if (selection.index < level.staticProps.size())
         {
@@ -381,6 +389,12 @@ const core::Vec3* GetEditablePosition(
         if (selection.index < level.doors.size())
         {
             return &level.doors[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::ItemPickup:
+        if (selection.index < level.itemPickups.size())
+        {
+            return &level.itemPickups[selection.index].position;
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -600,6 +614,15 @@ bool GetGizmoPreviewBox(
             const world::DoorSpec& door = workingCopy.doors[selection.index];
             center = door.center;
             size = door.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::ItemPickup:
+        if (selection.index < workingCopy.itemPickups.size())
+        {
+            const world::ItemPickupSpec& pickup = workingCopy.itemPickups[selection.index];
+            center = pickup.position;
+            size = world::kItemPickupVisualExtents;
             return true;
         }
         break;
@@ -838,6 +861,27 @@ bool AuthoredGeometryDiffers(
             || Vec3Differs(activeDoor.size, workingDoor.size)
             || activeDoor.openDistance != workingDoor.openDistance;
     }
+    case EditorObjectKind::ItemPickup:
+    {
+        if (selection.index >= workingCopy.itemPickups.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::ItemPickup, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.itemPickups.size())
+        {
+            return true;
+        }
+        const world::ItemPickupSpec& activePickup =
+            active.itemPickups[static_cast<std::size_t>(activeIndex)];
+        const world::ItemPickupSpec& workingPickup = workingCopy.itemPickups[selection.index];
+        return Vec3Differs(activePickup.position, workingPickup.position)
+            || activePickup.itemId != workingPickup.itemId
+            || activePickup.quantity != workingPickup.quantity
+            || activePickup.modelIdentity != workingPickup.modelIdentity;
+    }
     case EditorObjectKind::StaticProp:
     {
         if (selection.index >= workingCopy.staticProps.size())
@@ -1057,6 +1101,7 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::DynamicBox,
         EditorObjectKind::PressurePlate,
         EditorObjectKind::Door,
+        EditorObjectKind::ItemPickup,
         EditorObjectKind::StaticProp};
     for (const EditorObjectKind kind : kinds)
     {
@@ -1077,6 +1122,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.pressurePlates.size();
             case EditorObjectKind::Door:
                 return workingCopy.doors.size();
+            case EditorObjectKind::ItemPickup:
+                return workingCopy.itemPickups.size();
             case EditorObjectKind::StaticProp:
                 return workingCopy.staticProps.size();
             default:

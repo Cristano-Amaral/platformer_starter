@@ -127,6 +127,7 @@ int main()
         return 1;
     }
     Expect(parsed.level.doors.empty(), "canonical Level 01 has 0 Doors");
+    Expect(parsed.level.itemPickups.empty(), "canonical Level 01 has 0 Item Pickups");
     Expect(parsed.level.pressurePlates.empty(), "canonical Level 01 has 0 Pressure Plates");
     Expect(parsed.level.dynamicBoxes.empty(), "canonical Level 01 has 0 Dynamic Boxes");
     Expect(parsed.level.staticProps.empty(), "canonical Level 01 has 0 Static Props");

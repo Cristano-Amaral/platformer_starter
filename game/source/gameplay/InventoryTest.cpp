@@ -220,6 +220,7 @@ int main()
         Expect(parsed.level.pressurePlates.empty(), "canonical Level 01 has 0 Pressure Plates");
         Expect(parsed.level.dynamicBoxes.empty(), "canonical Level 01 has 0 Dynamic Boxes");
         Expect(parsed.level.staticProps.empty(), "canonical Level 01 has 0 Static Props");
+        Expect(parsed.level.itemPickups.empty(), "canonical Level 01 has 0 Item Pickups");
 
         world::LevelDefinition workingCopy = parsed.level;
         world::LevelDefinition active = parsed.level;

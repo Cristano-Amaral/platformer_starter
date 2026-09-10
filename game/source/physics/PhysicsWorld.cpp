@@ -579,6 +579,13 @@ struct PhysicsWorld::Impl
         return true;
     }
 
+    bool WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to) const
+    {
+        const JPH::Vec3 offset(to.x - from.x, to.y - from.y, to.z - from.z);
+        float fraction = 1.0f;
+        return CastWorldRay(ToRVec3(from), offset, fraction) && fraction < 0.98f;
+    }
+
     void ClearCarryState()
     {
         if (HeldIndexIsValid() && physicsSystem != nullptr)
@@ -1640,6 +1647,15 @@ void PhysicsWorld::HandleGrabDrop()
     impl->EnsureGrabAim();
     impl->RefreshGrabTarget();
     impl->TryGrabCurrentTarget();
+}
+
+bool PhysicsWorld::WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to) const
+{
+    if (impl == nullptr || !impl->initialized)
+    {
+        return false;
+    }
+    return impl->WorldSolidBlocksSegment(from, to);
 }
 
 void PhysicsWorld::ClearCarry()

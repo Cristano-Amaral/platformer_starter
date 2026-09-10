@@ -572,6 +572,42 @@ int main()
         Expect(working.pressurePlates.empty(), "Door placement does not add Pressure Plates");
     }
 
+    {
+        using editor::PlacementMode;
+        PlacementMode mode = PlacementMode::None;
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::ItemPickup);
+        Expect(mode == PlacementMode::ItemPickup, "click Item Pickup enters placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::ItemPickup);
+        Expect(mode == PlacementMode::None, "click Item Pickup again exits placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Door);
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::ItemPickup);
+        Expect(mode == PlacementMode::ItemPickup, "click Item Pickup switches from Door");
+        Expect(
+            editor::KindFromPlacementMode(mode) == EditorObjectKind::ItemPickup,
+            "placement kind is ItemPickup");
+        Expect(
+            editor::PlacementAddRequest(mode) == editor::LevelEditorRequest::AddItemPickup,
+            "placement confirm is AddItemPickup");
+        const editor::PlacementCandidate candidate =
+            editor::MakePlacementCandidate(PlacementMode::ItemPickup, {2.0f, 1.5f, 0.0f});
+        Expect(candidate.visible, "Item Pickup candidate visible");
+        Expect(
+            candidate.size.x == world::kItemPickupVisualExtents.x
+                && candidate.size.y == world::kItemPickupVisualExtents.y
+                && candidate.size.z == world::kItemPickupVisualExtents.z,
+            "candidate uses pickup visual size");
+        world::LevelDefinition working = MakeActiveLevel();
+        Expect(
+            editor::AddItemPickupAt(working, {2.0f, 1.5f, 0.0f}).succeeded,
+            "palette confirm Add Item Pickup");
+        Expect(working.itemPickups[0].position.x == 2.0f, "placed Item Pickup uses world center");
+        Expect(working.itemPickups[0].itemId == world::kDefaultItemPickupId, "placed default itemId");
+        Expect(working.doors.empty(), "Item Pickup placement does not add Doors");
+        Expect(
+            !editor::IsEligiblePlacementSurface(EditorObjectKind::ItemPickup),
+            "Item Pickup is not a placement surface");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor placement test(s) failed.\n", gFailures);

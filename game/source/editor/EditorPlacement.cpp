@@ -1,6 +1,7 @@
 #include "editor/EditorPlacement.h"
 
 #include "editor/LevelEditor.h"
+#include "world/ItemPickup.h"
 
 namespace editor
 {
@@ -22,6 +23,8 @@ const char* PlacementModeName(PlacementMode mode)
         return "Pressure Plate";
     case PlacementMode::Door:
         return "Door";
+    case PlacementMode::ItemPickup:
+        return "Item Pickup";
     default:
         return "None";
     }
@@ -45,6 +48,8 @@ EditorObjectKind KindFromPlacementMode(PlacementMode mode)
         return EditorObjectKind::PressurePlate;
     case PlacementMode::Door:
         return EditorObjectKind::Door;
+    case PlacementMode::ItemPickup:
+        return EditorObjectKind::ItemPickup;
     default:
         return EditorObjectKind::None;
     }
@@ -68,6 +73,8 @@ PlacementMode PlacementModeFromKind(EditorObjectKind kind)
         return PlacementMode::PressurePlate;
     case EditorObjectKind::Door:
         return PlacementMode::Door;
+    case EditorObjectKind::ItemPickup:
+        return PlacementMode::ItemPickup;
     default:
         return PlacementMode::None;
     }
@@ -91,6 +98,8 @@ LevelEditorRequest PlacementAddRequest(PlacementMode mode)
         return LevelEditorRequest::AddPressurePlate;
     case PlacementMode::Door:
         return LevelEditorRequest::AddDoor;
+    case PlacementMode::ItemPickup:
+        return LevelEditorRequest::AddItemPickup;
     default:
         return LevelEditorRequest::None;
     }
@@ -114,6 +123,8 @@ core::Vec3 DefaultPlacementSize(PlacementMode mode)
         return world::kDefaultPressurePlateSize;
     case PlacementMode::Door:
         return world::kDefaultDoorSize;
+    case PlacementMode::ItemPickup:
+        return world::kItemPickupVisualExtents;
     default:
         return {};
     }
@@ -137,6 +148,8 @@ core::Vec3 DefaultPlacementOffset(PlacementMode mode)
         return kDefaultAddedPressurePlateOffset;
     case PlacementMode::Door:
         return kDefaultAddedDoorOffset;
+    case PlacementMode::ItemPickup:
+        return kDefaultAddedItemPickupOffset;
     default:
         return {};
     }
