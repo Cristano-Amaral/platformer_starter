@@ -4,6 +4,7 @@
 #include "core/Vec3.h"
 #include "gameplay/Player.h"
 #include "platform/RuntimePaths.h"
+#include "render/ItemPickupTargetHighlight.h"
 #include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
@@ -1536,7 +1537,17 @@ void Renderer::DrawWorld(
         }
         const world::ItemPickupSpec& pickup = level.itemPickups[index];
         const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
-        if (targeted)
+        core::Vec3 loadedMin{};
+        core::Vec3 loadedMax{};
+        bool haveLoadedBounds = false;
+        if (!pickup.modelIdentity.empty() && staticPropModels != nullptr)
+        {
+            haveLoadedBounds = staticPropModels->TryGetLoadedLocalBounds(
+                pickup.modelIdentity, loadedMin, loadedMax);
+        }
+        const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
+            pickup, targeted, false, haveLoadedBounds, loadedMin, loadedMax);
+        if (presentation.drawHud)
         {
             pickupHudTarget = true;
             std::snprintf(
@@ -1551,15 +1562,14 @@ void Renderer::DrawWorld(
         if (!pickup.modelIdentity.empty() && staticPropModels)
         {
             staticPropModels->DrawProp(world::ItemPickupVisualProp(pickup));
-            if (targeted)
+            if (presentation.drawModelHighlight)
             {
-                const core::Vec3 visualCenter = world::ItemPickupVisualPosition(pickup);
-                DrawCubeWires(
-                    ToRaylib(visualCenter),
-                    world::kItemPickupVisualSize * pickup.visualScale.x,
-                    world::kItemPickupVisualSize * pickup.visualScale.y,
-                    world::kItemPickupVisualSize * pickup.visualScale.z,
-                    wire);
+                staticPropModels->DrawGameplayTargetHighlight(presentation.visual);
+            }
+            if (presentation.drawInteractionBounds)
+            {
+                DrawTransformedBoundsWires(
+                    presentation.boundsCorners, kSelectedModelBoundsWire);
             }
             continue;
         }
@@ -1569,12 +1579,15 @@ void Renderer::DrawWorld(
             world::kItemPickupVisualSize,
             world::kItemPickupVisualSize,
             fill);
-        DrawCubeWires(
-            ToRaylib(pickup.position),
-            world::kItemPickupVisualSize,
-            world::kItemPickupVisualSize,
-            world::kItemPickupVisualSize,
-            wire);
+        if (!targeted || presentation.drawInteractionBounds)
+        {
+            DrawCubeWires(
+                ToRaylib(pickup.position),
+                world::kItemPickupVisualSize,
+                world::kItemPickupVisualSize,
+                world::kItemPickupVisualSize,
+                wire);
+        }
     }
     DrawOrientedGreyboxBox(
         level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],

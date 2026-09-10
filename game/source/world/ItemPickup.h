@@ -1,9 +1,10 @@
 #pragma once
 
-// Authored Item Pickup (Milestone 55 / 58). World acquisition: gameplay
-// position, M54 itemId, quantity, optional Static Model identity, and a
-// per-instance visual transform. Runtime collected state is never stored
-// here or in Level Format. Not an ItemDefinition or generic Transform.
+// Authored Item Pickup (Milestone 55 / 58 / 58.3). World acquisition: gameplay
+// position, M54 itemId, quantity, optional Static Model identity, a
+// per-instance visual transform, and presentation-only interaction-bounds
+// visibility. Runtime collected state is never stored here or in Level Format.
+// Not an ItemDefinition or generic Transform.
 
 #include "core/Vec3.h"
 #include "gameplay/Inventory.h"
@@ -29,8 +30,10 @@ inline constexpr std::string_view kDefaultItemPickupId = "key";
 inline constexpr core::Vec3 kDefaultItemPickupVisualOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultItemPickupVisualRotationDegrees{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultItemPickupVisualScale{1.0f, 1.0f, 1.0f};
-// Level Format v1 marker. Cannot collide with modelIdentity (models/<file>.glb).
+inline constexpr bool kDefaultItemPickupShowInteractionBounds = true;
+// Level Format v1 markers. Cannot collide with modelIdentity (models/<file>.glb).
 inline constexpr std::string_view kItemPickupVisualKeyword = "visual";
+inline constexpr std::string_view kItemPickupBoundsKeyword = "bounds";
 
 struct ItemPickupSpec
 {
@@ -42,6 +45,9 @@ struct ItemPickupSpec
     core::Vec3 visualOffset{};
     core::Vec3 visualRotationDegrees{};
     core::Vec3 visualScale = kDefaultItemPickupVisualScale;
+    // Presentation only. When this pickup is the current M55 target, draw
+    // the interaction-bounds wire. Does not affect targeting or collection.
+    bool showInteractionBounds = kDefaultItemPickupShowInteractionBounds;
 };
 
 inline bool ItemPickupPositionIsValid(core::Vec3 position)

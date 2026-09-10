@@ -133,6 +133,26 @@ int main()
     Expect(before.depthTest && after.depthTest, "depth test restored");
     Expect(before.depthWriteMask && after.depthWriteMask, "depth mask restored");
     Expect(before.cullFace && after.cullFace, "culling restored");
+
+    store.ResetDrawStats();
+    const Snapshot gameplayBefore = QuerySnapshot();
+    store.DrawGameplayTargetHighlight(spec);
+    Expect(
+        store.GameplayHighlightSubmissionCount() == 1,
+        "gameplay target records one highlight submission");
+    Expect(store.HighlightSubmissionCount() == 0, "gameplay highlight is not the editor ghost counter");
+    Expect(store.DrawSubmissionCount() == 1, "gameplay highlight is a single tinted pass");
+    Expect(store.LoadCount() == loadsBefore, "gameplay highlight does not LoadModel");
+    Expect(!store.HasModel(spec.modelIdentity), "gameplay highlight does not create a model cache");
+    const Snapshot gameplayAfter = QuerySnapshot();
+    Expect(
+        SnapshotNear(gameplayBefore, gameplayAfter),
+        "41-44. gameplay highlight restores matrix/depth/blend/cull");
+    Expect(gameplayBefore.depthTest && gameplayAfter.depthTest, "gameplay depth test restored");
+    Expect(
+        gameplayBefore.depthWriteMask && gameplayAfter.depthWriteMask,
+        "gameplay depth mask restored");
+    Expect(gameplayBefore.cullFace && gameplayAfter.cullFace, "gameplay culling restored");
     DrawCube(Vector3{2.0f, 1.0f, 0.0f}, 0.5f, 0.5f, 0.5f, Color{216, 96, 72, 255});
     DrawCubeWires(Vector3{2.0f, 1.0f, 0.0f}, 0.5f, 0.5f, 0.5f, Color{24, 26, 32, 255});
     EndMode3D();

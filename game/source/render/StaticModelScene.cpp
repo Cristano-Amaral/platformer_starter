@@ -101,6 +101,7 @@ struct StaticModelSceneStore::GpuState
     std::unordered_map<std::string, Entry> entries;
     mutable std::size_t drawSubmissions = 0;
     mutable std::size_t highlightSubmissions = 0;
+    mutable std::size_t gameplayHighlightSubmissions = 0;
     mutable std::vector<std::string> submittedIdentities;
     std::size_t loadCount = 0;
 };
@@ -320,6 +321,7 @@ void StaticModelSceneStore::ResetDrawStats() const
     }
     gpu->drawSubmissions = 0;
     gpu->highlightSubmissions = 0;
+    gpu->gameplayHighlightSubmissions = 0;
     gpu->submittedIdentities.clear();
 }
 
@@ -339,6 +341,15 @@ std::size_t StaticModelSceneStore::HighlightSubmissionCount() const
         return 0;
     }
     return gpu->highlightSubmissions;
+}
+
+std::size_t StaticModelSceneStore::GameplayHighlightSubmissionCount() const
+{
+    if (gpu == nullptr)
+    {
+        return 0;
+    }
+    return gpu->gameplayHighlightSubmissions;
 }
 
 bool StaticModelSceneStore::SubmittedIdentity(std::string_view identity) const
@@ -475,5 +486,22 @@ void StaticModelSceneStore::DrawSelectionHighlight(const world::StaticPropSpec& 
     rlDisableBackfaceCulling();
     DrawPropTinted(spec, 255, 236, 96, 56);
     RestoreEditorModelHighlightState();
+}
+
+void StaticModelSceneStore::DrawGameplayTargetHighlight(const world::StaticPropSpec& spec) const
+{
+    if (!world::StaticPropTransformIsValid(spec))
+    {
+        return;
+    }
+    if (gpu != nullptr)
+    {
+        ++gpu->gameplayHighlightSubmissions;
+    }
+    // Single depth-respecting golden tint. No x-ray: occluded pickups stay
+    // occluded so gameplay targeting does not read through solids.
+    rlDrawRenderBatchActive();
+    DrawPropTinted(spec, 255, 220, 72, 180);
+    RestoreGreyboxImmediateState();
 }
 }

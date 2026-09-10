@@ -1273,7 +1273,8 @@ int main()
                 && state.workingCopy.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
                 && state.workingCopy.itemPickups[0].modelIdentity.empty()
                 && state.workingCopy.itemPickups[0].visualOffset.y == 0.0f
-                && state.workingCopy.itemPickups[0].visualScale.x == 1.0f,
+                && state.workingCopy.itemPickups[0].visualScale.x == 1.0f
+                && state.workingCopy.itemPickups[0].showInteractionBounds,
             "default Item Pickup id/quantity/no model/neutral visual");
         Expect(state.selection.kind == EditorObjectKind::ItemPickup, "new Item Pickup is selected");
         Expect(
@@ -1332,6 +1333,7 @@ int main()
         dupState.workingCopy.itemPickups[0].visualOffset = {0.0f, 0.5f, 0.0f};
         dupState.workingCopy.itemPickups[0].visualRotationDegrees = {0.0f, 90.0f, 0.0f};
         dupState.workingCopy.itemPickups[0].visualScale = {0.15f, 0.2f, 0.25f};
+        dupState.workingCopy.itemPickups[0].showInteractionBounds = false;
         dupState.selection = {EditorObjectKind::ItemPickup, 0};
         Expect(
             editor::HandleAuthoredLifecycleRequest(
@@ -1345,7 +1347,8 @@ int main()
                     == dupState.workingCopy.itemPickups[0].modelIdentity
                 && dupState.workingCopy.itemPickups[1].visualOffset.y == 0.5f
                 && dupState.workingCopy.itemPickups[1].visualRotationDegrees.y == 90.0f
-                && dupState.workingCopy.itemPickups[1].visualScale.x == 0.15f,
+                && dupState.workingCopy.itemPickups[1].visualScale.x == 0.15f
+                && !dupState.workingCopy.itemPickups[1].showInteractionBounds,
             "Duplicate preserves itemId/quantity/model/visual transform");
         Expect(
             dupState.workingCopy.itemPickups[1].position.x
@@ -1381,6 +1384,29 @@ int main()
             world::AuthoredLevelDataEqual(revertVisual.workingCopy, appliedVisual),
             "Revert restores visual fields");
         Expect(!revertVisual.modified, "Revert after visual edit clears Modified");
+        Expect(
+            !revertVisual.workingCopy.itemPickups[0].showInteractionBounds,
+            "applied pickup currently has bounds disabled");
+        revertVisual.workingCopy.itemPickups[0].showInteractionBounds = true;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(revertVisual.modified, "showInteractionBounds edit marks Modified");
+        Expect(
+            !world::AuthoredLevelDataEqual(revertVisual.workingCopy, appliedVisual),
+            "equality detects showInteractionBounds change");
+        revertVisual.workingCopy = appliedVisual;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(
+            !revertVisual.workingCopy.itemPickups[0].showInteractionBounds,
+            "Revert restores showInteractionBounds");
+        Expect(!revertVisual.modified, "Revert after bounds edit clears Modified");
+        world::LevelDefinition appliedBounds = revertVisual.workingCopy;
+        appliedBounds.itemPickups[0].showInteractionBounds = true;
+        Expect(
+            world::AuthoredLevelDataEqual(appliedBounds, appliedBounds),
+            "Apply promotes showInteractionBounds with workingCopy");
+        Expect(
+            appliedBounds.itemPickups[0].showInteractionBounds,
+            "promoted showInteractionBounds is true");
         const core::Vec3 keptOffset = dupState.workingCopy.itemPickups[0].visualOffset;
         const core::Vec3 keptRotation = dupState.workingCopy.itemPickups[0].visualRotationDegrees;
         const core::Vec3 keptScale = dupState.workingCopy.itemPickups[0].visualScale;

@@ -76,10 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 58.2 — Model-backed Selection & Transform Preview
-(Development editor model ghost/highlight for Static Props and model-backed
-Item Pickups; awaiting manual acceptance).
-Milestone 58.1 is implemented. Milestone 59 has not started.
+Milestone 58.3 — Item Pickup Gameplay Target Highlight
+(Development Inspector `Show Interaction Bounds`; Gameplay/Release golden
+model highlight for the current M55 Item Pickup target; awaiting manual
+acceptance).
+Milestone 58.2 is implemented. Milestone 59 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -256,4 +257,7 @@ same cached staged model and the current `workingCopy` transform (Item Pickup:
 `position + visualOffset`, `visualRotationDegrees`, `visualScale`). The
 generic yellow AABB is demoted for those objects; a quieter transformed
 wireframe of the local bounds may remain. Gameplay Item Pickup targeting still
-uses logical `position`. Do not start Milestone 59.
+uses logical `position`. Milestone 58.3 adds Gameplay/Release golden model
+highlight for the current M55 Item Pickup target and authored
+`showInteractionBounds` (default true) controlling only the target
+interaction-bounds wire. Do not start Milestone 59.

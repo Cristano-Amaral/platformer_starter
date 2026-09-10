@@ -266,7 +266,9 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || !Vec3Equal(
                 a.itemPickups[index].visualRotationDegrees,
                 b.itemPickups[index].visualRotationDegrees)
-            || !Vec3Equal(a.itemPickups[index].visualScale, b.itemPickups[index].visualScale))
+            || !Vec3Equal(a.itemPickups[index].visualScale, b.itemPickups[index].visualScale)
+            || a.itemPickups[index].showInteractionBounds
+                != b.itemPickups[index].showInteractionBounds)
         {
             return false;
         }

@@ -144,6 +144,7 @@ add_executable(Platformer3D
     game/source/render/StaticModelPreview.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
+    game/source/render/ItemPickupTargetHighlight.h
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
@@ -1242,6 +1243,28 @@ if(MSVC)
     target_compile_options(ModelSelectionPreviewTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(ModelSelectionPreviewTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 58.3: gameplay Item Pickup target highlight presentation.
+# Consumes the M55 target index. No window or raylib.
+add_executable(ItemPickupTargetHighlightTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/render/ItemPickupTargetHighlight.h
+    game/source/render/ItemPickupTargetHighlightTest.cpp
+    game/source/world/ItemPickup.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(ItemPickupTargetHighlightTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ItemPickupTargetHighlightTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ItemPickupTargetHighlightTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 58.2: selected-model highlight restores depth/blend/cull/matrix.

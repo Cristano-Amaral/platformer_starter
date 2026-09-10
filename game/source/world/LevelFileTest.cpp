@@ -1116,6 +1116,9 @@ int main()
                     && one.level.itemPickups[0].visualScale.y == 1.0f
                     && one.level.itemPickups[0].visualScale.z == 1.0f,
                 "old item_pickup visualScale defaults to 1");
+            Expect(
+                one.level.itemPickups[0].showInteractionBounds,
+                "legacy item_pickup showInteractionBounds defaults true");
             const std::string writtenOne = world::SerializeLevelText(one.level);
             Expect(CountRecords(writtenOne, "item_pickup") == 1, "writer one item_pickup");
             Expect(
@@ -1187,6 +1190,8 @@ int main()
             const std::string writtenVisual = world::SerializeLevelText(visualParsed.level);
             Expect(writtenVisual.find(" visual ") != std::string::npos,
                 "canonical writer emits visual marker");
+            Expect(writtenVisual.find(" bounds 1") != std::string::npos,
+                "canonical writer emits bounds marker default true");
             Expect(writtenVisual.find("models/test_static.glb") != std::string::npos,
                 "canonical writer keeps identity after visual fields");
             Expect(
@@ -1207,6 +1212,9 @@ int main()
             Expect(
                 spacedParsed.level.itemPickups[0].visualScale.x == 1.0f,
                 "old spaced identity keeps default visualScale");
+            Expect(
+                spacedParsed.level.itemPickups[0].showInteractionBounds,
+                "old spaced identity defaults showInteractionBounds true");
             const std::string writtenSpaced = world::SerializeLevelText(spacedParsed.level);
             Expect(
                 world::AuthoredLevelDataEqual(
@@ -1264,6 +1272,99 @@ int main()
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "invalid identity after visual segment rejected");
+
+            const std::string boundsOff =
+                canonical
+                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 0 "
+                  "models/test_static.glb\n";
+            const world::ParseLevelFileResult boundsOffParsed = world::ParseLevelText(boundsOff);
+            Expect(boundsOffParsed.status == world::LoadLevelFileStatus::Loaded,
+                "item_pickup bounds 0 loads");
+            Expect(
+                !boundsOffParsed.level.itemPickups[0].showInteractionBounds,
+                "exact 0 parses showInteractionBounds false");
+            Expect(
+                boundsOffParsed.level.itemPickups[0].modelIdentity == "models/test_static.glb",
+                "bounds marker does not consume modelIdentity");
+            const std::string writtenBoundsOff = world::SerializeLevelText(boundsOffParsed.level);
+            Expect(writtenBoundsOff.find(" bounds 0") != std::string::npos,
+                "canonical writer emits bounds 0");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    boundsOffParsed.level, world::ParseLevelText(writtenBoundsOff).level),
+                "bounds 0 round trip");
+
+            const std::string boundsOn =
+                canonical
+                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
+                  "models/test_static.glb\n";
+            const world::ParseLevelFileResult boundsOnParsed = world::ParseLevelText(boundsOn);
+            Expect(boundsOnParsed.status == world::LoadLevelFileStatus::Loaded,
+                "item_pickup bounds 1 loads");
+            Expect(
+                boundsOnParsed.level.itemPickups[0].showInteractionBounds,
+                "exact 1 parses showInteractionBounds true");
+            world::LevelDefinition boundsChanged = boundsOnParsed.level;
+            boundsChanged.itemPickups[0].showInteractionBounds = false;
+            Expect(
+                !world::AuthoredLevelDataEqual(boundsOnParsed.level, boundsChanged),
+                "authored equality detects showInteractionBounds change");
+
+            const std::string spacedBounds =
+                canonical
+                + "item_pickup 3 1 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 0 "
+                  "models/Chest by Quaternius - O72u4Drp8k.glb\n";
+            const world::ParseLevelFileResult spacedBoundsParsed =
+                world::ParseLevelText(spacedBounds);
+            Expect(spacedBoundsParsed.status == world::LoadLevelFileStatus::Loaded,
+                "bounds before spaced modelIdentity loads");
+            Expect(
+                spacedBoundsParsed.level.itemPickups[0].modelIdentity
+                    == "models/Chest by Quaternius - O72u4Drp8k.glb",
+                "modelIdentity with spaces round-trips after bounds");
+            Expect(
+                !spacedBoundsParsed.level.itemPickups[0].showInteractionBounds,
+                "spaced identity keeps parsed bounds 0");
+            const std::string writtenSpacedBounds =
+                world::SerializeLevelText(spacedBoundsParsed.level);
+            Expect(
+                writtenSpacedBounds.find("models/Chest by Quaternius - O72u4Drp8k.glb")
+                    != std::string::npos,
+                "writer keeps spaced identity after bounds");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    spacedBoundsParsed.level, world::ParseLevelText(writtenSpacedBounds).level),
+                "spaced identity with bounds round trip");
+
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 2\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "invalid bounds token rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds true\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non 0/1 bounds token rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "incomplete bounds marker rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key bounds 0\n").status
+                    == world::LoadLevelFileStatus::Loaded,
+                "bounds without visual is valid");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 key bounds 0\n")
+                    .level.itemPickups[0]
+                    .showInteractionBounds
+                    == false,
+                "bounds 0 without visual parses false");
         }
 
         {

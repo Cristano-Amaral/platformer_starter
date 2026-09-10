@@ -49,7 +49,11 @@ public:
     // Editor-only second pass of the same cached model. Does not LoadModel,
     // mutate materials, or add a persistent scene object.
     void DrawSelectionHighlight(const world::StaticPropSpec& spec) const;
+    // Gameplay/Release Item Pickup target tint. Same cached model as DrawProp.
+    // Depth-respecting golden pass only; no editor x-ray and no LoadModel.
+    void DrawGameplayTargetHighlight(const world::StaticPropSpec& spec) const;
     std::size_t HighlightSubmissionCount() const;
+    std::size_t GameplayHighlightSubmissionCount() const;
 
 private:
     void DrawPropTinted(

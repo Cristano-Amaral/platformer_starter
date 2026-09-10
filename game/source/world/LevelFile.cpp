@@ -685,6 +685,20 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 }
                 identityStart = 16;
             }
+            if (tokens.size() > identityStart && tokens[identityStart] == kItemPickupBoundsKeyword)
+            {
+                if (tokens.size() < identityStart + 2)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup bounds");
+                }
+                if (!ParseBool01Token(tokens[identityStart + 1], pickup.showInteractionBounds))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup bounds");
+                }
+                identityStart += 2;
+            }
             if (tokens.size() > identityStart)
             {
                 pickup.modelIdentity = std::string(tokens[identityStart]);

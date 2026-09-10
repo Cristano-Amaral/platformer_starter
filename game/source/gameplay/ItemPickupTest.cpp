@@ -207,6 +207,23 @@ int main()
         Expect(pickups[0].visualOffset.y == 8.0f, "collection does not mutate authored visualOffset");
         Expect(pickups[0].visualScale.x == 4.0f, "collection does not mutate authored visualScale");
         Expect(pickups[0].position.x == nearby.x, "collection does not mutate gameplay position");
+        world::ItemPickupSpec boundsOff = shifted;
+        boundsOff.showInteractionBounds = false;
+        const std::vector<world::ItemPickupSpec> boundsOffPickups{boundsOff};
+        Expect(
+            gameplay::FindItemPickupTargetIndex(
+                spawn, 1.0f, boundsOffPickups, run.collected, los)
+                == gameplay::kNoItemPickupIndex,
+            "collected pickup stays untargetable regardless of bounds flag");
+        gameplay::ItemPickupRunState available = gameplay::MakeClearedItemPickupRunState(1);
+        Expect(
+            gameplay::FindItemPickupTargetIndex(
+                spawn, 1.0f, boundsOffPickups, available.collected, los)
+                == 0,
+            "showInteractionBounds false does not change target eligibility");
+        Expect(
+            boundsOffPickups[0].showInteractionBounds == false,
+            "targeting does not mutate showInteractionBounds");
     }
 
     {

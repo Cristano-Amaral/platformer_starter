@@ -179,6 +179,12 @@ int main()
             editor::MakeSelectedModelGhostRequest(editor::ClearSelection(), working).visible
                 == false,
             "unselected Item Pickup has no ghost");
+        working.itemPickups[0].showInteractionBounds = false;
+        Expect(
+            editor::MakeSelectedModelGhostRequest(
+                {editor::EditorObjectKind::ItemPickup, 0}, working)
+                .visible,
+            "showInteractionBounds does not disable M58.2 editor ghost");
     }
 
     // Fallback Item Pickup (empty modelIdentity) stays on the cube path.

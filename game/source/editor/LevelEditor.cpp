@@ -527,6 +527,10 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Visual Offset X Y Z", pickup.visualOffset);
             EditVec3("Visual Rotation X Y Z (deg)", pickup.visualRotationDegrees);
             EditVec3("Visual Scale X Y Z", pickup.visualScale);
+            ImGui::Checkbox("Show Interaction Bounds", &pickup.showInteractionBounds);
+            ImGui::TextUnformatted(
+                "When targeted in Gameplay, draw the interaction-bounds wire. Does not change "
+                "targeting, HUD, or collection.");
             ImGui::TextUnformatted(
                 "Translate edits Position. Rotate gizmo edits Visual Rotation. Scale gizmo edits "
                 "Visual Scale. Offset remains Inspector-only.");
