@@ -388,6 +388,30 @@ EditorHighlightRequest MakeHighlightRequest(
     return request;
 }
 
+void ApplyLoadedLocalBounds(PickingProxy& proxy, core::Vec3 localMin, core::Vec3 localMax)
+{
+    if (!proxy.usesStaticPropTransform)
+    {
+        return;
+    }
+    proxy.localMin = localMin;
+    proxy.localMax = localMax;
+    StaticPropWorldAabb(
+        proxy.staticProp, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
+}
+
+void ApplyLoadedLocalBounds(PendingPickProxy& proxy, core::Vec3 localMin, core::Vec3 localMax)
+{
+    if (!proxy.usesStaticPropTransform)
+    {
+        return;
+    }
+    proxy.localMin = localMin;
+    proxy.localMax = localMax;
+    StaticPropWorldAabb(
+        proxy.staticProp, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
+}
+
 EditorSelection PickNearestPending(Ray3 ray, const std::vector<PendingPickProxy>& proxies)
 {
     EditorSelection best = ClearSelection();
@@ -395,7 +419,9 @@ EditorSelection PickNearestPending(Ray3 ray, const std::vector<PendingPickProxy>
 
     for (const PendingPickProxy& proxy : proxies)
     {
-        const RayHit hit = IntersectRayAabb(ray, proxy.center, proxy.size);
+        const RayHit hit = proxy.usesStaticPropTransform
+            ? IntersectRayStaticProp(ray, proxy.staticProp, proxy.localMin, proxy.localMax)
+            : IntersectRayAabb(ray, proxy.center, proxy.size);
         if (!hit.hit)
         {
             continue;

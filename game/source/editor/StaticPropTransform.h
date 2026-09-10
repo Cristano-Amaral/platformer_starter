@@ -36,6 +36,22 @@ inline core::Vec3 StaticPropWorldFromLocal(
         + RotateEulerXYZ(ScaleAxes(local, spec.scale), spec.rotationDegrees);
 }
 
+inline void StaticPropWorldCorners(
+    const world::StaticPropSpec& spec,
+    core::Vec3 localMin,
+    core::Vec3 localMax,
+    core::Vec3 outCorners[8])
+{
+    outCorners[0] = StaticPropWorldFromLocal(spec, {localMin.x, localMin.y, localMin.z});
+    outCorners[1] = StaticPropWorldFromLocal(spec, {localMax.x, localMin.y, localMin.z});
+    outCorners[2] = StaticPropWorldFromLocal(spec, {localMin.x, localMax.y, localMin.z});
+    outCorners[3] = StaticPropWorldFromLocal(spec, {localMax.x, localMax.y, localMin.z});
+    outCorners[4] = StaticPropWorldFromLocal(spec, {localMin.x, localMin.y, localMax.z});
+    outCorners[5] = StaticPropWorldFromLocal(spec, {localMax.x, localMin.y, localMax.z});
+    outCorners[6] = StaticPropWorldFromLocal(spec, {localMin.x, localMax.y, localMax.z});
+    outCorners[7] = StaticPropWorldFromLocal(spec, {localMax.x, localMax.y, localMax.z});
+}
+
 inline void StaticPropWorldAabb(
     const world::StaticPropSpec& spec,
     core::Vec3 localMin,
@@ -43,15 +59,8 @@ inline void StaticPropWorldAabb(
     core::Vec3& outCenter,
     core::Vec3& outSize)
 {
-    const core::Vec3 corners[8] = {
-        StaticPropWorldFromLocal(spec, {localMin.x, localMin.y, localMin.z}),
-        StaticPropWorldFromLocal(spec, {localMax.x, localMin.y, localMin.z}),
-        StaticPropWorldFromLocal(spec, {localMin.x, localMax.y, localMin.z}),
-        StaticPropWorldFromLocal(spec, {localMax.x, localMax.y, localMin.z}),
-        StaticPropWorldFromLocal(spec, {localMin.x, localMin.y, localMax.z}),
-        StaticPropWorldFromLocal(spec, {localMax.x, localMin.y, localMax.z}),
-        StaticPropWorldFromLocal(spec, {localMin.x, localMax.y, localMax.z}),
-        StaticPropWorldFromLocal(spec, {localMax.x, localMax.y, localMax.z})};
+    core::Vec3 corners[8]{};
+    StaticPropWorldCorners(spec, localMin, localMax, corners);
     core::Vec3 minimum = corners[0];
     core::Vec3 maximum = corners[0];
     for (int index = 1; index < 8; ++index)
@@ -114,7 +123,9 @@ inline RayHit IntersectRayStaticProp(
 inline void ItemPickupEditorBounds(
     const world::ItemPickupSpec& pickup,
     core::Vec3& outCenter,
-    core::Vec3& outSize)
+    core::Vec3& outSize,
+    core::Vec3 localMin = kStaticPropDefaultLocalMin,
+    core::Vec3 localMax = kStaticPropDefaultLocalMax)
 {
     if (pickup.modelIdentity.empty())
     {
@@ -124,10 +135,20 @@ inline void ItemPickupEditorBounds(
     }
     StaticPropWorldAabb(
         world::ItemPickupVisualProp(pickup),
-        kStaticPropDefaultLocalMin,
-        kStaticPropDefaultLocalMax,
+        localMin,
+        localMax,
         outCenter,
         outSize);
+}
+
+inline void AssignLoadedStaticPropLocalBounds(
+    core::Vec3 loadedMin,
+    core::Vec3 loadedMax,
+    core::Vec3& localMin,
+    core::Vec3& localMax)
+{
+    localMin = loadedMin;
+    localMax = loadedMax;
 }
 
 inline bool PointInsideAabb(core::Vec3 point, core::Vec3 center, core::Vec3 size)

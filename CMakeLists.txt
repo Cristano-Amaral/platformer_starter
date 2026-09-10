@@ -1208,6 +1208,73 @@ target_compile_definitions(GreyboxImmediateStateTest PRIVATE
     "PLATFORMER_BARREL_GLB=\"${PLATFORMER_BARREL_GLB}\""
 )
 
+# Milestone 58.2: selected-model ghost/highlight uses workingCopy transform and
+# oriented picking bounds. No window or raylib.
+add_executable(ModelSelectionPreviewTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/ModelSelectionPreviewTest.cpp
+    game/source/editor/SelectedModelHighlight.h
+    game/source/editor/StaticPropTransform.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/render/CameraView.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(ModelSelectionPreviewTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ModelSelectionPreviewTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ModelSelectionPreviewTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 58.2: selected-model highlight restores depth/blend/cull/matrix.
+# Hidden window. Uses the placeholder path so staged assets are not required.
+add_executable(SelectedModelHighlightStateTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/SelectedModelHighlightStateTest.cpp
+    game/source/render/StaticModelScene.cpp
+    game/source/render/StaticModelScene.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(SelectedModelHighlightStateTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(SelectedModelHighlightStateTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(SelectedModelHighlightStateTest PRIVATE game/source)
+target_link_libraries(SelectedModelHighlightStateTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(SelectedModelHighlightStateTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(SelectedModelHighlightStateTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(SelectedModelHighlightStateTest PRIVATE ole32 shell32 uuid)
+endif()
+
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or
 # HostProcess. Shares enable helpers with EditorWorkspaceTest.
 add_executable(CookStageReloadWorkflowTest

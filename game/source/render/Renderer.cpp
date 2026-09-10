@@ -85,6 +85,7 @@ constexpr Color kGrabHudText{236, 214, 72, 255};
 constexpr Color kGrabHudMuted{200, 208, 220, 255};
 constexpr Color kSpawnMarkerFill{240, 200, 64, 255};
 constexpr Color kSelectionHighlightColor{255, 236, 64, 255};
+constexpr Color kSelectedModelBoundsWire{200, 188, 72, 140};
 constexpr Color kPendingPreviewWire{72, 220, 236, 255};
 constexpr Color kPendingPreviewWireUnselected{72, 220, 236, 130};
 constexpr Color kCheckpointRespawnMarkerWire{220, 64, 196, 255};
@@ -142,6 +143,30 @@ void DrawGhostBox(core::Vec3 center, core::Vec3 size, Color fill, Color wire)
     const Vector3 position = ToRaylib(center);
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, wire);
+}
+
+void DrawTransformedBoundsWires(const core::Vec3 corners[8], Color wire)
+{
+    const int edges[12][2] = {
+        {0, 1},
+        {2, 3},
+        {4, 5},
+        {6, 7},
+        {0, 2},
+        {1, 3},
+        {4, 6},
+        {5, 7},
+        {0, 4},
+        {1, 5},
+        {2, 6},
+        {3, 7}};
+    for (int index = 0; index < 12; ++index)
+    {
+        DrawLine3D(
+            ToRaylib(corners[edges[index][0]]),
+            ToRaylib(corners[edges[index][1]]),
+            wire);
+    }
 }
 
 void DrawPendingDeleteWires(core::Vec3 center, core::Vec3 size)
@@ -838,6 +863,10 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
                 kSelectionHighlightColor);
         }
     }
+    if (overlay.drawSelectedModelBounds)
+    {
+        DrawTransformedBoundsWires(overlay.selectedModelBoundsCorners, kSelectedModelBoundsWire);
+    }
     if (!overlay.collectedAuthoredCollectibleCenters.empty())
     {
         const float size = world::kCollectibleVisualSize;
@@ -943,6 +972,9 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
             }
             const Color boundsWire =
                 selectedPass ? kPendingPreviewWire : kPendingPreviewWireUnselected;
+            const bool skipModelBackedBounds =
+                item.selected && overlay.drawSelectedModelGhost
+                && (item.kind == 5 || item.kind == 8);
             if (item.drawObjectVisual)
             {
                 if (item.kind == 1)
@@ -982,7 +1014,8 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
                                      : kPendingCollectibleWireUnselected);
                 }
             }
-            if (item.boundsSize.x > 0.0f && item.boundsSize.y > 0.0f && item.boundsSize.z > 0.0f)
+            if (!skipModelBackedBounds && item.boundsSize.x > 0.0f && item.boundsSize.y > 0.0f
+                && item.boundsSize.z > 0.0f)
             {
                 DrawCubeWires(
                     ToRaylib(item.boundsCenter),
@@ -1234,11 +1267,12 @@ Renderer::~Renderer()
 
 void Renderer::SyncStaticPropModels(
     const world::LevelDefinition& level,
-    std::string_view extraIdentity)
+    std::string_view extraIdentity,
+    const world::LevelDefinition* extraLevel)
 {
     if (staticPropModels)
     {
-        staticPropModels->Sync(level, extraIdentity);
+        staticPropModels->Sync(level, extraIdentity, extraLevel);
     }
 }
 
@@ -1596,6 +1630,10 @@ void Renderer::DrawWorld(
     if (overlay.drawStaticPropPlacementPreview && staticPropModels)
     {
         staticPropModels->DrawPlacementPreview(overlay.staticPropPlacementPreview);
+    }
+    if (overlay.drawSelectedModelGhost && staticPropModels)
+    {
+        staticPropModels->DrawSelectionHighlight(overlay.selectedModelGhost);
     }
     DrawWorldOverlay(overlay);
 

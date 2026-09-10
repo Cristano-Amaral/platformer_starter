@@ -24,7 +24,10 @@ public:
     StaticModelSceneStore& operator=(const StaticModelSceneStore&) = delete;
 
     void Shutdown();
-    void Sync(const world::LevelDefinition& level, std::string_view extraIdentity = {});
+    void Sync(
+        const world::LevelDefinition& level,
+        std::string_view extraIdentity = {},
+        const world::LevelDefinition* extraLevel = nullptr);
 
     bool HasModel(std::string_view identity) const;
     bool IsFailed(std::string_view identity) const;
@@ -43,6 +46,10 @@ public:
 
     void DrawProp(const world::StaticPropSpec& spec) const;
     void DrawPlacementPreview(const world::StaticPropSpec& spec) const;
+    // Editor-only second pass of the same cached model. Does not LoadModel,
+    // mutate materials, or add a persistent scene object.
+    void DrawSelectionHighlight(const world::StaticPropSpec& spec) const;
+    std::size_t HighlightSubmissionCount() const;
 
 private:
     void DrawPropTinted(
@@ -61,4 +68,6 @@ private:
 // start of each 3D world pass and after each prop. This does not restore
 // clip planes; BeginMode3D already consumed those (see DrawWorld).
 void RestoreGreyboxImmediateState();
+// Restore depth/cull/shader after an editor selection-highlight pass.
+void RestoreEditorModelHighlightState();
 }

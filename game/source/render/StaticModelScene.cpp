@@ -100,6 +100,7 @@ struct StaticModelSceneStore::GpuState
 
     std::unordered_map<std::string, Entry> entries;
     mutable std::size_t drawSubmissions = 0;
+    mutable std::size_t highlightSubmissions = 0;
     mutable std::vector<std::string> submittedIdentities;
     std::size_t loadCount = 0;
 };
@@ -132,7 +133,10 @@ void StaticModelSceneStore::Shutdown()
     gpu->entries.clear();
 }
 
-void StaticModelSceneStore::Sync(const world::LevelDefinition& level, std::string_view extraIdentity)
+void StaticModelSceneStore::Sync(
+    const world::LevelDefinition& level,
+    std::string_view extraIdentity,
+    const world::LevelDefinition* extraLevel)
 {
     if (gpu == nullptr)
     {
@@ -141,19 +145,26 @@ void StaticModelSceneStore::Sync(const world::LevelDefinition& level, std::strin
 
     std::unordered_set<std::string> needed;
     needed.reserve(level.staticProps.size() + level.itemPickups.size() + 1);
-    for (const world::StaticPropSpec& prop : level.staticProps)
-    {
-        if (world::StaticPropIdentityIsValid(prop.modelIdentity))
+    const auto collectIdentities = [&](const world::LevelDefinition& source) {
+        for (const world::StaticPropSpec& prop : source.staticProps)
         {
-            needed.insert(prop.modelIdentity);
+            if (world::StaticPropIdentityIsValid(prop.modelIdentity))
+            {
+                needed.insert(prop.modelIdentity);
+            }
         }
-    }
-    for (const world::ItemPickupSpec& pickup : level.itemPickups)
-    {
-        if (world::StaticPropIdentityIsValid(pickup.modelIdentity))
+        for (const world::ItemPickupSpec& pickup : source.itemPickups)
         {
-            needed.insert(pickup.modelIdentity);
+            if (world::StaticPropIdentityIsValid(pickup.modelIdentity))
+            {
+                needed.insert(pickup.modelIdentity);
+            }
         }
+    };
+    collectIdentities(level);
+    if (extraLevel != nullptr)
+    {
+        collectIdentities(*extraLevel);
     }
     if (world::StaticPropIdentityIsValid(extraIdentity))
     {
@@ -308,6 +319,7 @@ void StaticModelSceneStore::ResetDrawStats() const
         return;
     }
     gpu->drawSubmissions = 0;
+    gpu->highlightSubmissions = 0;
     gpu->submittedIdentities.clear();
 }
 
@@ -318,6 +330,15 @@ std::size_t StaticModelSceneStore::DrawSubmissionCount() const
         return 0;
     }
     return gpu->drawSubmissions;
+}
+
+std::size_t StaticModelSceneStore::HighlightSubmissionCount() const
+{
+    if (gpu == nullptr)
+    {
+        return 0;
+    }
+    return gpu->highlightSubmissions;
 }
 
 bool StaticModelSceneStore::SubmittedIdentity(std::string_view identity) const
@@ -423,5 +444,36 @@ void StaticModelSceneStore::DrawPlacementPreview(const world::StaticPropSpec& sp
     // Editor-only ghost tint. Must not LoadModel, mutate the shared Model, or
     // change rlgl clip planes (M49 Gameplay contract).
     DrawPropTinted(spec, 96, 220, 236, 160);
+}
+
+void RestoreEditorModelHighlightState()
+{
+    rlDrawRenderBatchActive();
+    rlEnableBackfaceCulling();
+    rlEnableDepthMask();
+    rlEnableDepthTest();
+    RestoreGreyboxImmediateState();
+}
+
+void StaticModelSceneStore::DrawSelectionHighlight(const world::StaticPropSpec& spec) const
+{
+    if (!world::StaticPropTransformIsValid(spec))
+    {
+        return;
+    }
+    if (gpu != nullptr)
+    {
+        ++gpu->highlightSubmissions;
+    }
+    // Depth-respecting tint, then a quieter x-ray pass so occluded parts of
+    // the selected model stay readable. Restore every changed rlgl state.
+    rlDrawRenderBatchActive();
+    DrawPropTinted(spec, 255, 220, 72, 150);
+    rlDrawRenderBatchActive();
+    rlDisableDepthTest();
+    rlDisableDepthMask();
+    rlDisableBackfaceCulling();
+    DrawPropTinted(spec, 255, 236, 96, 56);
+    RestoreEditorModelHighlightState();
 }
 }

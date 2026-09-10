@@ -53,6 +53,7 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
+#include "editor/SelectedModelHighlight.h"
 #include "editor/StaticPropPlacement.h"
 #include "editor/StaticPropTransform.h"
 #include "editor/EditorToolCommands.h"
@@ -186,6 +187,71 @@ editor::EditorPickingWorldState MakeRuntimePickingWorldState(
         state.doorSizes.push_back(door.size);
     }
     return state;
+}
+
+void ApplyLoadedModelBoundsToProxy(
+    const render::StaticModelSceneStore* store,
+    editor::PickingProxy& proxy)
+{
+    if (store == nullptr || !proxy.usesStaticPropTransform)
+    {
+        return;
+    }
+    core::Vec3 localMin{};
+    core::Vec3 localMax{};
+    if (!store->TryGetLoadedLocalBounds(proxy.staticProp.modelIdentity, localMin, localMax))
+    {
+        return;
+    }
+    editor::ApplyLoadedLocalBounds(proxy, localMin, localMax);
+}
+
+void ApplyLoadedModelBoundsToPickingSet(
+    editor::EditorPickingSet& set,
+    const render::StaticModelSceneStore* store)
+{
+    for (editor::PickingProxy& proxy : set.proxies)
+    {
+        ApplyLoadedModelBoundsToProxy(store, proxy);
+    }
+}
+
+void ApplyLoadedModelBoundsToPending(
+    std::vector<editor::PendingAuthoringVisual>& visuals,
+    const render::StaticModelSceneStore* store)
+{
+    for (editor::PendingAuthoringVisual& visual : visuals)
+    {
+        if (!visual.usesStaticPropTransform)
+        {
+            continue;
+        }
+        core::Vec3 localMin{};
+        core::Vec3 localMax{};
+        if (store != nullptr
+            && store->TryGetLoadedLocalBounds(
+                visual.staticProp.modelIdentity, localMin, localMax))
+        {
+            visual.localMin = localMin;
+            visual.localMax = localMax;
+        }
+        editor::StaticPropWorldAabb(
+            visual.staticProp,
+            visual.localMin,
+            visual.localMax,
+            visual.boundsCenter,
+            visual.boundsSize);
+    }
+}
+
+editor::EditorPickingSet MakeLivePickingSet(
+    const world::LevelDefinition& appliedLevel,
+    const editor::EditorPickingWorldState& worldState,
+    const render::StaticModelSceneStore* store)
+{
+    editor::EditorPickingSet set = editor::BuildPickingSet(appliedLevel, worldState);
+    ApplyLoadedModelBoundsToPickingSet(set, store);
+    return set;
 }
 #endif
 
@@ -1010,11 +1076,47 @@ int Application::Run()
 
             const editor::EditorPickingWorldState pickingWorld =
                 MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors);
+            {
+                std::string_view previewIdentity{};
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+                if (editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement))
+                {
+                    previewIdentity = levelEditorState.staticPropPlacement.modelIdentity;
+                }
+#endif
+                renderer.SyncStaticPropModels(
+                    levelDefinition, previewIdentity, &levelEditorState.workingCopy);
+            }
+            const render::StaticModelSceneStore* modelStore = renderer.StaticPropModels();
+            const editor::EditorPickingSet pickingSet =
+                MakeLivePickingSet(levelDefinition, pickingWorld, modelStore);
+            editor::SelectedModelGhostRequest modelGhost =
+                editor::MakeSelectedModelGhostRequest(
+                    levelEditorState.selection, levelEditorState.workingCopy);
+            if (modelGhost.visible && modelStore != nullptr)
+            {
+                core::Vec3 loadedMin{};
+                core::Vec3 loadedMax{};
+                const bool haveBounds = modelStore->TryGetLoadedLocalBounds(
+                    modelGhost.visual.modelIdentity, loadedMin, loadedMax);
+                editor::ApplyLoadedLocalBoundsToGhost(modelGhost, haveBounds, loadedMin, loadedMax);
+            }
+            overlay.drawSelectedModelGhost = modelGhost.visible;
+            overlay.selectedModelGhost = modelGhost.visual;
+            overlay.drawSelectedModelBounds = modelGhost.drawOrientedBounds;
+            if (overlay.drawSelectedModelBounds)
+            {
+                editor::StaticPropWorldCorners(
+                    modelGhost.visual,
+                    modelGhost.localMin,
+                    modelGhost.localMax,
+                    overlay.selectedModelBoundsCorners);
+            }
             const editor::EditorHighlightRequest highlight = editor::MakeHighlightRequest(
                 editor::HighlightSelectionFromWorking(
                     levelEditorState.selection, levelEditorState.structuralMap),
-                editor::BuildPickingSet(levelDefinition, pickingWorld));
-            overlay.drawHighlight = highlight.visible;
+                pickingSet);
+            overlay.drawHighlight = highlight.visible && !modelGhost.demotePrimaryBox;
             overlay.highlightCenter = highlight.center;
             overlay.highlightSize = highlight.size;
             overlay.highlightRotationZDegrees = highlight.rotationZDegrees;
@@ -1034,12 +1136,13 @@ int Application::Run()
             overlay.collectedAuthoredCollectibleCenters.resize(
                 collectedAuthoredCount < 0 ? 0 : static_cast<std::size_t>(collectedAuthoredCount));
 
-            const std::vector<editor::PendingAuthoringVisual> pendingAuthoring =
+            std::vector<editor::PendingAuthoringVisual> pendingAuthoring =
                 editor::CollectPendingAuthoringVisuals(
                     levelDefinition,
                     levelEditorState.workingCopy,
                     levelEditorState.structuralMap,
                     levelEditorState.selection);
+            ApplyLoadedModelBoundsToPending(pendingAuthoring, modelStore);
             overlay.pendingAuthoring.clear();
             overlay.pendingAuthoring.reserve(pendingAuthoring.size());
             for (const editor::PendingAuthoringVisual& visual : pendingAuthoring)
@@ -1092,13 +1195,6 @@ int Application::Run()
             }
 
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
-            {
-                const std::string_view previewIdentity =
-                    editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement)
-                    ? std::string_view(levelEditorState.staticPropPlacement.modelIdentity)
-                    : std::string_view{};
-                renderer.SyncStaticPropModels(levelDefinition, previewIdentity);
-            }
             if (editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement))
             {
                 const editor::Ray3 previewRay = editor::ScreenToWorldRayFromWindow(
@@ -1108,16 +1204,16 @@ int Application::Run()
                     editorViewport);
                 core::Vec3 localMin = editor::kStaticPropDefaultLocalMin;
                 core::Vec3 localMax = editor::kStaticPropDefaultLocalMax;
-                if (renderer.StaticPropModels() != nullptr)
+                if (modelStore != nullptr)
                 {
-                    (void)renderer.StaticPropModels()->TryGetLoadedLocalBounds(
+                    (void)modelStore->TryGetLoadedLocalBounds(
                         levelEditorState.staticPropPlacement.modelIdentity, localMin, localMax);
                 }
                 const editor::StaticPropPlacementPreview preview =
                     editor::ResolveStaticPropPlacementPreview(
                         levelEditorState.staticPropPlacement,
                         previewRay,
-                        editor::BuildPickingSet(levelDefinition, pickingWorld),
+                        pickingSet,
                         localMin,
                         localMax);
                 overlay.drawStaticPropPlacementPreview =
@@ -1144,7 +1240,7 @@ int Application::Run()
                 const editor::PlacementCandidate candidate = editor::ResolvePlacementCandidate(
                     levelEditorState.placementMode,
                     previewRay,
-                    editor::BuildPickingSet(levelDefinition, pickingWorld),
+                    pickingSet,
                     editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
                 overlay.drawPlacementCandidate = candidate.visible;
                 overlay.placementCandidateFallback =
@@ -1388,12 +1484,23 @@ int Application::Run()
                 inventory.Has(targetedDoor.requiredItemId, gameplay::kDoorUnlockQuantity));
         }
         renderer.BeginFrame();
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        if (levelEditorState.active)
+        {
+            std::string_view previewIdentity{};
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
-        renderer.SyncStaticPropModels(
-            levelDefinition,
-            editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement)
-                ? std::string_view(levelEditorState.staticPropPlacement.modelIdentity)
-                : std::string_view{});
+            if (editor::StaticPropPlacementIsActive(levelEditorState.staticPropPlacement))
+            {
+                previewIdentity = levelEditorState.staticPropPlacement.modelIdentity;
+            }
+#endif
+            renderer.SyncStaticPropModels(
+                levelDefinition, previewIdentity, &levelEditorState.workingCopy);
+        }
+        else
+        {
+            renderer.SyncStaticPropModels(levelDefinition);
+        }
 #else
         renderer.SyncStaticPropModels(levelDefinition);
 #endif
@@ -1720,9 +1827,10 @@ int Application::Run()
                     editor::ResolveStaticPropPlacementPreview(
                         levelEditorState.staticPropPlacement,
                         ray,
-                        editor::BuildPickingSet(
+                        MakeLivePickingSet(
                             levelDefinition,
-                            MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors)),
+                            MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors),
+                            renderer.StaticPropModels()),
                         localMin,
                         localMax);
                 const bool canAdd = editor::CanIssueAuthoredLifecycleRequest(
@@ -1767,9 +1875,10 @@ int Application::Run()
                 const editor::PlacementCandidate candidate = editor::ResolvePlacementCandidate(
                     levelEditorState.placementMode,
                     ray,
-                    editor::BuildPickingSet(
+                    MakeLivePickingSet(
                         levelDefinition,
-                        MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors)),
+                        MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors),
+                        renderer.StaticPropModels()),
                     editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
                 editor::HandleAuthoredLifecycleRequest(
                     levelEditorState,
@@ -1789,16 +1898,20 @@ int Application::Run()
             {
                 const editor::EditorPickingWorldState pickingWorld =
                     MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors);
-                const std::vector<editor::PendingPickProxy> pendingProxies =
-                    editor::BuildPendingPickProxies(editor::CollectPendingAuthoringVisuals(
+                std::vector<editor::PendingAuthoringVisual> pendingVisuals =
+                    editor::CollectPendingAuthoringVisuals(
                         levelDefinition,
                         levelEditorState.workingCopy,
                         levelEditorState.structuralMap,
-                        levelEditorState.selection));
+                        levelEditorState.selection);
+                ApplyLoadedModelBoundsToPending(pendingVisuals, renderer.StaticPropModels());
+                const std::vector<editor::PendingPickProxy> pendingProxies =
+                    editor::BuildPendingPickProxies(pendingVisuals);
                 editor::EditorSelection workingPick{};
                 if (editor::TryResolveEditorViewportPick(
                         ray,
-                        editor::BuildPickingSet(levelDefinition, pickingWorld),
+                        MakeLivePickingSet(
+                            levelDefinition, pickingWorld, renderer.StaticPropModels()),
                         pendingProxies,
                         levelEditorState.structuralMap,
                         workingPick))

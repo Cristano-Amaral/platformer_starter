@@ -1291,6 +1291,21 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
             {
                 visual.collectible = workingCopy.collectibles[index];
             }
+            if (kind == EditorObjectKind::StaticProp)
+            {
+                visual.usesStaticPropTransform = true;
+                visual.staticProp = workingCopy.staticProps[index];
+                visual.localMin = kStaticPropDefaultLocalMin;
+                visual.localMax = kStaticPropDefaultLocalMax;
+            }
+            if (kind == EditorObjectKind::ItemPickup
+                && !workingCopy.itemPickups[index].modelIdentity.empty())
+            {
+                visual.usesStaticPropTransform = true;
+                visual.staticProp = world::ItemPickupVisualProp(workingCopy.itemPickups[index]);
+                visual.localMin = kStaticPropDefaultLocalMin;
+                visual.localMax = kStaticPropDefaultLocalMax;
+            }
             visuals.push_back(visual);
         }
     }

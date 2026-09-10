@@ -267,6 +267,10 @@ struct PendingAuthoringVisual
     world::CheckpointSpec checkpoint{};
     world::HazardSpec hazard{};
     world::CollectibleSpec collectible{};
+    bool usesStaticPropTransform = false;
+    world::StaticPropSpec staticProp{};
+    core::Vec3 localMin{-0.5f, -0.5f, -0.5f};
+    core::Vec3 localMax{0.5f, 0.5f, 0.5f};
 };
 
 std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
@@ -321,6 +325,10 @@ inline std::vector<PendingPickProxy> BuildPendingPickProxies(
         proxy.selection = {visual.kind, visual.workingIndex};
         proxy.center = visual.boundsCenter;
         proxy.size = visual.boundsSize;
+        proxy.usesStaticPropTransform = visual.usesStaticPropTransform;
+        proxy.staticProp = visual.staticProp;
+        proxy.localMin = visual.localMin;
+        proxy.localMax = visual.localMax;
         proxies.push_back(proxy);
     }
     return proxies;

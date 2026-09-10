@@ -70,6 +70,10 @@ struct PendingPickProxy
     EditorSelection selection{};
     core::Vec3 center{};
     core::Vec3 size{};
+    bool usesStaticPropTransform = false;
+    world::StaticPropSpec staticProp{};
+    core::Vec3 localMin{-0.5f, -0.5f, -0.5f};
+    core::Vec3 localMax{0.5f, 0.5f, 0.5f};
 };
 
 struct StructuralIndexMap;
@@ -112,6 +116,9 @@ EditorSelection PickNearest(Ray3 ray, const EditorPickingSet& set);
 EditorHighlightRequest MakeHighlightRequest(
     EditorSelection selection,
     const EditorPickingSet& set);
+
+void ApplyLoadedLocalBounds(PickingProxy& proxy, core::Vec3 localMin, core::Vec3 localMax);
+void ApplyLoadedLocalBounds(PendingPickProxy& proxy, core::Vec3 localMin, core::Vec3 localMax);
 
 // Same-frame ImGui / look / gizmo gating used by Application. Pending and
 // active viewport picks share this; gizmo drag stays higher priority.

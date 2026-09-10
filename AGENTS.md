@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 58.1 — Editor Rotate Gizmo v1
-(Development world-axis Rotate gizmo for Static Prop rotation and Item Pickup
-`visualRotationDegrees`; awaiting manual acceptance).
-Milestone 58 is implemented. Milestone 59 has not started.
+Milestone 58.2 — Model-backed Selection & Transform Preview
+(Development editor model ghost/highlight for Static Props and model-backed
+Item Pickups; awaiting manual acceptance).
+Milestone 58.1 is implemented. Milestone 59 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -250,4 +250,10 @@ Milestone 58.1 Rotate edits `visualRotationDegrees` only. `visualOffset`
 remains Inspector-authored. Canonical Level 01 has 0 Item Pickups, 0 Doors, 0 Pressure
 Plates, 0 Dynamic Boxes, and 0 Static Props. Milestone 58.1 adds a Development
 Rotate gizmo for Static Prop authored rotation and Item Pickup
-`visualRotationDegrees` only. Do not start Milestone 59.
+`visualRotationDegrees` only. Milestone 58.2 adds a Development editor-only
+second draw of the selected Static Prop or model-backed Item Pickup using the
+same cached staged model and the current `workingCopy` transform (Item Pickup:
+`position + visualOffset`, `visualRotationDegrees`, `visualScale`). The
+generic yellow AABB is demoted for those objects; a quieter transformed
+wireframe of the local bounds may remain. Gameplay Item Pickup targeting still
+uses logical `position`. Do not start Milestone 59.

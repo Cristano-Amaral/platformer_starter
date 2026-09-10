@@ -31,6 +31,11 @@ struct DebugWorldOverlay
     core::Vec3 highlightCenter{};
     core::Vec3 highlightSize{};
     float highlightRotationZDegrees = 0.0f;
+    // M58.2 editor-only selected-model ghost. workingCopy visual transform.
+    bool drawSelectedModelGhost = false;
+    world::StaticPropSpec selectedModelGhost{};
+    bool drawSelectedModelBounds = false;
+    core::Vec3 selectedModelBoundsCorners[8]{};
     // Editor-only Checkpoint respawn marker. Distinct from the trigger AABB.
     bool drawCheckpointRespawnMarker = false;
     core::Vec3 checkpointRespawnMarker{};
@@ -194,7 +199,8 @@ public:
     void UnloadRuntimeAssets();
     void SyncStaticPropModels(
         const world::LevelDefinition& level,
-        std::string_view extraIdentity = {});
+        std::string_view extraIdentity = {},
+        const world::LevelDefinition* extraLevel = nullptr);
     StaticModelSceneStore* StaticPropModels();
     const StaticModelSceneStore* StaticPropModels() const;
 
