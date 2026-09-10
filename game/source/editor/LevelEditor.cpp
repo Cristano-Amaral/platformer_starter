@@ -528,8 +528,8 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Visual Rotation X Y Z (deg)", pickup.visualRotationDegrees);
             EditVec3("Visual Scale X Y Z", pickup.visualScale);
             ImGui::TextUnformatted(
-                "Translate edits Position. Scale gizmo edits Visual Scale. Offset and Rotation are "
-                "Inspector-only.");
+                "Translate edits Position. Rotate gizmo edits Visual Rotation. Scale gizmo edits "
+                "Visual Scale. Offset remains Inspector-only.");
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -540,7 +540,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::TextUnformatted("Referenced Static Model Asset (not scene selection).");
             DrawStaticModelStagingHint(prop.modelIdentity);
             ImGui::TextUnformatted("Scale is visual model scale, not primitive Resize.");
-            ImGui::TextUnformatted("Translate gizmo edits Position. Scale gizmo edits Scale. Rotation is Inspector-only.");
+            ImGui::TextUnformatted("Translate gizmo edits Position. Rotate gizmo edits Rotation. Scale gizmo edits Scale.");
             ImGui::TextUnformatted("Model Preview auto-frames and is not world size.");
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
             if (view.staticPropModels != nullptr)
@@ -1214,6 +1214,12 @@ LevelEditorRequest DrawLevelControls(
             editor::TrySetEditorTransformMode(
                 state.transformMode, state.gizmo.dragging, EditorTransformMode::Scale);
         }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Rotate", state.transformMode == EditorTransformMode::Rotate))
+        {
+            editor::TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Rotate);
+        }
         ImGui::EndDisabled();
         if (state.gizmo.dragging)
         {
@@ -1230,6 +1236,12 @@ LevelEditorRequest DrawLevelControls(
             && !IsScaleSelection(state.selection))
         {
             ImGui::TextUnformatted("Selected object is not scalable");
+        }
+        if (state.transformMode == EditorTransformMode::Rotate
+            && state.selection.kind != EditorObjectKind::None
+            && !IsRotateSelection(state.selection))
+        {
+            ImGui::TextUnformatted("Selected object is not rotatable");
         }
         ImGui::TextWrapped(
             "Nudge (Translate mode): Ctrl+Arrows/PageUp/PageDown. Precision: Ctrl+Shift.");
@@ -1432,6 +1444,14 @@ LevelEditorRequest DrawEditorMenuBar(
         {
             TrySetEditorTransformMode(
                 state.transformMode, state.gizmo.dragging, EditorTransformMode::Scale);
+        }
+        if (ImGui::MenuItem(
+                "Rotate",
+                nullptr,
+                state.transformMode == EditorTransformMode::Rotate))
+        {
+            TrySetEditorTransformMode(
+                state.transformMode, state.gizmo.dragging, EditorTransformMode::Rotate);
         }
         ImGui::EndDisabled();
         ImGui::EndMenu();
@@ -1841,6 +1861,12 @@ LevelEditorRequest DrawEditorQuickToolbar(
     ImGui::SameLine();
     DrawQuickToolbarTransformButton(
         state, "Scale", "Scale visual model (Static Prop / Item Pickup)", EditorTransformMode::Scale);
+    ImGui::SameLine();
+    DrawQuickToolbarTransformButton(
+        state,
+        "Rotate",
+        "Rotate (Static Prop rotation / Item Pickup visual rotation)",
+        EditorTransformMode::Rotate);
 
     ImGui::SameLine();
     ImGui::TextDisabled("|");

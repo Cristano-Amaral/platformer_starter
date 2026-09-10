@@ -173,6 +173,74 @@ float RayPointDistance(Ray3 ray, core::Vec3 point, float& rayDistance)
     const core::Vec3 onRay = Add(ray.origin, Scale(ray.direction, rayT));
     return Length(Sub(onRay, point));
 }
+
+core::Vec3 RotateRingPoint(EditorAxis axis, float radius, float angleRadians)
+{
+    const float cosine = std::cos(angleRadians);
+    const float sine = std::sin(angleRadians);
+    switch (axis)
+    {
+    case EditorAxis::X:
+        return {0.0f, cosine * radius, sine * radius};
+    case EditorAxis::Y:
+        return {sine * radius, 0.0f, cosine * radius};
+    case EditorAxis::Z:
+        return {cosine * radius, sine * radius, 0.0f};
+    case EditorAxis::None:
+        break;
+    }
+    return {};
+}
+
+bool RotateRadialFromRay(
+    Ray3 ray,
+    core::Vec3 origin,
+    EditorAxis axis,
+    float minRadial,
+    core::Vec3& radial)
+{
+    if (axis == EditorAxis::None || LengthSquared(ray.direction) < kMinRayLengthSquared
+        || !IsFiniteVec3(origin) || !(minRadial > 0.0f))
+    {
+        return false;
+    }
+
+    const core::Vec3 normal = EditorAxisDirection(axis);
+    core::Vec3 hit{};
+    if (!IntersectRayPlane(ray, origin, normal, hit))
+    {
+        return false;
+    }
+
+    core::Vec3 fromOrigin = Sub(hit, origin);
+    fromOrigin = Sub(fromOrigin, Scale(normal, Dot(fromOrigin, normal)));
+    if (!IsFiniteVec3(fromOrigin) || Length(fromOrigin) < minRadial)
+    {
+        return false;
+    }
+
+    radial = fromOrigin;
+    return true;
+}
+
+float SignedAngleDegreesAroundAxis(core::Vec3 axis, core::Vec3 from, core::Vec3 to)
+{
+    const core::Vec3 a = NormalizeOr(from, {});
+    const core::Vec3 b = NormalizeOr(to, {});
+    if (LengthSquared(a) < kMinRayLengthSquared || LengthSquared(b) < kMinRayLengthSquared)
+    {
+        return 0.0f;
+    }
+
+    const float sine = Dot(axis, Cross(a, b));
+    const float cosine = Dot(a, b);
+    const float degrees = std::atan2(sine, cosine) * kRadiansToDegrees;
+    if (!std::isfinite(degrees))
+    {
+        return 0.0f;
+    }
+    return degrees;
+}
 }
 
 const char* EditorAxisName(EditorAxis axis)
@@ -251,6 +319,12 @@ bool IsResizeSelection(EditorSelection selection)
 }
 
 bool IsScaleSelection(EditorSelection selection)
+{
+    return selection.kind == EditorObjectKind::StaticProp
+        || selection.kind == EditorObjectKind::ItemPickup;
+}
+
+bool IsRotateSelection(EditorSelection selection)
 {
     return selection.kind == EditorObjectKind::StaticProp
         || selection.kind == EditorObjectKind::ItemPickup;
@@ -520,6 +594,38 @@ const core::Vec3* GetEditableScale(
         && selection.index < level.itemPickups.size())
     {
         return &level.itemPickups[selection.index].visualScale;
+    }
+    return nullptr;
+}
+
+core::Vec3* GetEditableRotation(world::LevelDefinition& level, EditorSelection selection)
+{
+    if (selection.kind == EditorObjectKind::StaticProp
+        && selection.index < level.staticProps.size())
+    {
+        return &level.staticProps[selection.index].rotationDegrees;
+    }
+    if (selection.kind == EditorObjectKind::ItemPickup
+        && selection.index < level.itemPickups.size())
+    {
+        return &level.itemPickups[selection.index].visualRotationDegrees;
+    }
+    return nullptr;
+}
+
+const core::Vec3* GetEditableRotation(
+    const world::LevelDefinition& level,
+    EditorSelection selection)
+{
+    if (selection.kind == EditorObjectKind::StaticProp
+        && selection.index < level.staticProps.size())
+    {
+        return &level.staticProps[selection.index].rotationDegrees;
+    }
+    if (selection.kind == EditorObjectKind::ItemPickup
+        && selection.index < level.itemPickups.size())
+    {
+        return &level.itemPickups[selection.index].visualRotationDegrees;
     }
     return nullptr;
 }
@@ -1327,6 +1433,8 @@ void EndGizmoDrag(GizmoInteractionState& state)
     state.dragStartAxisParameter = 0.0f;
     state.dragStartSize = {};
     state.dragStartScale = {};
+    state.dragStartRotation = {};
+    state.dragStartRadial = {};
     state.dragHandleSign = 1;
 }
 
@@ -1753,6 +1861,218 @@ bool UpdateScaleInteraction(
         *scale,
         mouseRay,
         view);
+}
+
+GizmoDrawRequest MakeRotateGizmoDrawRequest(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    const GizmoInteractionState& interaction)
+{
+    GizmoDrawRequest request{};
+    core::Vec3 origin{};
+    if (!TryScaleGizmoOrigin(workingCopy, selection, origin) || !IsRotateSelection(selection)
+        || GetEditableRotation(workingCopy, selection) == nullptr)
+    {
+        return request;
+    }
+
+    request.visible = true;
+    request.origin = origin;
+    request.axisLength = GizmoWorldLength(view, request.origin);
+    request.hovered = interaction.hovered;
+    request.active = interaction.dragging ? interaction.active : EditorAxis::None;
+    return request;
+}
+
+EditorAxis PickRotateHandle(
+    Ray3 ray,
+    core::Vec3 origin,
+    float axisLength,
+    float hitRadius)
+{
+    if (!(axisLength > 0.0f) || !(hitRadius > 0.0f)
+        || LengthSquared(ray.direction) < kMinRayLengthSquared)
+    {
+        return EditorAxis::None;
+    }
+
+    EditorAxis best = EditorAxis::None;
+    float bestDistance = std::numeric_limits<float>::infinity();
+    const EditorAxis axes[] = {EditorAxis::X, EditorAxis::Y, EditorAxis::Z};
+    const float step = (2.0f * kPi) / static_cast<float>(kRotateRingSegments);
+    for (EditorAxis axis : axes)
+    {
+        for (int segment = 0; segment < kRotateRingSegments; ++segment)
+        {
+            const core::Vec3 a =
+                Add(origin, RotateRingPoint(axis, axisLength, step * static_cast<float>(segment)));
+            const core::Vec3 b = Add(
+                origin,
+                RotateRingPoint(
+                    axis, axisLength, step * static_cast<float>(segment + 1)));
+            float rayDistance = 0.0f;
+            const float distance = RaySegmentDistance(ray, a, b, rayDistance);
+            if (distance <= hitRadius && rayDistance >= 0.0f && distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = axis;
+            }
+        }
+    }
+    return best;
+}
+
+bool BeginRotateDrag(
+    GizmoInteractionState& state,
+    EditorSelection selection,
+    EditorAxis axis,
+    core::Vec3 workingOrigin,
+    core::Vec3 workingRotation,
+    Ray3 mouseRay)
+{
+    if (!IsRotateSelection(selection) || axis == EditorAxis::None || !IsFiniteVec3(workingOrigin)
+        || !IsFiniteVec3(workingRotation))
+    {
+        return false;
+    }
+
+    core::Vec3 radial{};
+    const float floorRadial = kGizmoMinWorldLength * kRotateMinRadialFraction;
+    if (!RotateRadialFromRay(mouseRay, workingOrigin, axis, floorRadial, radial))
+    {
+        return false;
+    }
+
+    state.dragging = true;
+    state.active = axis;
+    state.hovered = axis;
+    state.dragTarget = selection;
+    state.dragStartPosition = workingOrigin;
+    state.dragStartRotation = workingRotation;
+    state.dragStartRadial = radial;
+    return true;
+}
+
+core::Vec3 GizmoRotateDegrees(const GizmoInteractionState& state, Ray3 mouseRay)
+{
+    if (!state.dragging || state.active == EditorAxis::None
+        || !IsFiniteVec3(state.dragStartRotation) || !IsFiniteVec3(state.dragStartRadial))
+    {
+        return state.dragStartRotation;
+    }
+
+    const float floorRadial = kGizmoMinWorldLength * kRotateMinRadialFraction;
+    core::Vec3 radial{};
+    if (!RotateRadialFromRay(
+            mouseRay, state.dragStartPosition, state.active, floorRadial, radial))
+    {
+        return state.dragStartRotation;
+    }
+
+    const float delta = SignedAngleDegreesAroundAxis(
+        EditorAxisDirection(state.active), state.dragStartRadial, radial);
+    if (!std::isfinite(delta))
+    {
+        return state.dragStartRotation;
+    }
+
+    core::Vec3 rotation = state.dragStartRotation;
+    switch (state.active)
+    {
+    case EditorAxis::X:
+        rotation.x = state.dragStartRotation.x + delta;
+        break;
+    case EditorAxis::Y:
+        rotation.y = state.dragStartRotation.y + delta;
+        break;
+    case EditorAxis::Z:
+        rotation.z = state.dragStartRotation.z + delta;
+        break;
+    case EditorAxis::None:
+        break;
+    }
+    if (!IsFiniteVec3(rotation))
+    {
+        return state.dragStartRotation;
+    }
+    return rotation;
+}
+
+bool UpdateRotateInteraction(
+    GizmoInteractionState& state,
+    EditorSelection currentSelection,
+    world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    Ray3 mouseRay,
+    bool imguiWantsMouse,
+    bool lookHeld,
+    bool selectPressed,
+    bool selectHeld,
+    bool selectReleased)
+{
+    if (state.dragging)
+    {
+        if (selectReleased || !selectHeld)
+        {
+            EndGizmoDrag(state);
+            return true;
+        }
+
+        if (currentSelection != state.dragTarget)
+        {
+            EndGizmoDrag(state);
+            return true;
+        }
+
+        core::Vec3* rotation = GetEditableRotation(workingCopy, state.dragTarget);
+        if (rotation == nullptr)
+        {
+            ClearGizmoInteraction(state);
+            return true;
+        }
+
+        *rotation = GizmoRotateDegrees(state, mouseRay);
+        state.hovered = state.active;
+        return true;
+    }
+
+    if (imguiWantsMouse)
+    {
+        state.hovered = EditorAxis::None;
+        return false;
+    }
+
+    if (!IsRotateSelection(currentSelection))
+    {
+        state.hovered = EditorAxis::None;
+        return false;
+    }
+
+    const core::Vec3* rotation = GetEditableRotation(workingCopy, currentSelection);
+    core::Vec3 origin{};
+    if (!TryScaleGizmoOrigin(workingCopy, currentSelection, origin) || rotation == nullptr)
+    {
+        state.hovered = EditorAxis::None;
+        return false;
+    }
+
+    const float axisLength = GizmoWorldLength(view, origin);
+    const float hitRadius = axisLength * kRotateHitRadiusFraction;
+    state.hovered = PickRotateHandle(mouseRay, origin, axisLength, hitRadius);
+    if (lookHeld || !selectPressed || state.hovered == EditorAxis::None)
+    {
+        return false;
+    }
+
+    if (!BeginRotateDrag(
+            state, currentSelection, state.hovered, origin, *rotation, mouseRay))
+    {
+        // Ring was hit but the plane could not start a drag. Consume the click
+        // so the object behind the gizmo is not selected.
+        return true;
+    }
+    return true;
 }
 
 bool UpdateGizmoInteraction(

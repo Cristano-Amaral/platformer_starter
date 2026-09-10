@@ -133,9 +133,13 @@ int main()
             "idle Scale mode change");
         Expect(mode == EditorTransformMode::Scale, "idle mode change writes Scale");
         Expect(
+            editor::TrySetEditorTransformMode(mode, false, EditorTransformMode::Rotate),
+            "idle Rotate mode change");
+        Expect(mode == EditorTransformMode::Rotate, "idle mode change writes Rotate");
+        Expect(
             !editor::TrySetEditorTransformMode(mode, true, EditorTransformMode::Translate),
             "mode change blocked during drag");
-        Expect(mode == EditorTransformMode::Scale, "blocked change leaves Scale");
+        Expect(mode == EditorTransformMode::Rotate, "blocked change leaves Rotate");
     }
 
     {

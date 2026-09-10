@@ -719,6 +719,96 @@ void DrawResizeGizmo(const DebugWorldOverlay& overlay)
     rlEnableDepthTest();
 }
 
+void DrawRotateGizmo(const DebugWorldOverlay& overlay)
+{
+    if (!overlay.drawRotateGizmo || !(overlay.gizmoAxisLength > 0.0f))
+    {
+        return;
+    }
+
+    const float length = overlay.gizmoAxisLength;
+    const float visualRadius = std::max(length * 0.038f, 0.045f);
+    const core::Vec3 origin = overlay.gizmoOrigin;
+    const Vector3 originRl = ToRaylib(origin);
+    constexpr int kSegments = 48;
+
+    const struct AxisDraw
+    {
+        int id;
+        Vector3 direction;
+        Color color;
+    } axes[] = {
+        {1, {1.0f, 0.0f, 0.0f}, kGizmoAxisX},
+        {2, {0.0f, 1.0f, 0.0f}, kGizmoAxisY},
+        {3, {0.0f, 0.0f, 1.0f}, kGizmoAxisZ},
+    };
+
+    const auto ringPoint = [](int axisId, float radius, float angle) -> Vector3 {
+        const float cosine = std::cos(angle);
+        const float sine = std::sin(angle);
+        if (axisId == 1)
+        {
+            return {0.0f, cosine * radius, sine * radius};
+        }
+        if (axisId == 2)
+        {
+            return {sine * radius, 0.0f, cosine * radius};
+        }
+        return {cosine * radius, sine * radius, 0.0f};
+    };
+
+    const auto drawPass = [&](unsigned char alpha, float radiusScale)
+    {
+        DrawSphere(originRl, visualRadius * 0.55f * radiusScale, ScaleGizmoColor({220, 220, 228, 255}, alpha));
+        const float step = (2.0f * static_cast<float>(PI)) / static_cast<float>(kSegments);
+        for (const AxisDraw& axis : axes)
+        {
+            const bool active = overlay.gizmoActiveAxis == axis.id;
+            const bool hovered = overlay.gizmoHoveredAxis == axis.id;
+            Color color = axis.color;
+            float tube = visualRadius * 0.42f * radiusScale;
+            if (active)
+            {
+                color = kGizmoAxisActive;
+                tube *= 1.55f;
+            }
+            else if (hovered)
+            {
+                color = {
+                    static_cast<unsigned char>(std::min(255, axis.color.r + 48)),
+                    static_cast<unsigned char>(std::min(255, axis.color.g + 48)),
+                    static_cast<unsigned char>(std::min(255, axis.color.b + 48)),
+                    255};
+                tube *= 1.28f;
+            }
+
+            for (int segment = 0; segment < kSegments; ++segment)
+            {
+                const Vector3 localA = ringPoint(axis.id, length, step * static_cast<float>(segment));
+                const Vector3 localB =
+                    ringPoint(axis.id, length, step * static_cast<float>(segment + 1));
+                const Vector3 a{
+                    originRl.x + localA.x, originRl.y + localA.y, originRl.z + localA.z};
+                const Vector3 b{
+                    originRl.x + localB.x, originRl.y + localB.y, originRl.z + localB.z};
+                DrawCylinderEx(a, b, tube, tube, 6, ScaleGizmoColor(color, alpha));
+            }
+        }
+    };
+
+    drawPass(70, 0.85f);
+
+    rlDrawRenderBatchActive();
+    rlDisableDepthTest();
+    rlDisableDepthMask();
+    rlDisableBackfaceCulling();
+    drawPass(255, 1.0f);
+    rlDrawRenderBatchActive();
+    rlEnableBackfaceCulling();
+    rlEnableDepthMask();
+    rlEnableDepthTest();
+}
+
 void DrawWorldOverlay(const DebugWorldOverlay& overlay)
 {
     if (overlay.drawSpawnMarker
@@ -1032,6 +1122,7 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     }
     DrawTranslationGizmo(overlay);
     DrawResizeGizmo(overlay);
+    DrawRotateGizmo(overlay);
 }
 
 void DrawCheckpointMarkerGeometry(

@@ -1332,6 +1332,14 @@ int Application::Run()
                     cameraView,
                     levelEditorState.gizmo);
             }
+            else if (levelEditorState.transformMode == editor::EditorTransformMode::Rotate)
+            {
+                gizmo = editor::MakeRotateGizmoDrawRequest(
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    levelEditorState.gizmo);
+            }
             else
             {
                 gizmo = editor::MakeGizmoDrawRequest(
@@ -1349,6 +1357,9 @@ int Application::Run()
             overlay.drawScaleGizmo =
                 gizmo.visible
                 && levelEditorState.transformMode == editor::EditorTransformMode::Scale;
+            overlay.drawRotateGizmo =
+                gizmo.visible
+                && levelEditorState.transformMode == editor::EditorTransformMode::Rotate;
             overlay.gizmoOrigin = gizmo.origin;
             overlay.gizmoAxisLength = gizmo.axisLength;
             overlay.gizmoHoveredAxis = static_cast<int>(gizmo.hovered);
@@ -1618,6 +1629,20 @@ int Application::Run()
             else if (levelEditorState.transformMode == editor::EditorTransformMode::Scale)
             {
                 gizmoConsumedPointer = editor::UpdateScaleInteraction(
+                    levelEditorState.gizmo,
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    cameraView,
+                    ray,
+                    mouseCaptured,
+                    editorInput.lookHeld,
+                    selectPressedForGizmo,
+                    editorInput.selectHeld,
+                    editorInput.selectReleased);
+            }
+            else if (levelEditorState.transformMode == editor::EditorTransformMode::Rotate)
+            {
+                gizmoConsumedPointer = editor::UpdateRotateInteraction(
                     levelEditorState.gizmo,
                     levelEditorState.selection,
                     levelEditorState.workingCopy,

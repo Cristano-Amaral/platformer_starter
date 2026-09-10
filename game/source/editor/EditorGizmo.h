@@ -2,7 +2,8 @@
 
 // Milestone 34 translation gizmo + Milestone 35 resize math/live handles.
 // Milestone 49/58 Scale gizmo edits Static Prop scale or Item Pickup visualScale.
-// No Rotate gizmo.
+// Milestone 58.1 Rotate gizmo edits Static Prop rotation or Item Pickup
+// visualRotationDegrees. World-axis Euler rings only; not a Transform component.
 
 #include "core/Vec3.h"
 #include "editor/EditorPicking.h"
@@ -30,6 +31,7 @@ enum class EditorTransformMode
     Translate,
     Resize,
     Scale,
+    Rotate,
 };
 
 struct ResizeHandlePick
@@ -51,6 +53,10 @@ struct GizmoInteractionState
     core::Vec3 dragStartSize{};
     // Scale-only. Visual model multiplier, not primitive size.
     core::Vec3 dragStartScale{};
+    // Rotate-only. Authored Euler degrees captured at mouse-down.
+    core::Vec3 dragStartRotation{};
+    // Rotate-only. In-plane radial from origin to the mouse-down plane hit.
+    core::Vec3 dragStartRadial{};
     int dragHandleSign = 1;
     int hoveredSign = 1;
 };
@@ -135,6 +141,10 @@ inline constexpr float kScaleFromAxisDelta = 1.0f;
 // that. 0.12 full-size is still smaller than any Level 01 authored box (0.4+).
 inline constexpr float kMinAuthoredBoxExtent = 0.12f;
 inline constexpr float kResizeHandleHitFraction = 0.10f;
+// World-axis rotation rings. Radius is axisLength; hit tube is this fraction.
+inline constexpr int kRotateRingSegments = 48;
+inline constexpr float kRotateHitRadiusFraction = 0.12f;
+inline constexpr float kRotateMinRadialFraction = 0.08f;
 
 const char* EditorAxisName(EditorAxis axis);
 core::Vec3 EditorAxisDirection(EditorAxis axis);
@@ -144,6 +154,7 @@ void ClearGizmoInteraction(GizmoInteractionState& state);
 bool IsGizmoSelection(EditorSelection selection);
 bool IsResizeSelection(EditorSelection selection);
 bool IsScaleSelection(EditorSelection selection);
+bool IsRotateSelection(EditorSelection selection);
 
 // Mutable authored position in workingCopy. Null for Camera and remaining
 // read-only kinds. Checkpoint, Hazard, and Collectible are Translate-only.
@@ -169,6 +180,15 @@ core::Vec3* GetEditableScale(
     world::LevelDefinition& level,
     EditorSelection selection);
 const core::Vec3* GetEditableScale(
+    const world::LevelDefinition& level,
+    EditorSelection selection);
+
+// Mutable authored Euler degrees. Static Prop rotationDegrees or Item Pickup
+// visualRotationDegrees. Not a generic Transform component.
+core::Vec3* GetEditableRotation(
+    world::LevelDefinition& level,
+    EditorSelection selection);
+const core::Vec3* GetEditableRotation(
     const world::LevelDefinition& level,
     EditorSelection selection);
 
@@ -410,6 +430,44 @@ core::Vec3 GizmoScaleSize(
     const render::CameraView& view);
 
 bool UpdateScaleInteraction(
+    GizmoInteractionState& state,
+    EditorSelection currentSelection,
+    world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    Ray3 mouseRay,
+    bool imguiWantsMouse,
+    bool lookHeld,
+    bool selectPressed,
+    bool selectHeld,
+    bool selectReleased);
+
+GizmoDrawRequest MakeRotateGizmoDrawRequest(
+    EditorSelection selection,
+    const world::LevelDefinition& workingCopy,
+    const render::CameraView& view,
+    const GizmoInteractionState& interaction);
+
+EditorAxis PickRotateHandle(
+    Ray3 ray,
+    core::Vec3 origin,
+    float axisLength,
+    float hitRadius);
+
+bool BeginRotateDrag(
+    GizmoInteractionState& state,
+    EditorSelection selection,
+    EditorAxis axis,
+    core::Vec3 workingOrigin,
+    core::Vec3 workingRotation,
+    Ray3 mouseRay);
+
+// authoredAtDragStart + signed world-axis delta. Does not accumulate
+// frame-to-frame. Returns start rotation if the ray/plane is unusable.
+core::Vec3 GizmoRotateDegrees(
+    const GizmoInteractionState& state,
+    Ray3 mouseRay);
+
+bool UpdateRotateInteraction(
     GizmoInteractionState& state,
     EditorSelection currentSelection,
     world::LevelDefinition& workingCopy,

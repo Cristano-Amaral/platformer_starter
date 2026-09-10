@@ -4,6 +4,7 @@
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
+#include "editor/StaticPropTransform.h"
 #include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
 
@@ -226,12 +227,21 @@ int main()
         Expect(
             editor::IsScaleSelection({EditorObjectKind::ItemPickup, 0}),
             "Item Pickup is Scale for visualScale");
+        Expect(
+            editor::IsRotateSelection({EditorObjectKind::ItemPickup, 0}),
+            "Item Pickup is Rotate for visualRotationDegrees");
         core::Vec3* pickupScale =
             editor::GetEditableScale(level, {EditorObjectKind::ItemPickup, 0});
         Expect(pickupScale != nullptr, "Item Pickup has visualScale pointer");
         Expect(
             pickupScale == &level.itemPickups[0].visualScale,
             "Scale gizmo edits visualScale not position");
+        core::Vec3* pickupRotation =
+            editor::GetEditableRotation(level, {EditorObjectKind::ItemPickup, 0});
+        Expect(pickupRotation != nullptr, "Item Pickup has visualRotationDegrees pointer");
+        Expect(
+            pickupRotation == &level.itemPickups[0].visualRotationDegrees,
+            "Rotate gizmo edits visualRotationDegrees not position");
         if (pickupScale != nullptr)
         {
             pickupScale->x = 0.25f;
@@ -258,14 +268,27 @@ int main()
             editor::GetEditableSize(level, {EditorObjectKind::StaticProp, 0}) == nullptr,
             "Static Prop has no primitive Resize size");
         Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is Scale");
+        Expect(editor::IsRotateSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is Rotate");
         Expect(
             !editor::IsScaleSelection({EditorObjectKind::Ground, 0}),
             "Ground is not Static Prop Scale");
         Expect(
+            !editor::IsRotateSelection({EditorObjectKind::Ground, 0}),
+            "Ground is not rotatable");
+        Expect(
             !editor::IsScaleSelection({EditorObjectKind::DynamicBox, 0}),
             "Dynamic Box is not Static Prop Scale");
+        Expect(
+            !editor::IsRotateSelection({EditorObjectKind::DynamicBox, 0}),
+            "Dynamic Box is not rotatable");
         core::Vec3* propScale = editor::GetEditableScale(level, {EditorObjectKind::StaticProp, 0});
         Expect(propScale != nullptr, "Static Prop has editable scale");
+        core::Vec3* propRotation =
+            editor::GetEditableRotation(level, {EditorObjectKind::StaticProp, 0});
+        Expect(propRotation != nullptr, "Static Prop has editable rotation");
+        Expect(
+            propRotation == &level.staticProps[0].rotationDegrees,
+            "Rotate edits authored Static Prop rotation");
         if (propScale != nullptr)
         {
             propScale->x = 3.0f;
@@ -1085,6 +1108,416 @@ int main()
             "Translate origin remains gameplay position");
     }
 
+    // ---- M58.1 Rotate gizmo ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {3.0f, 1.0f, 0.0f};
+        prop.rotationDegrees = {5.0f, 15.0f, 25.0f};
+        prop.scale = {1.0f, 2.0f, 1.0f};
+        working.staticProps.push_back(prop);
+        world::ItemPickupSpec pickup{};
+        pickup.position = {5.0f, 1.0f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        pickup.modelIdentity = "models/test_static.glb";
+        pickup.visualOffset = {0.0f, 0.5f, 0.0f};
+        pickup.visualRotationDegrees = {10.0f, 20.0f, 30.0f};
+        pickup.visualScale = {0.4f, 0.5f, 0.6f};
+        working.itemPickups.push_back(pickup);
+        const world::LevelDefinition active = working;
+        EditorSelection prop0{EditorObjectKind::StaticProp, 0};
+        EditorSelection pickup0{EditorObjectKind::ItemPickup, 0};
+        const core::Vec3 propOrigin = working.staticProps[0].position;
+        const core::Vec3 pickupOrigin = world::ItemPickupVisualPosition(working.itemPickups[0]);
+        const render::CameraView propView = MakeView({20.0f, 8.0f, 20.0f}, propOrigin);
+        const render::CameraView pickupView = MakeView({20.0f, 8.0f, 20.0f}, pickupOrigin);
+        const float propLength = editor::GizmoWorldLength(propView, propOrigin);
+        const float pickupLength = editor::GizmoWorldLength(pickupView, pickupOrigin);
+        const float ringHit = propLength * editor::kRotateHitRadiusFraction;
+        const float unique = 0.70710678f;
+
+        Expect(editor::EditorTransformMode::Rotate != editor::EditorTransformMode::Scale,
+            "Rotate is a distinct central transform mode");
+        Expect(editor::IsRotateSelection(prop0), "Static Prop supports Rotate");
+        Expect(editor::IsRotateSelection(pickup0), "Item Pickup supports Rotate");
+        Expect(
+            !editor::IsRotateSelection({EditorObjectKind::ElevatedPlatform, 0}),
+            "Platform is inert under Rotate");
+        Expect(
+            !editor::IsRotateSelection({EditorObjectKind::Ground, 0}),
+            "Ground is inert under Rotate");
+        Expect(
+            !editor::IsRotateSelection({EditorObjectKind::Door, 0}),
+            "Door is inert under Rotate");
+        Expect(
+            !editor::IsRotateSelection({EditorObjectKind::PressurePlate, 0}),
+            "Pressure Plate is inert under Rotate");
+        Expect(
+            editor::MakeRotateGizmoDrawRequest(prop0, working, propView, {}).visible,
+            "Static Prop has Rotate gizmo request");
+        const editor::GizmoDrawRequest pickupDraw =
+            editor::MakeRotateGizmoDrawRequest(pickup0, working, pickupView, {});
+        Expect(pickupDraw.visible, "Item Pickup has Rotate gizmo request");
+        Expect(
+            Vec3Near(pickupDraw.origin, pickupOrigin),
+            "Item Pickup Rotate origin is position + visualOffset");
+        Expect(
+            Vec3Near(
+                editor::MakeRotateGizmoDrawRequest(prop0, working, propView, {}).origin, propOrigin),
+            "Static Prop Rotate origin is authored position");
+        Expect(
+            !editor::MakeRotateGizmoDrawRequest(
+                 {EditorObjectKind::ElevatedPlatform, 0}, working, propView, {})
+                 .visible,
+            "unsupported object has no Rotate gizmo");
+
+        const core::Vec3 xRing{
+            propOrigin.x,
+            propOrigin.y + propLength * unique,
+            propOrigin.z + propLength * unique};
+        const core::Vec3 yRing{
+            propOrigin.x + propLength * unique,
+            propOrigin.y,
+            propOrigin.z + propLength * unique};
+        const core::Vec3 zRing{
+            propOrigin.x + propLength * unique,
+            propOrigin.y + propLength * unique,
+            propOrigin.z};
+        Expect(
+            editor::PickRotateHandle(RayThrough(propView, xRing), propOrigin, propLength, ringHit)
+                == EditorAxis::X,
+            "X ring pick");
+        Expect(
+            editor::PickRotateHandle(RayThrough(propView, yRing), propOrigin, propLength, ringHit)
+                == EditorAxis::Y,
+            "Y ring pick");
+        Expect(
+            editor::PickRotateHandle(RayThrough(propView, zRing), propOrigin, propLength, ringHit)
+                == EditorAxis::Z,
+            "Z ring pick");
+        Expect(
+            editor::PickRotateHandle(
+                RayThrough(propView, {propOrigin.x + 8.0f, propOrigin.y + 8.0f, propOrigin.z + 8.0f}),
+                propOrigin,
+                propLength,
+                ringHit)
+                == EditorAxis::None,
+            "missed rotation ring");
+
+        editor::GizmoInteractionState rejected{};
+        Expect(
+            !editor::BeginRotateDrag(
+                rejected,
+                {EditorObjectKind::Ground, 0},
+                EditorAxis::X,
+                propOrigin,
+                prop.rotationDegrees,
+                RayThrough(propView, xRing)),
+            "unsupported object cannot begin Rotate drag");
+        Expect(!rejected.dragging, "rejected Rotate leaves drag inactive");
+
+        editor::GizmoInteractionState parallel{};
+        editor::Ray3 parallelRay{{10.0f, 5.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+        Expect(
+            !editor::BeginRotateDrag(
+                parallel,
+                prop0,
+                EditorAxis::Y,
+                {},
+                {0.0f, 0.0f, 0.0f},
+                parallelRay),
+            "parallel ray does not begin Y Rotate");
+        Expect(!parallel.dragging, "degenerate begin does not capture axis");
+        const core::Vec3 parallelResult = editor::GizmoRotateDegrees(parallel, parallelRay);
+        Expect(
+            std::isfinite(parallelResult.x) && std::isfinite(parallelResult.y)
+                && std::isfinite(parallelResult.z),
+            "degenerate Rotate does not write Inf");
+        Expect(
+            !(parallelResult.x != parallelResult.x) && !(parallelResult.y != parallelResult.y)
+                && !(parallelResult.z != parallelResult.z),
+            "degenerate Rotate does not write NaN");
+
+        const core::Vec3 startRotation = working.staticProps[0].rotationDegrees;
+        editor::GizmoInteractionState state{};
+        Expect(
+            editor::BeginRotateDrag(
+                state, prop0, EditorAxis::X, propOrigin, startRotation, RayThrough(propView, xRing)),
+            "mouse-down captures X ring");
+        Expect(state.dragging && state.active == EditorAxis::X, "active Rotate axis is X");
+        const core::Vec3 noJump =
+            editor::GizmoRotateDegrees(state, RayThrough(propView, xRing));
+        Expect(Vec3Near(noJump, startRotation, 0.25f), "same-ray Rotate has no initial jump");
+
+        const core::Vec3 xSwept{
+            propOrigin.x,
+            propOrigin.y - propLength * unique,
+            propOrigin.z + propLength * unique};
+        const core::Vec3 rotatedX = editor::GizmoRotateDegrees(state, RayThrough(propView, xSwept));
+        Expect(std::fabs(rotatedX.x - startRotation.x) > 1.0f, "X ring changes authored X");
+        Expect(NearlyEqual(rotatedX.y, startRotation.y, 0.25f), "X ring keeps authored Y");
+        Expect(NearlyEqual(rotatedX.z, startRotation.z, 0.25f), "X ring keeps authored Z");
+        Expect(std::isfinite(rotatedX.x), "X Rotate stays finite");
+
+        editor::EndGizmoDrag(state);
+        Expect(!state.dragging && state.active == EditorAxis::None, "mouse-up ends Rotate drag");
+        Expect(
+            editor::BeginRotateDrag(
+                state, prop0, EditorAxis::Y, propOrigin, startRotation, RayThrough(propView, yRing)),
+            "begin Y Rotate");
+        const core::Vec3 ySwept{
+            propOrigin.x + propLength * unique,
+            propOrigin.y,
+            propOrigin.z - propLength * unique};
+        const core::Vec3 rotatedY = editor::GizmoRotateDegrees(state, RayThrough(propView, ySwept));
+        Expect(NearlyEqual(rotatedY.x, startRotation.x, 0.25f), "Y ring keeps authored X");
+        Expect(std::fabs(rotatedY.y - startRotation.y) > 1.0f, "Y ring changes authored Y");
+        Expect(NearlyEqual(rotatedY.z, startRotation.z, 0.25f), "Y ring keeps authored Z");
+
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::BeginRotateDrag(
+                state, prop0, EditorAxis::Z, propOrigin, startRotation, RayThrough(propView, zRing)),
+            "begin Z Rotate");
+        const core::Vec3 zSwept{
+            propOrigin.x - propLength * unique,
+            propOrigin.y + propLength * unique,
+            propOrigin.z};
+        const core::Vec3 rotatedZ = editor::GizmoRotateDegrees(state, RayThrough(propView, zSwept));
+        Expect(NearlyEqual(rotatedZ.x, startRotation.x, 0.25f), "Z ring keeps authored X");
+        Expect(NearlyEqual(rotatedZ.y, startRotation.y, 0.25f), "Z ring keeps authored Y");
+        Expect(std::fabs(rotatedZ.z - startRotation.z) > 1.0f, "Z ring changes authored Z");
+
+        editor::EndGizmoDrag(state);
+        const core::Vec3 startPos = working.staticProps[0].position;
+        const core::Vec3 startScale = working.staticProps[0].scale;
+        Expect(
+            editor::UpdateRotateInteraction(
+                state,
+                prop0,
+                working,
+                propView,
+                RayThrough(propView, xRing),
+                false,
+                false,
+                true,
+                true,
+                false),
+            "Rotate press consumes pointer so world pick behind the ring cannot run");
+        Expect(state.dragging, "Rotate press starts drag");
+        Expect(
+            editor::UpdateRotateInteraction(
+                state,
+                prop0,
+                working,
+                propView,
+                RayThrough(propView, xSwept),
+                false,
+                false,
+                false,
+                true,
+                false),
+            "Rotate drag consumes pointer");
+        Expect(state.dragging, "active Rotate drag remains captured");
+        Expect(
+            std::fabs(working.staticProps[0].rotationDegrees.x - startRotation.x) > 1.0f,
+            "Rotate writes workingCopy rotation.x");
+        Expect(
+            Vec3Near(working.staticProps[0].position, startPos),
+            "Static Prop Rotate leaves Translate position");
+        Expect(
+            Vec3Near(working.staticProps[0].scale, startScale),
+            "Static Prop Rotate leaves Scale");
+        Expect(
+            Vec3Near(active.staticProps[0].rotationDegrees, startRotation),
+            "Rotate does not mutate active");
+        Expect(
+            editor::AuthoredGeometryDiffers(active, working, prop0),
+            "semantic Rotate produces pending authored edit");
+        Expect(
+            !world::AuthoredLevelDataEqual(working, active),
+            "semantic Rotate is Modified/Dirty vs active");
+
+        const core::Vec3 localMin = editor::kStaticPropDefaultLocalMin;
+        const core::Vec3 localMax = editor::kStaticPropDefaultLocalMax;
+        core::Vec3 rotatedCenter{};
+        core::Vec3 rotatedSize{};
+        editor::StaticPropWorldAabb(
+            working.staticProps[0], localMin, localMax, rotatedCenter, rotatedSize);
+        Expect(
+            rotatedSize.x > 0.0f && rotatedSize.y > 0.0f && rotatedSize.z > 0.0f
+                && std::isfinite(rotatedCenter.x) && std::isfinite(rotatedSize.x),
+            "transformed editor bounds remain useful after Rotate");
+
+        Expect(
+            editor::UpdateRotateInteraction(
+                state,
+                {EditorObjectKind::Ground, 0},
+                working,
+                propView,
+                RayThrough(propView, xSwept),
+                false,
+                false,
+                false,
+                true,
+                false),
+            "selection change consumes the pointer while cancelling");
+        Expect(!state.dragging, "selection change cancels Rotate drag");
+
+        editor::GizmoInteractionState modeDrag{};
+        Expect(
+            editor::BeginRotateDrag(
+                modeDrag, prop0, EditorAxis::X, propOrigin, startRotation, RayThrough(propView, xRing)),
+            "mode-change fixture drag");
+        Expect(
+            editor::UpdateRotateInteraction(
+                modeDrag,
+                prop0,
+                working,
+                propView,
+                RayThrough(propView, xRing),
+                false,
+                false,
+                false,
+                false,
+                true),
+            "mouse-up during Rotate ends drag");
+        Expect(!modeDrag.dragging, "mode change is safe after mouse-up ends Rotate drag");
+
+        working.staticProps[0].rotationDegrees = startRotation;
+        Expect(
+            world::AuthoredLevelDataEqual(working, active)
+                || Vec3Near(working.staticProps[0].rotationDegrees, startRotation),
+            "Revert path can restore Static Prop rotation");
+
+        const core::Vec3 pickupStartRot = working.itemPickups[0].visualRotationDegrees;
+        const core::Vec3 pickupPos = working.itemPickups[0].position;
+        const core::Vec3 pickupOffset = working.itemPickups[0].visualOffset;
+        const core::Vec3 pickupScale = working.itemPickups[0].visualScale;
+        const core::Vec3 pickupXRing{
+            pickupOrigin.x,
+            pickupOrigin.y + pickupLength * unique,
+            pickupOrigin.z + pickupLength * unique};
+        const core::Vec3 pickupXSwept{
+            pickupOrigin.x,
+            pickupOrigin.y - pickupLength * unique,
+            pickupOrigin.z + pickupLength * unique};
+        editor::GizmoInteractionState pickupState{};
+        Expect(
+            editor::BeginRotateDrag(
+                pickupState,
+                pickup0,
+                EditorAxis::X,
+                pickupOrigin,
+                pickupStartRot,
+                RayThrough(pickupView, pickupXRing)),
+            "begin Item Pickup X Rotate");
+        const core::Vec3 pickupRotX =
+            editor::GizmoRotateDegrees(pickupState, RayThrough(pickupView, pickupXSwept));
+        Expect(std::fabs(pickupRotX.x - pickupStartRot.x) > 1.0f, "Item Pickup X ring changes visualRotation.x");
+        Expect(NearlyEqual(pickupRotX.y, pickupStartRot.y, 0.25f), "Item Pickup X keeps visualRotation.y");
+        Expect(NearlyEqual(pickupRotX.z, pickupStartRot.z, 0.25f), "Item Pickup X keeps visualRotation.z");
+        editor::EndGizmoDrag(pickupState);
+
+        const core::Vec3 pickupYRing{
+            pickupOrigin.x + pickupLength * unique,
+            pickupOrigin.y,
+            pickupOrigin.z + pickupLength * unique};
+        const core::Vec3 pickupYSwept{
+            pickupOrigin.x + pickupLength * unique,
+            pickupOrigin.y,
+            pickupOrigin.z - pickupLength * unique};
+        Expect(
+            editor::BeginRotateDrag(
+                pickupState,
+                pickup0,
+                EditorAxis::Y,
+                pickupOrigin,
+                pickupStartRot,
+                RayThrough(pickupView, pickupYRing)),
+            "begin Item Pickup Y Rotate");
+        const core::Vec3 pickupRotY =
+            editor::GizmoRotateDegrees(pickupState, RayThrough(pickupView, pickupYSwept));
+        Expect(NearlyEqual(pickupRotY.x, pickupStartRot.x, 0.25f), "Item Pickup Y keeps visualRotation.x");
+        Expect(std::fabs(pickupRotY.y - pickupStartRot.y) > 1.0f, "Item Pickup Y ring changes visualRotation.y");
+        Expect(NearlyEqual(pickupRotY.z, pickupStartRot.z, 0.25f), "Item Pickup Y keeps visualRotation.z");
+        editor::EndGizmoDrag(pickupState);
+
+        const core::Vec3 pickupZRing{
+            pickupOrigin.x + pickupLength * unique,
+            pickupOrigin.y + pickupLength * unique,
+            pickupOrigin.z};
+        const core::Vec3 pickupZSwept{
+            pickupOrigin.x - pickupLength * unique,
+            pickupOrigin.y + pickupLength * unique,
+            pickupOrigin.z};
+        Expect(
+            editor::BeginRotateDrag(
+                pickupState,
+                pickup0,
+                EditorAxis::Z,
+                pickupOrigin,
+                pickupStartRot,
+                RayThrough(pickupView, pickupZRing)),
+            "begin Item Pickup Z Rotate");
+        const core::Vec3 pickupRotZ =
+            editor::GizmoRotateDegrees(pickupState, RayThrough(pickupView, pickupZSwept));
+        Expect(NearlyEqual(pickupRotZ.x, pickupStartRot.x, 0.25f), "Item Pickup Z keeps visualRotation.x");
+        Expect(NearlyEqual(pickupRotZ.y, pickupStartRot.y, 0.25f), "Item Pickup Z keeps visualRotation.y");
+        Expect(std::fabs(pickupRotZ.z - pickupStartRot.z) > 1.0f, "Item Pickup Z ring changes visualRotation.z");
+
+        working.itemPickups[0].visualRotationDegrees = pickupRotY;
+        Expect(Vec3Near(working.itemPickups[0].position, pickupPos), "Item Pickup Rotate leaves position");
+        Expect(
+            Vec3Near(working.itemPickups[0].visualOffset, pickupOffset),
+            "Item Pickup Rotate leaves visualOffset");
+        Expect(
+            Vec3Near(working.itemPickups[0].visualScale, pickupScale),
+            "Item Pickup Rotate leaves visualScale");
+        Expect(
+            editor::GetEditablePosition(working, pickup0) == &working.itemPickups[0].position,
+            "Translate still edits gameplay position");
+        Expect(
+            editor::GetEditableScale(working, pickup0) == &working.itemPickups[0].visualScale,
+            "Scale still edits visualScale");
+        Expect(
+            editor::GetEditableRotation(working, pickup0)
+                == &working.itemPickups[0].visualRotationDegrees,
+            "Inspector Visual Rotation is the same workingCopy field");
+        const world::StaticPropSpec visualProp = world::ItemPickupVisualProp(working.itemPickups[0]);
+        Expect(
+            Vec3Near(visualProp.rotationDegrees, working.itemPickups[0].visualRotationDegrees),
+            "rendered staged GLB follows visualRotationDegrees");
+        Expect(
+            Vec3Near(visualProp.position, pickupOrigin),
+            "rendered model origin stays position + visualOffset");
+        Expect(
+            NearlyEqual(working.itemPickups[0].position.x, pickupPos.x)
+                && NearlyEqual(working.itemPickups[0].position.y, pickupPos.y)
+                && NearlyEqual(working.itemPickups[0].position.z, pickupPos.z),
+            "gameplay targeting position is unchanged by Rotate");
+
+        editor::GizmoInteractionState inert{};
+        const core::Vec3 platformCenter = working.elevatedPlatforms[0].center;
+        Expect(
+            !editor::UpdateRotateInteraction(
+                inert,
+                {EditorObjectKind::ElevatedPlatform, 0},
+                working,
+                propView,
+                RayThrough(propView, xRing),
+                false,
+                false,
+                true,
+                true,
+                false),
+            "Rotate is inert for unsupported selection");
+        Expect(Vec3Near(working.elevatedPlatforms[0].center, platformCenter), "inert Rotate does not mutate Platform");
+        Expect(!inert.dragging, "inert Rotate does not start a drag");
+    }
+
     // ---- M35 Phase A nudge ----
     {
         Expect(NearlyEqual(editor::NudgeStep(false), 0.10f, 0.0001f), "normal nudge is 0.10");
@@ -1125,6 +1558,9 @@ int main()
             !editor::NudgeAllowed(editor::EditorTransformMode::Scale, false, false),
             "nudge blocked in Scale mode");
         Expect(
+            !editor::NudgeAllowed(editor::EditorTransformMode::Rotate, false, false),
+            "nudge blocked in Rotate mode");
+        Expect(
             !editor::NudgeAllowed(editor::EditorTransformMode::Translate, true, false),
             "nudge blocked when ImGui wants keyboard");
         Expect(
@@ -1143,6 +1579,18 @@ int main()
         Expect(
             Vec3Near(working.initialSpawnVisualCenter, spawnBefore, 0.0001f),
             "Resize-mode nudge leaves working center");
+        Expect(
+            !editor::ApplyNudge(
+                working,
+                spawn,
+                EditorAxis::X,
+                1.0f,
+                false,
+                editor::EditorTransformMode::Rotate),
+            "Rotate mode ApplyNudge is a no-op");
+        Expect(
+            Vec3Near(working.initialSpawnVisualCenter, spawnBefore, 0.0001f),
+            "Rotate-mode nudge leaves working center");
     }
 
     // ---- resize handle pick identifies axis and sign ----

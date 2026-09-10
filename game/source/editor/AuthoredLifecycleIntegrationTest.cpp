@@ -1283,9 +1283,16 @@ int main()
             editor::IsScaleSelection(state.selection),
             "Item Pickup uses Scale for visualScale");
         Expect(
+            editor::IsRotateSelection(state.selection),
+            "Item Pickup uses Rotate for visualRotationDegrees");
+        Expect(
             editor::GetEditableScale(state.workingCopy, state.selection)
                 == &state.workingCopy.itemPickups[0].visualScale,
             "Scale gizmo edits visualScale");
+        Expect(
+            editor::GetEditableRotation(state.workingCopy, state.selection)
+                == &state.workingCopy.itemPickups[0].visualRotationDegrees,
+            "Rotate gizmo edits visualRotationDegrees");
         Expect(
             editor::GetEditablePosition(state.workingCopy, state.selection)
                 == &state.workingCopy.itemPickups[0].position,
@@ -1595,9 +1602,14 @@ int main()
             "primitive Resize is not Static Prop Scale");
         Expect(!editor::IsResizeSelection(state.selection), "Static Prop is not a Resize selection");
         Expect(editor::IsScaleSelection(state.selection), "Static Prop supports Scale tool");
+        Expect(editor::IsRotateSelection(state.selection), "Static Prop supports Rotate tool");
         Expect(
             editor::GetEditableScale(state.workingCopy, state.selection) != nullptr,
             "Scale gizmo edits Static Prop scale");
+        Expect(
+            editor::GetEditableRotation(state.workingCopy, state.selection)
+                == &state.workingCopy.staticProps[0].rotationDegrees,
+            "Rotate gizmo edits Static Prop rotation");
         Expect(
             editor::GetEditableScale(state.workingCopy, {EditorObjectKind::ElevatedPlatform, 0})
                 == nullptr,

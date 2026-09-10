@@ -87,9 +87,13 @@ int main()
             "toolbar Scale writes canonical TransformMode");
         Expect(mode == EditorTransformMode::Scale, "canonical mode is Scale");
         Expect(
+            editor::TrySetEditorTransformMode(mode, false, EditorTransformMode::Rotate),
+            "toolbar Rotate writes canonical TransformMode");
+        Expect(mode == EditorTransformMode::Rotate, "canonical mode is Rotate");
+        Expect(
             editor::TrySetEditorTransformMode(mode, false, EditorTransformMode::Translate),
-            "toolbar Translate restores after Scale");
-        Expect(mode == EditorTransformMode::Translate, "canonical mode is Translate after Scale");
+            "toolbar Translate restores after Rotate");
+        Expect(mode == EditorTransformMode::Translate, "canonical mode is Translate after Rotate");
         Expect(
             !editor::TrySetEditorTransformMode(mode, true, EditorTransformMode::Resize),
             "toolbar cannot bypass drag lock");
@@ -120,6 +124,11 @@ int main()
             editor::IsScaleSelection({editor::EditorObjectKind::StaticProp, 0})
                 && !editor::IsScaleSelection({editor::EditorObjectKind::ElevatedPlatform, 0}),
             "Scale availability is canonical IsScaleSelection");
+        Expect(
+            editor::IsRotateSelection({editor::EditorObjectKind::StaticProp, 0})
+                && editor::IsRotateSelection({editor::EditorObjectKind::ItemPickup, 0})
+                && !editor::IsRotateSelection({editor::EditorObjectKind::ElevatedPlatform, 0}),
+            "Rotate availability is canonical IsRotateSelection");
     }
 
     {

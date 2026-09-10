@@ -103,6 +103,8 @@ struct DebugWorldOverlay
     bool drawResizeGizmo = false;
     // Static Prop Scale uses the same cube handles; edits visual scale, not size.
     bool drawScaleGizmo = false;
+    // World-axis rotation rings. Static Prop rotation or Item Pickup visualRotationDegrees.
+    bool drawRotateGizmo = false;
     int gizmoHoveredSign = 1;
     int gizmoActiveSign = 1;
 };
