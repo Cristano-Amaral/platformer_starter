@@ -619,6 +619,7 @@ add_executable(PressurePlateTest
     game/source/physics/PressurePlateTest.cpp
     game/source/physics/PhysicsWorld.cpp
     game/source/physics/PhysicsWorld.h
+    game/source/platform/FileReplace.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/PressurePlate.h
@@ -626,7 +627,14 @@ add_executable(PressurePlateTest
     game/source/world/StaticProp.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
 )
+if(WIN32)
+    target_sources(PressurePlateTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(PressurePlateTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
 target_include_directories(PressurePlateTest PRIVATE game/source)
 target_link_libraries(PressurePlateTest PRIVATE Jolt)
 if(MSVC)

@@ -8,9 +8,12 @@
 #include "gameplay/Inventory.h"
 #include "world/StaticProp.h"
 
+#include <algorithm>
 #include <cmath>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace world
 {
@@ -52,5 +55,25 @@ inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
     return ItemPickupPositionIsValid(spec.position) && gameplay::IsValidItemId(spec.itemId)
         && ItemPickupQuantityIsValid(spec.quantity)
         && ItemPickupModelIdentityIsValid(spec.modelIdentity);
+}
+
+// Unique deterministic itemId values currently authored by Item Pickups.
+// Not an ItemCatalog. Invalid ids are skipped. Sorted for Inspector order.
+inline std::vector<std::string> UniqueAuthoredPickupItemIds(
+    std::span<const ItemPickupSpec> pickups)
+{
+    std::vector<std::string> ids;
+    ids.reserve(pickups.size());
+    for (const ItemPickupSpec& pickup : pickups)
+    {
+        if (!gameplay::IsValidItemId(pickup.itemId))
+        {
+            continue;
+        }
+        ids.push_back(pickup.itemId);
+    }
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+    return ids;
 }
 }

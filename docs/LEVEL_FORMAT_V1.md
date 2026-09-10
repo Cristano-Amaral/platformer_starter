@@ -89,8 +89,8 @@ checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
 hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
-pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex>]
-door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiresKey>]
+pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay>]]
+door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
@@ -122,29 +122,42 @@ probe line; this is not the historical EOL artifact). Save serializes authored
 Position is world center. Size is extents; each axis finite and
 `>= kMinPressurePlateExtent` (0.12). Default Add size is `2, 0.2, 2`. Zero,
 one, or many records are valid. Canonical Level 01 has **zero** Pressure
-Plates. Runtime Active/Inactive is derived from current Dynamic Box overlap
-and is **not** a Level Format field.
+Plates. Runtime Active/Inactive is derived from overlap and is **not** a
+Level Format field.
 
-A 7-token `pressure_plate` is a no-link plate (`linkedDoorIndex = -1`). An
-optional 8th integer is the authored Door index into `LevelDefinition.doors`
-(0-based). `-1` is explicit no-link. The writer always emits 8 tokens. The
-index is **not** a BodyID, pointer, or GUID. Out-of-range and non-integer
-links fail validation; they do not silently retarget another Door. Cardinality
-is one Pressure Plate → zero or one Door. Multiple plates may name the same
-Door. One plate cannot name multiple Doors.
+A 7-token `pressure_plate` is a no-link plate (`linkedDoorIndex = -1`) with
+legacy M52/M53 modes: `activateByDynamicBox = true`, `activateByPlayer =
+false`, `visibleInGameplay = true`. An 8-token record adds the authored Door
+index into `LevelDefinition.doors` (0-based). `-1` is explicit no-link.
+Omitted mode flags keep those legacy defaults. An 11-token record adds three
+strict `0`/`1` flags: Dynamic Box activation, Player activation, gameplay
+visibility. Invalid flag tokens are rejected. The writer always emits 11
+tokens. Both activation sources may be true (OR) or both false (never
+Active). `visibleInGameplay = 0` suppresses the Gameplay fill; Editor
+authoring still draws/selects the plate. The Door index is **not** a BodyID,
+pointer, or GUID. Out-of-range and non-integer links fail validation; they
+do not silently retarget another Door. Cardinality is one Pressure Plate →
+zero or one Door. Multiple plates may name the same Door. One plate cannot
+name multiple Doors.
 
 `door` is a repeatable authored solid. Position is the **closed** world center.
 Size is extents; each axis finite and `>= kMinDoorExtent` (0.12). Open
 distance is finite and in `[kMinDoorOpenDistance, kMaxDoorOpenDistance]`
 (`[0.12, 20]`). Default Add size is `1.2, 3.0, 2.4` and default open distance
-is `3.2`. Opening direction is fixed **+Y**. An optional 9th token is
-`requiresKey`: exactly `0` or `1`. Omitted means `false` (exact M53
-behavior). The writer always emits 9 tokens (`0` or `1`). Do not author an
-item id, lock id, or channel; the runtime unlock item is the production
-Inventory token `key`. Zero, one, or many records are valid. Canonical
-Level 01 has **zero** Doors. Runtime open fraction, desiredOpen, lock
-unlocked flags, obstruction, and live kinematic pose are **not** Level
-Format fields. Save writes the authored closed pose and `requiresKey` only.
+is `3.2`. Opening direction is fixed **+Y**. An optional 9th token is the
+Inventory requirement:
+
+- omitted or `0` → no required item;
+- `1` → required item `key` (M57 compatibility);
+- a valid M54 `itemId` (`key`, `card`, `red_key`, …) → that item.
+
+`redKey` is rejected because `gameplay::IsValidItemId` requires lowercase.
+The writer emits `0` when empty and the canonical `itemId` when set (so a
+parsed `1` is saved as `key`). Do not author a Pickup index, lock id, or
+channel. Zero, one, or many records are valid. Canonical Level 01 has
+**zero** Doors. Runtime open fraction, desiredOpen, lock unlocked flags,
+obstruction, and live kinematic pose are **not** Level Format fields. Save
+writes the authored closed pose and required item token only.
 
 `item_pickup` is a repeatable authored world acquisition volume. Position is
 the world center. `quantity` is a positive integer in the M54 Inventory range

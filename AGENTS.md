@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 57 — Key Item & Locked Door Interaction
-(authored Door `requiresKey`; runtime lock gated by production Inventory
-item `key`; Tab Inventory UI remains read-only; awaiting manual acceptance).
-Milestone 56 is complete. Milestone 58 has not started.
+Milestone 57.1 — Specific Door Item Requirement & Pressure Plate Modes
+(Door `requiredItemId`; Pressure Plate box/player/visibility modes;
+awaiting manual acceptance).
+Milestone 57 is complete. Milestone 58 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -233,9 +233,13 @@ Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props.
 Milestone 56 adds a read-only player-facing Inventory UI (`Tab` toggle, `Esc`
 closes, arrow navigation) that reads the production M54 Inventory. It works in
 Release without ImGui. While open, gameplay simulation pauses (same wholesale
-guard as F2). Milestone 57 adds authored Door `requiresKey` (default false).
-A key Door starts each applied run locked; `E` consumes one production Inventory
-`key` via `TryRemove` to unlock only that runtime Door. Unlocking does not
-open the Door; M53 Pressure Plate OR still drives `desiredOpen` once unlocked.
-Canonical Level 01 has 0 Item Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic
-Boxes, and 0 Static Props. Do not start Milestone 58.
+guard as F2). Milestone 57 is complete: authored Door `requiredItemId` (empty =
+no requirement; M57 trailing `1` maps to `key`). A required-item Door starts
+each applied run locked; `E` consumes one unit of that item via `TryRemove` to
+unlock only that runtime Door. Unlocking does not open the Door; M53 Pressure
+Plate OR still drives `desiredOpen` once unlocked. Milestone 57.1 lets a Door
+require a specific Inventory `itemId` (`card`, `key`, `red_key`) and extends
+Pressure Plates with `activateByDynamicBox` / `activateByPlayer` /
+`visibleInGameplay` (legacy defaults box-only + visible). Invisible plates
+remain editor-authorable. Canonical Level 01 has 0 Item Pickups, 0 Doors, 0
+Pressure Plates, 0 Dynamic Boxes, and 0 Static Props. Do not start Milestone 58.

@@ -840,7 +840,10 @@ bool AuthoredGeometryDiffers(
         const world::PressurePlateSpec& workingPlate = workingCopy.pressurePlates[selection.index];
         return Vec3Differs(activePlate.center, workingPlate.center)
             || Vec3Differs(activePlate.size, workingPlate.size)
-            || activePlate.linkedDoorIndex != workingPlate.linkedDoorIndex;
+            || activePlate.linkedDoorIndex != workingPlate.linkedDoorIndex
+            || activePlate.activateByDynamicBox != workingPlate.activateByDynamicBox
+            || activePlate.activateByPlayer != workingPlate.activateByPlayer
+            || activePlate.visibleInGameplay != workingPlate.visibleInGameplay;
     }
     case EditorObjectKind::Door:
     {
@@ -860,7 +863,7 @@ bool AuthoredGeometryDiffers(
         return Vec3Differs(activeDoor.center, workingDoor.center)
             || Vec3Differs(activeDoor.size, workingDoor.size)
             || activeDoor.openDistance != workingDoor.openDistance
-            || activeDoor.requiresKey != workingDoor.requiresKey;
+            || activeDoor.requiredItemId != workingDoor.requiredItemId;
     }
     case EditorObjectKind::ItemPickup:
     {

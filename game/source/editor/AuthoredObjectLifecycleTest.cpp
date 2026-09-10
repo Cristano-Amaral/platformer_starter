@@ -1269,7 +1269,15 @@ int main()
                 && working.pressurePlates[0].size.y == world::kDefaultPressurePlateSize.y
                 && working.pressurePlates[0].size.z == world::kDefaultPressurePlateSize.z,
             "default Pressure Plate size");
+        Expect(
+            working.pressurePlates[0].activateByDynamicBox
+                && !working.pressurePlates[0].activateByPlayer
+                && working.pressurePlates[0].visibleInGameplay,
+            "Add Pressure Plate defaults box-only visible");
         Expect(added.selection.kind == EditorObjectKind::PressurePlate, "Add selects Pressure Plate");
+        working.pressurePlates[0].activateByDynamicBox = false;
+        working.pressurePlates[0].activateByPlayer = true;
+        working.pressurePlates[0].visibleInGameplay = false;
         const float originalSizeX = working.pressurePlates[0].size.x;
         const editor::LifecycleEditResult duplicated =
             editor::DuplicateSelected(working, added.selection);
@@ -1283,6 +1291,11 @@ int main()
             working.pressurePlates[1].size.x == originalSizeX
                 && working.pressurePlates[1].size.y == world::kDefaultPressurePlateSize.y,
             "Duplicate preserves size");
+        Expect(
+            !working.pressurePlates[1].activateByDynamicBox
+                && working.pressurePlates[1].activateByPlayer
+                && !working.pressurePlates[1].visibleInGameplay,
+            "Duplicate preserves Pressure Plate mode flags");
         Expect(
             editor::DeleteSelected(working, {EditorObjectKind::PressurePlate, 1}).succeeded,
             "Delete Pressure Plate");
@@ -1302,10 +1315,10 @@ int main()
         Expect(
             working.doors[0].size.x == world::kDefaultDoorSize.x
                 && working.doors[0].openDistance == world::kDefaultDoorOpenDistance
-                && !working.doors[0].requiresKey,
-            "default Door size, openDistance, and requiresKey=false");
+                && working.doors[0].requiredItemId.empty(),
+            "default Door size, openDistance, and no required item");
         Expect(added.selection.kind == EditorObjectKind::Door, "Add selects Door");
-        working.doors[0].requiresKey = true;
+        working.doors[0].requiredItemId = "key";
         working.pressurePlates.push_back({{4.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
         working.pressurePlates.push_back({{8.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
         const editor::LifecycleEditResult duplicated =
@@ -1319,7 +1332,7 @@ int main()
         Expect(
             working.doors[1].openDistance == working.doors[0].openDistance,
             "Duplicate preserves openDistance");
-        Expect(working.doors[1].requiresKey, "Duplicate preserves requiresKey");
+        Expect(working.doors[1].requiredItemId == "key", "Duplicate preserves requiredItemId");
         Expect(
             working.pressurePlates[0].linkedDoorIndex == 0
                 && working.pressurePlates[1].linkedDoorIndex == 0,

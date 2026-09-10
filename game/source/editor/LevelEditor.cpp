@@ -29,6 +29,8 @@
 #include "render/StaticModelThumbnail.h"
 #include "render/StaticModelPreview.h"
 #endif
+#include "world/Door.h"
+#include "world/ItemPickup.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -409,6 +411,9 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                     ImGui::EndCombo();
                 }
             }
+            ImGui::Checkbox("Activate By Dynamic Box", &plate.activateByDynamicBox);
+            ImGui::Checkbox("Activate By Player", &plate.activateByPlayer);
+            ImGui::Checkbox("Visible In Gameplay", &plate.visibleInGameplay);
         }
         break;
     case EditorObjectKind::Door:
@@ -418,7 +423,53 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Position X Y Z", door.center);
             EditVec3("Size X Y Z", door.size);
             ImGui::InputFloat("Open Distance", &door.openDistance, 0.0f, 0.0f, kFloatFormat);
-            ImGui::Checkbox("Requires Key", &door.requiresKey);
+            bool requiresItem = world::DoorRequiresInventoryItem(door);
+            if (ImGui::Checkbox("Requires Item", &requiresItem))
+            {
+                if (!requiresItem)
+                {
+                    door.requiredItemId.clear();
+                }
+                else if (door.requiredItemId.empty())
+                {
+                    const std::vector<std::string> pickupIds =
+                        world::UniqueAuthoredPickupItemIds(level.itemPickups);
+                    if (!pickupIds.empty())
+                    {
+                        door.requiredItemId = pickupIds.front();
+                    }
+                }
+            }
+            if (world::DoorRequiresInventoryItem(door))
+            {
+                std::vector<std::string> itemIds =
+                    world::UniqueAuthoredPickupItemIds(level.itemPickups);
+                bool currentListed = false;
+                for (const std::string& itemId : itemIds)
+                {
+                    if (itemId == door.requiredItemId)
+                    {
+                        currentListed = true;
+                        break;
+                    }
+                }
+                if (!currentListed)
+                {
+                    itemIds.insert(itemIds.begin(), door.requiredItemId);
+                }
+                if (ImGui::BeginCombo("Required Item", door.requiredItemId.c_str()))
+                {
+                    for (const std::string& itemId : itemIds)
+                    {
+                        const bool selected = door.requiredItemId == itemId;
+                        if (ImGui::Selectable(itemId.c_str(), selected))
+                        {
+                            door.requiredItemId = itemId;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
             ImGui::TextUnformatted("Opens +Y from the authored closed position.");
         }
         break;

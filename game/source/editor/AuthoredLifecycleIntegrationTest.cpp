@@ -1028,6 +1028,11 @@ int main()
                 && state.workingCopy.pressurePlates[0].size.z == world::kDefaultPressurePlateSize.z,
             "default size is 2,0.2,2");
         Expect(
+            state.workingCopy.pressurePlates[0].activateByDynamicBox
+                && !state.workingCopy.pressurePlates[0].activateByPlayer
+                && state.workingCopy.pressurePlates[0].visibleInGameplay,
+            "Add Pressure Plate defaults box-only visible");
+        Expect(
             state.workingCopy.pressurePlates[0].center.x == cameraAnchor.x
                 && state.workingCopy.pressurePlates[0].center.y == cameraAnchor.y,
             "Edit Add uses camera-region X/Y");
@@ -1088,6 +1093,9 @@ int main()
                 true,
                 cameraAnchor),
             "Add before Duplicate");
+        dupState.workingCopy.pressurePlates[0].activateByDynamicBox = false;
+        dupState.workingCopy.pressurePlates[0].activateByPlayer = true;
+        dupState.workingCopy.pressurePlates[0].visibleInGameplay = false;
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DuplicateSelected, true),
@@ -1096,6 +1104,11 @@ int main()
         Expect(
             dupState.workingCopy.pressurePlates[1].size.y == world::kDefaultPressurePlateSize.y,
             "Duplicate preserves size");
+        Expect(
+            !dupState.workingCopy.pressurePlates[1].activateByDynamicBox
+                && dupState.workingCopy.pressurePlates[1].activateByPlayer
+                && !dupState.workingCopy.pressurePlates[1].visibleInGameplay,
+            "Duplicate preserves Pressure Plate mode flags");
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DeleteSelected, true),
@@ -1156,7 +1169,9 @@ int main()
             state.workingCopy.doors[0].size.x == world::kDefaultDoorSize.x
                 && state.workingCopy.doors[0].openDistance == world::kDefaultDoorOpenDistance,
             "default Door size and openDistance");
-        Expect(!state.workingCopy.doors[0].requiresKey, "Add Door defaults requiresKey=false");
+        Expect(
+            state.workingCopy.doors[0].requiredItemId.empty(),
+            "Add Door defaults no required item");
         Expect(state.selection.kind == EditorObjectKind::Door, "new Door is selected");
         Expect(
             HierarchyKindCount(state.workingCopy, EditorObjectKind::Door) == 1,
@@ -1186,14 +1201,16 @@ int main()
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, editor::EditAddMenuRequest(EditorObjectKind::Door), true, cameraAnchor),
             "seed Door for Duplicate");
-        dupState.workingCopy.doors[0].requiresKey = true;
+        dupState.workingCopy.doors[0].requiredItemId = "card";
         dupState.selection = {EditorObjectKind::Door, 0};
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DuplicateSelected, true),
             "Duplicate Door request");
         Expect(dupState.workingCopy.doors.size() == 2, "Duplicate appends Door");
-        Expect(dupState.workingCopy.doors[1].requiresKey, "Duplicate preserves requiresKey");
+        Expect(
+            dupState.workingCopy.doors[1].requiredItemId == "card",
+            "Duplicate preserves requiredItemId");
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DeleteSelected, true),

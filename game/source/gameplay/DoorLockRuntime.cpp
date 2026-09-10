@@ -1,6 +1,7 @@
 #include "gameplay/DoorLockRuntime.h"
 
 #include <cmath>
+#include <cstdio>
 
 namespace gameplay
 {
@@ -17,6 +18,40 @@ float Vec3Length(core::Vec3 value)
 }
 }
 
+void FormatLockedDoorPrompt(
+    char* buffer,
+    std::size_t bufferSize,
+    std::string_view requiredItemId,
+    bool hasRequiredItem)
+{
+    if (buffer == nullptr || bufferSize == 0)
+    {
+        return;
+    }
+    if (requiredItemId.empty())
+    {
+        buffer[0] = '\0';
+        return;
+    }
+    const int itemLength = static_cast<int>(requiredItemId.size());
+    if (hasRequiredItem)
+    {
+        std::snprintf(
+            buffer,
+            bufferSize,
+            "E Unlock Door (%.*s)",
+            itemLength,
+            requiredItemId.data());
+        return;
+    }
+    std::snprintf(
+        buffer,
+        bufferSize,
+        "Requires %.*s",
+        itemLength,
+        requiredItemId.data());
+}
+
 int FindLockedDoorTargetIndex(
     core::Vec3 playerCenter,
     float facingX,
@@ -30,7 +65,7 @@ int FindLockedDoorTargetIndex(
     float bestDistance = kLockedDoorMaxDistance + 1.0f;
     for (std::size_t index = 0; index < count; ++index)
     {
-        if (!doors[index].requiresKey)
+        if (!world::DoorRequiresInventoryItem(doors[index]))
         {
             continue;
         }
@@ -91,7 +126,7 @@ bool TryUnlockLockedDoor(
     {
         return false;
     }
-    if (!doors[doorIndex].requiresKey)
+    if (!world::DoorRequiresInventoryItem(doors[doorIndex]))
     {
         return false;
     }
@@ -103,7 +138,7 @@ bool TryUnlockLockedDoor(
     {
         return false;
     }
-    if (!inventory.TryRemove(kDoorUnlockItemId, kDoorUnlockQuantity))
+    if (!inventory.TryRemove(doors[doorIndex].requiredItemId, kDoorUnlockQuantity))
     {
         return false;
     }

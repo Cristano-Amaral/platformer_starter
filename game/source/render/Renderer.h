@@ -156,6 +156,8 @@ struct PressurePlateDrawState
     core::Vec3 center{};
     core::Vec3 size{};
     bool active = false;
+    bool visibleInGameplay = true;
+    bool revealInEditor = false;
 };
 
 struct DoorDrawState
@@ -231,7 +233,7 @@ public:
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
         int lockedDoorTargetIndex,
-        bool inventoryHasKey,
+        const char* lockedDoorPrompt,
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,

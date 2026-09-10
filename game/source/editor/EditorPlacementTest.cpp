@@ -568,7 +568,7 @@ int main()
         Expect(editor::AddDoorAt(working, {2.0f, 1.5f, 0.0f}).succeeded, "palette confirm Add Door");
         Expect(working.doors[0].center.x == 2.0f, "placed Door uses world center");
         Expect(working.doors[0].openDistance == world::kDefaultDoorOpenDistance, "placed openDistance");
-        Expect(!working.doors[0].requiresKey, "placed Door defaults requiresKey=false");
+        Expect(working.doors[0].requiredItemId.empty(), "placed Door defaults no required item");
         Expect(working.staticProps.empty(), "Door placement does not add Static Props");
         Expect(working.pressurePlates.empty(), "Door placement does not add Pressure Plates");
     }

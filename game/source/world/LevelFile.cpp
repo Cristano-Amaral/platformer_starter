@@ -147,6 +147,41 @@ bool ParseIntToken(std::string_view token, int& value)
     return true;
 }
 
+bool ParseBool01Token(std::string_view token, bool& value)
+{
+    if (token == "0")
+    {
+        value = false;
+        return true;
+    }
+    if (token == "1")
+    {
+        value = true;
+        return true;
+    }
+    return false;
+}
+
+bool ParseDoorRequiredItemToken(std::string_view token, std::string& requiredItemId)
+{
+    if (token == "0")
+    {
+        requiredItemId.clear();
+        return true;
+    }
+    if (token == "1")
+    {
+        requiredItemId = std::string(kM57LegacyRequiredKeyItemId);
+        return true;
+    }
+    if (gameplay::IsValidItemId(token))
+    {
+        requiredItemId = std::string(token);
+        return true;
+    }
+    return false;
+}
+
 bool ParseVec3(
     const std::vector<std::string_view>& tokens,
     std::size_t offset,
@@ -549,7 +584,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "pressure_plate")
         {
-            if (tokens.size() != 7 && tokens.size() != 8)
+            if (tokens.size() != 7 && tokens.size() != 8 && tokens.size() != 11)
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
             }
@@ -561,9 +596,19 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
             }
-            if (tokens.size() == 8)
+            if (tokens.size() >= 8)
             {
                 if (!ParseIntToken(tokens[7], plate.linkedDoorIndex))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+            }
+            if (tokens.size() == 11)
+            {
+                if (!ParseBool01Token(tokens[8], plate.activateByDynamicBox)
+                    || !ParseBool01Token(tokens[9], plate.activateByPlayer)
+                    || !ParseBool01Token(tokens[10], plate.visibleInGameplay))
                 {
                     return MakeStatus(
                         LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
@@ -580,17 +625,22 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             }
             DoorSpec door{};
             if (!ParseVec3(tokens, 1, door.center) || !ParseVec3(tokens, 4, door.size)
-                || !ParseFloatToken(tokens[7], door.openDistance) || !DoorSpecIsValid(door))
+                || !ParseFloatToken(tokens[7], door.openDistance)
+                || !DoorCenterIsValid(door.center) || !DoorSizeIsValid(door.size)
+                || !DoorOpenDistanceIsValid(door.openDistance))
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid door");
             }
             if (tokens.size() == 9)
             {
-                if (tokens[8] != "0" && tokens[8] != "1")
+                if (!ParseDoorRequiredItemToken(tokens[8], door.requiredItemId))
                 {
                     return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid door");
                 }
-                door.requiresKey = tokens[8] == "1";
+            }
+            if (!DoorSpecIsValid(door))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid door");
             }
             if (state.doors.size()
                 >= static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies))

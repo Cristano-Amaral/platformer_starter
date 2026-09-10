@@ -38,6 +38,7 @@ struct PressurePlateRuntimeState
     core::Vec3 center{};
     core::Vec3 size{};
     bool active = false;
+    bool visibleInGameplay = true;
 };
 
 struct DoorRuntimeState
@@ -140,7 +141,7 @@ public:
     void ClearCarry();
     DynamicBoxGrabState GetGrabState() const;
     // Session lock flags owned by Application. Size should match applied Doors.
-    // Missing entries fall back to authored requiresKey. Does not snap motion.
+    // Missing entries fall back to authored requiredItemId. Does not snap motion.
     void SetDoorRuntimeUnlocked(std::span<const std::uint8_t> unlocked);
     // Solid world LOS used by M51 grab and M55 pickup. Ignores Dynamic Boxes
     // and the CharacterVirtual inner body. Static Props have no Jolt body.

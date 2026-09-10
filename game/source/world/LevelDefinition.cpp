@@ -237,7 +237,11 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
     {
         if (!Vec3Equal(a.pressurePlates[index].center, b.pressurePlates[index].center)
             || !Vec3Equal(a.pressurePlates[index].size, b.pressurePlates[index].size)
-            || a.pressurePlates[index].linkedDoorIndex != b.pressurePlates[index].linkedDoorIndex)
+            || a.pressurePlates[index].linkedDoorIndex != b.pressurePlates[index].linkedDoorIndex
+            || a.pressurePlates[index].activateByDynamicBox
+                != b.pressurePlates[index].activateByDynamicBox
+            || a.pressurePlates[index].activateByPlayer != b.pressurePlates[index].activateByPlayer
+            || a.pressurePlates[index].visibleInGameplay != b.pressurePlates[index].visibleInGameplay)
         {
             return false;
         }
@@ -247,7 +251,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         if (!Vec3Equal(a.doors[index].center, b.doors[index].center)
             || !Vec3Equal(a.doors[index].size, b.doors[index].size)
             || a.doors[index].openDistance != b.doors[index].openDistance
-            || a.doors[index].requiresKey != b.doors[index].requiresKey)
+            || a.doors[index].requiredItemId != b.doors[index].requiredItemId)
         {
             return false;
         }

@@ -212,6 +212,12 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendVec3(out, plate.size);
         out += ' ';
         AppendInt(out, plate.linkedDoorIndex);
+        out += ' ';
+        AppendInt(out, plate.activateByDynamicBox ? 1 : 0);
+        out += ' ';
+        AppendInt(out, plate.activateByPlayer ? 1 : 0);
+        out += ' ';
+        AppendInt(out, plate.visibleInGameplay ? 1 : 0);
         out += '\n';
     }
 
@@ -224,7 +230,14 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out += ' ';
         AppendFloat(out, door.openDistance);
         out += ' ';
-        AppendInt(out, door.requiresKey ? 1 : 0);
+        if (door.requiredItemId.empty())
+        {
+            AppendInt(out, 0);
+        }
+        else
+        {
+            out += door.requiredItemId;
+        }
         out += '\n';
     }
 

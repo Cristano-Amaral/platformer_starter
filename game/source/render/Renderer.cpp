@@ -3,7 +3,6 @@
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
 #include "gameplay/Player.h"
-#include "gameplay/DoorLockRuntime.h"
 #include "platform/RuntimePaths.h"
 #include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
@@ -48,6 +47,8 @@ constexpr Color kDynamicBoxCarryFill{96, 168, 214, 255};
 constexpr Color kDynamicBoxCarryWire{72, 214, 236, 255};
 constexpr Color kPressurePlateInactive{86, 98, 124, 255};
 constexpr Color kPressurePlateActive{56, 188, 92, 255};
+constexpr Color kPressurePlateHiddenEditorFill{86, 98, 124, 56};
+constexpr Color kPressurePlateHiddenEditorWire{140, 176, 214, 220};
 constexpr Color kDoorColor{136, 96, 68, 255};
 constexpr Color kDoorTargetFill{198, 188, 96, 255};
 constexpr Color kDoorTargetWire{236, 214, 72, 255};
@@ -1269,7 +1270,7 @@ void Renderer::DrawWorld(
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
         int lockedDoorTargetIndex,
-        bool inventoryHasKey,
+        const char* lockedDoorPrompt,
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
@@ -1344,10 +1345,24 @@ void Renderer::DrawWorld(
         {
             continue;
         }
+        const PressurePlateDrawState& plate = pressurePlates[index];
+        if (!plate.visibleInGameplay && !plate.revealInEditor)
+        {
+            continue;
+        }
+        if (!plate.visibleInGameplay && plate.revealInEditor)
+        {
+            DrawGhostBox(
+                plate.center,
+                plate.size,
+                kPressurePlateHiddenEditorFill,
+                kPressurePlateHiddenEditorWire);
+            continue;
+        }
         DrawGreyboxBox(
-            pressurePlates[index].center,
-            pressurePlates[index].size,
-            pressurePlates[index].active ? kPressurePlateActive : kPressurePlateInactive);
+            plate.center,
+            plate.size,
+            plate.active ? kPressurePlateActive : kPressurePlateInactive);
     }
     bool doorHudTarget = false;
     for (std::size_t index = 0; index < doors.size(); ++index)
@@ -1518,7 +1533,10 @@ void Renderer::DrawWorld(
         }
         else if (!grabHudCarrying && !grabHudTarget && !pickupHudTarget && doorHudTarget)
         {
-            DrawPickupHud(gameplay::LockedDoorPromptText(inventoryHasKey));
+            DrawPickupHud(
+                lockedDoorPrompt != nullptr && lockedDoorPrompt[0] != '\0'
+                    ? lockedDoorPrompt
+                    : "Requires item");
         }
     }
     if (levelCompleted)

@@ -5,10 +5,13 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
+#include "gameplay/DoorLockRuntime.h"
 #include "gameplay/Inventory.h"
 #include "world/DynamicBox.h"
+#include "world/Door.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
+#include "world/LevelWriter.h"
 #include "world/PressurePlate.h"
 #include "world/StaticProp.h"
 
@@ -392,6 +395,189 @@ int main()
         Expect(
             world.GetPressurePlates()[0].center.x == plateCenter.x,
             "mutating the caller's LevelDefinition does not change runtime before rebuild");
+    }
+
+    {
+        const std::string oldSeven = world::SerializeLevelText(parsed.level) + "pressure_plate 2 0.1 0 2 0.2 2\n";
+        const world::ParseLevelFileResult oldParsed = world::ParseLevelText(oldSeven);
+        Expect(oldParsed.status == world::LoadLevelFileStatus::Loaded, "old 7-token plate still loads");
+        Expect(
+            oldParsed.level.pressurePlates[0].activateByDynamicBox
+                && !oldParsed.level.pressurePlates[0].activateByPlayer
+                && oldParsed.level.pressurePlates[0].visibleInGameplay,
+            "old plate syntax defaults box=true player=false visible=true");
+        const std::string written = world::SerializeLevelText(oldParsed.level);
+        Expect(
+            world::AuthoredLevelDataEqual(oldParsed.level, world::ParseLevelText(written).level),
+            "canonical plate writer round-trip");
+        Expect(
+            world::ParseLevelText(
+                world::SerializeLevelText(parsed.level) + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 2 1\n")
+                .status
+                == world::LoadLevelFileStatus::Invalid,
+            "invalid plate bool flag rejected");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.activateByDynamicBox = false;
+        plate.activateByPlayer = true;
+        level.pressurePlates.push_back(plate);
+        level.dynamicBoxes.push_back(MakeBox(onPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "player-only Initialize");
+        Expect(!world.GetPressurePlates()[0].active, "player-only ignores overlapping Dynamic Box");
+        world.ResetCharacter(
+            {plateCenter.x, parsed.level.initialSpawnVisualCenter.y, plateCenter.z}, {});
+        Expect(world.GetPressurePlates()[0].active, "player-only activates from Player overlap");
+        Expect(world.DynamicBodyCount() == 1, "player activation adds no Jolt body");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(parsed.level.initialSpawnVisualCenter, {2.0f, 2.0f, 2.0f});
+        plate.activateByDynamicBox = true;
+        plate.activateByPlayer = false;
+        level.pressurePlates.push_back(plate);
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "box-only spawn overlap Initialize");
+        Expect(!world.GetPressurePlates()[0].active, "box-only ignores overlapping Player");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.activateByDynamicBox = true;
+        plate.activateByPlayer = true;
+        level.pressurePlates.push_back(plate);
+        level.dynamicBoxes.push_back(MakeBox(onPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "both-sources Initialize");
+        Expect(world.GetPressurePlates()[0].active, "both enabled: box alone activates");
+        world.ResetCharacter(
+            {plateCenter.x, parsed.level.initialSpawnVisualCenter.y, plateCenter.z}, {});
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(world, 0, offPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "both enabled: Player remains after box leaves");
+        world.ResetCharacter(level.initialSpawnVisualCenter, {});
+        Expect(!world.GetPressurePlates()[0].active, "both enabled: last source leaving deactivates");
+        world.ResetCharacter(
+            {plateCenter.x, parsed.level.initialSpawnVisualCenter.y, plateCenter.z}, {});
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(world, 0, onPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "both sources present -> active");
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(world, 0, offPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "removing box while Player remains keeps active");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.activateByDynamicBox = false;
+        plate.activateByPlayer = false;
+        level.pressurePlates.push_back(plate);
+        level.dynamicBoxes.push_back(MakeBox(onPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "both-disabled Initialize");
+        world.ResetCharacter(
+            {plateCenter.x, parsed.level.initialSpawnVisualCenter.y, plateCenter.z}, {});
+        Expect(!world.GetPressurePlates()[0].active, "both disabled never active");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.activateByDynamicBox = false;
+        plate.activateByPlayer = true;
+        level.pressurePlates.push_back(plate);
+        level.dynamicBoxes.push_back(MakeBox(offPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "carried box vs player-only");
+        const core::Vec3 grabAim{offPlate.x - 1.2f, offPlate.y, offPlate.z};
+        StepGrab(world, grabAim, 1.0f, {}, true);
+        Expect(world.GetGrabState().carrying, "grabbed box for player-only plate");
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(world, 0, onPlate, {}, {});
+        Expect(
+            !world.GetPressurePlates()[0].active,
+            "carried box does not activate player-only plate");
+        plate.activateByDynamicBox = true;
+        plate.activateByPlayer = false;
+        world::LevelDefinition boxOnly = parsed.level;
+        boxOnly.pressurePlates.push_back(plate);
+        boxOnly.dynamicBoxes.push_back(MakeBox(offPlate));
+        physics::PhysicsWorld boxWorld;
+        Expect(StartWorld(boxWorld, boxOnly), "carried box vs box-only");
+        StepGrab(boxWorld, grabAim, 1.0f, {}, true);
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(boxWorld, 0, onPlate, {}, {});
+        Expect(
+            boxWorld.GetPressurePlates()[0].active,
+            "carried overlapping box activates when box mode is on");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(parsed.level.initialSpawnVisualCenter, {2.0f, 2.0f, 2.0f});
+        plate.activateByDynamicBox = false;
+        plate.activateByPlayer = true;
+        plate.visibleInGameplay = false;
+        level.pressurePlates.push_back(plate);
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "invisible plate still evaluates");
+        Expect(world.GetPressurePlates()[0].active, "invisible plate Active from Player overlap");
+        Expect(!world.GetPressurePlates()[0].visibleInGameplay, "invisible plate is not gameplay-visible");
+        const physics::PlayerPhysicsState player = world.GetPlayerPhysicsState();
+        Expect(player.characterInitialized, "Player collision uses CharacterVirtual");
+        Expect(
+            world::PressurePlateOverlapsPlayerVolume(
+                plate, player.visualCenter, world::kPlayerVisualSize),
+            "Player overlap uses CharacterVirtual capsule AABB matching kPlayerVisualSize");
+        world::PressurePlateSpec farPlate = MakePlate(
+            {player.visualCenter.x, player.visualCenter.y + 5.0f, player.visualCenter.z},
+            {1.0f, 0.2f, 1.0f});
+        farPlate.activateByPlayer = true;
+        Expect(
+            !world::PressurePlateOverlapsPlayerVolume(
+                farPlate, player.visualCenter, world::kPlayerVisualSize),
+            "Player overlap requires actual capsule AABB intersection");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(parsed.level.initialSpawnVisualCenter, {2.0f, 2.0f, 2.0f});
+        plate.activateByDynamicBox = false;
+        plate.activateByPlayer = true;
+        plate.visibleInGameplay = false;
+        plate.linkedDoorIndex = 0;
+        level.pressurePlates.push_back(plate);
+        world::DoorSpec door{};
+        door.center = {8.5f, 1.5f, 0.0f};
+        door.size = world::kDefaultDoorSize;
+        door.openDistance = world::kDefaultDoorOpenDistance;
+        level.doors.push_back(door);
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "automatic Door from invisible player plate");
+        gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(level.doors);
+        world.SetDoorRuntimeUnlocked(locks.unlocked);
+        Expect(world.GetPressurePlates()[0].active, "automatic plate Active");
+        Expect(world.GetDoors()[0].desiredOpen, "unlocked Door opens from invisible player plate");
+        world.ResetCharacter({28.0f, parsed.level.initialSpawnVisualCenter.y, 0.0f}, {});
+        world.SetDoorRuntimeUnlocked(locks.unlocked);
+        Expect(!world.GetPressurePlates()[0].active, "leaving invisible volume deactivates");
+        Expect(!world.GetDoors()[0].desiredOpen, "automatic Door closes when Player leaves");
+        Expect(world.DoorBodyCount() == 1, "automatic Door adds no plate body");
+        Expect(world.DynamicBodyCount() == 0, "automatic setup uses no Dynamic Box");
+    }
+
+    {
+        world::LevelDefinition a = parsed.level;
+        world::LevelDefinition b = parsed.level;
+        a.pressurePlates.push_back(MakePlate(plateCenter));
+        b.pressurePlates.push_back(MakePlate(plateCenter));
+        b.pressurePlates[0].activateByPlayer = true;
+        Expect(!world::AuthoredLevelDataEqual(a, b), "equality includes Pressure Plate mode flags");
+        b.pressurePlates[0].activateByPlayer = false;
+        Expect(world::AuthoredLevelDataEqual(a, b), "matching flags compare equal");
+        a.pressurePlates[0].visibleInGameplay = false;
+        Expect(!world::AuthoredLevelDataEqual(a, b), "visibleInGameplay participates in equality");
     }
 
     if (gFailures != 0)

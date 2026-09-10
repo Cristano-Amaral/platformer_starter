@@ -129,7 +129,8 @@ std::vector<render::DynamicBoxDrawState> MakeDynamicBoxDrawStates(
 }
 
 std::vector<render::PressurePlateDrawState> MakePressurePlateDrawStates(
-    const std::vector<physics::PressurePlateRuntimeState>& plates)
+    const std::vector<physics::PressurePlateRuntimeState>& plates,
+    bool revealHiddenInEditor)
 {
     std::vector<render::PressurePlateDrawState> draw;
     draw.reserve(plates.size());
@@ -139,6 +140,8 @@ std::vector<render::PressurePlateDrawState> MakePressurePlateDrawStates(
         item.center = plate.center;
         item.size = plate.size;
         item.active = plate.active;
+        item.visibleInGameplay = plate.visibleInGameplay;
+        item.revealInEditor = revealHiddenInEditor;
         draw.push_back(item);
     }
     return draw;
@@ -900,7 +903,7 @@ int Application::Run()
                 std::vector<std::uint8_t> doorLosBlocked(doorCount, 0);
                 for (std::size_t index = 0; index < doorCount; ++index)
                 {
-                    if (!levelDefinition.doors[index].requiresKey
+                    if (!world::DoorRequiresInventoryItem(levelDefinition.doors[index])
                         || gameplay::DoorIsRuntimeUnlocked(doorLockRunState, index))
                     {
                         continue;
@@ -957,7 +960,11 @@ int Application::Run()
         const std::vector<render::DynamicBoxDrawState> dynamicDraw =
             MakeDynamicBoxDrawStates(dynamicBoxes, grabState);
         const std::vector<render::PressurePlateDrawState> pressurePlateDraw =
-            MakePressurePlateDrawStates(physicsWorld.GetPressurePlates());
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+            MakePressurePlateDrawStates(physicsWorld.GetPressurePlates(), levelEditorState.active);
+#else
+            MakePressurePlateDrawStates(physicsWorld.GetPressurePlates(), false);
+#endif
         const std::vector<physics::DoorRuntimeState> runtimeDoors = physicsWorld.GetDoors();
         const std::vector<render::DoorDrawState> doorDraw = MakeDoorDrawStates(runtimeDoors);
         const physics::MovingPlatformState movingPlatform = physicsWorld.GetMovingPlatform();
@@ -1354,6 +1361,18 @@ int Application::Run()
 #else
         window.SetEscapeClosesWindow(!inventoryUi.open);
 #endif
+        char lockedDoorPrompt[64]{};
+        if (lockedDoorTargetIndex >= 0
+            && static_cast<std::size_t>(lockedDoorTargetIndex) < levelDefinition.doors.size())
+        {
+            const world::DoorSpec& targetedDoor =
+                levelDefinition.doors[static_cast<std::size_t>(lockedDoorTargetIndex)];
+            gameplay::FormatLockedDoorPrompt(
+                lockedDoorPrompt,
+                sizeof(lockedDoorPrompt),
+                targetedDoor.requiredItemId,
+                inventory.Has(targetedDoor.requiredItemId, gameplay::kDoorUnlockQuantity));
+        }
         renderer.BeginFrame();
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         renderer.SyncStaticPropModels(
@@ -1381,7 +1400,7 @@ int Application::Run()
             itemPickupRunState.collected,
             itemPickupTargetIndex,
             lockedDoorTargetIndex,
-            inventory.Has(gameplay::kDoorUnlockItemId, gameplay::kDoorUnlockQuantity),
+            lockedDoorPrompt,
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,

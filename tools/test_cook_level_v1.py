@@ -70,6 +70,26 @@ class LevelV1HeaderTests(unittest.TestCase):
         self.assertIn(b"door 4 1.5 0", payload)
         self.assertIn(b"3.2 1", payload)
 
+    def test_door_item_id_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"door 4 1.5 0 1.2 3 2.4 3.2 card\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"door 4 1.5 0", payload)
+        self.assertIn(b"card", payload)
+
+    def test_pressure_plate_mode_flags_do_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"pressure_plate 2 0.1 0", payload)
+        self.assertIn(b"0 1 0", payload)
+
     def test_item_pickup_record_does_not_fail_header_gate(self) -> None:
         payload = (
             b"PLATFORMER_LEVEL 1\n"

@@ -1029,7 +1029,9 @@ int main()
             Expect(one.level.doors.size() == 1, "one door count");
             Expect(one.level.doors[0].center.x == 4.0f, "one door center x");
             Expect(one.level.doors[0].openDistance == 3.2f, "one door openDistance");
-            Expect(!one.level.doors[0].requiresKey, "old Door syntax defaults requiresKey false");
+            Expect(
+                one.level.doors[0].requiredItemId.empty(),
+                "old Door syntax defaults no required item");
             const std::string writtenOne = world::SerializeLevelText(one.level);
             Expect(CountRecords(writtenOne, "door") == 1, "writer one door");
             Expect(
@@ -1067,6 +1069,30 @@ int main()
                 world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0\n").status
                     == world::LoadLevelFileStatus::Invalid,
                 "Door link without Doors rejected");
+            const std::string oldSeven = canonical + "pressure_plate 2 0.1 0 2 0.2 2\n";
+            const world::PressurePlateSpec oldPlate =
+                world::ParseLevelText(oldSeven).level.pressurePlates[0];
+            Expect(
+                oldPlate.activateByDynamicBox && !oldPlate.activateByPlayer
+                    && oldPlate.visibleInGameplay,
+                "7-token pressure_plate defaults box-only visible");
+            const std::string modes =
+                canonical + "door 4 1.5 0 1.2 3 2.4 3.2\npressure_plate 2 0.1 0 2 0.2 2 0 0 1 0\n";
+            const world::ParseLevelFileResult modeParsed = world::ParseLevelText(modes);
+            Expect(modeParsed.status == world::LoadLevelFileStatus::Loaded, "11-token pressure_plate loads");
+            Expect(
+                !modeParsed.level.pressurePlates[0].activateByDynamicBox
+                    && modeParsed.level.pressurePlates[0].activateByPlayer
+                    && !modeParsed.level.pressurePlates[0].visibleInGameplay,
+                "11-token pressure_plate flags parse");
+            const std::string writtenModes = world::SerializeLevelText(modeParsed.level);
+            Expect(
+                writtenModes.find("pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0") != std::string::npos,
+                "canonical writer emits plate mode flags");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0 2 0 1\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "invalid pressure_plate bool flag rejected");
         }
 
         {

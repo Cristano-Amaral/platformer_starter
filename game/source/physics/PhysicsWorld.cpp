@@ -995,7 +995,8 @@ struct PhysicsWorld::Impl
         doorRuntimeUnlocked.resize(doorSpecs.size());
         for (std::size_t index = 0; index < doorSpecs.size(); ++index)
         {
-            doorRuntimeUnlocked[index] = doorSpecs[index].requiresKey ? 0 : 1;
+            doorRuntimeUnlocked[index] =
+                world::DoorRequiresInventoryItem(doorSpecs[index]) ? 0 : 1;
         }
         JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
         for (std::size_t index = 0; index < doorSpecs.size(); ++index)
@@ -1020,14 +1021,31 @@ struct PhysicsWorld::Impl
         return true;
     }
 
-    bool PressurePlateIsActive(std::size_t plateIndex) const
+    core::Vec3 PlayerCollisionAabbCenter() const
     {
-        if (plateIndex >= pressurePlateSpecs.size() || physicsSystem == nullptr)
+        if (character == nullptr)
+        {
+            return {};
+        }
+        const JPH::RVec3 feet = character->GetPosition();
+        return {
+            static_cast<float>(feet.GetX()),
+            static_cast<float>(feet.GetY()) + kCapsuleTotalHeight * 0.5f,
+            gameplayZ};
+    }
+
+    core::Vec3 PlayerCollisionAabbSize() const
+    {
+        return {kCapsuleRadius * 2.0f, kCapsuleTotalHeight, kCapsuleRadius * 2.0f};
+    }
+
+    bool PressurePlateBoxIsActive(const world::PressurePlateSpec& spec) const
+    {
+        if (!spec.activateByDynamicBox || physicsSystem == nullptr)
         {
             return false;
         }
 
-        const world::PressurePlateSpec& spec = pressurePlateSpecs[plateIndex];
         const JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
         const std::size_t count = DynamicBoxCount();
         for (std::size_t boxIndex = 0; boxIndex < count; ++boxIndex)
@@ -1046,6 +1064,27 @@ struct PhysicsWorld::Impl
         return false;
     }
 
+    bool PressurePlatePlayerIsActive(const world::PressurePlateSpec& spec) const
+    {
+        if (!spec.activateByPlayer || character == nullptr)
+        {
+            return false;
+        }
+        return world::PressurePlateOverlapsPlayerVolume(
+            spec, PlayerCollisionAabbCenter(), PlayerCollisionAabbSize());
+    }
+
+    bool PressurePlateIsActive(std::size_t plateIndex) const
+    {
+        if (plateIndex >= pressurePlateSpecs.size())
+        {
+            return false;
+        }
+
+        const world::PressurePlateSpec& spec = pressurePlateSpecs[plateIndex];
+        return PressurePlateBoxIsActive(spec) || PressurePlatePlayerIsActive(spec);
+    }
+
     bool DoorIsUnlocked(int doorIndex) const
     {
         if (doorIndex < 0)
@@ -1061,7 +1100,7 @@ struct PhysicsWorld::Impl
         {
             return doorRuntimeUnlocked[index] != 0;
         }
-        return !doorSpecs[index].requiresKey;
+        return !world::DoorRequiresInventoryItem(doorSpecs[index]);
     }
 
     bool DoorDesiredOpen(int doorIndex) const
@@ -1722,7 +1761,8 @@ void PhysicsWorld::SetDoorRuntimeUnlocked(std::span<const std::uint8_t> unlocked
         }
         else
         {
-            impl->doorRuntimeUnlocked[index] = impl->doorSpecs[index].requiresKey ? 0 : 1;
+            impl->doorRuntimeUnlocked[index] =
+                world::DoorRequiresInventoryItem(impl->doorSpecs[index]) ? 0 : 1;
         }
     }
 }
@@ -2036,26 +2076,14 @@ std::vector<DynamicBoxRuntimeState> PhysicsWorld::GetDynamicBoxes() const
 std::vector<PressurePlateRuntimeState> PhysicsWorld::GetPressurePlates() const
 {
     std::vector<PressurePlateRuntimeState> plates(impl->pressurePlateSpecs.size());
-    const std::vector<DynamicBoxRuntimeState> boxes = GetDynamicBoxes();
     for (std::size_t plateIndex = 0; plateIndex < impl->pressurePlateSpecs.size(); ++plateIndex)
     {
         const world::PressurePlateSpec& spec = impl->pressurePlateSpecs[plateIndex];
         PressurePlateRuntimeState& plate = plates[plateIndex];
         plate.center = spec.center;
         plate.size = spec.size;
-        plate.active = false;
-        for (const DynamicBoxRuntimeState& box : boxes)
-        {
-            if (!box.valid)
-            {
-                continue;
-            }
-            if (world::PressurePlateOverlapsBox(spec, box.center, box.size))
-            {
-                plate.active = true;
-                break;
-            }
-        }
+        plate.visibleInGameplay = spec.visibleInGameplay;
+        plate.active = impl->PressurePlateIsActive(plateIndex);
     }
     return plates;
 }

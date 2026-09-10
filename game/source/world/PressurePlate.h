@@ -1,7 +1,7 @@
 #pragma once
 
-// Authored Pressure Plate (Milestone 52). Axis-aligned trigger region only.
-// Runtime Active/Inactive is derived from Dynamic Box overlap and is never
+// Authored Pressure Plate (Milestone 52 / 53 / 57.1). Axis-aligned trigger
+// region only. Runtime Active/Inactive is derived from overlap and is never
 // stored on this spec or in Level Format.
 
 #include "core/Vec3.h"
@@ -27,6 +27,11 @@ struct PressurePlateSpec
     core::Vec3 center{};
     core::Vec3 size{};
     int linkedDoorIndex = kNoLinkedDoor;
+    // Legacy M52/M53 defaults: Dynamic Boxes activate, Player does not,
+    // gameplay visual is drawn.
+    bool activateByDynamicBox = true;
+    bool activateByPlayer = false;
+    bool visibleInGameplay = true;
 };
 
 inline bool PressurePlateSizeIsValid(core::Vec3 size)
@@ -55,13 +60,33 @@ inline bool PressurePlateDoorLinkIsValid(int linkedDoorIndex, std::size_t doorCo
     return linkedDoorIndex >= 0 && static_cast<std::size_t>(linkedDoorIndex) < doorCount;
 }
 
-// Production overlap rule: authored plate AABB vs current Dynamic Box AABB.
-// Player, Static Props, and other authored categories are never arguments.
+// Generic AABB overlap against the authored plate volume.
+inline bool PressurePlateOverlapsVolume(
+    const PressurePlateSpec& plate,
+    core::Vec3 volumeCenter,
+    core::Vec3 volumeSize)
+{
+    return PressurePlateSpecIsValid(plate)
+        && AabbOverlaps(plate.center, plate.size, volumeCenter, volumeSize);
+}
+
+// Production Dynamic Box overlap rule: authored plate AABB vs current box AABB.
 inline bool PressurePlateOverlapsBox(
     const PressurePlateSpec& plate,
     core::Vec3 boxCenter,
     core::Vec3 boxSize)
 {
-    return PressurePlateSpecIsValid(plate) && AabbOverlaps(plate.center, plate.size, boxCenter, boxSize);
+    return PressurePlateOverlapsVolume(plate, boxCenter, boxSize);
+}
+
+// Player overlap uses the CharacterVirtual capsule AABB supplied by
+// PhysicsWorld (radius 0.4, total height 1.6 from feet — the live collision
+// shape, which currently matches kPlayerVisualSize). Not a rendered-only cube.
+inline bool PressurePlateOverlapsPlayerVolume(
+    const PressurePlateSpec& plate,
+    core::Vec3 playerCollisionCenter,
+    core::Vec3 playerCollisionSize)
+{
+    return PressurePlateOverlapsVolume(plate, playerCollisionCenter, playerCollisionSize);
 }
 }
