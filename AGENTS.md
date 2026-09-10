@@ -76,10 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 57.1 — Specific Door Item Requirement & Pressure Plate Modes
-(Door `requiredItemId`; Pressure Plate box/player/visibility modes;
-awaiting manual acceptance).
-Milestone 57 is complete. Milestone 58 has not started.
+Milestone 58 — Item Pickup Visual Transform & Asset Presentation
+(authored `visualOffset` / `visualRotationDegrees` / `visualScale`;
+gameplay `position` remains the interaction authority; awaiting manual
+acceptance).
+Milestone 57.1 is complete. Milestone 59 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -241,5 +242,8 @@ Plate OR still drives `desiredOpen` once unlocked. Milestone 57.1 lets a Door
 require a specific Inventory `itemId` (`card`, `key`, `red_key`) and extends
 Pressure Plates with `activateByDynamicBox` / `activateByPlayer` /
 `visibleInGameplay` (legacy defaults box-only + visible). Invisible plates
-remain editor-authorable. Canonical Level 01 has 0 Item Pickups, 0 Doors, 0
-Pressure Plates, 0 Dynamic Boxes, and 0 Static Props. Do not start Milestone 58.
+remain editor-authorable. Milestone 58 adds per-instance Item Pickup visual
+transform (`visualOffset`, `visualRotationDegrees`, `visualScale`) so an
+assigned staged GLB can be fitted without moving gameplay `position`.
+Canonical Level 01 has 0 Item Pickups, 0 Doors, 0 Pressure
+Plates, 0 Dynamic Boxes, and 0 Static Props. Do not start Milestone 59.

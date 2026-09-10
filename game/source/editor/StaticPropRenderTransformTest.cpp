@@ -9,6 +9,7 @@
 // staged-runtime diagnostic policy (no canonical-source fallback).
 
 #include "editor/StaticPropTransform.h"
+#include "world/ItemPickup.h"
 
 #include <cmath>
 #include <cstdio>
@@ -367,6 +368,30 @@ int main()
         Expect(
             !barrelLook.hit || barrelLook.distance > 8.0f,
             "default-add Barrel does not sit on the gameplay near plane");
+    }
+
+    {
+        world::ItemPickupSpec pickup{};
+        pickup.position = {5.0f, 1.0f, 0.0f};
+        pickup.visualOffset = {0.0f, 0.5f, 0.0f};
+        pickup.visualRotationDegrees = {10.0f, 20.0f, 30.0f};
+        pickup.visualScale = {2.0f, 3.0f, 4.0f};
+        pickup.modelIdentity = kTestStatic.identity;
+        Expect(
+            Vec3Near(world::ItemPickupVisualPosition(pickup), {5.0f, 1.5f, 0.0f}),
+            "Item Pickup visual position is gameplay position plus offset");
+        const world::StaticPropSpec visual = world::ItemPickupVisualProp(pickup);
+        const core::Vec3 local{0.5f, -0.25f, 0.75f};
+        const core::Vec3 expected = visual.position
+            + editor::RotateEulerXYZ(
+                  editor::ScaleAxes(local, visual.scale), visual.rotationDegrees);
+        Expect(
+            Vec3Near(editor::StaticPropWorldFromLocal(visual, local), expected),
+            "Item Pickup render is translate(offset) then RotZ*RotY*RotX then scale");
+        Expect(visual.position.x != pickup.position.x || visual.position.y != pickup.position.y,
+            "visual prop origin is not the gameplay position when offset is set");
+        Expect(pickup.position.x == 5.0f && pickup.position.y == 1.0f,
+            "visual adapter does not rewrite gameplay position");
     }
 
     if (gFailures != 0)

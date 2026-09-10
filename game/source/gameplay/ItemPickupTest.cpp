@@ -144,6 +144,20 @@ int main()
         Expect(pickup.itemId == "key", "default itemId is key");
         Expect(pickup.quantity == 1, "default quantity is 1");
         Expect(pickup.modelIdentity.empty(), "default has no model");
+        Expect(pickup.visualOffset.x == 0.0f && pickup.visualOffset.y == 0.0f
+                && pickup.visualOffset.z == 0.0f,
+            "Add default visualOffset is 0");
+        Expect(pickup.visualRotationDegrees.x == 0.0f && pickup.visualRotationDegrees.y == 0.0f
+                && pickup.visualRotationDegrees.z == 0.0f,
+            "Add default visualRotation is 0");
+        Expect(pickup.visualScale.x == 1.0f && pickup.visualScale.y == 1.0f
+                && pickup.visualScale.z == 1.0f,
+            "Add default visualScale is 1");
+        Expect(
+            world::ItemPickupVisualPosition(pickup).x == pickup.position.x
+                && world::ItemPickupVisualPosition(pickup).y == pickup.position.y
+                && world::ItemPickupVisualPosition(pickup).z == pickup.position.z,
+            "neutral visual position equals gameplay position");
     }
 
     {
@@ -164,6 +178,35 @@ int main()
             gameplay::FindItemPickupTargetIndex(spawn, 1.0f, behindPickups, run.collected, los)
                 == gameplay::kNoItemPickupIndex,
             "facing rule rejects behind");
+    }
+
+    {
+        world::ItemPickupSpec shifted = MakePickup(nearby, "key");
+        shifted.visualOffset = {4.0f, 8.0f, 3.0f};
+        shifted.visualRotationDegrees = {90.0f, 45.0f, 15.0f};
+        shifted.visualScale = {4.0f, 4.0f, 4.0f};
+        const std::vector<world::ItemPickupSpec> pickups{shifted};
+        gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
+        const std::vector<std::uint8_t> los = EmptyLos(1);
+        Expect(
+            gameplay::FindItemPickupTargetIndex(spawn, 1.0f, pickups, run.collected, los) == 0,
+            "targeting uses gameplay position, not visualOffset");
+        const world::ItemPickupSpec visualFar = []() {
+            world::ItemPickupSpec spec = MakePickup({100.0f, 1.0f, 0.0f}, "key");
+            spec.visualOffset = {-98.45f, 0.0f, 0.0f};
+            return spec;
+        }();
+        const std::vector<world::ItemPickupSpec> visualNearMesh{visualFar};
+        Expect(
+            gameplay::FindItemPickupTargetIndex(spawn, 1.0f, visualNearMesh, run.collected, los)
+                == gameplay::kNoItemPickupIndex,
+            "mesh-near visualOffset does not create a gameplay target");
+        gameplay::Inventory inventory;
+        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "collect transformed pickup");
+        Expect(inventory.GetQuantity("key") == 1, "collection still grants itemId");
+        Expect(pickups[0].visualOffset.y == 8.0f, "collection does not mutate authored visualOffset");
+        Expect(pickups[0].visualScale.x == 4.0f, "collection does not mutate authored visualScale");
+        Expect(pickups[0].position.x == nearby.x, "collection does not mutate gameplay position");
     }
 
     {
@@ -404,6 +447,27 @@ int main()
         world::ItemPickupSpec badModel = MakePickup(nearby);
         badModel.modelIdentity = "not-a-model";
         Expect(!world::ItemPickupSpecIsValid(badModel), "invalid model identity rejected");
+        world::ItemPickupSpec badOffset = MakePickup(nearby);
+        badOffset.visualOffset.y = std::numeric_limits<float>::infinity();
+        Expect(!world::ItemPickupSpecIsValid(badOffset), "non-finite visualOffset rejected");
+        world::ItemPickupSpec badRotation = MakePickup(nearby);
+        badRotation.visualRotationDegrees.x = std::numeric_limits<float>::quiet_NaN();
+        Expect(!world::ItemPickupSpecIsValid(badRotation), "non-finite visualRotation rejected");
+        world::ItemPickupSpec zeroScale = MakePickup(nearby);
+        zeroScale.visualScale.x = 0.0f;
+        Expect(!world::ItemPickupSpecIsValid(zeroScale), "zero visualScale rejected");
+        world::ItemPickupSpec negativeScale = MakePickup(nearby);
+        negativeScale.visualScale.y = -1.0f;
+        Expect(!world::ItemPickupSpecIsValid(negativeScale), "negative visualScale rejected");
+        world::ItemPickupSpec okVisual = MakePickup(nearby);
+        okVisual.visualOffset = {0.0f, 0.5f, 0.0f};
+        okVisual.visualRotationDegrees = {0.0f, 45.0f, 0.0f};
+        okVisual.visualScale = {0.15f, 0.15f, 0.15f};
+        Expect(world::ItemPickupSpecIsValid(okVisual), "finite positive visual transform is valid");
+        Expect(
+            world::ItemPickupVisualPosition(okVisual).y == nearby.y + 0.5f
+                && world::ItemPickupVisualPosition(okVisual).x == nearby.x,
+            "visual position is gameplay position plus offset");
     }
 
     if (gFailures != 0)

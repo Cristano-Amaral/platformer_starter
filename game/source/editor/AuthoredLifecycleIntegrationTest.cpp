@@ -1271,15 +1271,25 @@ int main()
         Expect(
             state.workingCopy.itemPickups[0].itemId == world::kDefaultItemPickupId
                 && state.workingCopy.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
-                && state.workingCopy.itemPickups[0].modelIdentity.empty(),
-            "default Item Pickup id/quantity/no model");
+                && state.workingCopy.itemPickups[0].modelIdentity.empty()
+                && state.workingCopy.itemPickups[0].visualOffset.y == 0.0f
+                && state.workingCopy.itemPickups[0].visualScale.x == 1.0f,
+            "default Item Pickup id/quantity/no model/neutral visual");
         Expect(state.selection.kind == EditorObjectKind::ItemPickup, "new Item Pickup is selected");
         Expect(
             HierarchyKindCount(state.workingCopy, EditorObjectKind::ItemPickup) == 1,
             "Hierarchy lists the pending Item Pickup");
         Expect(
-            !editor::IsScaleSelection(state.selection),
-            "Item Pickup does not use Scale");
+            editor::IsScaleSelection(state.selection),
+            "Item Pickup uses Scale for visualScale");
+        Expect(
+            editor::GetEditableScale(state.workingCopy, state.selection)
+                == &state.workingCopy.itemPickups[0].visualScale,
+            "Scale gizmo edits visualScale");
+        Expect(
+            editor::GetEditablePosition(state.workingCopy, state.selection)
+                == &state.workingCopy.itemPickups[0].position,
+            "Translate still edits gameplay position");
         Expect(
             !editor::IsResizeSelection(state.selection),
             "Item Pickup does not use Resize");
@@ -1312,6 +1322,9 @@ int main()
         dupState.workingCopy.itemPickups[0].itemId = "coin";
         dupState.workingCopy.itemPickups[0].quantity = 3;
         dupState.workingCopy.itemPickups[0].modelIdentity = "models/test_static.glb";
+        dupState.workingCopy.itemPickups[0].visualOffset = {0.0f, 0.5f, 0.0f};
+        dupState.workingCopy.itemPickups[0].visualRotationDegrees = {0.0f, 90.0f, 0.0f};
+        dupState.workingCopy.itemPickups[0].visualScale = {0.15f, 0.2f, 0.25f};
         dupState.selection = {EditorObjectKind::ItemPickup, 0};
         Expect(
             editor::HandleAuthoredLifecycleRequest(
@@ -1322,12 +1335,59 @@ int main()
             dupState.workingCopy.itemPickups[1].itemId == "coin"
                 && dupState.workingCopy.itemPickups[1].quantity == 3
                 && dupState.workingCopy.itemPickups[1].modelIdentity
-                    == dupState.workingCopy.itemPickups[0].modelIdentity,
-            "Duplicate preserves itemId/quantity/model");
+                    == dupState.workingCopy.itemPickups[0].modelIdentity
+                && dupState.workingCopy.itemPickups[1].visualOffset.y == 0.5f
+                && dupState.workingCopy.itemPickups[1].visualRotationDegrees.y == 90.0f
+                && dupState.workingCopy.itemPickups[1].visualScale.x == 0.15f,
+            "Duplicate preserves itemId/quantity/model/visual transform");
         Expect(
             dupState.workingCopy.itemPickups[1].position.x
                 == dupState.workingCopy.itemPickups[0].position.x + editor::kLifecycleDuplicateOffsetX,
             "Duplicate offsets +1 X");
+        const core::Vec3 gameplayBefore = dupState.workingCopy.itemPickups[0].position;
+        dupState.workingCopy.itemPickups[0].visualOffset.x = 1.25f;
+        editor::RefreshLevelEditorDerivedFlags(dupState, active);
+        Expect(dupState.modified, "visualOffset edit marks Modified");
+        Expect(
+            dupState.workingCopy.itemPickups[0].position.x == gameplayBefore.x
+                && dupState.workingCopy.itemPickups[0].position.y == gameplayBefore.y
+                && dupState.workingCopy.itemPickups[0].position.z == gameplayBefore.z,
+            "visualOffset edit does not move gameplay position");
+        const core::Vec3 scaleBeforePos = dupState.workingCopy.itemPickups[0].position;
+        dupState.workingCopy.itemPickups[0].visualScale = {0.5f, 0.5f, 0.5f};
+        editor::RefreshLevelEditorDerivedFlags(dupState, active);
+        Expect(
+            dupState.workingCopy.itemPickups[0].position.x == scaleBeforePos.x,
+            "visualScale edit does not move gameplay position");
+        world::LevelDefinition appliedVisual = dupState.workingCopy;
+        Expect(
+            world::AuthoredLevelDataEqual(appliedVisual, dupState.workingCopy),
+            "Apply promotes visual fields with workingCopy");
+        editor::LevelEditorState revertVisual{};
+        SeedEditor(revertVisual, appliedVisual);
+        revertVisual.workingCopy.itemPickups[0].visualOffset = {9.0f, 9.0f, 9.0f};
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(revertVisual.modified, "visual edit vs applied is Modified");
+        revertVisual.workingCopy = appliedVisual;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(
+            world::AuthoredLevelDataEqual(revertVisual.workingCopy, appliedVisual),
+            "Revert restores visual fields");
+        Expect(!revertVisual.modified, "Revert after visual edit clears Modified");
+        const core::Vec3 keptOffset = dupState.workingCopy.itemPickups[0].visualOffset;
+        const core::Vec3 keptRotation = dupState.workingCopy.itemPickups[0].visualRotationDegrees;
+        const core::Vec3 keptScale = dupState.workingCopy.itemPickups[0].visualScale;
+        dupState.workingCopy.itemPickups[0].modelIdentity = "models/test_authored.glb";
+        Expect(
+            dupState.workingCopy.itemPickups[0].visualOffset.x == keptOffset.x
+                && dupState.workingCopy.itemPickups[0].visualRotationDegrees.y == keptRotation.y
+                && dupState.workingCopy.itemPickups[0].visualScale.x == keptScale.x,
+            "Content Browser assignment preserves visual transform");
+        dupState.workingCopy.itemPickups[0].modelIdentity.clear();
+        Expect(
+            dupState.workingCopy.itemPickups[0].visualOffset.x == keptOffset.x
+                && dupState.workingCopy.itemPickups[0].visualScale.z == keptScale.z,
+            "Clear Model preserves visual transform");
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DeleteSelected, true),

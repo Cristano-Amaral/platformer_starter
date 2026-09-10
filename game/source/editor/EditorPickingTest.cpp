@@ -405,6 +405,76 @@ int main()
         Expect(sawPickup, "Hierarchy lists Item Pickups");
     }
 
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        world::ItemPickupSpec pickup{};
+        pickup.position = {6.0f, 2.0f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        pickup.modelIdentity = "models/test_static.glb";
+        pickup.visualOffset = {2.0f, 0.0f, 0.0f};
+        pickup.visualRotationDegrees = {0.0f, 90.0f, 0.0f};
+        pickup.visualScale = {2.0f, 1.0f, 1.0f};
+        level.itemPickups.push_back(pickup);
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::PickingProxy* proxy =
+            FindProxy(set, editor::EditorObjectKind::ItemPickup, 0);
+        Expect(proxy != nullptr, "modeled Item Pickup has a picking proxy");
+        Expect(proxy != nullptr && proxy->usesStaticPropTransform,
+            "modeled Item Pickup picking uses visual transform");
+        const editor::Ray3 atVisual{{8.0f, 2.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atVisual, set).kind == editor::EditorObjectKind::ItemPickup,
+            "editor picking follows visual offset");
+        const editor::Ray3 atGameplay{{6.0f, 2.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        const editor::RayHit gameplayHit = editor::IntersectRayStaticProp(
+            atGameplay,
+            world::ItemPickupVisualProp(pickup),
+            editor::kStaticPropDefaultLocalMin,
+            editor::kStaticPropDefaultLocalMax);
+        Expect(!gameplayHit.hit, "gameplay position is not the modeled pick volume after offset");
+
+        world::ItemPickupSpec rotated = pickup;
+        rotated.visualOffset = {};
+        rotated.visualScale = {1.0f, 1.0f, 1.0f};
+        rotated.visualRotationDegrees = {0.0f, 90.0f, 0.0f};
+        rotated.position = {0.0f, 0.0f, 0.0f};
+        const editor::Ray3 alongX{{8.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}};
+        Expect(
+            editor::IntersectRayStaticProp(
+                alongX,
+                world::ItemPickupVisualProp(rotated),
+                editor::kStaticPropDefaultLocalMin,
+                editor::kStaticPropDefaultLocalMax)
+                .hit,
+            "editor picking remains usable after visual rotation");
+
+        world::ItemPickupSpec scaled = pickup;
+        scaled.position = {0.0f, 0.0f, 0.0f};
+        scaled.visualOffset = {};
+        scaled.visualRotationDegrees = {};
+        scaled.visualScale = {0.2f, 0.2f, 0.2f};
+        const editor::Ray3 far{{2.0f, 0.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            !editor::IntersectRayStaticProp(
+                far,
+                world::ItemPickupVisualProp(scaled),
+                editor::kStaticPropDefaultLocalMin,
+                editor::kStaticPropDefaultLocalMax)
+                .hit,
+            "editor picking remains usable after visual scale");
+        const editor::Ray3 nearOrigin{{0.0f, 0.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::IntersectRayStaticProp(
+                nearOrigin,
+                world::ItemPickupVisualProp(scaled),
+                editor::kStaticPropDefaultLocalMin,
+                editor::kStaticPropDefaultLocalMax)
+                .hit,
+            "scaled Item Pickup still picks at visual origin");
+    }
+
     // ---- camera is not a world proxy; spawn is ----
     {
         const world::LevelDefinition level = MakeStubLevel();

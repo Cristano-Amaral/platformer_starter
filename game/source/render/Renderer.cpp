@@ -1425,19 +1425,15 @@ void Renderer::DrawWorld(
         const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
         if (!pickup.modelIdentity.empty() && staticPropModels)
         {
-            world::StaticPropSpec visual{};
-            visual.modelIdentity = pickup.modelIdentity;
-            visual.position = pickup.position;
-            visual.rotationDegrees = world::kDefaultStaticPropRotationDegrees;
-            visual.scale = world::kDefaultStaticPropScale;
-            staticPropModels->DrawProp(visual);
+            staticPropModels->DrawProp(world::ItemPickupVisualProp(pickup));
             if (targeted)
             {
+                const core::Vec3 visualCenter = world::ItemPickupVisualPosition(pickup);
                 DrawCubeWires(
-                    ToRaylib(pickup.position),
-                    world::kItemPickupVisualSize,
-                    world::kItemPickupVisualSize,
-                    world::kItemPickupVisualSize,
+                    ToRaylib(visualCenter),
+                    world::kItemPickupVisualSize * pickup.visualScale.x,
+                    world::kItemPickupVisualSize * pickup.visualScale.y,
+                    world::kItemPickupVisualSize * pickup.visualScale.z,
                     wire);
             }
             continue;

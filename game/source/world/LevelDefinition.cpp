@@ -261,7 +261,12 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         if (!Vec3Equal(a.itemPickups[index].position, b.itemPickups[index].position)
             || a.itemPickups[index].itemId != b.itemPickups[index].itemId
             || a.itemPickups[index].quantity != b.itemPickups[index].quantity
-            || a.itemPickups[index].modelIdentity != b.itemPickups[index].modelIdentity)
+            || a.itemPickups[index].modelIdentity != b.itemPickups[index].modelIdentity
+            || !Vec3Equal(a.itemPickups[index].visualOffset, b.itemPickups[index].visualOffset)
+            || !Vec3Equal(
+                a.itemPickups[index].visualRotationDegrees,
+                b.itemPickups[index].visualRotationDegrees)
+            || !Vec3Equal(a.itemPickups[index].visualScale, b.itemPickups[index].visualScale))
         {
             return false;
         }

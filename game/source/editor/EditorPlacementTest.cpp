@@ -603,6 +603,9 @@ int main()
             "palette confirm Add Item Pickup");
         Expect(working.itemPickups[0].position.x == 2.0f, "placed Item Pickup uses world center");
         Expect(working.itemPickups[0].itemId == world::kDefaultItemPickupId, "placed default itemId");
+        Expect(working.itemPickups[0].visualScale.x == 1.0f
+                && working.itemPickups[0].visualOffset.y == 0.0f,
+            "placed Item Pickup has neutral visual transform");
         Expect(working.doors.empty(), "Item Pickup placement does not add Doors");
         Expect(
             !editor::IsEligiblePlacementSurface(EditorObjectKind::ItemPickup),

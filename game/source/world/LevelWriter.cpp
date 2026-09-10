@@ -249,6 +249,14 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendInt(out, pickup.quantity);
         out += ' ';
         out.append(pickup.itemId);
+        out += ' ';
+        out.append(kItemPickupVisualKeyword);
+        out += ' ';
+        AppendVec3(out, pickup.visualOffset);
+        out += ' ';
+        AppendVec3(out, pickup.visualRotationDegrees);
+        out += ' ';
+        AppendVec3(out, pickup.visualScale);
         if (!pickup.modelIdentity.empty())
         {
             out += ' ';

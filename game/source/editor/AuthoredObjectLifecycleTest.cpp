@@ -1378,12 +1378,22 @@ int main()
         Expect(
             working.itemPickups[0].itemId == world::kDefaultItemPickupId
                 && working.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
-                && working.itemPickups[0].modelIdentity.empty(),
-            "default Item Pickup id/quantity/no model");
+                && working.itemPickups[0].modelIdentity.empty()
+                && working.itemPickups[0].visualOffset.x == 0.0f
+                && working.itemPickups[0].visualOffset.y == 0.0f
+                && working.itemPickups[0].visualOffset.z == 0.0f
+                && working.itemPickups[0].visualRotationDegrees.x == 0.0f
+                && working.itemPickups[0].visualScale.x == 1.0f
+                && working.itemPickups[0].visualScale.y == 1.0f
+                && working.itemPickups[0].visualScale.z == 1.0f,
+            "default Item Pickup id/quantity/no model/neutral visual");
         Expect(added.selection.kind == EditorObjectKind::ItemPickup, "Add selects Item Pickup");
         working.itemPickups[0].itemId = "coin";
         working.itemPickups[0].quantity = 4;
         working.itemPickups[0].modelIdentity = "models/test_static.glb";
+        working.itemPickups[0].visualOffset = {0.0f, 0.5f, 0.0f};
+        working.itemPickups[0].visualRotationDegrees = {10.0f, 20.0f, 30.0f};
+        working.itemPickups[0].visualScale = {0.2f, 0.3f, 0.4f};
         const editor::LifecycleEditResult duplicated =
             editor::DuplicateSelected(working, added.selection);
         Expect(duplicated.succeeded, "Duplicate Item Pickup");
@@ -1395,8 +1405,12 @@ int main()
         Expect(
             working.itemPickups[1].itemId == working.itemPickups[0].itemId
                 && working.itemPickups[1].quantity == working.itemPickups[0].quantity
-                && working.itemPickups[1].modelIdentity == working.itemPickups[0].modelIdentity,
-            "Duplicate preserves itemId/quantity/model");
+                && working.itemPickups[1].modelIdentity == working.itemPickups[0].modelIdentity
+                && working.itemPickups[1].visualOffset.y == working.itemPickups[0].visualOffset.y
+                && working.itemPickups[1].visualRotationDegrees.y
+                    == working.itemPickups[0].visualRotationDegrees.y
+                && working.itemPickups[1].visualScale.x == working.itemPickups[0].visualScale.x,
+            "Duplicate preserves itemId/quantity/model/visual transform");
         Expect(
             editor::DeleteSelected(working, {EditorObjectKind::ItemPickup, 0}).succeeded,
             "Delete earlier Item Pickup");

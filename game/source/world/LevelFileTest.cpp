@@ -1104,6 +1104,18 @@ int main()
             Expect(one.level.itemPickups[0].quantity == 1, "one item_pickup quantity");
             Expect(one.level.itemPickups[0].position.x == 2.0f, "one item_pickup position x");
             Expect(one.level.itemPickups[0].modelIdentity.empty(), "one item_pickup has no model");
+            Expect(one.level.itemPickups[0].visualOffset.x == 0.0f
+                    && one.level.itemPickups[0].visualOffset.y == 0.0f
+                    && one.level.itemPickups[0].visualOffset.z == 0.0f,
+                "old item_pickup visualOffset defaults to 0");
+            Expect(one.level.itemPickups[0].visualRotationDegrees.x == 0.0f
+                    && one.level.itemPickups[0].visualRotationDegrees.y == 0.0f
+                    && one.level.itemPickups[0].visualRotationDegrees.z == 0.0f,
+                "old item_pickup visualRotation defaults to 0");
+            Expect(one.level.itemPickups[0].visualScale.x == 1.0f
+                    && one.level.itemPickups[0].visualScale.y == 1.0f
+                    && one.level.itemPickups[0].visualScale.z == 1.0f,
+                "old item_pickup visualScale defaults to 1");
             const std::string writtenOne = world::SerializeLevelText(one.level);
             Expect(CountRecords(writtenOne, "item_pickup") == 1, "writer one item_pickup");
             Expect(
@@ -1156,6 +1168,102 @@ int main()
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "invalid item_pickup model identity rejected");
+
+            const std::string visualPickup =
+                canonical
+                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 "
+                  "models/test_static.glb\n";
+            const world::ParseLevelFileResult visualParsed = world::ParseLevelText(visualPickup);
+            Expect(visualParsed.status == world::LoadLevelFileStatus::Loaded,
+                "M58 visual item_pickup loads");
+            Expect(visualParsed.level.itemPickups[0].position.x == 5.0f, "visual record keeps gameplay x");
+            Expect(visualParsed.level.itemPickups[0].visualOffset.y == 0.5f, "visualOffset y");
+            Expect(visualParsed.level.itemPickups[0].visualRotationDegrees.y == 90.0f,
+                "visualRotation y");
+            Expect(visualParsed.level.itemPickups[0].visualScale.x == 0.15f, "visualScale x");
+            Expect(
+                visualParsed.level.itemPickups[0].modelIdentity == "models/test_static.glb",
+                "visual record keeps model identity");
+            const std::string writtenVisual = world::SerializeLevelText(visualParsed.level);
+            Expect(writtenVisual.find(" visual ") != std::string::npos,
+                "canonical writer emits visual marker");
+            Expect(writtenVisual.find("models/test_static.glb") != std::string::npos,
+                "canonical writer keeps identity after visual fields");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    visualParsed.level, world::ParseLevelText(writtenVisual).level),
+                "M58 visual item_pickup round trip");
+
+            const std::string spaced =
+                canonical
+                + "item_pickup 3 1 0 1 key models/Chest by Quaternius - O72u4Drp8k.glb\n";
+            const world::ParseLevelFileResult spacedParsed = world::ParseLevelText(spaced);
+            Expect(spacedParsed.status == world::LoadLevelFileStatus::Loaded,
+                "old spaced modelIdentity still parses");
+            Expect(
+                spacedParsed.level.itemPickups[0].modelIdentity
+                    == "models/Chest by Quaternius - O72u4Drp8k.glb",
+                "old spaced identity reassembles");
+            Expect(
+                spacedParsed.level.itemPickups[0].visualScale.x == 1.0f,
+                "old spaced identity keeps default visualScale");
+            const std::string writtenSpaced = world::SerializeLevelText(spacedParsed.level);
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    spacedParsed.level, world::ParseLevelText(writtenSpaced).level),
+                "spaced modelIdentity round-trips through visual writer");
+            Expect(
+                writtenSpaced.find("models/Chest by Quaternius - O72u4Drp8k.glb") != std::string::npos,
+                "writer keeps spaced identity after visual fields");
+
+            const std::string emptyVisual =
+                canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1\n";
+            const world::ParseLevelFileResult emptyVisualParsed = world::ParseLevelText(emptyVisual);
+            Expect(emptyVisualParsed.status == world::LoadLevelFileStatus::Loaded,
+                "visual record with empty identity is valid");
+            Expect(emptyVisualParsed.level.itemPickups[0].modelIdentity.empty(),
+                "visual-only record has empty identity");
+
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 inf 0 0 0 0 1 1 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-finite visualOffset rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 nan 0 0 1 1 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-finite visualRotation rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 inf 1 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-finite visualScale rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 0 1 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero visualScale rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 -1 1 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative visualScale rejected");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "incomplete visual segment rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 models/missing.txt\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "invalid identity after visual segment rejected");
         }
 
         {

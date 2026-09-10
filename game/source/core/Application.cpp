@@ -1272,8 +1272,11 @@ int Application::Run()
             overlay.pendingDeleteItemPickupSizes.reserve(pendingDelete.itemPickups.size());
             for (const world::ItemPickupSpec& pickup : pendingDelete.itemPickups)
             {
-                overlay.pendingDeleteItemPickupCenters.push_back(pickup.position);
-                overlay.pendingDeleteItemPickupSizes.push_back(world::kItemPickupVisualExtents);
+                core::Vec3 center{};
+                core::Vec3 size{};
+                editor::ItemPickupEditorBounds(pickup, center, size);
+                overlay.pendingDeleteItemPickupCenters.push_back(center);
+                overlay.pendingDeleteItemPickupSizes.push_back(size);
             }
             overlay.pendingDeleteStaticPropIndices = pendingDelete.staticPropIndices;
             overlay.pendingDeleteStaticPropCenters.clear();

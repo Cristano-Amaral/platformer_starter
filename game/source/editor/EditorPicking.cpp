@@ -304,11 +304,24 @@ EditorPickingSet BuildPickingSet(
     }
     for (std::size_t index = 0; index < appliedLevel.itemPickups.size(); ++index)
     {
+        const world::ItemPickupSpec& pickup = appliedLevel.itemPickups[index];
+        if (!pickup.modelIdentity.empty())
+        {
+            PickingProxy proxy{};
+            proxy.selection = {EditorObjectKind::ItemPickup, index};
+            proxy.usesStaticPropTransform = true;
+            proxy.staticProp = world::ItemPickupVisualProp(pickup);
+            proxy.localMin = kStaticPropDefaultLocalMin;
+            proxy.localMax = kStaticPropDefaultLocalMax;
+            ItemPickupEditorBounds(pickup, proxy.center, proxy.size);
+            set.proxies.push_back(proxy);
+            continue;
+        }
         AddProxy(
             set,
             EditorObjectKind::ItemPickup,
             index,
-            appliedLevel.itemPickups[index].position,
+            pickup.position,
             world::kItemPickupVisualExtents,
             0.0f);
     }

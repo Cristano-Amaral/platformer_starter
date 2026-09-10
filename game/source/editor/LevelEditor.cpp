@@ -520,6 +520,16 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 pickup.modelIdentity.clear();
             }
             ImGui::TextUnformatted("Optional visual only. Empty uses the primitive fallback.");
+            ImGui::Separator();
+            ImGui::TextUnformatted("Visual");
+            ImGui::TextUnformatted(
+                "Fits the assigned model. Does not move the gameplay pickup position.");
+            EditVec3("Visual Offset X Y Z", pickup.visualOffset);
+            EditVec3("Visual Rotation X Y Z (deg)", pickup.visualRotationDegrees);
+            EditVec3("Visual Scale X Y Z", pickup.visualScale);
+            ImGui::TextUnformatted(
+                "Translate edits Position. Scale gizmo edits Visual Scale. Offset and Rotation are "
+                "Inspector-only.");
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -1310,7 +1320,7 @@ LevelEditorRequest DrawLevelControls(
             "RMB look, WASD move, Q/E down/up, Shift faster, wheel speed, Alt+wheel dolly. "
             "Translate: LMB on an X/Y/Z handle moves the working copy. "
             "Resize: LMB on a cube handle changes authored primitive size; the cyan ghost is the true size. "
-            "Scale: LMB on a cube handle changes Static Prop visual scale (not primitive Resize).");
+            "Scale: LMB on a cube handle changes Static Prop or Item Pickup visual scale (not primitive Resize).");
         ImGui::TextWrapped(
             "The gizmo and pending ghost follow unapplied working-copy edits. "
             "Active render, physics, picking and highlight stay put until Apply Preview.");
@@ -1830,7 +1840,7 @@ LevelEditorRequest DrawEditorQuickToolbar(
     DrawQuickToolbarTransformButton(state, "Resize", "Resize", EditorTransformMode::Resize);
     ImGui::SameLine();
     DrawQuickToolbarTransformButton(
-        state, "Scale", "Scale visual model (Static Prop)", EditorTransformMode::Scale);
+        state, "Scale", "Scale visual model (Static Prop / Item Pickup)", EditorTransformMode::Scale);
 
     ImGui::SameLine();
     ImGui::TextDisabled("|");

@@ -252,7 +252,8 @@ bool IsResizeSelection(EditorSelection selection)
 
 bool IsScaleSelection(EditorSelection selection)
 {
-    return selection.kind == EditorObjectKind::StaticProp;
+    return selection.kind == EditorObjectKind::StaticProp
+        || selection.kind == EditorObjectKind::ItemPickup;
 }
 
 core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection selection)
@@ -498,6 +499,11 @@ core::Vec3* GetEditableScale(world::LevelDefinition& level, EditorSelection sele
     {
         return &level.staticProps[selection.index].scale;
     }
+    if (selection.kind == EditorObjectKind::ItemPickup
+        && selection.index < level.itemPickups.size())
+    {
+        return &level.itemPickups[selection.index].visualScale;
+    }
     return nullptr;
 }
 
@@ -509,6 +515,11 @@ const core::Vec3* GetEditableScale(
         && selection.index < level.staticProps.size())
     {
         return &level.staticProps[selection.index].scale;
+    }
+    if (selection.kind == EditorObjectKind::ItemPickup
+        && selection.index < level.itemPickups.size())
+    {
+        return &level.itemPickups[selection.index].visualScale;
     }
     return nullptr;
 }
@@ -620,9 +631,8 @@ bool GetGizmoPreviewBox(
     case EditorObjectKind::ItemPickup:
         if (selection.index < workingCopy.itemPickups.size())
         {
-            const world::ItemPickupSpec& pickup = workingCopy.itemPickups[selection.index];
-            center = pickup.position;
-            size = world::kItemPickupVisualExtents;
+            ItemPickupEditorBounds(
+                workingCopy.itemPickups[selection.index], center, size);
             return true;
         }
         break;
@@ -884,7 +894,11 @@ bool AuthoredGeometryDiffers(
         return Vec3Differs(activePickup.position, workingPickup.position)
             || activePickup.itemId != workingPickup.itemId
             || activePickup.quantity != workingPickup.quantity
-            || activePickup.modelIdentity != workingPickup.modelIdentity;
+            || activePickup.modelIdentity != workingPickup.modelIdentity
+            || Vec3Differs(activePickup.visualOffset, workingPickup.visualOffset)
+            || Vec3Differs(
+                activePickup.visualRotationDegrees, workingPickup.visualRotationDegrees)
+            || Vec3Differs(activePickup.visualScale, workingPickup.visualScale);
     }
     case EditorObjectKind::StaticProp:
     {
@@ -1533,6 +1547,26 @@ bool UpdateResizeInteraction(
         view);
 }
 
+bool TryScaleGizmoOrigin(
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    core::Vec3& origin)
+{
+    if (selection.kind == EditorObjectKind::ItemPickup
+        && selection.index < workingCopy.itemPickups.size())
+    {
+        origin = world::ItemPickupVisualPosition(workingCopy.itemPickups[selection.index]);
+        return true;
+    }
+    const core::Vec3* position = GetEditablePosition(workingCopy, selection);
+    if (position == nullptr)
+    {
+        return false;
+    }
+    origin = *position;
+    return true;
+}
+
 GizmoDrawRequest MakeScaleGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
@@ -1540,15 +1574,15 @@ GizmoDrawRequest MakeScaleGizmoDrawRequest(
     const GizmoInteractionState& interaction)
 {
     GizmoDrawRequest request{};
-    const core::Vec3* origin = GetEditablePosition(workingCopy, selection);
-    if (origin == nullptr || !IsScaleSelection(selection)
+    core::Vec3 origin{};
+    if (!TryScaleGizmoOrigin(workingCopy, selection, origin) || !IsScaleSelection(selection)
         || GetEditableScale(workingCopy, selection) == nullptr)
     {
         return request;
     }
 
     request.visible = true;
-    request.origin = *origin;
+    request.origin = origin;
     request.axisLength = GizmoWorldLength(view, request.origin);
     request.hovered = interaction.hovered;
     request.hoveredSign = interaction.hoveredSign;
@@ -1691,18 +1725,18 @@ bool UpdateScaleInteraction(
         return false;
     }
 
-    const core::Vec3* origin = GetEditablePosition(workingCopy, currentSelection);
     const core::Vec3* scale = GetEditableScale(workingCopy, currentSelection);
-    if (origin == nullptr || scale == nullptr)
+    core::Vec3 origin{};
+    if (!TryScaleGizmoOrigin(workingCopy, currentSelection, origin) || scale == nullptr)
     {
         state.hovered = EditorAxis::None;
         state.hoveredSign = 1;
         return false;
     }
 
-    const float axisLength = GizmoWorldLength(view, *origin);
+    const float axisLength = GizmoWorldLength(view, origin);
     const ResizeHandlePick pick =
-        PickResizeHandle(mouseRay, *origin, axisLength, axisLength * kResizeHandleHitFraction);
+        PickResizeHandle(mouseRay, origin, axisLength, axisLength * kResizeHandleHitFraction);
     state.hovered = pick.axis;
     state.hoveredSign = pick.sign;
     if (lookHeld || !selectPressed || pick.axis == EditorAxis::None)
@@ -1715,7 +1749,7 @@ bool UpdateScaleInteraction(
         currentSelection,
         pick.axis,
         pick.sign,
-        *origin,
+        origin,
         *scale,
         mouseRay,
         view);

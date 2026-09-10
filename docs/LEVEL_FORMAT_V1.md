@@ -91,7 +91,7 @@ collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay>]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
-item_pickup <px> <py> <pz> <quantity> <itemId> [<modelIdentity...>]
+item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
 
@@ -160,15 +160,24 @@ obstruction, and live kinematic pose are **not** Level Format fields. Save
 writes the authored closed pose and required item token only.
 
 `item_pickup` is a repeatable authored world acquisition volume. Position is
-the world center. `quantity` is a positive integer in the M54 Inventory range
+the world **gameplay** pickup location (interaction, facing, LOS, placement,
+Duplicate +1 X). `quantity` is a positive integer in the M54 Inventory range
 (`1..kMaxItemQuantity`). `itemId` uses the production M54 `IsValidItemId`
-rule (not a second parser-local grammar). Optional trailing tokens are a
-canonical Static Model identity (`models/<file>.glb`), reassembled with spaces
-like `static_prop`. Omitted identity means the primitive fallback visual; a
-GLB is **not** required to author a valid pickup. Zero, one, or many records
-are valid. Canonical Level 01 has **zero** Item Pickups. Runtime
-available/collected flags are **not** Level Format fields. Save writes
-authored position, quantity, itemId, and optional model identity only.
+rule (not a second parser-local grammar). An optional `visual` segment holds
+per-instance presentation: offset, Euler XYZ degrees, and visual scale.
+Omitted `visual` (legacy M55 records) means offset/rotation `0,0,0` and scale
+`1,1,1`. Visual scale is finite and `> 0` on every axis — the same rule as
+Static Prop scale, including the Scale-gizmo floor `kMinStaticPropScale` 0.01.
+Visual fields never move the gameplay pickup point. Optional trailing tokens
+after `visual` (or after `itemId` on legacy lines) are a canonical Static
+Model identity (`models/<file>.glb`), reassembled with spaces like
+`static_prop`. The writer always emits the `visual` marker and nine floats,
+then the identity when non-empty. Omitted identity means the primitive
+fallback visual; a GLB is **not** required to author a valid pickup. Zero,
+one, or many records are valid. Canonical Level 01 has **zero** Item Pickups.
+Runtime available/collected flags are **not** Level Format fields. Save writes
+authored gameplay position, quantity, itemId, visual transform, and optional
+model identity only.
 
 `static_prop` is a visual authored instance, not a physics body. Identity is
 the canonical project-relative Static Model Asset path (`models/<file>.glb`),

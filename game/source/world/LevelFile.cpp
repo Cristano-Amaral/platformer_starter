@@ -668,10 +668,27 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup");
             }
             pickup.itemId = std::string(tokens[5]);
-            if (tokens.size() > 6)
+            std::size_t identityStart = 6;
+            if (tokens.size() > 6 && tokens[6] == kItemPickupVisualKeyword)
             {
-                pickup.modelIdentity = std::string(tokens[6]);
-                for (std::size_t index = 7; index < tokens.size(); ++index)
+                if (tokens.size() < 16)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup visual");
+                }
+                if (!ParseVec3(tokens, 7, pickup.visualOffset)
+                    || !ParseVec3(tokens, 10, pickup.visualRotationDegrees)
+                    || !ParseVec3(tokens, 13, pickup.visualScale))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup visual");
+                }
+                identityStart = 16;
+            }
+            if (tokens.size() > identityStart)
+            {
+                pickup.modelIdentity = std::string(tokens[identityStart]);
+                for (std::size_t index = identityStart + 1; index < tokens.size(); ++index)
                 {
                     pickup.modelIdentity.push_back(' ');
                     pickup.modelIdentity.append(tokens[index]);

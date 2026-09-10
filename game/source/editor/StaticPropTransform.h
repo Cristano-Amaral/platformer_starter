@@ -5,6 +5,7 @@
 
 #include "editor/EditorMath.h"
 #include "editor/EditorPicking.h"
+#include "world/ItemPickup.h"
 #include "world/StaticProp.h"
 
 #include <cmath>
@@ -107,6 +108,26 @@ inline RayHit IntersectRayStaticProp(
         (localMin.y + localMax.y) * 0.5f,
         (localMin.z + localMax.z) * 0.5f};
     return IntersectRayAabb({localOrigin, localDirection}, center, size);
+}
+
+// Editor visual bounds. Gameplay targeting still uses ItemPickupSpec::position.
+inline void ItemPickupEditorBounds(
+    const world::ItemPickupSpec& pickup,
+    core::Vec3& outCenter,
+    core::Vec3& outSize)
+{
+    if (pickup.modelIdentity.empty())
+    {
+        outCenter = pickup.position;
+        outSize = world::kItemPickupVisualExtents;
+        return;
+    }
+    StaticPropWorldAabb(
+        world::ItemPickupVisualProp(pickup),
+        kStaticPropDefaultLocalMin,
+        kStaticPropDefaultLocalMax,
+        outCenter,
+        outSize);
 }
 
 inline bool PointInsideAabb(core::Vec3 point, core::Vec3 center, core::Vec3 size)

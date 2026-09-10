@@ -1,7 +1,8 @@
 #pragma once
 
 // Milestone 34 translation gizmo + Milestone 35 resize math/live handles.
-// Milestone 49 Scale gizmo edits Static Prop visual scale only. No Rotate.
+// Milestone 49/58 Scale gizmo edits Static Prop scale or Item Pickup visualScale.
+// No Rotate gizmo.
 
 #include "core/Vec3.h"
 #include "editor/EditorPicking.h"
@@ -162,7 +163,8 @@ const core::Vec3* GetEditableSize(
     const world::LevelDefinition& level,
     EditorSelection selection);
 
-// Mutable authored visual scale. Static Prop only. Not primitive size.
+// Mutable authored visual scale. Static Prop scale or Item Pickup visualScale.
+// Not primitive size.
 core::Vec3* GetEditableScale(
     world::LevelDefinition& level,
     EditorSelection selection);

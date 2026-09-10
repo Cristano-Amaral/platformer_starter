@@ -4,6 +4,7 @@
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
+#include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
 
 #include <cstdint>
@@ -223,8 +224,20 @@ int main()
             !editor::IsResizeSelection({EditorObjectKind::ItemPickup, 0}),
             "Item Pickup is not resize");
         Expect(
-            !editor::IsScaleSelection({EditorObjectKind::ItemPickup, 0}),
-            "Item Pickup is not Scale");
+            editor::IsScaleSelection({EditorObjectKind::ItemPickup, 0}),
+            "Item Pickup is Scale for visualScale");
+        core::Vec3* pickupScale =
+            editor::GetEditableScale(level, {EditorObjectKind::ItemPickup, 0});
+        Expect(pickupScale != nullptr, "Item Pickup has visualScale pointer");
+        Expect(
+            pickupScale == &level.itemPickups[0].visualScale,
+            "Scale gizmo edits visualScale not position");
+        if (pickupScale != nullptr)
+        {
+            pickupScale->x = 0.25f;
+        }
+        Expect(NearlyEqual(level.itemPickups[0].visualScale.x, 0.25f), "Scale mutates visualScale");
+        Expect(NearlyEqual(level.itemPickups[0].position.x, 7.0f), "Scale leaves gameplay position");
         world::StaticPropSpec prop{};
         prop.modelIdentity = "models/test_static.glb";
         prop.position = {3.0f, 1.0f, 0.0f};
@@ -1021,6 +1034,55 @@ int main()
         Expect(
             editor::AuthoredGeometryDiffers(active, working, prop0),
             "Scale drag is a pending authored edit");
+    }
+
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        world::ItemPickupSpec pickup{};
+        pickup.position = {5.0f, 1.0f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        pickup.modelIdentity = "models/test_static.glb";
+        pickup.visualOffset = {0.0f, 0.5f, 0.0f};
+        pickup.visualScale = {1.0f, 1.0f, 1.0f};
+        working.itemPickups.push_back(pickup);
+        const world::LevelDefinition active = working;
+        const render::CameraView view = MakeView({20.0f, 8.0f, 20.0f}, {5.0f, 1.5f, 0.0f});
+        EditorSelection pickup0{EditorObjectKind::ItemPickup, 0};
+        const core::Vec3 visualOrigin = world::ItemPickupVisualPosition(working.itemPickups[0]);
+        const core::Vec3 startScale = working.itemPickups[0].visualScale;
+        const float length = editor::GizmoWorldLength(view, visualOrigin);
+        const editor::GizmoDrawRequest draw =
+            editor::MakeScaleGizmoDrawRequest(pickup0, working, view, {});
+        Expect(draw.visible, "Item Pickup has Scale gizmo request");
+        Expect(Vec3Near(draw.origin, visualOrigin), "Item Pickup Scale gizmo sits at visual position");
+
+        editor::GizmoInteractionState state{};
+        Expect(
+            editor::BeginScaleDrag(
+                state,
+                pickup0,
+                EditorAxis::Y,
+                1,
+                visualOrigin,
+                startScale,
+                RayThrough(view, {visualOrigin.x, visualOrigin.y + length, visualOrigin.z}),
+                view),
+            "begin Item Pickup +Y Scale");
+        const core::Vec3 scaled = editor::GizmoScaleSize(
+            state,
+            RayThrough(view, {visualOrigin.x, visualOrigin.y + length + 1.0f, visualOrigin.z}),
+            view);
+        Expect(scaled.y > startScale.y, "Item Pickup Scale Y changes visualScale.y");
+        Expect(NearlyEqual(scaled.x, startScale.x), "Item Pickup Scale Y keeps visualScale.x");
+        working.itemPickups[0].visualScale = scaled;
+        Expect(NearlyEqual(working.itemPickups[0].position.x, 5.0f), "Scale leaves gameplay X");
+        Expect(NearlyEqual(working.itemPickups[0].position.y, 1.0f), "Scale leaves gameplay Y");
+        Expect(NearlyEqual(working.itemPickups[0].visualOffset.y, 0.5f), "Scale leaves visualOffset");
+        Expect(Vec3Near(active.itemPickups[0].visualScale, startScale), "Scale does not mutate active pickup");
+        Expect(
+            editor::GetEditablePosition(working, pickup0) == &working.itemPickups[0].position,
+            "Translate origin remains gameplay position");
     }
 
     // ---- M35 Phase A nudge ----

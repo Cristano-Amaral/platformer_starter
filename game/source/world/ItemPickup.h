@@ -1,8 +1,9 @@
 #pragma once
 
-// Authored Item Pickup (Milestone 55). World acquisition only: position,
-// M54 itemId, quantity, optional Static Model identity. Runtime collected
-// state is never stored here or in Level Format.
+// Authored Item Pickup (Milestone 55 / 58). World acquisition: gameplay
+// position, M54 itemId, quantity, optional Static Model identity, and a
+// per-instance visual transform. Runtime collected state is never stored
+// here or in Level Format. Not an ItemDefinition or generic Transform.
 
 #include "core/Vec3.h"
 #include "gameplay/Inventory.h"
@@ -25,6 +26,11 @@ inline constexpr core::Vec3 kItemPickupVisualExtents{
     kItemPickupVisualSize};
 inline constexpr int kDefaultItemPickupQuantity = 1;
 inline constexpr std::string_view kDefaultItemPickupId = "key";
+inline constexpr core::Vec3 kDefaultItemPickupVisualOffset{0.0f, 0.0f, 0.0f};
+inline constexpr core::Vec3 kDefaultItemPickupVisualRotationDegrees{0.0f, 0.0f, 0.0f};
+inline constexpr core::Vec3 kDefaultItemPickupVisualScale{1.0f, 1.0f, 1.0f};
+// Level Format v1 marker. Cannot collide with modelIdentity (models/<file>.glb).
+inline constexpr std::string_view kItemPickupVisualKeyword = "visual";
 
 struct ItemPickupSpec
 {
@@ -33,11 +39,31 @@ struct ItemPickupSpec
     int quantity = kDefaultItemPickupQuantity;
     // Empty: primitive fallback. Non-empty: canonical models/<file>.glb.
     std::string modelIdentity;
+    core::Vec3 visualOffset{};
+    core::Vec3 visualRotationDegrees{};
+    core::Vec3 visualScale = kDefaultItemPickupVisualScale;
 };
 
 inline bool ItemPickupPositionIsValid(core::Vec3 position)
 {
     return std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(position.z);
+}
+
+inline bool ItemPickupVisualOffsetIsValid(core::Vec3 visualOffset)
+{
+    return std::isfinite(visualOffset.x) && std::isfinite(visualOffset.y)
+        && std::isfinite(visualOffset.z);
+}
+
+inline bool ItemPickupVisualRotationIsValid(core::Vec3 visualRotationDegrees)
+{
+    return std::isfinite(visualRotationDegrees.x) && std::isfinite(visualRotationDegrees.y)
+        && std::isfinite(visualRotationDegrees.z);
+}
+
+inline bool ItemPickupVisualScaleIsValid(core::Vec3 visualScale)
+{
+    return StaticPropScaleIsValid(visualScale);
 }
 
 inline bool ItemPickupQuantityIsValid(int quantity)
@@ -54,7 +80,27 @@ inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
 {
     return ItemPickupPositionIsValid(spec.position) && gameplay::IsValidItemId(spec.itemId)
         && ItemPickupQuantityIsValid(spec.quantity)
-        && ItemPickupModelIdentityIsValid(spec.modelIdentity);
+        && ItemPickupModelIdentityIsValid(spec.modelIdentity)
+        && ItemPickupVisualOffsetIsValid(spec.visualOffset)
+        && ItemPickupVisualRotationIsValid(spec.visualRotationDegrees)
+        && ItemPickupVisualScaleIsValid(spec.visualScale);
+}
+
+// Rendered model origin. Gameplay targeting continues to use position.
+inline core::Vec3 ItemPickupVisualPosition(const ItemPickupSpec& spec)
+{
+    return spec.position + spec.visualOffset;
+}
+
+// Narrow DrawProp/picking adapter. Not a Transform component.
+inline StaticPropSpec ItemPickupVisualProp(const ItemPickupSpec& spec)
+{
+    StaticPropSpec visual{};
+    visual.modelIdentity = spec.modelIdentity;
+    visual.position = ItemPickupVisualPosition(spec);
+    visual.rotationDegrees = spec.visualRotationDegrees;
+    visual.scale = spec.visualScale;
+    return visual;
 }
 
 // Unique deterministic itemId values currently authored by Item Pickups.
