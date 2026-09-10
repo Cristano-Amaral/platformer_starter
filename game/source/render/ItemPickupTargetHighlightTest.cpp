@@ -59,6 +59,17 @@ int main()
             == world::kDefaultItemPickupShowInteractionBounds
             && world::kDefaultItemPickupShowInteractionBounds,
         "1. showInteractionBounds defaults true");
+    Expect(
+        world::ItemPickupSpec{}.targetHighlightIntensity
+            == world::kDefaultItemPickupTargetHighlightIntensity
+            && world::kDefaultItemPickupTargetHighlightIntensity == 0.70f,
+        "1. targetHighlightIntensity defaults 0.70");
+    Expect(
+        render::ItemPickupTargetHighlightAlpha(0.70f) >= 178
+            && render::ItemPickupTargetHighlightAlpha(0.70f) <= 180,
+        "23. default 0.70 maps near M58.3 alpha 180");
+    Expect(render::ItemPickupTargetHighlightAlpha(0.0f) == 0, "22. intensity 0 maps to alpha 0");
+    Expect(render::ItemPickupTargetHighlightAlpha(1.0f) == 255, "24. intensity 1 maps to alpha 255");
 
     const world::ItemPickupSpec modeled = MakePickup({2.0f, 1.0f, 0.0f}, "key", "models/test_static.glb");
     const world::ItemPickupSpec fallback = []() {
@@ -99,6 +110,41 @@ int main()
     Expect(hiddenBounds.drawModelHighlight, "23. false does not suppress model highlight");
     Expect(hiddenBounds.drawHud, "24. false does not suppress HUD");
     Expect(!hiddenBounds.drawInteractionBounds, "22. showInteractionBounds false suppresses bounds");
+    Expect(hiddenBounds.drawModelHighlight, "30. bounds false + intensity default still highlights");
+
+    world::ItemPickupSpec zeroIntensity = modeled;
+    zeroIntensity.targetHighlightIntensity = 0.0f;
+    const render::ItemPickupTargetPresentation zeroHighlight =
+        render::MakeItemPickupTargetPresentation(
+            zeroIntensity, true, false, false, {}, {});
+    Expect(!zeroHighlight.drawModelHighlight, "22. intensity 0 suppresses model highlight");
+    Expect(zeroHighlight.drawHud, "27. intensity 0 still shows HUD");
+    Expect(zeroHighlight.drawInteractionBounds, "31. bounds true + intensity 0 still draws bounds");
+    Expect(zeroHighlight.highlightAlpha == 0, "intensity 0 has no highlight contribution");
+    Expect(Vec3Near(zeroHighlight.visual.position, world::ItemPickupVisualPosition(zeroIntensity)),
+        "28. intensity does not change visual transform");
+
+    world::ItemPickupSpec hudOnly = modeled;
+    hudOnly.showInteractionBounds = false;
+    hudOnly.targetHighlightIntensity = 0.0f;
+    const render::ItemPickupTargetPresentation hudOnlyPresentation =
+        render::MakeItemPickupTargetPresentation(
+            hudOnly, true, false, false, {}, {});
+    Expect(!hudOnlyPresentation.drawModelHighlight, "D. HUD-only has no model highlight");
+    Expect(!hudOnlyPresentation.drawInteractionBounds, "D. HUD-only has no bounds");
+    Expect(hudOnlyPresentation.drawHud, "32. bounds false + intensity 0 preserves HUD");
+
+    world::ItemPickupSpec strongNoBounds = modeled;
+    strongNoBounds.showInteractionBounds = false;
+    strongNoBounds.targetHighlightIntensity = 0.90f;
+    const render::ItemPickupTargetPresentation strong =
+        render::MakeItemPickupTargetPresentation(
+            strongNoBounds, true, false, false, {}, {});
+    Expect(strong.drawModelHighlight, "30. bounds false + intensity 0.90 highlights");
+    Expect(!strong.drawInteractionBounds, "bounds stay independent of intensity");
+    Expect(strong.drawHud, "HUD remains at high intensity");
+    Expect(strong.highlightAlpha == render::ItemPickupTargetHighlightAlpha(0.90f),
+        "0.90 maps through the same alpha helper");
 
     const render::ItemPickupTargetPresentation collected =
         render::MakeItemPickupTargetPresentation(
@@ -182,6 +228,32 @@ int main()
     Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "35. collection unchanged");
     Expect(inventory.GetQuantity("key") == 1, "36. Inventory unchanged");
     Expect(pickups[0].showInteractionBounds == false, "collection does not mutate bounds flag");
+    world::ItemPickupSpec zeroCollect = search;
+    zeroCollect.targetHighlightIntensity = 0.0f;
+    const std::vector<world::ItemPickupSpec> zeroCollectPickups{zeroCollect};
+    gameplay::ItemPickupRunState zeroRun = gameplay::MakeClearedItemPickupRunState(1);
+    gameplay::Inventory zeroInventory;
+    Expect(
+        gameplay::FindItemPickupTargetIndex(
+            spawn, 1.0f, zeroCollectPickups, zeroRun.collected, los)
+            == 0,
+        "33. intensity 0 preserves targeting");
+    Expect(
+        gameplay::TryCollectItemPickup(zeroInventory, zeroRun, zeroCollectPickups, 0),
+        "34. intensity 0 preserves collection");
+    Expect(zeroInventory.GetQuantity("key") == 1, "collection at intensity 0 still grants item");
+    Expect(
+        zeroCollectPickups[0].targetHighlightIntensity == 0.0f,
+        "collection does not mutate targetHighlightIntensity");
+
+    world::ItemPickupSpec fallbackZero = fallback;
+    fallbackZero.targetHighlightIntensity = 0.0f;
+    const render::ItemPickupTargetPresentation fallbackZeroPresentation =
+        render::MakeItemPickupTargetPresentation(
+            fallbackZero, true, false, false, {}, {});
+    Expect(!fallbackZeroPresentation.drawFallbackHighlight,
+        "43. fallback intensity 0 has no extra fill highlight");
+    Expect(fallbackZeroPresentation.drawHud, "fallback intensity 0 still shows HUD");
 
     if (gFailures != 0)
     {

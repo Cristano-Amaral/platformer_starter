@@ -1386,7 +1386,9 @@ int main()
                 && working.itemPickups[0].visualScale.x == 1.0f
                 && working.itemPickups[0].visualScale.y == 1.0f
                 && working.itemPickups[0].visualScale.z == 1.0f
-                && working.itemPickups[0].showInteractionBounds,
+                && working.itemPickups[0].showInteractionBounds
+                && working.itemPickups[0].targetHighlightIntensity
+                    == world::kDefaultItemPickupTargetHighlightIntensity,
             "default Item Pickup id/quantity/no model/neutral visual");
         Expect(added.selection.kind == EditorObjectKind::ItemPickup, "Add selects Item Pickup");
         working.itemPickups[0].itemId = "coin";
@@ -1396,6 +1398,7 @@ int main()
         working.itemPickups[0].visualRotationDegrees = {10.0f, 20.0f, 30.0f};
         working.itemPickups[0].visualScale = {0.2f, 0.3f, 0.4f};
         working.itemPickups[0].showInteractionBounds = false;
+        working.itemPickups[0].targetHighlightIntensity = 0.25f;
         const editor::LifecycleEditResult duplicated =
             editor::DuplicateSelected(working, added.selection);
         Expect(duplicated.succeeded, "Duplicate Item Pickup");
@@ -1413,7 +1416,9 @@ int main()
                     == working.itemPickups[0].visualRotationDegrees.y
                 && working.itemPickups[1].visualScale.x == working.itemPickups[0].visualScale.x
                 && working.itemPickups[1].showInteractionBounds
-                    == working.itemPickups[0].showInteractionBounds,
+                    == working.itemPickups[0].showInteractionBounds
+                && working.itemPickups[1].targetHighlightIntensity
+                    == working.itemPickups[0].targetHighlightIntensity,
             "Duplicate preserves itemId/quantity/model/visual transform");
         Expect(
             editor::DeleteSelected(working, {EditorObjectKind::ItemPickup, 0}).succeeded,

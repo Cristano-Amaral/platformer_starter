@@ -1,10 +1,11 @@
 #pragma once
 
-// Authored Item Pickup (Milestone 55 / 58 / 58.3). World acquisition: gameplay
-// position, M54 itemId, quantity, optional Static Model identity, a
-// per-instance visual transform, and presentation-only interaction-bounds
-// visibility. Runtime collected state is never stored here or in Level Format.
-// Not an ItemDefinition or generic Transform.
+// Authored Item Pickup (Milestone 55 / 58 / 58.3 / 58.4). World acquisition:
+// gameplay position, M54 itemId, quantity, optional Static Model identity, a
+// per-instance visual transform, presentation-only interaction-bounds
+// visibility, and gameplay target-highlight intensity. Runtime collected
+// state is never stored here or in Level Format. Not an ItemDefinition or
+// generic Transform.
 
 #include "core/Vec3.h"
 #include "gameplay/Inventory.h"
@@ -31,9 +32,14 @@ inline constexpr core::Vec3 kDefaultItemPickupVisualOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultItemPickupVisualRotationDegrees{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultItemPickupVisualScale{1.0f, 1.0f, 1.0f};
 inline constexpr bool kDefaultItemPickupShowInteractionBounds = true;
+// Approximately M58.3 tint alpha 180/255. Presentation only.
+inline constexpr float kDefaultItemPickupTargetHighlightIntensity = 0.70f;
+inline constexpr float kMinItemPickupTargetHighlightIntensity = 0.0f;
+inline constexpr float kMaxItemPickupTargetHighlightIntensity = 1.0f;
 // Level Format v1 markers. Cannot collide with modelIdentity (models/<file>.glb).
 inline constexpr std::string_view kItemPickupVisualKeyword = "visual";
 inline constexpr std::string_view kItemPickupBoundsKeyword = "bounds";
+inline constexpr std::string_view kItemPickupHighlightKeyword = "highlight";
 
 struct ItemPickupSpec
 {
@@ -48,6 +54,9 @@ struct ItemPickupSpec
     // Presentation only. When this pickup is the current M55 target, draw
     // the interaction-bounds wire. Does not affect targeting or collection.
     bool showInteractionBounds = kDefaultItemPickupShowInteractionBounds;
+    // Presentation only. Strength of the Gameplay golden target tint.
+    // Does not affect targeting, HUD, collection, or showInteractionBounds.
+    float targetHighlightIntensity = kDefaultItemPickupTargetHighlightIntensity;
 };
 
 inline bool ItemPickupPositionIsValid(core::Vec3 position)
@@ -82,6 +91,12 @@ inline bool ItemPickupModelIdentityIsValid(std::string_view identity)
     return identity.empty() || StaticPropIdentityIsValid(identity);
 }
 
+inline bool ItemPickupTargetHighlightIntensityIsValid(float intensity)
+{
+    return std::isfinite(intensity) && intensity >= kMinItemPickupTargetHighlightIntensity
+        && intensity <= kMaxItemPickupTargetHighlightIntensity;
+}
+
 inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
 {
     return ItemPickupPositionIsValid(spec.position) && gameplay::IsValidItemId(spec.itemId)
@@ -89,7 +104,8 @@ inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
         && ItemPickupModelIdentityIsValid(spec.modelIdentity)
         && ItemPickupVisualOffsetIsValid(spec.visualOffset)
         && ItemPickupVisualRotationIsValid(spec.visualRotationDegrees)
-        && ItemPickupVisualScaleIsValid(spec.visualScale);
+        && ItemPickupVisualScaleIsValid(spec.visualScale)
+        && ItemPickupTargetHighlightIntensityIsValid(spec.targetHighlightIntensity);
 }
 
 // Rendered model origin. Gameplay targeting continues to use position.

@@ -1274,7 +1274,9 @@ int main()
                 && state.workingCopy.itemPickups[0].modelIdentity.empty()
                 && state.workingCopy.itemPickups[0].visualOffset.y == 0.0f
                 && state.workingCopy.itemPickups[0].visualScale.x == 1.0f
-                && state.workingCopy.itemPickups[0].showInteractionBounds,
+                && state.workingCopy.itemPickups[0].showInteractionBounds
+                && state.workingCopy.itemPickups[0].targetHighlightIntensity
+                    == world::kDefaultItemPickupTargetHighlightIntensity,
             "default Item Pickup id/quantity/no model/neutral visual");
         Expect(state.selection.kind == EditorObjectKind::ItemPickup, "new Item Pickup is selected");
         Expect(
@@ -1334,6 +1336,7 @@ int main()
         dupState.workingCopy.itemPickups[0].visualRotationDegrees = {0.0f, 90.0f, 0.0f};
         dupState.workingCopy.itemPickups[0].visualScale = {0.15f, 0.2f, 0.25f};
         dupState.workingCopy.itemPickups[0].showInteractionBounds = false;
+        dupState.workingCopy.itemPickups[0].targetHighlightIntensity = 0.25f;
         dupState.selection = {EditorObjectKind::ItemPickup, 0};
         Expect(
             editor::HandleAuthoredLifecycleRequest(
@@ -1348,7 +1351,8 @@ int main()
                 && dupState.workingCopy.itemPickups[1].visualOffset.y == 0.5f
                 && dupState.workingCopy.itemPickups[1].visualRotationDegrees.y == 90.0f
                 && dupState.workingCopy.itemPickups[1].visualScale.x == 0.15f
-                && !dupState.workingCopy.itemPickups[1].showInteractionBounds,
+                && !dupState.workingCopy.itemPickups[1].showInteractionBounds
+                && dupState.workingCopy.itemPickups[1].targetHighlightIntensity == 0.25f,
             "Duplicate preserves itemId/quantity/model/visual transform");
         Expect(
             dupState.workingCopy.itemPickups[1].position.x
@@ -1407,6 +1411,29 @@ int main()
         Expect(
             appliedBounds.itemPickups[0].showInteractionBounds,
             "promoted showInteractionBounds is true");
+        Expect(
+            revertVisual.workingCopy.itemPickups[0].targetHighlightIntensity == 0.25f,
+            "applied pickup currently has authored intensity 0.25");
+        revertVisual.workingCopy.itemPickups[0].targetHighlightIntensity = 1.0f;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(revertVisual.modified, "targetHighlightIntensity edit marks Modified");
+        Expect(
+            !world::AuthoredLevelDataEqual(revertVisual.workingCopy, appliedVisual),
+            "equality detects targetHighlightIntensity change");
+        revertVisual.workingCopy = appliedVisual;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(
+            revertVisual.workingCopy.itemPickups[0].targetHighlightIntensity == 0.25f,
+            "Revert restores targetHighlightIntensity");
+        Expect(!revertVisual.modified, "Revert after intensity edit clears Modified");
+        world::LevelDefinition appliedIntensity = revertVisual.workingCopy;
+        appliedIntensity.itemPickups[0].targetHighlightIntensity = 0.90f;
+        Expect(
+            world::AuthoredLevelDataEqual(appliedIntensity, appliedIntensity),
+            "Apply promotes targetHighlightIntensity with workingCopy");
+        Expect(
+            appliedIntensity.itemPickups[0].targetHighlightIntensity == 0.90f,
+            "promoted targetHighlightIntensity is 0.90");
         const core::Vec3 keptOffset = dupState.workingCopy.itemPickups[0].visualOffset;
         const core::Vec3 keptRotation = dupState.workingCopy.itemPickups[0].visualRotationDegrees;
         const core::Vec3 keptScale = dupState.workingCopy.itemPickups[0].visualScale;

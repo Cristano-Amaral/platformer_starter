@@ -185,6 +185,12 @@ int main()
                 {editor::EditorObjectKind::ItemPickup, 0}, working)
                 .visible,
             "showInteractionBounds does not disable M58.2 editor ghost");
+        working.itemPickups[0].targetHighlightIntensity = 0.0f;
+        Expect(
+            editor::MakeSelectedModelGhostRequest(
+                {editor::EditorObjectKind::ItemPickup, 0}, working)
+                .visible,
+            "targetHighlightIntensity does not disable M58.2 editor ghost");
     }
 
     // Fallback Item Pickup (empty modelIdentity) stays on the cube path.

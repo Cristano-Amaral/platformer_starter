@@ -531,6 +531,15 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::TextUnformatted(
                 "When targeted in Gameplay, draw the interaction-bounds wire. Does not change "
                 "targeting, HUD, or collection.");
+            ImGui::SliderFloat(
+                "Target Highlight Intensity",
+                &pickup.targetHighlightIntensity,
+                world::kMinItemPickupTargetHighlightIntensity,
+                world::kMaxItemPickupTargetHighlightIntensity,
+                "%.2f");
+            ImGui::TextUnformatted(
+                "Gameplay target tint strength only. 0 keeps HUD and targeting. Independent of "
+                "interaction bounds.");
             ImGui::TextUnformatted(
                 "Translate edits Position. Rotate gizmo edits Visual Rotation. Scale gizmo edits "
                 "Visual Scale. Offset remains Inspector-only.");

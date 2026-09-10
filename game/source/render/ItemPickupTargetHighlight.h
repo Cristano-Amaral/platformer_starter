@@ -36,7 +36,27 @@ struct ItemPickupTargetPresentation
     core::Vec3 localMin = kItemPickupModelFallbackLocalMin;
     core::Vec3 localMax = kItemPickupModelFallbackLocalMax;
     core::Vec3 boundsCorners[8]{};
+    float highlightIntensity = 0.0f;
+    unsigned char highlightAlpha = 0;
 };
+
+inline unsigned char ItemPickupTargetHighlightAlpha(float intensity)
+{
+    if (!world::ItemPickupTargetHighlightIntensityIsValid(intensity) || !(intensity > 0.0f))
+    {
+        return 0;
+    }
+    const long rounded = std::lround(static_cast<double>(intensity) * 255.0);
+    if (rounded <= 0)
+    {
+        return 0;
+    }
+    if (rounded >= 255)
+    {
+        return 255;
+    }
+    return static_cast<unsigned char>(rounded);
+}
 
 namespace item_pickup_highlight_detail
 {
@@ -154,13 +174,15 @@ inline ItemPickupTargetPresentation MakeItemPickupTargetPresentation(
 
     result.drawHud = true;
     result.drawInteractionBounds = pickup.showInteractionBounds;
+    result.highlightIntensity = pickup.targetHighlightIntensity;
+    result.highlightAlpha = ItemPickupTargetHighlightAlpha(pickup.targetHighlightIntensity);
     if (result.modelBacked)
     {
-        result.drawModelHighlight = true;
+        result.drawModelHighlight = result.highlightAlpha > 0;
     }
     else
     {
-        result.drawFallbackHighlight = true;
+        result.drawFallbackHighlight = result.highlightAlpha > 0;
     }
     return result;
 }

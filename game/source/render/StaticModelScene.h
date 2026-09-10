@@ -51,7 +51,10 @@ public:
     void DrawSelectionHighlight(const world::StaticPropSpec& spec) const;
     // Gameplay/Release Item Pickup target tint. Same cached model as DrawProp.
     // Depth-respecting golden pass only; no editor x-ray and no LoadModel.
-    void DrawGameplayTargetHighlight(const world::StaticPropSpec& spec) const;
+    // alpha 0 skips the extra pass without changing renderer state.
+    void DrawGameplayTargetHighlight(
+        const world::StaticPropSpec& spec,
+        unsigned char alpha = 180) const;
     std::size_t HighlightSubmissionCount() const;
     std::size_t GameplayHighlightSubmissionCount() const;
 

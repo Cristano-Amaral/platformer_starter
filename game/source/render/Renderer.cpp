@@ -132,6 +132,16 @@ Vector3 ToRaylib(core::Vec3 value)
     return Vector3{value.x, value.y, value.z};
 }
 
+Color MixRgb(Color from, Color to, float amount)
+{
+    const float t = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
+    const auto mix = [t](unsigned char a, unsigned char b) {
+        return static_cast<unsigned char>(std::lround(
+            static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * t));
+    };
+    return Color{mix(from.r, to.r), mix(from.g, to.g), mix(from.b, to.b), 255};
+}
+
 void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
 {
     const Vector3 position = ToRaylib(center);
@@ -1557,14 +1567,17 @@ void Renderer::DrawWorld(
                 pickup.itemId.c_str(),
                 pickup.quantity);
         }
-        const Color fill = targeted ? kItemPickupTargetFill : kItemPickupFill;
+        const Color fill = targeted
+            ? MixRgb(kItemPickupFill, kItemPickupTargetFill, presentation.highlightIntensity)
+            : kItemPickupFill;
         const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
         if (!pickup.modelIdentity.empty() && staticPropModels)
         {
             staticPropModels->DrawProp(world::ItemPickupVisualProp(pickup));
             if (presentation.drawModelHighlight)
             {
-                staticPropModels->DrawGameplayTargetHighlight(presentation.visual);
+                staticPropModels->DrawGameplayTargetHighlight(
+                    presentation.visual, presentation.highlightAlpha);
             }
             if (presentation.drawInteractionBounds)
             {

@@ -699,6 +699,20 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 }
                 identityStart += 2;
             }
+            if (tokens.size() > identityStart && tokens[identityStart] == kItemPickupHighlightKeyword)
+            {
+                if (tokens.size() < identityStart + 2)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup highlight");
+                }
+                if (!ParseFloatToken(tokens[identityStart + 1], pickup.targetHighlightIntensity))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup highlight");
+                }
+                identityStart += 2;
+            }
             if (tokens.size() > identityStart)
             {
                 pickup.modelIdentity = std::string(tokens[identityStart]);

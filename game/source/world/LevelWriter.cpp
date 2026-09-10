@@ -261,6 +261,10 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out.append(kItemPickupBoundsKeyword);
         out += ' ';
         AppendInt(out, pickup.showInteractionBounds ? 1 : 0);
+        out += ' ';
+        out.append(kItemPickupHighlightKeyword);
+        out += ' ';
+        AppendFloat(out, pickup.targetHighlightIntensity);
         if (!pickup.modelIdentity.empty())
         {
             out += ' ';

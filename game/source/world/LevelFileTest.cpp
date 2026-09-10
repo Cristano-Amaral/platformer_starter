@@ -1119,6 +1119,10 @@ int main()
             Expect(
                 one.level.itemPickups[0].showInteractionBounds,
                 "legacy item_pickup showInteractionBounds defaults true");
+            Expect(
+                one.level.itemPickups[0].targetHighlightIntensity
+                    == world::kDefaultItemPickupTargetHighlightIntensity,
+                "legacy item_pickup targetHighlightIntensity defaults 0.70");
             const std::string writtenOne = world::SerializeLevelText(one.level);
             Expect(CountRecords(writtenOne, "item_pickup") == 1, "writer one item_pickup");
             Expect(
@@ -1192,6 +1196,8 @@ int main()
                 "canonical writer emits visual marker");
             Expect(writtenVisual.find(" bounds 1") != std::string::npos,
                 "canonical writer emits bounds marker default true");
+            Expect(writtenVisual.find(" highlight ") != std::string::npos,
+                "canonical writer emits highlight marker");
             Expect(writtenVisual.find("models/test_static.glb") != std::string::npos,
                 "canonical writer keeps identity after visual fields");
             Expect(
@@ -1365,6 +1371,92 @@ int main()
                     .showInteractionBounds
                     == false,
                 "bounds 0 without visual parses false");
+
+            const std::string highlightRecord =
+                canonical
+                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
+                  "highlight 0.25 models/test_static.glb\n";
+            const world::ParseLevelFileResult highlightParsed =
+                world::ParseLevelText(highlightRecord);
+            Expect(highlightParsed.status == world::LoadLevelFileStatus::Loaded,
+                "item_pickup highlight loads");
+            Expect(
+                highlightParsed.level.itemPickups[0].targetHighlightIntensity == 0.25f,
+                "highlight 0.25 round-trips");
+            Expect(
+                highlightParsed.level.itemPickups[0].modelIdentity == "models/test_static.glb",
+                "highlight marker does not consume modelIdentity");
+            const std::string writtenHighlight = world::SerializeLevelText(highlightParsed.level);
+            Expect(writtenHighlight.find(" highlight ") != std::string::npos,
+                "canonical writer emits highlight marker after bounds");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    highlightParsed.level, world::ParseLevelText(writtenHighlight).level),
+                "highlight value round trip");
+
+            const std::string spacedHighlight =
+                canonical
+                + "item_pickup 3 1 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0 "
+                  "models/Chest by Quaternius - O72u4Drp8k.glb\n";
+            const world::ParseLevelFileResult spacedHighlightParsed =
+                world::ParseLevelText(spacedHighlight);
+            Expect(spacedHighlightParsed.status == world::LoadLevelFileStatus::Loaded,
+                "highlight before spaced modelIdentity loads");
+            Expect(
+                spacedHighlightParsed.level.itemPickups[0].modelIdentity
+                    == "models/Chest by Quaternius - O72u4Drp8k.glb",
+                "modelIdentity with spaces round-trips after highlight");
+            Expect(
+                spacedHighlightParsed.level.itemPickups[0].targetHighlightIntensity == 0.0f,
+                "highlight 0 parses as zero intensity");
+
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "incomplete highlight marker rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight abc\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "malformed highlight value rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight -0.1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "out-of-range negative highlight rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 1.01\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "out-of-range highlight >1 rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight nan\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "NaN highlight rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight inf\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "Inf highlight rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "item_pickup 2 0.5 0 1 key bounds 1 highlight 1\n").status
+                    == world::LoadLevelFileStatus::Loaded,
+                "highlight 1.0 without visual is valid");
         }
 
         {

@@ -224,6 +224,17 @@ int main()
         Expect(
             boundsOffPickups[0].showInteractionBounds == false,
             "targeting does not mutate showInteractionBounds");
+        world::ItemPickupSpec intensityZero = shifted;
+        intensityZero.targetHighlightIntensity = 0.0f;
+        const std::vector<world::ItemPickupSpec> intensityZeroPickups{intensityZero};
+        Expect(
+            gameplay::FindItemPickupTargetIndex(
+                spawn, 1.0f, intensityZeroPickups, available.collected, los)
+                == 0,
+            "intensity 0 does not change target eligibility");
+        Expect(
+            intensityZeroPickups[0].targetHighlightIntensity == 0.0f,
+            "targeting does not mutate targetHighlightIntensity");
     }
 
     {
@@ -485,6 +496,32 @@ int main()
             world::ItemPickupVisualPosition(okVisual).y == nearby.y + 0.5f
                 && world::ItemPickupVisualPosition(okVisual).x == nearby.x,
             "visual position is gameplay position plus offset");
+        Expect(
+            world::ItemPickupSpec{}.targetHighlightIntensity
+                == world::kDefaultItemPickupTargetHighlightIntensity
+                && world::kDefaultItemPickupTargetHighlightIntensity == 0.70f,
+            "default targetHighlightIntensity is 0.70");
+        world::ItemPickupSpec intensityZero = MakePickup(nearby);
+        intensityZero.targetHighlightIntensity = 0.0f;
+        Expect(world::ItemPickupSpecIsValid(intensityZero), "intensity 0.0 is valid");
+        world::ItemPickupSpec intensityOne = MakePickup(nearby);
+        intensityOne.targetHighlightIntensity = 1.0f;
+        Expect(world::ItemPickupSpecIsValid(intensityOne), "intensity 1.0 is valid");
+        world::ItemPickupSpec intensityMid = MakePickup(nearby);
+        intensityMid.targetHighlightIntensity = 0.25f;
+        Expect(world::ItemPickupSpecIsValid(intensityMid), "mid-range intensity is valid");
+        world::ItemPickupSpec intensityNeg = MakePickup(nearby);
+        intensityNeg.targetHighlightIntensity = -0.01f;
+        Expect(!world::ItemPickupSpecIsValid(intensityNeg), "negative intensity rejected");
+        world::ItemPickupSpec intensityHigh = MakePickup(nearby);
+        intensityHigh.targetHighlightIntensity = 1.01f;
+        Expect(!world::ItemPickupSpecIsValid(intensityHigh), "intensity >1 rejected");
+        world::ItemPickupSpec intensityNan = MakePickup(nearby);
+        intensityNan.targetHighlightIntensity = std::numeric_limits<float>::quiet_NaN();
+        Expect(!world::ItemPickupSpecIsValid(intensityNan), "NaN intensity rejected");
+        world::ItemPickupSpec intensityInf = MakePickup(nearby);
+        intensityInf.targetHighlightIntensity = std::numeric_limits<float>::infinity();
+        Expect(!world::ItemPickupSpecIsValid(intensityInf), "Inf intensity rejected");
     }
 
     if (gFailures != 0)

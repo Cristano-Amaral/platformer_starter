@@ -109,7 +109,7 @@ Tests:
 .\build\windows-vs2022\Development\InventoryTest.exe        # M54 Inventory API / lifecycle
 .\build\windows-vs2022\Development\InventoryUiTest.exe      # M56 player Inventory UI / focus
 .\build\windows-vs2022\Development\ItemPickupTest.exe       # M55/M58 Item Pickup targeting / visual transform
-.\build\windows-vs2022\Development\ItemPickupTargetHighlightTest.exe # M58.3 target highlight presentation
+.\build\windows-vs2022\Development\ItemPickupTargetHighlightTest.exe # M58.3/M58.4 target highlight presentation
 .\build\windows-vs2022\Development\DoorTest.exe             # M53 Door / Pressure Plate link
 .\build\windows-vs2022\Development\EditorPickingTest.exe    # M33 ray/AABB, slope, nearest-hit, selection
 .\build\windows-vs2022\Development\EditorGizmoTest.exe      # M34 translation + M35 resize/nudge math
@@ -131,7 +131,7 @@ Tests:
 .\build\windows-vs2022\Development\GreyboxImmediateStateTest.exe # M49 clip-plane leak vs Gameplay BeginMode3D
 .\build\windows-vs2022\Development\StaticPropPlacementTest.exe # M50 Static Prop viewport placement
 .\build\windows-vs2022\Development\ModelSelectionPreviewTest.exe # M58.2 selected-model ghost / picking
-.\build\windows-vs2022\Development\SelectedModelHighlightStateTest.exe # M58.2/M58.3 highlight rlgl restore
+.\build\windows-vs2022\Development\SelectedModelHighlightStateTest.exe # M58.2/M58.3/M58.4 highlight rlgl restore
 python tools/test_cook_level_v1.py
 python tools/test_cook_runtime_png.py
 python tools/test_stage_runtime_assets.py

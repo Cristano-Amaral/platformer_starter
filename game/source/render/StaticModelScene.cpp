@@ -488,9 +488,11 @@ void StaticModelSceneStore::DrawSelectionHighlight(const world::StaticPropSpec& 
     RestoreEditorModelHighlightState();
 }
 
-void StaticModelSceneStore::DrawGameplayTargetHighlight(const world::StaticPropSpec& spec) const
+void StaticModelSceneStore::DrawGameplayTargetHighlight(
+    const world::StaticPropSpec& spec,
+    unsigned char alpha) const
 {
-    if (!world::StaticPropTransformIsValid(spec))
+    if (alpha == 0 || !world::StaticPropTransformIsValid(spec))
     {
         return;
     }
@@ -498,10 +500,10 @@ void StaticModelSceneStore::DrawGameplayTargetHighlight(const world::StaticPropS
     {
         ++gpu->gameplayHighlightSubmissions;
     }
-    // Single depth-respecting golden tint. No x-ray: occluded pickups stay
-    // occluded so gameplay targeting does not read through solids.
+    // Single depth-respecting golden tint. Alpha is authored intensity
+    // mapped as round(255 * targetHighlightIntensity). No x-ray.
     rlDrawRenderBatchActive();
-    DrawPropTinted(spec, 255, 220, 72, 180);
+    DrawPropTinted(spec, 255, 220, 72, alpha);
     RestoreGreyboxImmediateState();
 }
 }

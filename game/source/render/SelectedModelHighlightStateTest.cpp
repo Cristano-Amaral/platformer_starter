@@ -153,6 +153,23 @@ int main()
         gameplayBefore.depthWriteMask && gameplayAfter.depthWriteMask,
         "gameplay depth mask restored");
     Expect(gameplayBefore.cullFace && gameplayAfter.cullFace, "gameplay culling restored");
+
+    store.ResetDrawStats();
+    const Snapshot skipBefore = QuerySnapshot();
+    store.DrawGameplayTargetHighlight(spec, 0);
+    Expect(store.GameplayHighlightSubmissionCount() == 0, "46. alpha 0 skips gameplay highlight");
+    Expect(store.DrawSubmissionCount() == 0, "alpha 0 does not DrawProp");
+    Expect(store.LoadCount() == loadsBefore, "alpha 0 does not LoadModel");
+    const Snapshot skipAfter = QuerySnapshot();
+    Expect(SnapshotNear(skipBefore, skipAfter), "zero-intensity skip leaves renderer state valid");
+
+    store.ResetDrawStats();
+    const Snapshot fullBefore = QuerySnapshot();
+    store.DrawGameplayTargetHighlight(spec, 255);
+    Expect(store.GameplayHighlightSubmissionCount() == 1, "24. intensity 1 still uses one tinted pass");
+    Expect(store.DrawSubmissionCount() == 1, "full intensity reuses DrawPropTinted");
+    const Snapshot fullAfter = QuerySnapshot();
+    Expect(SnapshotNear(fullBefore, fullAfter), "47. non-zero path restores renderer state");
     DrawCube(Vector3{2.0f, 1.0f, 0.0f}, 0.5f, 0.5f, 0.5f, Color{216, 96, 72, 255});
     DrawCubeWires(Vector3{2.0f, 1.0f, 0.0f}, 0.5f, 0.5f, 0.5f, Color{24, 26, 32, 255});
     EndMode3D();

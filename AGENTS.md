@@ -76,11 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 58.3 — Item Pickup Gameplay Target Highlight
-(Development Inspector `Show Interaction Bounds`; Gameplay/Release golden
-model highlight for the current M55 Item Pickup target; awaiting manual
-acceptance).
-Milestone 58.2 is implemented. Milestone 59 has not started.
+Milestone 58.4 — Item Pickup Target Highlight Intensity
+(Development Inspector `Target Highlight Intensity`; Gameplay/Release golden
+tint scaled per Item Pickup; awaiting manual acceptance).
+Milestone 58.3 is implemented. Milestone 59 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -260,4 +259,6 @@ wireframe of the local bounds may remain. Gameplay Item Pickup targeting still
 uses logical `position`. Milestone 58.3 adds Gameplay/Release golden model
 highlight for the current M55 Item Pickup target and authored
 `showInteractionBounds` (default true) controlling only the target
-interaction-bounds wire. Do not start Milestone 59.
+interaction-bounds wire. Milestone 58.4 adds authored `targetHighlightIntensity`
+(default 0.70) mapping to golden tint alpha `round(255 * intensity)`. Do not
+start Milestone 59.

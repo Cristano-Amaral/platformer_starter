@@ -91,7 +91,7 @@ collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay>]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
-item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [<modelIdentity...>]
+item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [highlight <intensity>] [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
 
@@ -175,16 +175,22 @@ suppresses that wire without changing targeting, HUD, or collection. The
 marker sits after `visual` (or after `itemId` on lines that omit `visual`) and
 before `modelIdentity`, so identities that contain spaces are not truncated.
 Omitted `bounds` (legacy M55/M58 records) means `showInteractionBounds = true`.
-The boolean token accepts exact `0` or `1` only. Optional trailing tokens
-after `bounds` (or after `visual` / `itemId` on legacy lines) are a canonical Static
+The boolean token accepts exact `0` or `1` only. An optional `highlight <intensity>`
+marker is presentation only: a finite float in `[0, 1]` that scales the Gameplay
+golden target tint. Omitted `highlight` (legacy M55/M58/M58.3 records) means
+`targetHighlightIntensity = 0.70`. Out-of-range, NaN, Inf, and malformed floats
+are rejected; they are not clamped. The marker sits after `bounds` (or after
+`visual` / `itemId` when those earlier optional markers are omitted) and before
+`modelIdentity`. Optional trailing tokens
+after `highlight` (or after `bounds` / `visual` / `itemId` on legacy lines) are a canonical Static
 Model identity (`models/<file>.glb`), reassembled with spaces like
 `static_prop`. The writer always emits the `visual` marker, nine floats, the
-`bounds` marker, and `0`/`1`, then the identity when non-empty. Omitted identity means the primitive
+`bounds` marker, `0`/`1`, the `highlight` marker, and the intensity, then the identity when non-empty. Omitted identity means the primitive
 fallback visual; a GLB is **not** required to author a valid pickup. Zero,
 one, or many records are valid. Canonical Level 01 has **zero** Item Pickups.
 Runtime available/collected flags are **not** Level Format fields. Save writes
 authored gameplay position, quantity, itemId, visual transform, interaction-bounds
-visibility, and optional model identity only.
+visibility, target-highlight intensity, and optional model identity only.
 
 `static_prop` is a visual authored instance, not a physics body. Identity is
 the canonical project-relative Static Model Asset path (`models/<file>.glb`),
