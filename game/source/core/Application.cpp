@@ -4,6 +4,7 @@
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -32,6 +33,7 @@
 
 static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
+static_assert(gameplay::kPlayerInventoryUiEnabled);
 #if defined(GAME_RELEASE)
 static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #endif
@@ -753,9 +755,24 @@ int Application::Run()
         {
             SetLevelEditorActive(!levelEditorState.active);
         }
-        const bool simulationPaused = levelEditorState.active;
+        if (levelEditorState.active)
+        {
+            gameplay::CloseInventoryUi(inventoryUi);
+        }
+#endif
+        const bool inventoryWasOpen = inventoryUi.open;
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        if (!levelEditorState.active)
+#endif
+        {
+            gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
+        }
+        const bool inventoryBlocksGameplay =
+            gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        const bool simulationPaused = levelEditorState.active || inventoryBlocksGameplay;
 #else
-        constexpr bool simulationPaused = false;
+        const bool simulationPaused = inventoryBlocksGameplay;
 #endif
 
         bool hazardContactThisFrame = false;
@@ -919,9 +936,10 @@ int Application::Run()
         {
             editorInput = editor::PollEditorInput();
             window.SetEscapeClosesWindow(
-                !editor::IsLevelAuthoringAvailable()
-                || !editor::EditorViewportPlacementIsActive(
-                    levelEditorState.placementMode, levelEditorState.staticPropPlacement));
+                !inventoryUi.open
+                && (!editor::IsLevelAuthoringAvailable()
+                    || !editor::EditorViewportPlacementIsActive(
+                        levelEditorState.placementMode, levelEditorState.staticPropPlacement)));
             editorViewport = MakeLiveEditorContentViewport(
                 static_cast<float>(window.Width()),
                 static_cast<float>(window.Height()),
@@ -1293,8 +1311,10 @@ int Application::Run()
         else
         {
             input::SetMouseLookActive(false);
-            window.SetEscapeClosesWindow(true);
+            window.SetEscapeClosesWindow(!inventoryUi.open);
         }
+#else
+        window.SetEscapeClosesWindow(!inventoryUi.open);
 #endif
         renderer.BeginFrame();
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
@@ -1325,6 +1345,10 @@ int Application::Run()
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
+            render::InventoryPanelView{
+                inventoryUi.open,
+                inventory.Entries(),
+                inventoryUi.selectedItemId},
             overlay,
             worldViewRect
         );
@@ -1822,6 +1846,8 @@ void Application::Initialize()
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
     renderer.LoadRuntimeAssets();
 
@@ -1905,6 +1931,8 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     camera.SnapToTarget(player.Position());
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
 }
 
 void Application::RestartRun()
@@ -1923,6 +1951,8 @@ void Application::RestartRun()
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::RestartRun, inventory);
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
 }
@@ -1956,6 +1986,7 @@ void Application::SetLevelEditorActive(bool active)
             levelEditorState.placementMode,
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
+        gameplay::CloseInventoryUi(inventoryUi);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         editor::RefreshContentBrowser(
             levelEditorState.contentBrowser, editor::AuthoringSourceRoot());
@@ -1971,6 +2002,7 @@ void Application::SetLevelEditorActive(bool active)
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
         window.SetEscapeClosesWindow(true);
+        gameplay::CloseInventoryUi(inventoryUi);
     }
 
     levelEditorState.active = active;
@@ -2443,6 +2475,8 @@ void Application::ResetGameplayAfterCommittedLevel()
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel, inventory);
     runTimerState = gameplay::RunTimerState{};
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);

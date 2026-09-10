@@ -107,6 +107,8 @@ add_executable(Platformer3D
     game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
+    game/source/gameplay/InventoryUi.cpp
+    game/source/gameplay/InventoryUi.h
     game/source/gameplay/ItemPickupRuntime.cpp
     game/source/gameplay/ItemPickupRuntime.h
     game/source/world/ItemPickup.h
@@ -499,6 +501,44 @@ else()
     target_compile_options(InventoryTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(InventoryTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Milestone 56: player-facing Inventory UI presentation/input/lifecycle.
+# Not shipped. No window, raylib, Jolt, or ImGui.
+add_executable(InventoryUiTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/InventoryUi.cpp
+    game/source/gameplay/InventoryUi.h
+    game/source/gameplay/InventoryUiTest.cpp
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/platform/FileReplace.h
+    game/source/world/ItemPickup.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(InventoryUiTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(InventoryUiTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(InventoryUiTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(InventoryUiTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(InventoryUiTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(InventoryUiTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 

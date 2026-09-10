@@ -308,6 +308,106 @@ void DrawPickupHud(const char* text)
     DrawText(text, x, y, font, kGrabHudText);
 }
 
+void DrawInventoryPanel(const InventoryPanelView& panel)
+{
+    if (!panel.visible)
+    {
+        return;
+    }
+
+    constexpr int kTitleSize = 28;
+    constexpr int kRowSize = 20;
+    constexpr int kDetailSize = 20;
+    constexpr int kHintSize = 16;
+    constexpr int kPad = 20;
+    constexpr int kPanelWidth = 420;
+    constexpr Color kPanelFill{18, 20, 28, 220};
+    constexpr Color kPanelEdge{210, 214, 224, 180};
+    constexpr Color kTitle{244, 212, 84, 255};
+    constexpr Color kRow{240, 240, 244, 255};
+    constexpr Color kSelectedFill{198, 188, 96, 70};
+    constexpr Color kSelectedText{236, 214, 72, 255};
+    constexpr Color kMuted{200, 208, 220, 255};
+
+    const int entryCount = static_cast<int>(panel.entries.size());
+    const int listHeight = entryCount == 0 ? kRowSize : entryCount * (kRowSize + 4);
+    const int panelHeight = kPad + kTitleSize + 12 + listHeight + 16 + kDetailSize * 3 + 12
+        + kHintSize * 2 + kPad;
+    const int panelX = (GetScreenWidth() - kPanelWidth) / 2;
+    const int panelY = (GetScreenHeight() - panelHeight) / 2;
+
+    DrawRectangle(panelX, panelY, kPanelWidth, panelHeight, kPanelFill);
+    DrawRectangleLines(panelX, panelY, kPanelWidth, panelHeight, kPanelEdge);
+
+    const char* title = "INVENTORY";
+    const int titleWidth = MeasureText(title, kTitleSize);
+    DrawText(title, panelX + (kPanelWidth - titleWidth) / 2, panelY + kPad, kTitleSize, kTitle);
+
+    int y = panelY + kPad + kTitleSize + 12;
+    if (entryCount == 0)
+    {
+        const char* emptyText = "Inventory is empty";
+        const int emptyWidth = MeasureText(emptyText, kRowSize);
+        DrawText(
+            emptyText, panelX + (kPanelWidth - emptyWidth) / 2, y, kRowSize, kMuted);
+        y += kRowSize + 16;
+        y += kDetailSize * 3;
+    }
+    else
+    {
+        int selectedQuantity = 0;
+        std::string_view selectedId = panel.selectedItemId;
+        for (const gameplay::InventoryEntry& entry : panel.entries)
+        {
+            const bool selected = entry.itemId == panel.selectedItemId;
+            if (selected)
+            {
+                selectedQuantity = entry.quantity;
+                selectedId = entry.itemId;
+                DrawRectangle(panelX + 12, y - 2, kPanelWidth - 24, kRowSize + 4, kSelectedFill);
+            }
+            const char* marker = selected ? ">" : " ";
+            const char* line = TextFormat("%s %s", marker, entry.itemId.c_str());
+            DrawText(line, panelX + kPad, y, kRowSize, selected ? kSelectedText : kRow);
+            const char* qty = TextFormat("x%d", entry.quantity);
+            const int qtyWidth = MeasureText(qty, kRowSize);
+            DrawText(qty, panelX + kPanelWidth - kPad - qtyWidth, y, kRowSize,
+                selected ? kSelectedText : kRow);
+            y += kRowSize + 4;
+        }
+        y += 12;
+        DrawText("Selected:", panelX + kPad, y, kDetailSize, kMuted);
+        y += kDetailSize + 2;
+        char selectedBuf[48]{};
+        if (selectedId.empty())
+        {
+            std::snprintf(selectedBuf, sizeof(selectedBuf), "-");
+        }
+        else
+        {
+            std::snprintf(
+                selectedBuf,
+                sizeof(selectedBuf),
+                "%.*s",
+                static_cast<int>(selectedId.size()),
+                selectedId.data());
+        }
+        DrawText(selectedBuf, panelX + kPad, y, kDetailSize, kSelectedText);
+        y += kDetailSize + 2;
+        DrawText(
+            TextFormat("Quantity: %d", selectedQuantity),
+            panelX + kPad,
+            y,
+            kDetailSize,
+            kRow);
+        y += kDetailSize + 12;
+    }
+
+    DrawText("Arrows: Select", panelX + kPad, y, kHintSize, kMuted);
+    y += kHintSize + 2;
+    DrawText("Tab/Esc: Close", panelX + kPad, y, kHintSize, kMuted);
+}
+
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
 {
     rlPushMatrix();
@@ -1168,6 +1268,7 @@ void Renderer::DrawWorld(
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
+        InventoryPanelView inventoryPanel,
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect)
 {
@@ -1393,15 +1494,19 @@ void Renderer::DrawWorld(
     DrawRunTimer(elapsedSeconds);
     DrawSessionBest(hasBestTime, bestSeconds);
     DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
-    DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
-    if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+    if (!inventoryPanel.visible)
     {
-        DrawPickupHud(pickupHudText);
+        DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
+        if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+        {
+            DrawPickupHud(pickupHudText);
+        }
     }
     if (levelCompleted)
     {
         DrawLevelCompleteMessage();
     }
+    DrawInventoryPanel(inventoryPanel);
 }
 
 void Renderer::DrawOrientationWidget(const OrientationWidgetOverlay& overlay)

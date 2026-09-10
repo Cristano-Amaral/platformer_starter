@@ -76,11 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 55 — World Item Pickup & Inventory Integration
-(authored Item Pickup; runtime available/collected; M51 E arbitration;
-M54 TryAdd collection; Development F1 Inventory harness for inspection;
+Milestone 56 — Player Inventory UI v1
+(read-only player-facing Inventory panel; Tab toggle; Esc closes; arrow
+navigation; gameplay simulation paused while open; Release HUD, not ImGui;
 awaiting manual acceptance).
-Milestone 54 is complete. Milestone 56 has not started.
+Milestone 55 is complete. Milestone 57 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -230,5 +230,8 @@ repeatable authored Item Pickups (`position`, `itemId`, `quantity`, optional
 serialized, and never deletes authored definitions. Semantic `E`
 (`grabDropPressed`) drops a carried Dynamic Box, else grabs a box target, else
 collects a valid pickup via `Inventory::TryAdd`. Canonical Level 01 has 0 Item
-Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props. Do
-not start Milestone 56.
+Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props.
+Milestone 56 adds a read-only player-facing Inventory UI (`Tab` toggle, `Esc`
+closes, arrow navigation) that reads the production M54 Inventory. It works in
+Release without ImGui. While open, gameplay simulation pauses (same wholesale
+guard as F2). Do not start Milestone 57.

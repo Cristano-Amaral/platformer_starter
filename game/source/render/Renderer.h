@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "gameplay/Inventory.h"
 #include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
 #include "world/LevelDefinition.h"
@@ -8,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -162,6 +164,15 @@ struct DoorDrawState
     core::Vec3 size{};
 };
 
+// Player-facing Inventory panel (Milestone 56). Game HUD, including Release.
+// Reads production Inventory entries; Renderer does not own contents.
+struct InventoryPanelView
+{
+    bool visible = false;
+    std::span<const gameplay::InventoryEntry> entries{};
+    std::string_view selectedItemId{};
+};
+
 class StaticModelSceneStore;
 
 class Renderer
@@ -222,6 +233,7 @@ public:
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
+        InventoryPanelView inventoryPanel = {},
         const DebugWorldOverlay& overlay = {},
         WorldViewRect viewRect = {});
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);

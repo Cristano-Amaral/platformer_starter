@@ -24,6 +24,10 @@ InputState Poll()
     state.respawnPressed = IsKeyPressed(KEY_R);
     state.restartPressed = IsKeyPressed(KEY_ENTER);
     state.grabDropPressed = IsKeyPressed(KEY_E);
+    state.toggleInventoryPressed = IsKeyPressed(KEY_TAB);
+    state.inventoryPreviousPressed = IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_LEFT);
+    state.inventoryNextPressed = IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT);
+    state.cancelPressed = IsKeyPressed(KEY_ESCAPE);
     state.toggleLevelEditorPressed = IsKeyPressed(KEY_F2);
     return state;
 }

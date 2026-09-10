@@ -382,7 +382,8 @@ void DrawDebugMetrics(
     {
         ImGui::TextUnformatted(
             "Development test harness. Calls production TryAdd / TryRemove / Clear.");
-        ImGui::TextUnformatted("Not a player HUD. No world pickup in M54.");
+        ImGui::TextUnformatted(
+            "Not the player HUD. Tab opens the separate Release-safe Inventory UI.");
         if (inventory == nullptr || inventory->Entries().empty())
         {
             ImGui::TextUnformatted("Inventory: empty");
