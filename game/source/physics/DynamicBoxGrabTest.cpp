@@ -5,6 +5,7 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
+#include "gameplay/Inventory.h"
 #include "world/DynamicBox.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -482,6 +483,23 @@ int main()
         Expect(world.GetGrabState().carrying && world.GetGrabState().carriedIndex == 1,
             "heavy authored mass remains grabbable");
         Expect(level.dynamicBoxes[1].massKg == 200.0f, "38. authored mass is unchanged");
+    }
+
+    {
+        gameplay::Inventory inventory;
+        Expect(inventory.TryAdd("coin", 2), "inventory seed before Grab");
+        world::LevelDefinition level = parsed.level;
+        level.dynamicBoxes.push_back(MakeBox(inRangeCenter));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "inventory grab isolation Initialize");
+        AimAndUpdate(world, 1.0f);
+        world.HandleGrabDrop();
+        Expect(world.GetGrabState().carrying, "Grab succeeded for inventory isolation");
+        Expect(inventory.GetQuantity("coin") == 2, "Grab does not add Inventory");
+        world.HandleGrabDrop();
+        Expect(!world.GetGrabState().carrying, "Drop succeeded for inventory isolation");
+        Expect(inventory.GetQuantity("coin") == 2, "Drop does not remove Inventory");
+        Expect(inventory.Entries().size() == 1, "Carry does not add Inventory entries");
     }
 
     if (gFailures != 0)

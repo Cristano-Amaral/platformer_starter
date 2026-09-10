@@ -6,6 +6,11 @@
 #include <cstdint>
 #include <vector>
 
+namespace gameplay
+{
+class Inventory;
+}
+
 namespace ui
 {
 struct DebugMetricsSnapshot
@@ -161,5 +166,6 @@ void DrawDebugMetrics(
     float viewportHeight,
     bool forceDefaultLayout,
     bool recoverOffscreenLayout,
-    bool* open);
+    bool* open,
+    gameplay::Inventory* inventory = nullptr);
 }

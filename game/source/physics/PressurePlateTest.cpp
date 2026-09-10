@@ -5,6 +5,7 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
+#include "gameplay/Inventory.h"
 #include "world/DynamicBox.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -335,6 +336,26 @@ int main()
                 || std::fabs(world.GetDynamicBoxes()[0].center.x - onPlate.x) < 0.05f,
             "checkpoint respawn does not globally reset boxes");
         Expect(world.GetPressurePlates()[0].active, "checkpoint respawn keeps overlap Active");
+    }
+
+    {
+        gameplay::Inventory inventory;
+        Expect(inventory.TryAdd("battery", 1), "inventory seed before plate update");
+        world::LevelDefinition level = parsed.level;
+        level.pressurePlates.push_back(MakePlate(plateCenter));
+        level.dynamicBoxes.push_back(MakeBox(offPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "inventory plate isolation Initialize");
+        Expect(!world.GetPressurePlates()[0].active, "authored off-plate starts Inactive");
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
+            world, 0, onPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "plate Active for inventory isolation");
+        Expect(inventory.GetQuantity("battery") == 1,
+            "Pressure Plate Active does not mutate Inventory");
+        world.ResetDynamicBoxes();
+        Expect(!world.GetPressurePlates()[0].active, "plate Inactive after authored reset");
+        Expect(inventory.GetQuantity("battery") == 1,
+            "Pressure Plate Inactive does not mutate Inventory");
     }
 
     {

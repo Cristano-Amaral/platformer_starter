@@ -74,6 +74,7 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.goal.center, {-21.0f, 3.8f, 0.0f})
         && level.dynamicBoxes.empty()
         && level.pressurePlates.empty()
+        && level.doors.empty()
         && level.staticProps.empty()
         && Vec3Equal(level.camera.offset, {2.0f, 3.5f, 12.0f})
         && level.camera.fieldOfViewY == 40.0f;
@@ -108,7 +109,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 
 // Whitelist proof: no line may carry a keyword outside the v1 grammar, so no
 // runtime state (active checkpoint, deaths, collected flags, completion, TIME,
-// BEST, platform/box poses, Jolt ids, smoothed camera target) can appear.
+// BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
     static constexpr std::array<std::string_view, 20> allowed{
@@ -410,6 +411,7 @@ int main()
     Expect(CountRecords(written, "door") == 0, "writer door count");
     Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
+    Expect(CountRecords(written, "inventory") == 0, "writer emits no inventory records");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
 
     const world::ParseLevelFileResult reparsed = world::ParseLevelText(written);

@@ -76,10 +76,11 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 53 — Authored Door & Pressure Plate Link
-(Authored Door; Pressure Plate → one Door index; kinematic solid;
-OR desiredOpen from M52 Active; awaiting manual acceptance).
-Milestone 52 is complete. Milestone 54 has not started.
+Milestone 54 — Player Inventory System v1
+(itemId → quantity → TryAdd / TryRemove / Query / Clear; Application-owned
+runtime inventory; Development F1 inspection harness; awaiting manual
+acceptance).
+Milestone 53 is complete. Milestone 55 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -220,4 +221,7 @@ body, no generic trigger/action framework). Milestone 53 adds repeatable
 authored Doors (`center`, `size`, `openDistance`) and a Pressure Plate → one
 Door index. Runtime Doors are kinematic solids that open +Y when any linked
 plate is Active. Canonical Level 01 has 0 Pressure Plates, 0 Doors, 0 Dynamic
-Boxes, and 0 Static Props. Do not start Milestone 54.
+Boxes, and 0 Static Props. Milestone 54 adds Application-owned runtime player
+Inventory (`itemId` → quantity) with TryAdd / TryRemove / Query / Clear.
+Inventory is not Level authored state, is not serialized, and has no world
+pickup. Development F1 Metrics hosts a test harness. Do not start Milestone 55.

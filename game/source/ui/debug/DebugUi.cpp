@@ -25,7 +25,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     const world::LevelDefinition& level,
     const editor::LevelEditorViewContext& levelEditorView,
     editor::EditorToolRunner& toolRunner,
-    bool cookStageReloadPending)
+    bool cookStageReloadPending,
+    gameplay::Inventory& inventory)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -61,7 +62,8 @@ editor::LevelEditorRequest DebugUi::Draw(
             view.viewportHeight,
             view.forceDefaultLayout,
             recoverMetrics,
-            &levelEditorState.workspace.showMetrics);
+            &levelEditorState.workspace.showMetrics,
+            &inventory);
         recoveredMetricsLayout = true;
     }
 

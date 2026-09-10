@@ -2,6 +2,7 @@
 
 #include "editor/LevelEditor.h"
 #include "editor/EditorToolRunner.h"
+#include "gameplay/Inventory.h"
 #include "ui/debug/DebugMetrics.h"
 #include "ui/debug/DebugUiBackend.h"
 
@@ -23,7 +24,8 @@ public:
         const world::LevelDefinition& level,
         const editor::LevelEditorViewContext& levelEditorView,
         editor::EditorToolRunner& toolRunner,
-        bool cookStageReloadPending);
+        bool cookStageReloadPending,
+        gameplay::Inventory& inventory);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.

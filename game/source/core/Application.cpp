@@ -3,6 +3,7 @@
 #include "core/RunTimeFormat.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/CollectibleRunState.h"
+#include "gameplay/Inventory.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
@@ -29,6 +30,9 @@
 
 static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
+#if defined(GAME_RELEASE)
+static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
+#endif
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "assets/StaticGlbImport.h"
@@ -1386,7 +1390,8 @@ int Application::Run()
             levelDefinition,
             levelEditorView,
             editorToolRunner,
-            cookStageReload.IsPending());
+            cookStageReload.IsPending(),
+            inventory);
         if (levelEditorState.active)
         {
             // Keyboard move, wheel and world pick use this frame's ImGui capture
@@ -1762,6 +1767,7 @@ void Application::Initialize()
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     collectibleRunState =
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
 
     renderer.LoadRuntimeAssets();
 
@@ -1843,6 +1849,8 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     camera.SnapToTarget(player.Position());
+    gameplay::ApplyInventoryLifecycle(
+        inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
 }
 
 void Application::RestartRun()
@@ -1858,6 +1866,7 @@ void Application::RestartRun()
     levelCompletionState.completed = false;
     collectibleRunState =
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
 }
@@ -2374,6 +2383,8 @@ void Application::ResetGameplayAfterCommittedLevel()
     levelCompletionState = gameplay::LevelCompletionState{};
     collectibleRunState =
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    gameplay::ApplyInventoryLifecycle(
+        inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
     runTimerState = gameplay::RunTimerState{};
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);

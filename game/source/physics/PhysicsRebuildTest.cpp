@@ -13,6 +13,7 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
+#include "gameplay/Inventory.h"
 #include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
 #include "world/LevelDefinition.h"
@@ -829,6 +830,27 @@ int main()
                 withDoors, withDoors.initialSpawnVisualCenter, world::kPlayerVisualSize),
             "second Door rebuild");
         Expect(doorWorld.DoorBodyCount() == 2, "repeated Door rebuild does not leak bodies");
+    }
+
+    {
+        gameplay::Inventory inventory;
+        Expect(inventory.TryAdd("key", 3), "inventory seed before TryRebuild");
+        physics::PhysicsWorld rebuildWorld;
+        Expect(rebuildWorld.Initialize(parsed.level), "inventory isolation Initialize");
+        Expect(
+            rebuildWorld.InitializePlayer(
+                parsed.level.initialSpawnVisualCenter, world::kPlayerVisualSize),
+            "inventory isolation InitializePlayer");
+        Expect(
+            rebuildWorld.TryRebuild(
+                parsed.level,
+                parsed.level.initialSpawnVisualCenter,
+                world::kPlayerVisualSize),
+            "TryRebuild alone does not own Inventory");
+        gameplay::ApplyInventoryLifecycle(
+            inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
+        Expect(inventory.GetQuantity("key") == 3, "PhysicsWorld rebuild preserves Inventory");
+        Expect(inventory.Entries().size() == 1, "rebuild does not duplicate inventory entries");
     }
 
     if (gFailures != 0)

@@ -105,6 +105,8 @@ add_executable(Platformer3D
     game/source/gameplay/Player.cpp
     game/source/gameplay/Player.h
     game/source/gameplay/CollectibleRunState.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/RespawnState.h
     game/source/gameplay/RunTimerState.h
@@ -464,6 +466,39 @@ target_compile_definitions(LevelFileTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 
+# Milestone 54: player runtime Inventory API and lifecycle policy. Not shipped.
+# No window, raylib, Jolt, or ImGui.
+add_executable(InventoryTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/InventoryTest.cpp
+    game/source/platform/FileReplace.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(InventoryTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(InventoryTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(InventoryTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(InventoryTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(InventoryTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(InventoryTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
 # Focused harness for the M32 editor Apply Preview rebuild cycle. Not shipped.
 # Links Jolt because that is exactly what is being validated; no raylib/ImGui.
 # It only reads the canonical level and never writes a file.
@@ -474,6 +509,8 @@ add_executable(PhysicsRebuildTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
     game/source/physics/PhysicsCapacity.h
     game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsRebuildTest.cpp
@@ -501,6 +538,8 @@ target_compile_definitions(PhysicsRebuildTest PRIVATE
 add_executable(DynamicBoxGrabTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
     game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsCapacity.h
     game/source/physics/DynamicBoxGrabTest.cpp
@@ -528,6 +567,8 @@ target_compile_definitions(DynamicBoxGrabTest PRIVATE
 add_executable(PressurePlateTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
     game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsCapacity.h
     game/source/physics/PressurePlateTest.cpp
@@ -556,6 +597,8 @@ target_compile_definitions(PressurePlateTest PRIVATE
 add_executable(DoorTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
     game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsCapacity.h
     game/source/physics/DoorTest.cpp

@@ -5,9 +5,11 @@
 #include "core/RunTimeFormat.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
+#include "gameplay/Inventory.h"
 #include "imgui.h"
 
 #include <cstddef>
+#include <cstdio>
 #include <filesystem>
 
 namespace ui
@@ -50,7 +52,8 @@ void DrawDebugMetrics(
     float viewportHeight,
     bool forceDefaultLayout,
     bool recoverOffscreenLayout,
-    bool* open)
+    bool* open,
+    gameplay::Inventory* inventory)
 {
     ApplyEditorWindowPlacement(
         editor::kMetricsWindowName,
@@ -374,6 +377,64 @@ void DrawDebugMetrics(
         ImGui::Text("Player inside goal: %s", BoolText(snapshot.playerInsideGoal));
     }
 
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (ImGui::CollapsingHeader("Inventory (Test)", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::TextUnformatted(
+            "Development test harness. Calls production TryAdd / TryRemove / Clear.");
+        ImGui::TextUnformatted("Not a player HUD. No world pickup in M54.");
+        if (inventory == nullptr || inventory->Entries().empty())
+        {
+            ImGui::TextUnformatted("Inventory: empty");
+        }
+        else
+        {
+            for (const gameplay::InventoryEntry& entry : inventory->Entries())
+            {
+                ImGui::Text("%s = %d", entry.itemId.c_str(), entry.quantity);
+            }
+        }
+
+        static char itemIdBuffer[64] = "key";
+        static int quantity = 1;
+        static char lastResult[96] = "";
+        ImGui::InputText("itemId", itemIdBuffer, sizeof(itemIdBuffer));
+        ImGui::InputInt("quantity", &quantity);
+        const bool canMutate = inventory != nullptr;
+        ImGui::BeginDisabled(!canMutate);
+        if (ImGui::Button("Add") && canMutate)
+        {
+            const bool ok = inventory->TryAdd(itemIdBuffer, quantity);
+            std::snprintf(
+                lastResult,
+                sizeof(lastResult),
+                ok ? "Add ok" : "Add failed (inventory unchanged)");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Remove") && canMutate)
+        {
+            const bool ok = inventory->TryRemove(itemIdBuffer, quantity);
+            std::snprintf(
+                lastResult,
+                sizeof(lastResult),
+                ok ? "Remove ok" : "Remove failed (inventory unchanged)");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear") && canMutate)
+        {
+            inventory->Clear();
+            std::snprintf(lastResult, sizeof(lastResult), "Cleared");
+        }
+        ImGui::EndDisabled();
+        if (lastResult[0] != '\0')
+        {
+            ImGui::TextUnformatted(lastResult);
+        }
+    }
+#else
+    (void)inventory;
+#endif
+
     ImGui::End();
 }
 }
@@ -383,7 +444,7 @@ void DrawDebugMetrics(
 namespace ui
 {
 void DrawDebugMetrics(
-    const DebugMetricsSnapshot&, float, float, bool, bool, bool*) {}
+    const DebugMetricsSnapshot&, float, float, bool, bool, bool*, gameplay::Inventory*) {}
 }
 
 #endif

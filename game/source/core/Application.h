@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gameplay/CollectibleRunState.h"
+#include "gameplay/Inventory.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
@@ -62,6 +63,7 @@ private:
     gameplay::RespawnState respawnState;
     gameplay::LevelCompletionState levelCompletionState;
     gameplay::CollectibleRunState collectibleRunState;
+    gameplay::Inventory inventory{};
     gameplay::RunTimerState runTimerState;
     gameplay::SessionBestTimeState sessionBestTimeState;
     persistence::LoadBestTimeStatus bestTimeLoadStatus = persistence::LoadBestTimeStatus::Missing;

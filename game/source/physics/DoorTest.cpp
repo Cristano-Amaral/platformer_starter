@@ -6,6 +6,7 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
+#include "gameplay/Inventory.h"
 #include "world/Door.h"
 #include "world/DynamicBox.h"
 #include "world/LevelDefinition.h"
@@ -577,6 +578,21 @@ int main()
         {
             Expect(true, "grab vs Door remains a non-fatal optional path");
         }
+    }
+
+    {
+        gameplay::Inventory inventory;
+        Expect(inventory.TryAdd("key", 1), "inventory seed before Door update");
+        world::LevelDefinition level = parsed.level;
+        level.doors.push_back(MakeDoor(doorClosed));
+        level.pressurePlates.push_back(MakePlate(plateCenter, 0));
+        level.dynamicBoxes.push_back(MakeBox(onPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "inventory door isolation Initialize");
+        Expect(world.GetDoors()[0].desiredOpen, "linked Door desiredOpen from plate");
+        StepWorld(world, 30);
+        Expect(inventory.GetQuantity("key") == 1, "Door open does not consume Inventory");
+        Expect(inventory.Entries().size() == 1, "Door update does not add Inventory entries");
     }
 
     Expect(
