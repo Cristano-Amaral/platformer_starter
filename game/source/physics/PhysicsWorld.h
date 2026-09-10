@@ -6,7 +6,9 @@
 #include "world/Door.h"
 #include "world/PressurePlate.h"
 
+#include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace world
@@ -47,6 +49,7 @@ struct DoorRuntimeState
     float openFraction = 0.0f;
     bool desiredOpen = false;
     bool blockedClosing = false;
+    bool unlocked = true;
     bool valid = false;
 };
 
@@ -136,9 +139,16 @@ public:
     void HandleGrabDrop();
     void ClearCarry();
     DynamicBoxGrabState GetGrabState() const;
+    // Session lock flags owned by Application. Size should match applied Doors.
+    // Missing entries fall back to authored requiresKey. Does not snap motion.
+    void SetDoorRuntimeUnlocked(std::span<const std::uint8_t> unlocked);
     // Solid world LOS used by M51 grab and M55 pickup. Ignores Dynamic Boxes
     // and the CharacterVirtual inner body. Static Props have no Jolt body.
     bool WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to) const;
+    // Same LOS, ignoring the named applied Door body so a locked Door can be
+    // targeted without its own solid blocking the ray to its center.
+    bool WorldSolidBlocksSegmentIgnoringDoor(
+        core::Vec3 from, core::Vec3 to, int doorIndex) const;
     void Shutdown();
 
     bool IsInitialized() const;

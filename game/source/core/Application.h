@@ -4,6 +4,7 @@
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
+#include "gameplay/DoorLockRuntime.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
@@ -68,6 +69,7 @@ private:
     gameplay::Inventory inventory{};
     gameplay::InventoryUiState inventoryUi{};
     gameplay::ItemPickupRunState itemPickupRunState{};
+    gameplay::DoorLockRunState doorLockRunState{};
     gameplay::RunTimerState runTimerState;
     gameplay::SessionBestTimeState sessionBestTimeState;
     persistence::LoadBestTimeStatus bestTimeLoadStatus = persistence::LoadBestTimeStatus::Missing;

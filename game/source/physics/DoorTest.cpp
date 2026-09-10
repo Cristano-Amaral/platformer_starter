@@ -145,6 +145,7 @@ int main()
         Expect(one.level.doors[0].center.x == 4.0f, "one door center x");
         Expect(one.level.doors[0].size.y == 3.0f, "one door size y");
         Expect(one.level.doors[0].openDistance == 3.2f, "one door open distance");
+        Expect(!one.level.doors[0].requiresKey, "old Door syntax defaults requiresKey false");
         const std::string written = world::SerializeLevelText(one.level);
         Expect(CountRecords(written, "door") == 1, "writer one door");
         const world::ParseLevelFileResult roundDoor = world::ParseLevelText(written);

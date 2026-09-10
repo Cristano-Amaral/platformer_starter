@@ -246,7 +246,8 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
     {
         if (!Vec3Equal(a.doors[index].center, b.doors[index].center)
             || !Vec3Equal(a.doors[index].size, b.doors[index].size)
-            || a.doors[index].openDistance != b.doors[index].openDistance)
+            || a.doors[index].openDistance != b.doors[index].openDistance
+            || a.doors[index].requiresKey != b.doors[index].requiresKey)
         {
             return false;
         }

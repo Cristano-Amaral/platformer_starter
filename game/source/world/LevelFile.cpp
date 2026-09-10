@@ -574,15 +574,23 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "door")
         {
-            if (!RequireTokenCount(tokens, 8, failure, lineNumber))
+            if (tokens.size() != 8 && tokens.size() != 9)
             {
-                return failure;
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
             }
             DoorSpec door{};
             if (!ParseVec3(tokens, 1, door.center) || !ParseVec3(tokens, 4, door.size)
                 || !ParseFloatToken(tokens[7], door.openDistance) || !DoorSpecIsValid(door))
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid door");
+            }
+            if (tokens.size() == 9)
+            {
+                if (tokens[8] != "0" && tokens[8] != "1")
+                {
+                    return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid door");
+                }
+                door.requiresKey = tokens[8] == "1";
             }
             if (state.doors.size()
                 >= static_cast<std::size_t>(physics::kMaxAuthoredPhysicsBodies))

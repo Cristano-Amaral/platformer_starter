@@ -859,7 +859,8 @@ bool AuthoredGeometryDiffers(
         const world::DoorSpec& workingDoor = workingCopy.doors[selection.index];
         return Vec3Differs(activeDoor.center, workingDoor.center)
             || Vec3Differs(activeDoor.size, workingDoor.size)
-            || activeDoor.openDistance != workingDoor.openDistance;
+            || activeDoor.openDistance != workingDoor.openDistance
+            || activeDoor.requiresKey != workingDoor.requiresKey;
     }
     case EditorObjectKind::ItemPickup:
     {

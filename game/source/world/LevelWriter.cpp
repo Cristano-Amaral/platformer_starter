@@ -223,6 +223,8 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendVec3(out, door.size);
         out += ' ';
         AppendFloat(out, door.openDistance);
+        out += ' ';
+        AppendInt(out, door.requiresKey ? 1 : 0);
         out += '\n';
     }
 

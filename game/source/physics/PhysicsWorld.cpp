@@ -471,6 +471,7 @@ struct PhysicsWorld::Impl
     std::vector<JPH::BodyID> doorBodyIds{};
     std::vector<float> doorOpenFraction{};
     std::vector<bool> doorBlockedClosing{};
+    std::vector<std::uint8_t> doorRuntimeUnlocked{};
     float killPlaneY = 0.0f;
     float movingPlatformDirection = 1.0f;
     float carriedGroundVelocityX = 0.0f;
@@ -547,7 +548,11 @@ struct PhysicsWorld::Impl
         grabAimValid = true;
     }
 
-    bool CastWorldRay(JPH::RVec3 origin, JPH::Vec3 offset, float& outFraction) const
+    bool CastWorldRay(
+        JPH::RVec3 origin,
+        JPH::Vec3 offset,
+        float& outFraction,
+        JPH::BodyID extraIgnore = {}) const
     {
         if (physicsSystem == nullptr)
         {
@@ -563,7 +568,7 @@ struct PhysicsWorld::Impl
         JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> collector;
         const JPH::BodyID inner =
             character != nullptr ? character->GetInnerBodyID() : JPH::BodyID();
-        const WorldSolidBodyFilter bodyFilter(&dynamicBodyIds, inner, {});
+        const WorldSolidBodyFilter bodyFilter(&dynamicBodyIds, inner, extraIgnore);
         physicsSystem->GetNarrowPhaseQuery().CastRay(
             ray,
             settings,
@@ -579,11 +584,11 @@ struct PhysicsWorld::Impl
         return true;
     }
 
-    bool WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to) const
+    bool WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to, JPH::BodyID extraIgnore = {}) const
     {
         const JPH::Vec3 offset(to.x - from.x, to.y - from.y, to.z - from.z);
         float fraction = 1.0f;
-        return CastWorldRay(ToRVec3(from), offset, fraction) && fraction < 0.98f;
+        return CastWorldRay(ToRVec3(from), offset, fraction, extraIgnore) && fraction < 0.98f;
     }
 
     void ClearCarryState()
@@ -987,6 +992,11 @@ struct PhysicsWorld::Impl
         doorBodyIds.clear();
         doorOpenFraction.assign(doorSpecs.size(), 0.0f);
         doorBlockedClosing.assign(doorSpecs.size(), false);
+        doorRuntimeUnlocked.resize(doorSpecs.size());
+        for (std::size_t index = 0; index < doorSpecs.size(); ++index)
+        {
+            doorRuntimeUnlocked[index] = doorSpecs[index].requiresKey ? 0 : 1;
+        }
         JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
         for (std::size_t index = 0; index < doorSpecs.size(); ++index)
         {
@@ -1036,8 +1046,30 @@ struct PhysicsWorld::Impl
         return false;
     }
 
+    bool DoorIsUnlocked(int doorIndex) const
+    {
+        if (doorIndex < 0)
+        {
+            return true;
+        }
+        const std::size_t index = static_cast<std::size_t>(doorIndex);
+        if (index >= doorSpecs.size())
+        {
+            return true;
+        }
+        if (index < doorRuntimeUnlocked.size())
+        {
+            return doorRuntimeUnlocked[index] != 0;
+        }
+        return !doorSpecs[index].requiresKey;
+    }
+
     bool DoorDesiredOpen(int doorIndex) const
     {
+        if (!DoorIsUnlocked(doorIndex))
+        {
+            return false;
+        }
         for (std::size_t plateIndex = 0; plateIndex < pressurePlateSpecs.size(); ++plateIndex)
         {
             if (pressurePlateSpecs[plateIndex].linkedDoorIndex != doorIndex)
@@ -1658,6 +1690,43 @@ bool PhysicsWorld::WorldSolidBlocksSegment(core::Vec3 from, core::Vec3 to) const
     return impl->WorldSolidBlocksSegment(from, to);
 }
 
+bool PhysicsWorld::WorldSolidBlocksSegmentIgnoringDoor(
+    core::Vec3 from,
+    core::Vec3 to,
+    int doorIndex) const
+{
+    if (impl == nullptr || !impl->initialized)
+    {
+        return false;
+    }
+    JPH::BodyID ignore{};
+    if (doorIndex >= 0 && static_cast<std::size_t>(doorIndex) < impl->doorBodyIds.size())
+    {
+        ignore = impl->doorBodyIds[static_cast<std::size_t>(doorIndex)];
+    }
+    return impl->WorldSolidBlocksSegment(from, to, ignore);
+}
+
+void PhysicsWorld::SetDoorRuntimeUnlocked(std::span<const std::uint8_t> unlocked)
+{
+    if (impl == nullptr)
+    {
+        return;
+    }
+    impl->doorRuntimeUnlocked.resize(impl->doorSpecs.size());
+    for (std::size_t index = 0; index < impl->doorSpecs.size(); ++index)
+    {
+        if (index < unlocked.size())
+        {
+            impl->doorRuntimeUnlocked[index] = unlocked[index] != 0 ? 1 : 0;
+        }
+        else
+        {
+            impl->doorRuntimeUnlocked[index] = impl->doorSpecs[index].requiresKey ? 0 : 1;
+        }
+    }
+}
+
 void PhysicsWorld::ClearCarry()
 {
     impl->ClearCarryState();
@@ -1869,6 +1938,7 @@ void PhysicsWorld::Shutdown()
         impl->doorSpecs.clear();
         impl->doorOpenFraction.clear();
         impl->doorBlockedClosing.clear();
+        impl->doorRuntimeUnlocked.clear();
         if (!impl->movingPlatformId.IsInvalid())
         {
             bodyInterface.RemoveBody(impl->movingPlatformId);
@@ -2005,6 +2075,7 @@ std::vector<DoorRuntimeState> PhysicsWorld::GetDoors() const
         door.desiredOpen = impl->DoorDesiredOpen(static_cast<int>(index));
         door.blockedClosing =
             index < impl->doorBlockedClosing.size() && impl->doorBlockedClosing[index];
+        door.unlocked = impl->DoorIsUnlocked(static_cast<int>(index));
         door.valid = impl->initialized && index < impl->doorBodyIds.size()
             && !impl->doorBodyIds[index].IsInvalid();
         if (!door.valid || impl->physicsSystem == nullptr)

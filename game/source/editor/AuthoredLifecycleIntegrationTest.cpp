@@ -1156,6 +1156,7 @@ int main()
             state.workingCopy.doors[0].size.x == world::kDefaultDoorSize.x
                 && state.workingCopy.doors[0].openDistance == world::kDefaultDoorOpenDistance,
             "default Door size and openDistance");
+        Expect(!state.workingCopy.doors[0].requiresKey, "Add Door defaults requiresKey=false");
         Expect(state.selection.kind == EditorObjectKind::Door, "new Door is selected");
         Expect(
             HierarchyKindCount(state.workingCopy, EditorObjectKind::Door) == 1,
@@ -1185,12 +1186,14 @@ int main()
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, editor::EditAddMenuRequest(EditorObjectKind::Door), true, cameraAnchor),
             "seed Door for Duplicate");
+        dupState.workingCopy.doors[0].requiresKey = true;
         dupState.selection = {EditorObjectKind::Door, 0};
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DuplicateSelected, true),
             "Duplicate Door request");
         Expect(dupState.workingCopy.doors.size() == 2, "Duplicate appends Door");
+        Expect(dupState.workingCopy.doors[1].requiresKey, "Duplicate preserves requiresKey");
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 dupState, active, LevelEditorRequest::DeleteSelected, true),

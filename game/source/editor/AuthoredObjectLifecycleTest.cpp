@@ -1301,9 +1301,11 @@ int main()
         Expect(working.doors.size() == 1, "one Door after Add");
         Expect(
             working.doors[0].size.x == world::kDefaultDoorSize.x
-                && working.doors[0].openDistance == world::kDefaultDoorOpenDistance,
-            "default Door size and openDistance");
+                && working.doors[0].openDistance == world::kDefaultDoorOpenDistance
+                && !working.doors[0].requiresKey,
+            "default Door size, openDistance, and requiresKey=false");
         Expect(added.selection.kind == EditorObjectKind::Door, "Add selects Door");
+        working.doors[0].requiresKey = true;
         working.pressurePlates.push_back({{4.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
         working.pressurePlates.push_back({{8.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
         const editor::LifecycleEditResult duplicated =
@@ -1317,6 +1319,7 @@ int main()
         Expect(
             working.doors[1].openDistance == working.doors[0].openDistance,
             "Duplicate preserves openDistance");
+        Expect(working.doors[1].requiresKey, "Duplicate preserves requiresKey");
         Expect(
             working.pressurePlates[0].linkedDoorIndex == 0
                 && working.pressurePlates[1].linkedDoorIndex == 0,

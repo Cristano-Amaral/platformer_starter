@@ -418,6 +418,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Position X Y Z", door.center);
             EditVec3("Size X Y Z", door.size);
             ImGui::InputFloat("Open Distance", &door.openDistance, 0.0f, 0.0f, kFloatFormat);
+            ImGui::Checkbox("Requires Key", &door.requiresKey);
             ImGui::TextUnformatted("Opens +Y from the authored closed position.");
         }
         break;

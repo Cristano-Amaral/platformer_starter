@@ -3,6 +3,7 @@
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
 #include "gameplay/Player.h"
+#include "gameplay/DoorLockRuntime.h"
 #include "platform/RuntimePaths.h"
 #include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
@@ -48,6 +49,8 @@ constexpr Color kDynamicBoxCarryWire{72, 214, 236, 255};
 constexpr Color kPressurePlateInactive{86, 98, 124, 255};
 constexpr Color kPressurePlateActive{56, 188, 92, 255};
 constexpr Color kDoorColor{136, 96, 68, 255};
+constexpr Color kDoorTargetFill{198, 188, 96, 255};
+constexpr Color kDoorTargetWire{236, 214, 72, 255};
 constexpr Color kItemPickupFill{92, 176, 214, 255};
 constexpr Color kItemPickupTargetFill{198, 188, 96, 255};
 constexpr Color kItemPickupTargetWire{236, 214, 72, 255};
@@ -1265,6 +1268,8 @@ void Renderer::DrawWorld(
         int collectedCount,
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
+        int lockedDoorTargetIndex,
+        bool inventoryHasKey,
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
@@ -1344,13 +1349,23 @@ void Renderer::DrawWorld(
             pressurePlates[index].size,
             pressurePlates[index].active ? kPressurePlateActive : kPressurePlateInactive);
     }
+    bool doorHudTarget = false;
     for (std::size_t index = 0; index < doors.size(); ++index)
     {
         if (OverlayMarksPendingDelete(overlay.pendingDeleteDoorIndices, index))
         {
             continue;
         }
-        DrawGreyboxBox(doors[index].center, doors[index].size, kDoorColor);
+        const bool targeted = lockedDoorTargetIndex == static_cast<int>(index);
+        if (targeted)
+        {
+            doorHudTarget = true;
+            DrawGhostBox(doors[index].center, doors[index].size, kDoorTargetFill, kDoorTargetWire);
+        }
+        else
+        {
+            DrawGreyboxBox(doors[index].center, doors[index].size, kDoorColor);
+        }
     }
     if (staticPropModels)
     {
@@ -1500,6 +1515,10 @@ void Renderer::DrawWorld(
         if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
         {
             DrawPickupHud(pickupHudText);
+        }
+        else if (!grabHudCarrying && !grabHudTarget && !pickupHudTarget && doorHudTarget)
+        {
+            DrawPickupHud(gameplay::LockedDoorPromptText(inventoryHasKey));
         }
     }
     if (levelCompleted)

@@ -1029,6 +1029,7 @@ int main()
             Expect(one.level.doors.size() == 1, "one door count");
             Expect(one.level.doors[0].center.x == 4.0f, "one door center x");
             Expect(one.level.doors[0].openDistance == 3.2f, "one door openDistance");
+            Expect(!one.level.doors[0].requiresKey, "old Door syntax defaults requiresKey false");
             const std::string writtenOne = world::SerializeLevelText(one.level);
             Expect(CountRecords(writtenOne, "door") == 1, "writer one door");
             Expect(

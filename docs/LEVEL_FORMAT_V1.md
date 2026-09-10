@@ -90,7 +90,7 @@ hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex>]
-door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance>
+door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiresKey>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 ```
@@ -137,10 +137,14 @@ Door. One plate cannot name multiple Doors.
 Size is extents; each axis finite and `>= kMinDoorExtent` (0.12). Open
 distance is finite and in `[kMinDoorOpenDistance, kMaxDoorOpenDistance]`
 (`[0.12, 20]`). Default Add size is `1.2, 3.0, 2.4` and default open distance
-is `3.2`. Opening direction is fixed **+Y**. Zero, one, or many records are
-valid. Canonical Level 01 has **zero** Doors. Runtime open fraction,
-desiredOpen, obstruction, and live kinematic pose are **not** Level Format
-fields. Save writes the authored closed pose only.
+is `3.2`. Opening direction is fixed **+Y**. An optional 9th token is
+`requiresKey`: exactly `0` or `1`. Omitted means `false` (exact M53
+behavior). The writer always emits 9 tokens (`0` or `1`). Do not author an
+item id, lock id, or channel; the runtime unlock item is the production
+Inventory token `key`. Zero, one, or many records are valid. Canonical
+Level 01 has **zero** Doors. Runtime open fraction, desiredOpen, lock
+unlocked flags, obstruction, and live kinematic pose are **not** Level
+Format fields. Save writes the authored closed pose and `requiresKey` only.
 
 `item_pickup` is a repeatable authored world acquisition volume. Position is
 the world center. `quantity` is a positive integer in the M54 Inventory range

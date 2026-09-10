@@ -830,6 +830,7 @@ int main()
                 withDoors, withDoors.initialSpawnVisualCenter, world::kPlayerVisualSize),
             "second Door rebuild");
         Expect(doorWorld.DoorBodyCount() == 2, "repeated Door rebuild does not leak bodies");
+        Expect(doorWorld.GetDoors()[0].unlocked, "non-key Door rebuild stays unlocked");
     }
 
     {

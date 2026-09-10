@@ -1,7 +1,8 @@
 #pragma once
 
-// Authored Door (Milestone 53). Closed pose + size + +Y open distance.
-// Runtime open fraction/desiredOpen are never stored on this spec.
+// Authored Door (Milestone 53 / 57). Closed pose + size + +Y open distance.
+// Optional requiresKey is authored; runtime locked/unlocked is never stored
+// on this spec.
 
 #include "core/Vec3.h"
 
@@ -21,6 +22,10 @@ struct DoorSpec
     core::Vec3 center{};
     core::Vec3 size{};
     float openDistance = 0.0f;
+    // Concrete M57 lock: when true, a new applied run starts locked until the
+    // production Inventory item "key" unlocks that runtime Door. Default false
+    // preserves exact M53 Pressure Plate motion.
+    bool requiresKey = false;
 };
 
 inline bool DoorSizeIsValid(core::Vec3 size)

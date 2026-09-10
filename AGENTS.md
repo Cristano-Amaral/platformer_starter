@@ -76,11 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 56 — Player Inventory UI v1
-(read-only player-facing Inventory panel; Tab toggle; Esc closes; arrow
-navigation; gameplay simulation paused while open; Release HUD, not ImGui;
-awaiting manual acceptance).
-Milestone 55 is complete. Milestone 57 has not started.
+Milestone 57 — Key Item & Locked Door Interaction
+(authored Door `requiresKey`; runtime lock gated by production Inventory
+item `key`; Tab Inventory UI remains read-only; awaiting manual acceptance).
+Milestone 56 is complete. Milestone 58 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -234,4 +233,9 @@ Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props.
 Milestone 56 adds a read-only player-facing Inventory UI (`Tab` toggle, `Esc`
 closes, arrow navigation) that reads the production M54 Inventory. It works in
 Release without ImGui. While open, gameplay simulation pauses (same wholesale
-guard as F2). Do not start Milestone 57.
+guard as F2). Milestone 57 adds authored Door `requiresKey` (default false).
+A key Door starts each applied run locked; `E` consumes one production Inventory
+`key` via `TryRemove` to unlock only that runtime Door. Unlocking does not
+open the Door; M53 Pressure Plate OR still drives `desiredOpen` once unlocked.
+Canonical Level 01 has 0 Item Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic
+Boxes, and 0 Static Props. Do not start Milestone 58.

@@ -230,6 +230,8 @@ public:
         int collectedCount,
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
+        int lockedDoorTargetIndex,
+        bool inventoryHasKey,
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,

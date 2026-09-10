@@ -111,6 +111,8 @@ add_executable(Platformer3D
     game/source/gameplay/InventoryUi.h
     game/source/gameplay/ItemPickupRuntime.cpp
     game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/DoorLockRuntime.cpp
+    game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/RespawnState.h
@@ -715,6 +717,52 @@ else()
     target_compile_options(ItemPickupTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(ItemPickupTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Milestone 57: Key Item & Locked Door. Not shipped.
+add_executable(LockedDoorTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/DoorLockRuntime.cpp
+    game/source/gameplay/DoorLockRuntime.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/InventoryUi.cpp
+    game/source/gameplay/InventoryUi.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/LockedDoorTest.cpp
+    game/source/physics/DynamicBoxGrab.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
+    game/source/platform/FileReplace.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/Door.h
+    game/source/world/ItemPickup.h
+    game/source/world/PressurePlate.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+)
+if(WIN32)
+    target_sources(LockedDoorTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(LockedDoorTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(LockedDoorTest PRIVATE game/source)
+target_link_libraries(LockedDoorTest PRIVATE Jolt)
+if(MSVC)
+    target_compile_options(LockedDoorTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LockedDoorTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(LockedDoorTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 

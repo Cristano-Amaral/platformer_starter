@@ -6,6 +6,7 @@
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
+#include "gameplay/DoorLockRuntime.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
@@ -779,6 +780,7 @@ int Application::Run()
         int collectedThisFrameIndex = world::kNoCollectibleIndex;
         bool restartedThisFrame = false;
         int itemPickupTargetIndex = gameplay::kNoItemPickupIndex;
+        int lockedDoorTargetIndex = gameplay::kNoLockedDoorIndex;
 
         // Single simulation guard. Everything inside keeps the exact M31 order
         // and content; the editor pauses it wholesale rather than scaling time.
@@ -892,20 +894,56 @@ int Application::Run()
                     itemPickupRunState.collected,
                     losBlocked);
             }
+            if (!physicsWorld.GetGrabState().carrying)
+            {
+                const std::size_t doorCount = levelDefinition.doors.size();
+                std::vector<std::uint8_t> doorLosBlocked(doorCount, 0);
+                for (std::size_t index = 0; index < doorCount; ++index)
+                {
+                    if (!levelDefinition.doors[index].requiresKey
+                        || gameplay::DoorIsRuntimeUnlocked(doorLockRunState, index))
+                    {
+                        continue;
+                    }
+                    if (physicsWorld.WorldSolidBlocksSegmentIgnoringDoor(
+                            player.Position(), levelDefinition.doors[index].center, static_cast<int>(index)))
+                    {
+                        doorLosBlocked[index] = 1;
+                    }
+                }
+                lockedDoorTargetIndex = gameplay::FindLockedDoorTargetIndex(
+                    player.Position(),
+                    player.FacingX(),
+                    levelDefinition.doors,
+                    doorLockRunState.unlocked,
+                    doorLosBlocked);
+            }
             if (!respawnedThisFrame && !restartedThisFrame && inputState.grabDropPressed)
             {
                 const bool wasCarrying = physicsWorld.GetGrabState().carrying;
                 physicsWorld.HandleGrabDrop();
                 if (!wasCarrying && !physicsWorld.GetGrabState().carrying)
                 {
-                    (void)gameplay::TryCollectItemPickup(
-                        inventory,
-                        itemPickupRunState,
-                        levelDefinition.itemPickups,
-                        itemPickupTargetIndex);
+                    if (itemPickupTargetIndex != gameplay::kNoItemPickupIndex)
+                    {
+                        (void)gameplay::TryCollectItemPickup(
+                            inventory,
+                            itemPickupRunState,
+                            levelDefinition.itemPickups,
+                            itemPickupTargetIndex);
+                    }
+                    else
+                    {
+                        (void)gameplay::TryUnlockLockedDoor(
+                            inventory,
+                            doorLockRunState,
+                            levelDefinition.doors,
+                            lockedDoorTargetIndex);
+                    }
                 }
             }
 
+            physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
             physicsWorld.Update(deltaSeconds);
             if (!respawnedThisFrame && !restartedThisFrame)
             {
@@ -1342,6 +1380,8 @@ int Application::Run()
             gameplay::CollectedCount(collectibleRunState),
             itemPickupRunState.collected,
             itemPickupTargetIndex,
+            lockedDoorTargetIndex,
+            inventory.Has(gameplay::kDoorUnlockItemId, gameplay::kDoorUnlockQuantity),
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
@@ -1845,6 +1885,7 @@ void Application::Initialize()
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
@@ -1858,6 +1899,7 @@ void Application::Initialize()
         initialized = false;
         return;
     }
+    physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
 
     if (!physicsWorld.InitializePlayer(
             levelDefinition.initialSpawnVisualCenter, player.Size()))
@@ -1937,6 +1979,8 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
 
 void Application::RestartRun()
 {
+    doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
+    physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     physicsWorld.ResetMovingPlatform();
     physicsWorld.ResetDynamicBoxes();
     physicsWorld.ResetCharacter(levelDefinition.initialSpawnVisualCenter, {});
@@ -2473,6 +2517,8 @@ void Application::ResetGameplayAfterCommittedLevel()
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
+    physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
     gameplay::ApplyInventoryUiLifecycle(
