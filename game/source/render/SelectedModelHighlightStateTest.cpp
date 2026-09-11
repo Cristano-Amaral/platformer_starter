@@ -170,6 +170,12 @@ int main()
     Expect(store.DrawSubmissionCount() == 1, "full intensity reuses DrawPropTinted");
     const Snapshot fullAfter = QuerySnapshot();
     Expect(SnapshotNear(fullBefore, fullAfter), "47. non-zero path restores renderer state");
+    store.ResetDrawStats();
+    const Snapshot goldBefore = QuerySnapshot();
+    store.DrawGameplayTargetHighlight(spec, 255, 255, 255, 180);
+    Expect(store.GameplayHighlightSubmissionCount() == 1, "Gold Amount 0 uses the same extra pass");
+    const Snapshot goldAfter = QuerySnapshot();
+    Expect(SnapshotNear(goldBefore, goldAfter), "47. Gold Amount RGB path restores renderer state");
     DrawCube(Vector3{2.0f, 1.0f, 0.0f}, 0.5f, 0.5f, 0.5f, Color{216, 96, 72, 255});
     DrawCubeWires(Vector3{2.0f, 1.0f, 0.0f}, 0.5f, 0.5f, 0.5f, Color{24, 26, 32, 255});
     EndMode3D();

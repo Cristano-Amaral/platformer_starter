@@ -607,8 +607,11 @@ int main()
                 && working.itemPickups[0].visualOffset.y == 0.0f
                 && working.itemPickups[0].showInteractionBounds
                 && working.itemPickups[0].targetHighlightIntensity
-                    == world::kDefaultItemPickupTargetHighlightIntensity,
-            "placed Item Pickup has neutral visual transform");
+                    == world::kDefaultItemPickupTargetHighlightIntensity
+                && working.itemPickups[0].targetHighlightGoldAmount
+                    == world::kDefaultItemPickupTargetHighlightGoldAmount
+                && !working.itemPickups[0].idleAnimationEnabled,
+            "placed Item Pickup has M59 defaults");
         Expect(working.doors.empty(), "Item Pickup placement does not add Doors");
         Expect(
             !editor::IsEligiblePlacementSurface(EditorObjectKind::ItemPickup),

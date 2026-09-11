@@ -492,6 +492,16 @@ void StaticModelSceneStore::DrawGameplayTargetHighlight(
     const world::StaticPropSpec& spec,
     unsigned char alpha) const
 {
+    DrawGameplayTargetHighlight(spec, 255, 220, 72, alpha);
+}
+
+void StaticModelSceneStore::DrawGameplayTargetHighlight(
+    const world::StaticPropSpec& spec,
+    unsigned char red,
+    unsigned char green,
+    unsigned char blue,
+    unsigned char alpha) const
+{
     if (alpha == 0 || !world::StaticPropTransformIsValid(spec))
     {
         return;
@@ -500,10 +510,10 @@ void StaticModelSceneStore::DrawGameplayTargetHighlight(
     {
         ++gpu->gameplayHighlightSubmissions;
     }
-    // Single depth-respecting golden tint. Alpha is authored intensity
-    // mapped as round(255 * targetHighlightIntensity). No x-ray.
+    // Intensity maps to pass alpha. Gold Amount maps to tint RGB
+    // (white → existing gold). Not a second alpha multiplier. No x-ray.
     rlDrawRenderBatchActive();
-    DrawPropTinted(spec, 255, 220, 72, alpha);
+    DrawPropTinted(spec, red, green, blue, alpha);
     RestoreGreyboxImmediateState();
 }
 }

@@ -1388,8 +1388,16 @@ int main()
                 && working.itemPickups[0].visualScale.z == 1.0f
                 && working.itemPickups[0].showInteractionBounds
                 && working.itemPickups[0].targetHighlightIntensity
-                    == world::kDefaultItemPickupTargetHighlightIntensity,
-            "default Item Pickup id/quantity/no model/neutral visual");
+                    == world::kDefaultItemPickupTargetHighlightIntensity
+                && working.itemPickups[0].targetHighlightGoldAmount
+                    == world::kDefaultItemPickupTargetHighlightGoldAmount
+                && !working.itemPickups[0].idleAnimationEnabled
+                && working.itemPickups[0].idleBobAmplitude
+                    == world::kDefaultItemPickupIdleBobAmplitude
+                && working.itemPickups[0].idleBobSpeed == world::kDefaultItemPickupIdleBobSpeed
+                && working.itemPickups[0].idleSpinSpeedDegrees
+                    == world::kDefaultItemPickupIdleSpinSpeedDegrees,
+            "6. Add uses M59 defaults");
         Expect(added.selection.kind == EditorObjectKind::ItemPickup, "Add selects Item Pickup");
         working.itemPickups[0].itemId = "coin";
         working.itemPickups[0].quantity = 4;
@@ -1399,6 +1407,11 @@ int main()
         working.itemPickups[0].visualScale = {0.2f, 0.3f, 0.4f};
         working.itemPickups[0].showInteractionBounds = false;
         working.itemPickups[0].targetHighlightIntensity = 0.25f;
+        working.itemPickups[0].targetHighlightGoldAmount = 1.0f;
+        working.itemPickups[0].idleAnimationEnabled = true;
+        working.itemPickups[0].idleBobAmplitude = 0.4f;
+        working.itemPickups[0].idleBobSpeed = 2.0f;
+        working.itemPickups[0].idleSpinSpeedDegrees = -90.0f;
         const editor::LifecycleEditResult duplicated =
             editor::DuplicateSelected(working, added.selection);
         Expect(duplicated.succeeded, "Duplicate Item Pickup");
@@ -1418,8 +1431,17 @@ int main()
                 && working.itemPickups[1].showInteractionBounds
                     == working.itemPickups[0].showInteractionBounds
                 && working.itemPickups[1].targetHighlightIntensity
-                    == working.itemPickups[0].targetHighlightIntensity,
-            "Duplicate preserves itemId/quantity/model/visual transform");
+                    == working.itemPickups[0].targetHighlightIntensity
+                && working.itemPickups[1].targetHighlightGoldAmount
+                    == working.itemPickups[0].targetHighlightGoldAmount
+                && working.itemPickups[1].idleAnimationEnabled
+                    == working.itemPickups[0].idleAnimationEnabled
+                && working.itemPickups[1].idleBobAmplitude
+                    == working.itemPickups[0].idleBobAmplitude
+                && working.itemPickups[1].idleBobSpeed == working.itemPickups[0].idleBobSpeed
+                && working.itemPickups[1].idleSpinSpeedDegrees
+                    == working.itemPickups[0].idleSpinSpeedDegrees,
+            "7. Duplicate preserves M59 presentation values");
         Expect(
             editor::DeleteSelected(working, {EditorObjectKind::ItemPickup, 0}).succeeded,
             "Delete earlier Item Pickup");

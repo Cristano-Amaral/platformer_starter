@@ -54,7 +54,7 @@ constexpr Color kDoorColor{136, 96, 68, 255};
 constexpr Color kDoorTargetFill{198, 188, 96, 255};
 constexpr Color kDoorTargetWire{236, 214, 72, 255};
 constexpr Color kItemPickupFill{92, 176, 214, 255};
-constexpr Color kItemPickupTargetFill{198, 188, 96, 255};
+constexpr Color kItemPickupTargetGold{255, 220, 72, 255};
 constexpr Color kItemPickupTargetWire{236, 214, 72, 255};
 constexpr Color kStaticPropFallbackColor{120, 72, 88, 255};
 constexpr Color kWireColor{24, 26, 32, 255};
@@ -154,6 +154,35 @@ void DrawGhostBox(core::Vec3 center, core::Vec3 size, Color fill, Color wire)
     const Vector3 position = ToRaylib(center);
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, wire);
+}
+
+void DrawItemPickupFallbackCube(
+    const world::StaticPropSpec& visual,
+    Color fill,
+    Color wire,
+    bool drawWire)
+{
+    rlPushMatrix();
+    rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
+    rlRotatef(visual.rotationDegrees.z, 0.0f, 0.0f, 1.0f);
+    rlRotatef(visual.rotationDegrees.y, 0.0f, 1.0f, 0.0f);
+    rlRotatef(visual.rotationDegrees.x, 1.0f, 0.0f, 0.0f);
+    DrawCube(
+        Vector3{0.0f, 0.0f, 0.0f},
+        world::kItemPickupVisualSize,
+        world::kItemPickupVisualSize,
+        world::kItemPickupVisualSize,
+        fill);
+    if (drawWire)
+    {
+        DrawCubeWires(
+            Vector3{0.0f, 0.0f, 0.0f},
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            wire);
+    }
+    rlPopMatrix();
 }
 
 void DrawTransformedBoundsWires(const core::Vec3 corners[8], Color wire)
@@ -1556,7 +1585,13 @@ void Renderer::DrawWorld(
                 pickup.modelIdentity, loadedMin, loadedMax);
         }
         const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
-            pickup, targeted, false, haveLoadedBounds, loadedMin, loadedMax);
+            pickup,
+            targeted,
+            false,
+            haveLoadedBounds,
+            loadedMin,
+            loadedMax,
+            elapsedSeconds);
         if (presentation.drawHud)
         {
             pickupHudTarget = true;
@@ -1567,17 +1602,26 @@ void Renderer::DrawWorld(
                 pickup.itemId.c_str(),
                 pickup.quantity);
         }
-        const Color fill = targeted
-            ? MixRgb(kItemPickupFill, kItemPickupTargetFill, presentation.highlightIntensity)
-            : kItemPickupFill;
+        Color fill = kItemPickupFill;
+        if (presentation.drawFallbackHighlight)
+        {
+            const Color goldPush = MixRgb(
+                kItemPickupFill, kItemPickupTargetGold, presentation.highlightGoldAmount);
+            fill = MixRgb(kItemPickupFill, goldPush, presentation.highlightIntensity);
+        }
         const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
         if (!pickup.modelIdentity.empty() && staticPropModels)
         {
-            staticPropModels->DrawProp(world::ItemPickupVisualProp(pickup));
+            staticPropModels->DrawProp(
+                world::ItemPickupPresentedVisualProp(pickup, elapsedSeconds));
             if (presentation.drawModelHighlight)
             {
                 staticPropModels->DrawGameplayTargetHighlight(
-                    presentation.visual, presentation.highlightAlpha);
+                    presentation.visual,
+                    presentation.highlightRed,
+                    presentation.highlightGreen,
+                    presentation.highlightBlue,
+                    presentation.highlightAlpha);
             }
             if (presentation.drawInteractionBounds)
             {
@@ -1586,21 +1630,11 @@ void Renderer::DrawWorld(
             }
             continue;
         }
-        DrawCube(
-            ToRaylib(pickup.position),
-            world::kItemPickupVisualSize,
-            world::kItemPickupVisualSize,
-            world::kItemPickupVisualSize,
-            fill);
-        if (!targeted || presentation.drawInteractionBounds)
-        {
-            DrawCubeWires(
-                ToRaylib(pickup.position),
-                world::kItemPickupVisualSize,
-                world::kItemPickupVisualSize,
-                world::kItemPickupVisualSize,
-                wire);
-        }
+        DrawItemPickupFallbackCube(
+            presentation.visual,
+            fill,
+            wire,
+            !targeted || presentation.drawInteractionBounds);
     }
     DrawOrientedGreyboxBox(
         level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],

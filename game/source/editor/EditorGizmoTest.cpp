@@ -1079,6 +1079,19 @@ int main()
             editor::MakeScaleGizmoDrawRequest(pickup0, working, view, {});
         Expect(draw.visible, "Item Pickup has Scale gizmo request");
         Expect(Vec3Near(draw.origin, visualOrigin), "Item Pickup Scale gizmo sits at visual position");
+        working.itemPickups[0].idleAnimationEnabled = true;
+        working.itemPickups[0].idleBobAmplitude = 1.5f;
+        working.itemPickups[0].idleSpinSpeedDegrees = 180.0f;
+        const editor::GizmoDrawRequest idleDraw =
+            editor::MakeScaleGizmoDrawRequest(pickup0, working, view, {});
+        Expect(
+            Vec3Near(idleDraw.origin, world::ItemPickupVisualPosition(working.itemPickups[0])),
+            "35. Scale gizmo origin does not chase runtime animation");
+        Expect(
+            !Vec3Near(
+                idleDraw.origin,
+                world::ItemPickupPresentedVisualPosition(working.itemPickups[0], 0.25)),
+            "35. Scale gizmo is not the bobbed visual");
 
         editor::GizmoInteractionState state{};
         Expect(

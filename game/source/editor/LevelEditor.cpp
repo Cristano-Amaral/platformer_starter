@@ -538,8 +538,43 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 world::kMaxItemPickupTargetHighlightIntensity,
                 "%.2f");
             ImGui::TextUnformatted(
-                "Gameplay target tint strength only. 0 keeps HUD and targeting. Independent of "
-                "interaction bounds.");
+                "Gameplay target tint opacity only. 0 keeps HUD and targeting. Independent of "
+                "interaction bounds and Gold Amount.");
+            ImGui::SliderFloat(
+                "Target Highlight Gold Amount",
+                &pickup.targetHighlightGoldAmount,
+                world::kMinItemPickupTargetHighlightGoldAmount,
+                world::kMaxItemPickupTargetHighlightGoldAmount,
+                "%.2f");
+            ImGui::TextUnformatted(
+                "How strongly the target pass pushes the model toward gold. Not another opacity "
+                "control. Independent of Intensity and bounds.");
+            ImGui::Separator();
+            ImGui::TextUnformatted("Idle Presentation");
+            ImGui::Checkbox("Idle Animation", &pickup.idleAnimationEnabled);
+            ImGui::TextUnformatted(
+                "Visual-only bob and Y spin. Off keeps the authored M58 transform. Does not "
+                "change targeting.");
+            ImGui::SliderFloat(
+                "Bob Amplitude",
+                &pickup.idleBobAmplitude,
+                world::kMinItemPickupIdleBobAmplitude,
+                world::kMaxItemPickupIdleBobAmplitude,
+                "%.2f");
+            ImGui::SliderFloat(
+                "Bob Speed",
+                &pickup.idleBobSpeed,
+                world::kMinItemPickupIdleBobSpeed,
+                world::kMaxItemPickupIdleBobSpeed,
+                "%.2f");
+            ImGui::SliderFloat(
+                "Spin Speed (deg/s)",
+                &pickup.idleSpinSpeedDegrees,
+                world::kMinItemPickupIdleSpinSpeedDegrees,
+                world::kMaxItemPickupIdleSpinSpeedDegrees,
+                "%.1f");
+            ImGui::TextUnformatted(
+                "Idle values stay stored while animation is off. Runtime phase is never saved.");
             ImGui::TextUnformatted(
                 "Translate edits Position. Rotate gizmo edits Visual Rotation. Scale gizmo edits "
                 "Visual Scale. Offset remains Inspector-only.");

@@ -265,6 +265,20 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out.append(kItemPickupHighlightKeyword);
         out += ' ';
         AppendFloat(out, pickup.targetHighlightIntensity);
+        out += ' ';
+        out.append(kItemPickupGoldKeyword);
+        out += ' ';
+        AppendFloat(out, pickup.targetHighlightGoldAmount);
+        out += ' ';
+        out.append(kItemPickupIdleKeyword);
+        out += ' ';
+        AppendInt(out, pickup.idleAnimationEnabled ? 1 : 0);
+        out += ' ';
+        AppendFloat(out, pickup.idleBobAmplitude);
+        out += ' ';
+        AppendFloat(out, pickup.idleBobSpeed);
+        out += ' ';
+        AppendFloat(out, pickup.idleSpinSpeedDegrees);
         if (!pickup.modelIdentity.empty())
         {
             out += ' ';

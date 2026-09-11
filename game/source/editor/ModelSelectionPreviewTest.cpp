@@ -191,6 +191,29 @@ int main()
                 {editor::EditorObjectKind::ItemPickup, 0}, working)
                 .visible,
             "targetHighlightIntensity does not disable M58.2 editor ghost");
+        working.itemPickups[0].idleAnimationEnabled = true;
+        working.itemPickups[0].idleBobAmplitude = 1.5f;
+        working.itemPickups[0].idleSpinSpeedDegrees = 180.0f;
+        const editor::SelectedModelGhostRequest idleGhost =
+            editor::MakeSelectedModelGhostRequest(
+                {editor::EditorObjectKind::ItemPickup, 0}, working);
+        Expect(idleGhost.visible, "idle animation does not disable M58.2 editor ghost");
+        Expect(
+            Vec3Near(idleGhost.visual.position, world::ItemPickupVisualPosition(working.itemPickups[0])),
+            "48. editor ghost stays on authored visual origin");
+        Expect(
+            Vec3Near(idleGhost.visual.rotationDegrees, working.itemPickups[0].visualRotationDegrees),
+            "48. editor ghost stays on authored visual rotation");
+        Expect(
+            !Vec3Near(
+                idleGhost.visual.position,
+                world::ItemPickupPresentedVisualPosition(working.itemPickups[0], 0.25)),
+            "35. editor ghost does not chase runtime bob");
+        Expect(
+            !Vec3Near(
+                idleGhost.visual.rotationDegrees,
+                world::ItemPickupPresentedVisualRotationDegrees(working.itemPickups[0], 1.0)),
+            "35. editor ghost does not chase runtime spin");
     }
 
     // Fallback Item Pickup (empty modelIdentity) stays on the cube path.

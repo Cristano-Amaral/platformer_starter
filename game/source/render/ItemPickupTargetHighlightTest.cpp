@@ -69,7 +69,11 @@ int main()
             && render::ItemPickupTargetHighlightAlpha(0.70f) <= 180,
         "23. default 0.70 maps near M58.3 alpha 180");
     Expect(render::ItemPickupTargetHighlightAlpha(0.0f) == 0, "22. intensity 0 maps to alpha 0");
-    Expect(render::ItemPickupTargetHighlightAlpha(1.0f) == 255, "24. intensity 1 maps to alpha 255");
+    Expect(
+        world::ItemPickupSpec{}.targetHighlightGoldAmount
+            == world::kDefaultItemPickupTargetHighlightGoldAmount
+            && world::kDefaultItemPickupTargetHighlightGoldAmount == 0.70f,
+        "5. targetHighlightGoldAmount defaults 0.70");
 
     const world::ItemPickupSpec modeled = MakePickup({2.0f, 1.0f, 0.0f}, "key", "models/test_static.glb");
     const world::ItemPickupSpec fallback = []() {
@@ -254,6 +258,167 @@ int main()
     Expect(!fallbackZeroPresentation.drawFallbackHighlight,
         "43. fallback intensity 0 has no extra fill highlight");
     Expect(fallbackZeroPresentation.drawHud, "fallback intensity 0 still shows HUD");
+
+    world::ItemPickupSpec goldZero = modeled;
+    goldZero.targetHighlightIntensity = 0.80f;
+    goldZero.targetHighlightGoldAmount = 0.0f;
+    const render::ItemPickupTargetPresentation goldZeroPresentation =
+        render::MakeItemPickupTargetPresentation(
+            goldZero, true, false, false, {}, {});
+    world::ItemPickupSpec goldOne = goldZero;
+    goldOne.targetHighlightGoldAmount = 1.0f;
+    const render::ItemPickupTargetPresentation goldOnePresentation =
+        render::MakeItemPickupTargetPresentation(
+            goldOne, true, false, false, {}, {});
+    Expect(goldZeroPresentation.drawModelHighlight, "gold 0 at intensity 0.80 still draws the pass");
+    Expect(goldOnePresentation.drawModelHighlight, "gold 1 at intensity 0.80 still draws the pass");
+    Expect(
+        goldZeroPresentation.highlightAlpha == goldOnePresentation.highlightAlpha
+            && goldZeroPresentation.highlightAlpha
+                == render::ItemPickupTargetHighlightAlpha(0.80f),
+        "38. Intensity owns alpha; Gold Amount does not change alpha");
+    Expect(
+        goldZeroPresentation.highlightRed == 255
+            && goldZeroPresentation.highlightGreen == 255
+            && goldZeroPresentation.highlightBlue == 255,
+        "25. Gold Amount 0 keeps white tint (original coloration)");
+    Expect(
+        goldOnePresentation.highlightRed == render::kItemPickupTargetGoldRed
+            && goldOnePresentation.highlightGreen == render::kItemPickupTargetGoldGreen
+            && goldOnePresentation.highlightBlue == render::kItemPickupTargetGoldBlue,
+        "26. Gold Amount 1 is the existing target gold");
+    Expect(
+        goldZeroPresentation.highlightGreen != goldOnePresentation.highlightGreen
+            || goldZeroPresentation.highlightBlue != goldOnePresentation.highlightBlue,
+        "37. Gold Amount 0 materially differs from 1 at fixed Intensity");
+
+    world::ItemPickupSpec intensityLow = modeled;
+    intensityLow.targetHighlightIntensity = 0.20f;
+    intensityLow.targetHighlightGoldAmount = 1.0f;
+    world::ItemPickupSpec intensityHigh = intensityLow;
+    intensityHigh.targetHighlightIntensity = 0.90f;
+    const render::ItemPickupTargetPresentation intensityLowPresentation =
+        render::MakeItemPickupTargetPresentation(
+            intensityLow, true, false, false, {}, {});
+    const render::ItemPickupTargetPresentation intensityHighPresentation =
+        render::MakeItemPickupTargetPresentation(
+            intensityHigh, true, false, false, {}, {});
+    Expect(
+        intensityLowPresentation.highlightAlpha
+            != intensityHighPresentation.highlightAlpha,
+        "38. Intensity changes overall contribution at fixed Gold Amount");
+    Expect(
+        intensityLowPresentation.highlightRed == intensityHighPresentation.highlightRed
+            && intensityLowPresentation.highlightGreen == intensityHighPresentation.highlightGreen
+            && intensityLowPresentation.highlightBlue == intensityHighPresentation.highlightBlue,
+        "39. Gold Amount owns RGB; Intensity does not change gold RGB");
+
+    world::ItemPickupSpec intensityZeroGoldOne = modeled;
+    intensityZeroGoldOne.targetHighlightIntensity = 0.0f;
+    intensityZeroGoldOne.targetHighlightGoldAmount = 1.0f;
+    const render::ItemPickupTargetPresentation intensityZeroGold =
+        render::MakeItemPickupTargetPresentation(
+            intensityZeroGoldOne, true, false, false, {}, {});
+    Expect(!intensityZeroGold.drawModelHighlight, "36. Intensity 0 suppresses extra model highlight");
+    Expect(intensityZeroGold.drawHud, "41. HUD remains independent of Gold Amount");
+    Expect(intensityZeroGold.highlightAlpha == 0, "24. Intensity 0 has no extra contribution");
+
+    world::ItemPickupSpec boundsGold = modeled;
+    boundsGold.showInteractionBounds = false;
+    boundsGold.targetHighlightIntensity = 0.80f;
+    boundsGold.targetHighlightGoldAmount = 1.0f;
+    const render::ItemPickupTargetPresentation boundsGoldPresentation =
+        render::MakeItemPickupTargetPresentation(
+            boundsGold, true, false, false, {}, {});
+    Expect(boundsGoldPresentation.drawModelHighlight, "40. bounds false + gold 1 still highlights");
+    Expect(!boundsGoldPresentation.drawInteractionBounds, "40. showInteractionBounds stays independent");
+
+    world::ItemPickupSpec idlePickup = modeled;
+    idlePickup.idleAnimationEnabled = true;
+    idlePickup.idleBobAmplitude = 0.15f;
+    idlePickup.idleBobSpeed = 1.0f;
+    idlePickup.idleSpinSpeedDegrees = 90.0f;
+    const double idleTime = 0.25;
+    const render::ItemPickupTargetPresentation idleVisual =
+        render::MakeItemPickupTargetPresentation(
+            idlePickup, true, false, false, {}, {}, idleTime);
+    Expect(
+        Vec3Near(
+            idleVisual.visual.position,
+            world::ItemPickupPresentedVisualPosition(idlePickup, idleTime)),
+        "33. target highlight follows animated visual position");
+    Expect(
+        Vec3Near(
+            idleVisual.visual.rotationDegrees,
+            world::ItemPickupPresentedVisualRotationDegrees(idlePickup, idleTime)),
+        "33. target highlight follows animated visual rotation");
+    Expect(
+        !Vec3Near(idleVisual.visual.position, world::ItemPickupVisualPosition(idlePickup)),
+        "33. animated highlight is not the static authored origin");
+    Expect(
+        Vec3Near(
+            idleVisual.boundsCorners[0],
+            render::item_pickup_highlight_detail::WorldFromLocal(
+                idleVisual.visual, idleVisual.localMin)),
+        "34. target bounds follow animated visual");
+    Expect(
+        Vec3Near(idlePickup.position, modeled.position)
+            && Vec3Near(idlePickup.visualOffset, modeled.visualOffset)
+            && Vec3Near(idlePickup.visualRotationDegrees, modeled.visualRotationDegrees)
+            && Vec3Near(idlePickup.visualScale, modeled.visualScale),
+        "14. idle presentation does not mutate authored state");
+    const world::StaticPropSpec authoredGhost = world::ItemPickupVisualProp(idlePickup);
+    Expect(
+        Vec3Near(authoredGhost.position, world::ItemPickupVisualPosition(idlePickup))
+            && Vec3Near(authoredGhost.rotationDegrees, idlePickup.visualRotationDegrees),
+        "35. editor ghost/gizmo origin stays on authored transform");
+    Expect(
+        !Vec3Near(authoredGhost.position, idleVisual.visual.position)
+            || !Vec3Near(authoredGhost.rotationDegrees, idleVisual.visual.rotationDegrees),
+        "35. authored ghost does not chase runtime animation");
+
+    const render::ItemPickupTargetPresentation collectedIdle =
+        render::MakeItemPickupTargetPresentation(
+            idlePickup, true, true, false, {}, {}, idleTime);
+    Expect(!collectedIdle.drawModelHighlight, "32. collected pickup does not render/animate");
+    Expect(collectedIdle.visual.modelIdentity.empty(), "32. collected presentation is empty");
+
+    world::ItemPickupSpec fallbackIdle = fallback;
+    fallbackIdle.idleAnimationEnabled = true;
+    fallbackIdle.idleBobAmplitude = 0.15f;
+    fallbackIdle.idleBobSpeed = 1.0f;
+    fallbackIdle.idleSpinSpeedDegrees = 45.0f;
+    const render::ItemPickupTargetPresentation fallbackIdlePresentation =
+        render::MakeItemPickupTargetPresentation(
+            fallbackIdle, true, false, false, {}, {}, 0.25);
+    Expect(fallbackIdlePresentation.drawFallbackHighlight, "43. no-model fallback highlight remains");
+    Expect(
+        NearlyEqual(
+            fallbackIdlePresentation.visual.position.y,
+            fallbackIdle.position.y + world::ItemPickupIdleBobOffsetY(fallbackIdle, 0.25)),
+        "43. fallback idle bob is visual-only");
+    Expect(
+        NearlyEqual(
+            fallbackIdlePresentation.visual.rotationDegrees.y,
+            world::ItemPickupIdleSpinYDegrees(fallbackIdle, 0.25)),
+        "43. fallback idle spin is visual-only");
+
+    unsigned char mixRed = 0;
+    unsigned char mixGreen = 0;
+    unsigned char mixBlue = 0;
+    render::ItemPickupTargetHighlightTint(0.0f, mixRed, mixGreen, mixBlue);
+    unsigned char goldRed = 0;
+    unsigned char goldGreen = 0;
+    unsigned char goldBlue = 0;
+    render::ItemPickupTargetHighlightTint(1.0f, goldRed, goldGreen, goldBlue);
+    Expect(mixRed == 255 && mixGreen == 255 && mixBlue == 255, "25. tint at gold 0 is white");
+    Expect(
+        goldRed == 255 && goldGreen == 220 && goldBlue == 72,
+        "26. tint at gold 1 is RGB(255,220,72)");
+    Expect(
+        render::ItemPickupTargetHighlightAlpha(0.80f)
+            == goldZeroPresentation.highlightAlpha,
+        "22. Gold Amount is not another alpha multiplier");
 
     if (gFailures != 0)
     {

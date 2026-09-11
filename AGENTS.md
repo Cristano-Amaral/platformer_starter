@@ -76,10 +76,10 @@ For each milestone:
 7. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 58.4 — Item Pickup Target Highlight Intensity
-(Development Inspector `Target Highlight Intensity`; Gameplay/Release golden
-tint scaled per Item Pickup; awaiting manual acceptance).
-Milestone 58.3 is implemented. Milestone 59 has not started.
+Milestone 59 — Item Pickup Presentation Polish
+(optional visual-only idle bob/Y-spin; Target Highlight Gold Amount distinct
+from M58.4 Intensity; awaiting manual acceptance).
+Milestone 58.4 is implemented. Milestone 60 has not started.
 See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
 
 Milestone 33 is complete and merged. F2 still pauses simulation, edits a
@@ -260,5 +260,7 @@ uses logical `position`. Milestone 58.3 adds Gameplay/Release golden model
 highlight for the current M55 Item Pickup target and authored
 `showInteractionBounds` (default true) controlling only the target
 interaction-bounds wire. Milestone 58.4 adds authored `targetHighlightIntensity`
-(default 0.70) mapping to golden tint alpha `round(255 * intensity)`. Do not
-start Milestone 59.
+(default 0.70) mapping to golden tint alpha `round(255 * intensity)`. Milestone
+59 adds optional visual-only idle bob/Y-spin (`idleAnimationEnabled` default
+false) and `targetHighlightGoldAmount` (default 0.70) so gold push is distinct
+from highlight opacity. Do not start Milestone 60.

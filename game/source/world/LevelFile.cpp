@@ -713,6 +713,37 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 }
                 identityStart += 2;
             }
+            if (tokens.size() > identityStart && tokens[identityStart] == kItemPickupGoldKeyword)
+            {
+                if (tokens.size() < identityStart + 2)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup gold");
+                }
+                if (!ParseFloatToken(tokens[identityStart + 1], pickup.targetHighlightGoldAmount))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup gold");
+                }
+                identityStart += 2;
+            }
+            if (tokens.size() > identityStart && tokens[identityStart] == kItemPickupIdleKeyword)
+            {
+                if (tokens.size() < identityStart + 5)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup idle");
+                }
+                if (!ParseBool01Token(tokens[identityStart + 1], pickup.idleAnimationEnabled)
+                    || !ParseFloatToken(tokens[identityStart + 2], pickup.idleBobAmplitude)
+                    || !ParseFloatToken(tokens[identityStart + 3], pickup.idleBobSpeed)
+                    || !ParseFloatToken(tokens[identityStart + 4], pickup.idleSpinSpeedDegrees))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup idle");
+                }
+                identityStart += 5;
+            }
             if (tokens.size() > identityStart)
             {
                 pickup.modelIdentity = std::string(tokens[identityStart]);

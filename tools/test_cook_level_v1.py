@@ -134,6 +134,19 @@ class LevelV1HeaderTests(unittest.TestCase):
         self.assertIn(b"highlight 0.25", payload)
         self.assertIn(b"models/Chest by Quaternius - O72u4Drp8k.glb", payload)
 
+    def test_item_pickup_gold_idle_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"item_pickup 2 1 0 1 key visual 0 0.5 0 0 90 0 0.15 0.15 0.15 bounds 1 "
+            b"highlight 0.25 gold 0.5 idle 1 0.2 2 90 "
+            b"models/Chest by Quaternius - O72u4Drp8k.glb\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"gold 0.5", payload)
+        self.assertIn(b"idle 1 0.2 2 90", payload)
+        self.assertIn(b"models/Chest by Quaternius - O72u4Drp8k.glb", payload)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

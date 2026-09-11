@@ -1,11 +1,12 @@
 #pragma once
 
-// Authored Item Pickup (Milestone 55 / 58 / 58.3 / 58.4). World acquisition:
-// gameplay position, M54 itemId, quantity, optional Static Model identity, a
-// per-instance visual transform, presentation-only interaction-bounds
-// visibility, and gameplay target-highlight intensity. Runtime collected
-// state is never stored here or in Level Format. Not an ItemDefinition or
-// generic Transform.
+// Authored Item Pickup (Milestone 55 / 58 / 58.3 / 58.4 / 59). World
+// acquisition: gameplay position, M54 itemId, quantity, optional Static Model
+// identity, a per-instance visual transform, presentation-only interaction
+// bounds, target-highlight intensity, target-highlight gold amount, and
+// optional visual-only idle bob/spin. Runtime collected state and idle phase
+// are never stored here or in Level Format. Not an ItemDefinition, animation
+// system, or generic Transform.
 
 #include "core/Vec3.h"
 #include "gameplay/Inventory.h"
@@ -36,10 +37,26 @@ inline constexpr bool kDefaultItemPickupShowInteractionBounds = true;
 inline constexpr float kDefaultItemPickupTargetHighlightIntensity = 0.70f;
 inline constexpr float kMinItemPickupTargetHighlightIntensity = 0.0f;
 inline constexpr float kMaxItemPickupTargetHighlightIntensity = 1.0f;
+inline constexpr float kDefaultItemPickupTargetHighlightGoldAmount = 0.70f;
+inline constexpr float kMinItemPickupTargetHighlightGoldAmount = 0.0f;
+inline constexpr float kMaxItemPickupTargetHighlightGoldAmount = 1.0f;
+inline constexpr bool kDefaultItemPickupIdleAnimationEnabled = false;
+inline constexpr float kDefaultItemPickupIdleBobAmplitude = 0.15f;
+inline constexpr float kMinItemPickupIdleBobAmplitude = 0.0f;
+inline constexpr float kMaxItemPickupIdleBobAmplitude = 2.0f;
+inline constexpr float kDefaultItemPickupIdleBobSpeed = 1.0f;
+inline constexpr float kMinItemPickupIdleBobSpeed = 0.0f;
+inline constexpr float kMaxItemPickupIdleBobSpeed = 10.0f;
+inline constexpr float kDefaultItemPickupIdleSpinSpeedDegrees = 45.0f;
+inline constexpr float kMinItemPickupIdleSpinSpeedDegrees = -720.0f;
+inline constexpr float kMaxItemPickupIdleSpinSpeedDegrees = 720.0f;
+inline constexpr double kItemPickupIdleTwoPi = 6.28318530717958647692;
 // Level Format v1 markers. Cannot collide with modelIdentity (models/<file>.glb).
 inline constexpr std::string_view kItemPickupVisualKeyword = "visual";
 inline constexpr std::string_view kItemPickupBoundsKeyword = "bounds";
 inline constexpr std::string_view kItemPickupHighlightKeyword = "highlight";
+inline constexpr std::string_view kItemPickupGoldKeyword = "gold";
+inline constexpr std::string_view kItemPickupIdleKeyword = "idle";
 
 struct ItemPickupSpec
 {
@@ -54,9 +71,19 @@ struct ItemPickupSpec
     // Presentation only. When this pickup is the current M55 target, draw
     // the interaction-bounds wire. Does not affect targeting or collection.
     bool showInteractionBounds = kDefaultItemPickupShowInteractionBounds;
-    // Presentation only. Strength of the Gameplay golden target tint.
-    // Does not affect targeting, HUD, collection, or showInteractionBounds.
+    // Presentation only. Overall contribution/opacity of the extra Gameplay
+    // target-highlight pass. Does not affect targeting, HUD, collection, or
+    // showInteractionBounds.
     float targetHighlightIntensity = kDefaultItemPickupTargetHighlightIntensity;
+    // Presentation only. How strongly that extra pass pushes coloration
+    // toward the existing golden target color. Not a second alpha.
+    float targetHighlightGoldAmount = kDefaultItemPickupTargetHighlightGoldAmount;
+    // Presentation only. When false, render the authored M58 visual
+    // transform. When true, add transient visual-only bob + Y spin.
+    bool idleAnimationEnabled = kDefaultItemPickupIdleAnimationEnabled;
+    float idleBobAmplitude = kDefaultItemPickupIdleBobAmplitude;
+    float idleBobSpeed = kDefaultItemPickupIdleBobSpeed;
+    float idleSpinSpeedDegrees = kDefaultItemPickupIdleSpinSpeedDegrees;
 };
 
 inline bool ItemPickupPositionIsValid(core::Vec3 position)
@@ -97,6 +124,31 @@ inline bool ItemPickupTargetHighlightIntensityIsValid(float intensity)
         && intensity <= kMaxItemPickupTargetHighlightIntensity;
 }
 
+inline bool ItemPickupTargetHighlightGoldAmountIsValid(float goldAmount)
+{
+    return std::isfinite(goldAmount) && goldAmount >= kMinItemPickupTargetHighlightGoldAmount
+        && goldAmount <= kMaxItemPickupTargetHighlightGoldAmount;
+}
+
+inline bool ItemPickupIdleBobAmplitudeIsValid(float amplitude)
+{
+    return std::isfinite(amplitude) && amplitude >= kMinItemPickupIdleBobAmplitude
+        && amplitude <= kMaxItemPickupIdleBobAmplitude;
+}
+
+inline bool ItemPickupIdleBobSpeedIsValid(float speed)
+{
+    return std::isfinite(speed) && speed >= kMinItemPickupIdleBobSpeed
+        && speed <= kMaxItemPickupIdleBobSpeed;
+}
+
+inline bool ItemPickupIdleSpinSpeedIsValid(float spinSpeedDegrees)
+{
+    return std::isfinite(spinSpeedDegrees)
+        && spinSpeedDegrees >= kMinItemPickupIdleSpinSpeedDegrees
+        && spinSpeedDegrees <= kMaxItemPickupIdleSpinSpeedDegrees;
+}
+
 inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
 {
     return ItemPickupPositionIsValid(spec.position) && gameplay::IsValidItemId(spec.itemId)
@@ -105,16 +157,63 @@ inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
         && ItemPickupVisualOffsetIsValid(spec.visualOffset)
         && ItemPickupVisualRotationIsValid(spec.visualRotationDegrees)
         && ItemPickupVisualScaleIsValid(spec.visualScale)
-        && ItemPickupTargetHighlightIntensityIsValid(spec.targetHighlightIntensity);
+        && ItemPickupTargetHighlightIntensityIsValid(spec.targetHighlightIntensity)
+        && ItemPickupTargetHighlightGoldAmountIsValid(spec.targetHighlightGoldAmount)
+        && ItemPickupIdleBobAmplitudeIsValid(spec.idleBobAmplitude)
+        && ItemPickupIdleBobSpeedIsValid(spec.idleBobSpeed)
+        && ItemPickupIdleSpinSpeedIsValid(spec.idleSpinSpeedDegrees);
 }
 
-// Rendered model origin. Gameplay targeting continues to use position.
+// Rendered authored model origin. Gameplay targeting continues to use position.
 inline core::Vec3 ItemPickupVisualPosition(const ItemPickupSpec& spec)
 {
     return spec.position + spec.visualOffset;
 }
 
-// Narrow DrawProp/picking adapter. Not a Transform component.
+// Transient visual-only Y bob. Zero when idle animation is disabled.
+// Does not mutate authored fields. phase = elapsedSeconds * idleBobSpeed * 2π.
+inline float ItemPickupIdleBobOffsetY(const ItemPickupSpec& spec, double elapsedSeconds)
+{
+    if (!spec.idleAnimationEnabled)
+    {
+        return 0.0f;
+    }
+    const double phase =
+        elapsedSeconds * static_cast<double>(spec.idleBobSpeed) * kItemPickupIdleTwoPi;
+    return static_cast<float>(std::sin(phase) * static_cast<double>(spec.idleBobAmplitude));
+}
+
+// Transient visual-only Y spin in degrees. Zero when idle animation is disabled.
+// idleSpinY = elapsedSeconds * idleSpinSpeedDegrees. Negative speed reverses.
+inline float ItemPickupIdleSpinYDegrees(const ItemPickupSpec& spec, double elapsedSeconds)
+{
+    if (!spec.idleAnimationEnabled)
+    {
+        return 0.0f;
+    }
+    return static_cast<float>(elapsedSeconds * static_cast<double>(spec.idleSpinSpeedDegrees));
+}
+
+inline core::Vec3 ItemPickupPresentedVisualPosition(
+    const ItemPickupSpec& spec,
+    double elapsedSeconds)
+{
+    core::Vec3 presented = ItemPickupVisualPosition(spec);
+    presented.y += ItemPickupIdleBobOffsetY(spec, elapsedSeconds);
+    return presented;
+}
+
+inline core::Vec3 ItemPickupPresentedVisualRotationDegrees(
+    const ItemPickupSpec& spec,
+    double elapsedSeconds)
+{
+    core::Vec3 presented = spec.visualRotationDegrees;
+    presented.y += ItemPickupIdleSpinYDegrees(spec, elapsedSeconds);
+    return presented;
+}
+
+// Narrow DrawProp/picking adapter. Authored transform only — editor ghost and
+// gizmos must not chase runtime idle. Not a Transform component.
 inline StaticPropSpec ItemPickupVisualProp(const ItemPickupSpec& spec)
 {
     StaticPropSpec visual{};
@@ -122,6 +221,18 @@ inline StaticPropSpec ItemPickupVisualProp(const ItemPickupSpec& spec)
     visual.position = ItemPickupVisualPosition(spec);
     visual.rotationDegrees = spec.visualRotationDegrees;
     visual.scale = spec.visualScale;
+    return visual;
+}
+
+// Gameplay/Release presented DrawProp adapter. Idle bob/spin are added here
+// only. elapsedSeconds is the existing run timer; phase is never stored.
+inline StaticPropSpec ItemPickupPresentedVisualProp(
+    const ItemPickupSpec& spec,
+    double elapsedSeconds)
+{
+    StaticPropSpec visual = ItemPickupVisualProp(spec);
+    visual.position = ItemPickupPresentedVisualPosition(spec, elapsedSeconds);
+    visual.rotationDegrees = ItemPickupPresentedVisualRotationDegrees(spec, elapsedSeconds);
     return visual;
 }
 

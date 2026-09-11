@@ -1276,8 +1276,17 @@ int main()
                 && state.workingCopy.itemPickups[0].visualScale.x == 1.0f
                 && state.workingCopy.itemPickups[0].showInteractionBounds
                 && state.workingCopy.itemPickups[0].targetHighlightIntensity
-                    == world::kDefaultItemPickupTargetHighlightIntensity,
-            "default Item Pickup id/quantity/no model/neutral visual");
+                    == world::kDefaultItemPickupTargetHighlightIntensity
+                && state.workingCopy.itemPickups[0].targetHighlightGoldAmount
+                    == world::kDefaultItemPickupTargetHighlightGoldAmount
+                && !state.workingCopy.itemPickups[0].idleAnimationEnabled
+                && state.workingCopy.itemPickups[0].idleBobAmplitude
+                    == world::kDefaultItemPickupIdleBobAmplitude
+                && state.workingCopy.itemPickups[0].idleBobSpeed
+                    == world::kDefaultItemPickupIdleBobSpeed
+                && state.workingCopy.itemPickups[0].idleSpinSpeedDegrees
+                    == world::kDefaultItemPickupIdleSpinSpeedDegrees,
+            "6. Add uses M59 defaults");
         Expect(state.selection.kind == EditorObjectKind::ItemPickup, "new Item Pickup is selected");
         Expect(
             HierarchyKindCount(state.workingCopy, EditorObjectKind::ItemPickup) == 1,
@@ -1337,6 +1346,11 @@ int main()
         dupState.workingCopy.itemPickups[0].visualScale = {0.15f, 0.2f, 0.25f};
         dupState.workingCopy.itemPickups[0].showInteractionBounds = false;
         dupState.workingCopy.itemPickups[0].targetHighlightIntensity = 0.25f;
+        dupState.workingCopy.itemPickups[0].targetHighlightGoldAmount = 0.4f;
+        dupState.workingCopy.itemPickups[0].idleAnimationEnabled = true;
+        dupState.workingCopy.itemPickups[0].idleBobAmplitude = 0.3f;
+        dupState.workingCopy.itemPickups[0].idleBobSpeed = 2.5f;
+        dupState.workingCopy.itemPickups[0].idleSpinSpeedDegrees = -30.0f;
         dupState.selection = {EditorObjectKind::ItemPickup, 0};
         Expect(
             editor::HandleAuthoredLifecycleRequest(
@@ -1352,8 +1366,13 @@ int main()
                 && dupState.workingCopy.itemPickups[1].visualRotationDegrees.y == 90.0f
                 && dupState.workingCopy.itemPickups[1].visualScale.x == 0.15f
                 && !dupState.workingCopy.itemPickups[1].showInteractionBounds
-                && dupState.workingCopy.itemPickups[1].targetHighlightIntensity == 0.25f,
-            "Duplicate preserves itemId/quantity/model/visual transform");
+                && dupState.workingCopy.itemPickups[1].targetHighlightIntensity == 0.25f
+                && dupState.workingCopy.itemPickups[1].targetHighlightGoldAmount == 0.4f
+                && dupState.workingCopy.itemPickups[1].idleAnimationEnabled
+                && dupState.workingCopy.itemPickups[1].idleBobAmplitude == 0.3f
+                && dupState.workingCopy.itemPickups[1].idleBobSpeed == 2.5f
+                && dupState.workingCopy.itemPickups[1].idleSpinSpeedDegrees == -30.0f,
+            "7. Duplicate preserves M59 presentation values");
         Expect(
             dupState.workingCopy.itemPickups[1].position.x
                 == dupState.workingCopy.itemPickups[0].position.x + editor::kLifecycleDuplicateOffsetX,
@@ -1434,6 +1453,57 @@ int main()
         Expect(
             appliedIntensity.itemPickups[0].targetHighlightIntensity == 0.90f,
             "promoted targetHighlightIntensity is 0.90");
+        Expect(
+            revertVisual.workingCopy.itemPickups[0].targetHighlightGoldAmount == 0.4f,
+            "applied pickup currently has authored gold 0.4");
+        revertVisual.workingCopy.itemPickups[0].targetHighlightGoldAmount = 1.0f;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(revertVisual.modified, "8. targetHighlightGoldAmount edit marks Modified");
+        Expect(
+            !world::AuthoredLevelDataEqual(revertVisual.workingCopy, appliedVisual),
+            "8. equality detects targetHighlightGoldAmount change");
+        revertVisual.workingCopy = appliedVisual;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(
+            revertVisual.workingCopy.itemPickups[0].targetHighlightGoldAmount == 0.4f,
+            "9. Revert restores targetHighlightGoldAmount");
+        Expect(!revertVisual.modified, "Revert after gold edit clears Modified");
+        world::LevelDefinition appliedGold = revertVisual.workingCopy;
+        appliedGold.itemPickups[0].targetHighlightGoldAmount = 0.20f;
+        Expect(
+            world::AuthoredLevelDataEqual(appliedGold, appliedGold),
+            "10. Apply promotes targetHighlightGoldAmount with workingCopy");
+        Expect(
+            appliedGold.itemPickups[0].targetHighlightGoldAmount == 0.20f,
+            "promoted targetHighlightGoldAmount is 0.20");
+        Expect(revertVisual.workingCopy.itemPickups[0].idleAnimationEnabled,
+            "applied pickup currently has idle enabled");
+        revertVisual.workingCopy.itemPickups[0].idleAnimationEnabled = false;
+        revertVisual.workingCopy.itemPickups[0].idleBobAmplitude = 1.0f;
+        revertVisual.workingCopy.itemPickups[0].idleBobSpeed = 3.0f;
+        revertVisual.workingCopy.itemPickups[0].idleSpinSpeedDegrees = 10.0f;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(revertVisual.modified, "8. idle field edits mark Modified");
+        Expect(
+            !world::AuthoredLevelDataEqual(revertVisual.workingCopy, appliedVisual),
+            "8. equality detects idle field changes");
+        revertVisual.workingCopy = appliedVisual;
+        editor::RefreshLevelEditorDerivedFlags(revertVisual, appliedVisual);
+        Expect(
+            revertVisual.workingCopy.itemPickups[0].idleAnimationEnabled
+                && revertVisual.workingCopy.itemPickups[0].idleBobAmplitude == 0.3f
+                && revertVisual.workingCopy.itemPickups[0].idleBobSpeed == 2.5f
+                && revertVisual.workingCopy.itemPickups[0].idleSpinSpeedDegrees == -30.0f,
+            "9. Revert restores idle presentation fields");
+        Expect(!revertVisual.modified, "Revert after idle edit clears Modified");
+        world::LevelDefinition appliedIdle = revertVisual.workingCopy;
+        appliedIdle.itemPickups[0].idleBobAmplitude = 0.5f;
+        Expect(
+            world::AuthoredLevelDataEqual(appliedIdle, appliedIdle),
+            "10. Apply promotes idle fields with workingCopy");
+        Expect(
+            appliedIdle.itemPickups[0].idleBobAmplitude == 0.5f,
+            "promoted idleBobAmplitude is 0.5");
         const core::Vec3 keptOffset = dupState.workingCopy.itemPickups[0].visualOffset;
         const core::Vec3 keptRotation = dupState.workingCopy.itemPickups[0].visualRotationDegrees;
         const core::Vec3 keptScale = dupState.workingCopy.itemPickups[0].visualScale;

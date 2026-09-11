@@ -38,6 +38,17 @@ void Expect(bool condition, const std::string& name)
 
 constexpr float kStepSeconds = 1.0f / 60.0f;
 
+bool NearlyEqual(float a, float b, float tolerance = 1.0e-4f)
+{
+    return std::fabs(a - b) <= tolerance;
+}
+
+bool Vec3Near(core::Vec3 a, core::Vec3 b, float tolerance = 1.0e-4f)
+{
+    return NearlyEqual(a.x, b.x, tolerance) && NearlyEqual(a.y, b.y, tolerance)
+        && NearlyEqual(a.z, b.z, tolerance);
+}
+
 world::ItemPickupSpec MakePickup(
     core::Vec3 position,
     std::string_view itemId = world::kDefaultItemPickupId,
@@ -158,6 +169,24 @@ int main()
                 && world::ItemPickupVisualPosition(pickup).y == pickup.position.y
                 && world::ItemPickupVisualPosition(pickup).z == pickup.position.z,
             "neutral visual position equals gameplay position");
+        Expect(!pickup.idleAnimationEnabled, "1. idleAnimationEnabled defaults false");
+        Expect(
+            pickup.idleBobAmplitude == world::kDefaultItemPickupIdleBobAmplitude
+                && world::kDefaultItemPickupIdleBobAmplitude == 0.15f,
+            "2. idleBobAmplitude defaults 0.15");
+        Expect(
+            pickup.idleBobSpeed == world::kDefaultItemPickupIdleBobSpeed
+                && world::kDefaultItemPickupIdleBobSpeed == 1.0f,
+            "3. idleBobSpeed defaults 1.0");
+        Expect(
+            pickup.idleSpinSpeedDegrees == world::kDefaultItemPickupIdleSpinSpeedDegrees
+                && world::kDefaultItemPickupIdleSpinSpeedDegrees == 45.0f,
+            "4. idleSpinSpeedDegrees defaults 45.0");
+        Expect(
+            pickup.targetHighlightGoldAmount
+                == world::kDefaultItemPickupTargetHighlightGoldAmount
+                && world::kDefaultItemPickupTargetHighlightGoldAmount == 0.70f,
+            "5. targetHighlightGoldAmount defaults 0.70");
     }
 
     {
@@ -522,6 +551,141 @@ int main()
         world::ItemPickupSpec intensityInf = MakePickup(nearby);
         intensityInf.targetHighlightIntensity = std::numeric_limits<float>::infinity();
         Expect(!world::ItemPickupSpecIsValid(intensityInf), "Inf intensity rejected");
+
+        Expect(
+            world::ItemPickupSpec{}.targetHighlightGoldAmount
+                == world::kDefaultItemPickupTargetHighlightGoldAmount,
+            "default gold amount is 0.70");
+        world::ItemPickupSpec goldZero = MakePickup(nearby);
+        goldZero.targetHighlightGoldAmount = 0.0f;
+        Expect(world::ItemPickupSpecIsValid(goldZero), "12. gold 0.0 is valid");
+        world::ItemPickupSpec goldOne = MakePickup(nearby);
+        goldOne.targetHighlightGoldAmount = 1.0f;
+        Expect(world::ItemPickupSpecIsValid(goldOne), "12. gold 1.0 is valid");
+        world::ItemPickupSpec goldNeg = MakePickup(nearby);
+        goldNeg.targetHighlightGoldAmount = -0.01f;
+        Expect(!world::ItemPickupSpecIsValid(goldNeg), "13. negative gold rejected");
+        world::ItemPickupSpec goldHigh = MakePickup(nearby);
+        goldHigh.targetHighlightGoldAmount = 1.01f;
+        Expect(!world::ItemPickupSpecIsValid(goldHigh), "13. gold >1 rejected");
+        world::ItemPickupSpec goldNan = MakePickup(nearby);
+        goldNan.targetHighlightGoldAmount = std::numeric_limits<float>::quiet_NaN();
+        Expect(!world::ItemPickupSpecIsValid(goldNan), "14. NaN gold rejected");
+        world::ItemPickupSpec goldInf = MakePickup(nearby);
+        goldInf.targetHighlightGoldAmount = std::numeric_limits<float>::infinity();
+        Expect(!world::ItemPickupSpecIsValid(goldInf), "15. Inf gold rejected");
+
+        world::ItemPickupSpec bobZero = MakePickup(nearby);
+        bobZero.idleBobAmplitude = 0.0f;
+        Expect(world::ItemPickupSpecIsValid(bobZero), "12. bob amplitude 0 is valid");
+        world::ItemPickupSpec bobMax = MakePickup(nearby);
+        bobMax.idleBobAmplitude = 2.0f;
+        Expect(world::ItemPickupSpecIsValid(bobMax), "12. bob amplitude 2 is valid");
+        world::ItemPickupSpec bobNeg = MakePickup(nearby);
+        bobNeg.idleBobAmplitude = -0.01f;
+        Expect(!world::ItemPickupSpecIsValid(bobNeg), "13. negative bob amplitude rejected");
+        world::ItemPickupSpec bobHigh = MakePickup(nearby);
+        bobHigh.idleBobAmplitude = 2.01f;
+        Expect(!world::ItemPickupSpecIsValid(bobHigh), "13. bob amplitude >2 rejected");
+        world::ItemPickupSpec bobNan = MakePickup(nearby);
+        bobNan.idleBobAmplitude = std::numeric_limits<float>::quiet_NaN();
+        Expect(!world::ItemPickupSpecIsValid(bobNan), "14. NaN bob amplitude rejected");
+
+        world::ItemPickupSpec speedZero = MakePickup(nearby);
+        speedZero.idleBobSpeed = 0.0f;
+        Expect(world::ItemPickupSpecIsValid(speedZero), "12. bob speed 0 is valid");
+        world::ItemPickupSpec speedMax = MakePickup(nearby);
+        speedMax.idleBobSpeed = 10.0f;
+        Expect(world::ItemPickupSpecIsValid(speedMax), "12. bob speed 10 is valid");
+        world::ItemPickupSpec speedNeg = MakePickup(nearby);
+        speedNeg.idleBobSpeed = -0.01f;
+        Expect(!world::ItemPickupSpecIsValid(speedNeg), "13. negative bob speed rejected");
+        world::ItemPickupSpec speedHigh = MakePickup(nearby);
+        speedHigh.idleBobSpeed = 10.01f;
+        Expect(!world::ItemPickupSpecIsValid(speedHigh), "13. bob speed >10 rejected");
+        world::ItemPickupSpec speedInf = MakePickup(nearby);
+        speedInf.idleBobSpeed = std::numeric_limits<float>::infinity();
+        Expect(!world::ItemPickupSpecIsValid(speedInf), "15. Inf bob speed rejected");
+
+        world::ItemPickupSpec spinMin = MakePickup(nearby);
+        spinMin.idleSpinSpeedDegrees = -720.0f;
+        Expect(world::ItemPickupSpecIsValid(spinMin), "12. spin -720 is valid");
+        world::ItemPickupSpec spinMax = MakePickup(nearby);
+        spinMax.idleSpinSpeedDegrees = 720.0f;
+        Expect(world::ItemPickupSpecIsValid(spinMax), "12. spin 720 is valid");
+        world::ItemPickupSpec spinZero = MakePickup(nearby);
+        spinZero.idleSpinSpeedDegrees = 0.0f;
+        Expect(world::ItemPickupSpecIsValid(spinZero), "12. spin 0 is valid");
+        world::ItemPickupSpec spinLow = MakePickup(nearby);
+        spinLow.idleSpinSpeedDegrees = -720.01f;
+        Expect(!world::ItemPickupSpecIsValid(spinLow), "13. spin below -720 rejected");
+        world::ItemPickupSpec spinHigh = MakePickup(nearby);
+        spinHigh.idleSpinSpeedDegrees = 720.01f;
+        Expect(!world::ItemPickupSpecIsValid(spinHigh), "13. spin above 720 rejected");
+        world::ItemPickupSpec spinNan = MakePickup(nearby);
+        spinNan.idleSpinSpeedDegrees = std::numeric_limits<float>::quiet_NaN();
+        Expect(!world::ItemPickupSpecIsValid(spinNan), "14. NaN spin rejected");
+
+        world::ItemPickupSpec idleOff = MakePickup(nearby);
+        idleOff.idleAnimationEnabled = false;
+        idleOff.idleBobAmplitude = 1.5f;
+        idleOff.visualOffset = {0.25f, 0.5f, -0.1f};
+        idleOff.visualRotationDegrees = {10.0f, 20.0f, 30.0f};
+        const core::Vec3 authoredPosition = idleOff.position;
+        const core::Vec3 authoredOffset = idleOff.visualOffset;
+        const core::Vec3 authoredRotation = idleOff.visualRotationDegrees;
+        const core::Vec3 authoredScale = idleOff.visualScale;
+        Expect(
+            Vec3Near(
+                world::ItemPickupPresentedVisualPosition(idleOff, 1.25),
+                world::ItemPickupVisualPosition(idleOff)),
+            "23. idle disabled preserves M58.4 visual position");
+        Expect(
+            Vec3Near(
+                world::ItemPickupPresentedVisualRotationDegrees(idleOff, 1.25),
+                idleOff.visualRotationDegrees),
+            "23. idle disabled preserves M58.4 visual rotation");
+
+        world::ItemPickupSpec idleOn = idleOff;
+        idleOn.idleAnimationEnabled = true;
+        idleOn.idleBobAmplitude = 0.15f;
+        idleOn.idleBobSpeed = 1.0f;
+        idleOn.idleSpinSpeedDegrees = 45.0f;
+        const float bobQuarter = world::ItemPickupIdleBobOffsetY(idleOn, 0.25);
+        Expect(NearlyEqual(bobQuarter, 0.15f), "24. enabled bob at quarter cycle is +amplitude on Y");
+        const core::Vec3 presentedPos = world::ItemPickupPresentedVisualPosition(idleOn, 0.25);
+        Expect(
+            NearlyEqual(presentedPos.x, world::ItemPickupVisualPosition(idleOn).x)
+                && NearlyEqual(presentedPos.z, world::ItemPickupVisualPosition(idleOn).z)
+                && NearlyEqual(presentedPos.y, world::ItemPickupVisualPosition(idleOn).y + 0.15f),
+            "24. enabled bob affects visual Y only");
+        const core::Vec3 presentedRot =
+            world::ItemPickupPresentedVisualRotationDegrees(idleOn, 1.0);
+        Expect(
+            NearlyEqual(presentedRot.x, idleOn.visualRotationDegrees.x)
+                && NearlyEqual(presentedRot.z, idleOn.visualRotationDegrees.z)
+                && NearlyEqual(presentedRot.y, idleOn.visualRotationDegrees.y + 45.0f),
+            "25. enabled spin affects visual Y rotation only");
+        idleOn.idleSpinSpeedDegrees = -45.0f;
+        Expect(
+            NearlyEqual(world::ItemPickupIdleSpinYDegrees(idleOn, 1.0), -45.0f),
+            "26. negative spin reverses direction");
+        Expect(
+            Vec3Near(idleOn.position, authoredPosition)
+                && Vec3Near(idleOn.visualOffset, authoredOffset)
+                && Vec3Near(idleOn.visualRotationDegrees, authoredRotation)
+                && Vec3Near(idleOn.visualScale, authoredScale),
+            "27-30. idle helpers do not mutate authored transform");
+        const std::vector<world::ItemPickupSpec> idlePickups{idleOn};
+        gameplay::ItemPickupRunState idleRun = gameplay::MakeClearedItemPickupRunState(1);
+        const std::vector<std::uint8_t> idleLos = EmptyLos(1);
+        Expect(
+            gameplay::FindItemPickupTargetIndex(spawn, 1.0f, idlePickups, idleRun.collected, idleLos)
+                == 0,
+            "31. logical target position unchanged by idle");
+        Expect(
+            idlePickups[0].idleAnimationEnabled && idlePickups[0].position.x == authoredPosition.x,
+            "idle does not rewrite authored position used by targeting");
     }
 
     if (gFailures != 0)

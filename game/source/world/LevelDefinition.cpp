@@ -270,7 +270,15 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || a.itemPickups[index].showInteractionBounds
                 != b.itemPickups[index].showInteractionBounds
             || a.itemPickups[index].targetHighlightIntensity
-                != b.itemPickups[index].targetHighlightIntensity)
+                != b.itemPickups[index].targetHighlightIntensity
+            || a.itemPickups[index].targetHighlightGoldAmount
+                != b.itemPickups[index].targetHighlightGoldAmount
+            || a.itemPickups[index].idleAnimationEnabled
+                != b.itemPickups[index].idleAnimationEnabled
+            || a.itemPickups[index].idleBobAmplitude != b.itemPickups[index].idleBobAmplitude
+            || a.itemPickups[index].idleBobSpeed != b.itemPickups[index].idleBobSpeed
+            || a.itemPickups[index].idleSpinSpeedDegrees
+                != b.itemPickups[index].idleSpinSpeedDegrees)
         {
             return false;
         }

@@ -1457,6 +1457,181 @@ int main()
                     canonical + "item_pickup 2 0.5 0 1 key bounds 1 highlight 1\n").status
                     == world::LoadLevelFileStatus::Loaded,
                 "highlight 1.0 without visual is valid");
+            const world::ParseLevelFileResult legacyM584 = world::ParseLevelText(
+                canonical + "item_pickup 2 0.5 0 1 key bounds 1 highlight 1\n");
+            Expect(
+                legacyM584.level.itemPickups[0].targetHighlightGoldAmount
+                    == world::kDefaultItemPickupTargetHighlightGoldAmount,
+                "16. old M58.4 record receives M59 gold default");
+            Expect(
+                !legacyM584.level.itemPickups[0].idleAnimationEnabled
+                    && legacyM584.level.itemPickups[0].idleBobAmplitude
+                        == world::kDefaultItemPickupIdleBobAmplitude
+                    && legacyM584.level.itemPickups[0].idleBobSpeed
+                        == world::kDefaultItemPickupIdleBobSpeed
+                    && legacyM584.level.itemPickups[0].idleSpinSpeedDegrees
+                        == world::kDefaultItemPickupIdleSpinSpeedDegrees,
+                "16. old M58.4 record receives M59 idle defaults");
+
+            const std::string goldIdleRecord =
+                canonical
+                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
+                  "highlight 0.25 gold 0.5 idle 1 0.2 2 90 models/test_static.glb\n";
+            const world::ParseLevelFileResult goldIdleParsed =
+                world::ParseLevelText(goldIdleRecord);
+            Expect(goldIdleParsed.status == world::LoadLevelFileStatus::Loaded,
+                "18. full M59 record loads");
+            Expect(
+                goldIdleParsed.level.itemPickups[0].targetHighlightGoldAmount == 0.5f,
+                "gold 0.5 round-trips");
+            Expect(
+                goldIdleParsed.level.itemPickups[0].idleAnimationEnabled
+                    && goldIdleParsed.level.itemPickups[0].idleBobAmplitude == 0.2f
+                    && goldIdleParsed.level.itemPickups[0].idleBobSpeed == 2.0f
+                    && goldIdleParsed.level.itemPickups[0].idleSpinSpeedDegrees == 90.0f,
+                "idle 1 0.2 2 90 round-trips");
+            Expect(
+                goldIdleParsed.level.itemPickups[0].modelIdentity == "models/test_static.glb",
+                "gold/idle markers do not consume modelIdentity");
+            const std::string writtenGoldIdle = world::SerializeLevelText(goldIdleParsed.level);
+            Expect(
+                writtenGoldIdle.find(" highlight ") != std::string::npos
+                    && writtenGoldIdle.find(" gold ") != std::string::npos
+                    && writtenGoldIdle.find(" idle ") != std::string::npos,
+                "17. canonical writer emits deterministic M59 markers");
+            const std::size_t highlightAt = writtenGoldIdle.find(" highlight ");
+            const std::size_t goldAt = writtenGoldIdle.find(" gold ");
+            const std::size_t idleAt = writtenGoldIdle.find(" idle ");
+            Expect(
+                highlightAt != std::string::npos && goldAt != std::string::npos
+                    && idleAt != std::string::npos && highlightAt < goldAt && goldAt < idleAt,
+                "17. writer order is highlight, gold, idle");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    goldIdleParsed.level, world::ParseLevelText(writtenGoldIdle).level),
+                "18. full M59 record round-trips");
+
+            const std::string spacedGold =
+                canonical
+                + "item_pickup 3 1 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0 "
+                  "gold 1 idle 0 0.15 1 45 models/Chest by Quaternius - O72u4Drp8k.glb\n";
+            const world::ParseLevelFileResult spacedGoldParsed =
+                world::ParseLevelText(spacedGold);
+            Expect(spacedGoldParsed.status == world::LoadLevelFileStatus::Loaded,
+                "19. gold/idle before spaced modelIdentity loads");
+            Expect(
+                spacedGoldParsed.level.itemPickups[0].modelIdentity
+                    == "models/Chest by Quaternius - O72u4Drp8k.glb",
+                "19. modelIdentity with spaces remains unchanged");
+            Expect(
+                spacedGoldParsed.level.itemPickups[0].targetHighlightGoldAmount == 1.0f
+                    && !spacedGoldParsed.level.itemPickups[0].idleAnimationEnabled,
+                "spaced identity keeps gold/idle values");
+
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "21. incomplete gold marker rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold abc\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "21. malformed gold float rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold -0.1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "13. out-of-range gold rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold nan\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "14. NaN gold rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold inf\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "15. Inf gold rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0.7 idle 2 0.15 1 45\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "20. malformed idle bool rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0.7 idle 1 abc 1 45\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "21. malformed idle float rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0.7 idle 1 2.01 1 45\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "13. idle amplitude out of range rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0.7 idle 1 0.15 1 720.01\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "13. idle spin out of range rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0.7 idle 1 0.15 inf 45\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "15. Inf idle speed rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0 gold 0.5\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "22. duplicate gold is not Level Format v2 / ambiguous");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 0.7 idle 0 0 0 -720\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded,
+                "12. idle range endpoints accepted");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "item_pickup 2 0.5 0 1 key visual 0 0 0 0 0 0 1 1 1 bounds 1 highlight 0.7 "
+                      "gold 1 idle 1 2 10 720\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded,
+                "12. idle and gold max endpoints accepted");
         }
 
         {

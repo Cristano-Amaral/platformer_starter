@@ -1,8 +1,8 @@
 #pragma once
 
-// Milestone 58.3: gameplay Item Pickup target presentation. Consumes the
-// existing M55 target result. Does not search for targets, load assets, or
-// change collection. Available in Debug/Development/Release.
+// Milestone 58.3 / 58.4 / 59: gameplay Item Pickup target presentation.
+// Consumes the existing M55 target result. Does not search for targets, load
+// assets, or change collection. Available in Debug/Development/Release.
 
 #include "core/Vec3.h"
 #include "world/ItemPickup.h"
@@ -25,6 +25,10 @@ inline constexpr core::Vec3 kItemPickupPrimitiveLocalMax{
     world::kItemPickupVisualSize * 0.5f,
     world::kItemPickupVisualSize * 0.5f};
 
+inline constexpr unsigned char kItemPickupTargetGoldRed = 255;
+inline constexpr unsigned char kItemPickupTargetGoldGreen = 220;
+inline constexpr unsigned char kItemPickupTargetGoldBlue = 72;
+
 struct ItemPickupTargetPresentation
 {
     bool drawHud = false;
@@ -37,6 +41,10 @@ struct ItemPickupTargetPresentation
     core::Vec3 localMax = kItemPickupModelFallbackLocalMax;
     core::Vec3 boundsCorners[8]{};
     float highlightIntensity = 0.0f;
+    float highlightGoldAmount = 0.0f;
+    unsigned char highlightRed = 255;
+    unsigned char highlightGreen = 255;
+    unsigned char highlightBlue = 255;
     unsigned char highlightAlpha = 0;
 };
 
@@ -56,6 +64,37 @@ inline unsigned char ItemPickupTargetHighlightAlpha(float intensity)
         return 255;
     }
     return static_cast<unsigned char>(rounded);
+}
+
+// RGB of the extra target-highlight pass. Gold Amount 0 keeps white
+// (original albedo * 1). Gold Amount 1 is the existing M58.3 gold.
+// This is not an alpha multiplier.
+inline unsigned char ItemPickupTargetHighlightChannel(
+    unsigned char from,
+    unsigned char to,
+    float goldAmount)
+{
+    const float t = goldAmount < 0.0f ? 0.0f : (goldAmount > 1.0f ? 1.0f : goldAmount);
+    return static_cast<unsigned char>(std::lround(
+        static_cast<float>(from) + (static_cast<float>(to) - static_cast<float>(from)) * t));
+}
+
+inline void ItemPickupTargetHighlightTint(
+    float goldAmount,
+    unsigned char& red,
+    unsigned char& green,
+    unsigned char& blue)
+{
+    if (!world::ItemPickupTargetHighlightGoldAmountIsValid(goldAmount))
+    {
+        red = 255;
+        green = 255;
+        blue = 255;
+        return;
+    }
+    red = ItemPickupTargetHighlightChannel(255, kItemPickupTargetGoldRed, goldAmount);
+    green = ItemPickupTargetHighlightChannel(255, kItemPickupTargetGoldGreen, goldAmount);
+    blue = ItemPickupTargetHighlightChannel(255, kItemPickupTargetGoldBlue, goldAmount);
 }
 
 namespace item_pickup_highlight_detail
@@ -129,14 +168,16 @@ inline void FillWorldCorners(
 }
 
 // isGameplayTarget is the current M55 index comparison. Callers must not
-// recompute targeting here.
+// recompute targeting here. elapsedSeconds is the existing run timer used
+// only for visual-only idle bob/spin attachment.
 inline ItemPickupTargetPresentation MakeItemPickupTargetPresentation(
     const world::ItemPickupSpec& pickup,
     bool isGameplayTarget,
     bool collected,
     bool haveLoadedLocalBounds,
     core::Vec3 loadedMin,
-    core::Vec3 loadedMax)
+    core::Vec3 loadedMax,
+    double elapsedSeconds = 0.0)
 {
     ItemPickupTargetPresentation result{};
     if (collected || !world::ItemPickupSpecIsValid(pickup))
@@ -147,7 +188,7 @@ inline ItemPickupTargetPresentation MakeItemPickupTargetPresentation(
     result.modelBacked = !pickup.modelIdentity.empty();
     if (result.modelBacked)
     {
-        result.visual = world::ItemPickupVisualProp(pickup);
+        result.visual = world::ItemPickupPresentedVisualProp(pickup, elapsedSeconds);
         result.localMin = kItemPickupModelFallbackLocalMin;
         result.localMax = kItemPickupModelFallbackLocalMax;
         if (haveLoadedLocalBounds)
@@ -159,7 +200,9 @@ inline ItemPickupTargetPresentation MakeItemPickupTargetPresentation(
     else
     {
         result.visual.position = pickup.position;
-        result.visual.rotationDegrees = {};
+        result.visual.position.y += world::ItemPickupIdleBobOffsetY(pickup, elapsedSeconds);
+        result.visual.rotationDegrees = {
+            0.0f, world::ItemPickupIdleSpinYDegrees(pickup, elapsedSeconds), 0.0f};
         result.visual.scale = {1.0f, 1.0f, 1.0f};
         result.localMin = kItemPickupPrimitiveLocalMin;
         result.localMax = kItemPickupPrimitiveLocalMax;
@@ -175,7 +218,13 @@ inline ItemPickupTargetPresentation MakeItemPickupTargetPresentation(
     result.drawHud = true;
     result.drawInteractionBounds = pickup.showInteractionBounds;
     result.highlightIntensity = pickup.targetHighlightIntensity;
+    result.highlightGoldAmount = pickup.targetHighlightGoldAmount;
     result.highlightAlpha = ItemPickupTargetHighlightAlpha(pickup.targetHighlightIntensity);
+    ItemPickupTargetHighlightTint(
+        pickup.targetHighlightGoldAmount,
+        result.highlightRed,
+        result.highlightGreen,
+        result.highlightBlue);
     if (result.modelBacked)
     {
         result.drawModelHighlight = result.highlightAlpha > 0;
