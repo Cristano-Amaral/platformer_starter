@@ -109,6 +109,8 @@ Tests:
 .\build\windows-vs2022\Development\InventoryTest.exe        # M54 Inventory API / lifecycle
 .\build\windows-vs2022\Development\InventoryUiTest.exe      # M56 player Inventory UI / focus
 .\build\windows-vs2022\Development\ItemPickupTest.exe       # M55/M58 Item Pickup targeting / visual transform
+.\build\windows-vs2022\Development\ItemPickupCollectionFeedbackTest.exe # M61 collection feedback trigger/lifecycle
+.\build\windows-vs2022\Development\ItemPickupCollectionFeedbackDrawTest.exe # M61 burst restore + missing sound
 .\build\windows-vs2022\Development\ItemPickupTargetHighlightTest.exe # M58.3/M58.4 target highlight presentation
 .\build\windows-vs2022\Development\DoorTest.exe             # M53 Door / Pressure Plate link
 .\build\windows-vs2022\Development\EditorPickingTest.exe    # M33 ray/AABB, slope, nearest-hit, selection
@@ -136,6 +138,7 @@ python tools/test_cook_level_v1.py
 python tools/test_cook_runtime_png.py
 python tools/test_stage_runtime_assets.py
 python tools/test_import_static_glb.py
+python tools/test_item_pickup_collect_sound.py
 python tools/test_milestone_docs.py
 ```
 

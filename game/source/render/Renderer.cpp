@@ -3,8 +3,10 @@
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
 #include "gameplay/Player.h"
+#include "gameplay/ItemPickupCollectionFeedback.h"
 #include "platform/RuntimePaths.h"
 #include "render/ItemPickupTargetHighlight.h"
+#include "render/ItemPickupCollectionFeedbackDraw.h"
 #include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
@@ -1434,6 +1436,7 @@ void Renderer::DrawWorld(
         int collectedCount,
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
+        const gameplay::ItemPickupCollectionFeedbackState& itemPickupCollectionFeedback,
         int lockedDoorTargetIndex,
         const char* lockedDoorPrompt,
         double elapsedSeconds,
@@ -1683,6 +1686,8 @@ void Renderer::DrawWorld(
             level.checkpoints[checkpointIndex], checkpointVisuals[checkpointIndex]);
     }
     DrawLevelGoalMarker(level.goal, levelCompleted);
+
+    DrawItemPickupCollectionFeedback(itemPickupCollectionFeedback);
 
     // Editor overlay last in 3D: world, then marker/highlight/faded
     // pending-delete (depth on), cyan pending ghost, then the

@@ -11,9 +11,9 @@ the current working directory.
 Standalone runtime PNGs (`kind: runtime_png`) are listed explicitly and may be
 downscaled with cooker-only Pillow. Blender authoring PNGs and `.blend` files
 are not cooker inputs. Known GLBs plus extra valid `source/models/*.glb` files
-are opaque copies after static-GLB compatibility checks. Level v1 files
-(`kind: level_v1`) are UTF-8 text copies after a header check; C++ owns full
-grammar validation.
+are opaque copies after static-GLB compatibility checks. The M61 collection
+WAV is an explicit opaque `copy`. Level v1 files (`kind: level_v1`) are UTF-8
+text copies after a header check; C++ owns full grammar validation.
 """
 
 from __future__ import annotations
@@ -33,7 +33,8 @@ MANIFEST_NAME = "manifest.json"
 
 # Asset kinds are declarative. Do not glob/discover every PNG under source/textures.
 # Extra valid source/models/*.glb files are discovered (M47). PNGs stay explicit.
-#   copy         = opaque byte copy (GLBs; embedded images are not inspected)
+#   copy         = opaque byte copy (GLBs and the M61 collection WAV;
+#                  embedded GLB images are not inspected)
 #   runtime_png  = standalone runtime PNG (M19 policy applies to these only)
 KIND_COPY = "copy"
 KIND_RUNTIME_PNG = "runtime_png"
@@ -82,6 +83,12 @@ KNOWN_ASSETS = (
         "source": "levels/level_01.level",
         "cooked": "levels/level_01.level",
         "kind": KIND_LEVEL_V1,
+    },
+    {
+        "id": "sounds/item_pickup_collect.wav",
+        "source": "sounds/item_pickup_collect.wav",
+        "cooked": "sounds/item_pickup_collect.wav",
+        "kind": KIND_COPY,
     },
 )
 

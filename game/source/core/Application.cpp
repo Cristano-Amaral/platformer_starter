@@ -6,6 +6,7 @@
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
+#include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -860,6 +861,8 @@ int Application::Run()
             {
                 runTimerState.elapsedSeconds += static_cast<double>(deltaSeconds);
             }
+            gameplay::UpdateItemPickupCollectionFeedback(
+                itemPickupCollectionFeedback, deltaSeconds);
             physicsWorld.UpdateMovingPlatform(deltaSeconds);
             player.Update(inputState, deltaSeconds, physicsWorld);
 
@@ -995,11 +998,19 @@ int Application::Run()
                 {
                     if (itemPickupTargetIndex != gameplay::kNoItemPickupIndex)
                     {
-                        (void)gameplay::TryCollectItemPickup(
-                            inventory,
-                            itemPickupRunState,
-                            levelDefinition.itemPickups,
-                            itemPickupTargetIndex);
+                        if (gameplay::TryCollectItemPickup(
+                                inventory,
+                                itemPickupRunState,
+                                levelDefinition.itemPickups,
+                                itemPickupTargetIndex))
+                        {
+                            (void)gameplay::SpawnItemPickupCollectionFeedback(
+                                itemPickupCollectionFeedback,
+                                levelDefinition.itemPickups[static_cast<std::size_t>(
+                                    itemPickupTargetIndex)],
+                                runTimerState.elapsedSeconds);
+                            itemPickupCollectionSound.Play();
+                        }
                     }
                     else
                     {
@@ -1520,6 +1531,7 @@ int Application::Run()
             gameplay::CollectedCount(collectibleRunState),
             itemPickupRunState.collected,
             itemPickupTargetIndex,
+            itemPickupCollectionFeedback,
             lockedDoorTargetIndex,
             lockedDoorPrompt,
             runTimerState.elapsedSeconds,
@@ -2045,15 +2057,18 @@ void Application::Initialize()
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
     renderer.LoadRuntimeAssets();
+    itemPickupCollectionSound.Load();
 
     if (!physicsWorld.Initialize(levelDefinition))
     {
+        itemPickupCollectionSound.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2065,6 +2080,7 @@ void Application::Initialize()
             levelDefinition.initialSpawnVisualCenter, player.Size()))
     {
         physicsWorld.Shutdown();
+        itemPickupCollectionSound.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2085,6 +2101,7 @@ void Application::Initialize()
     {
         std::fprintf(stderr, "RunTimeFormat scaffolding check failed.\n");
         physicsWorld.Shutdown();
+        itemPickupCollectionSound.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2094,6 +2111,7 @@ void Application::Initialize()
     {
         std::fprintf(stderr, "BestTimeSave format scaffolding check failed.\n");
         physicsWorld.Shutdown();
+        itemPickupCollectionSound.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2154,6 +2172,7 @@ void Application::RestartRun()
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::RestartRun, inventory);
@@ -2677,6 +2696,7 @@ void Application::ResetGameplayAfterCommittedLevel()
         gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     gameplay::ApplyInventoryLifecycle(
@@ -2723,6 +2743,7 @@ void Application::Shutdown()
     debugUi.Shutdown();
 #endif
     physicsWorld.Shutdown();
+    itemPickupCollectionSound.Unload();
     renderer.UnloadRuntimeAssets();
     window.Shutdown();
     initialized = false;

@@ -9,6 +9,8 @@ inline constexpr std::string_view kTestCheckerLogicalId = "textures/test_checker
 inline constexpr std::string_view kTestStaticModelLogicalId = "models/test_static.glb";
 inline constexpr std::string_view kTestAuthoredModelLogicalId = "models/test_authored.glb";
 inline constexpr std::string_view kTestTexturedModelLogicalId = "models/test_textured.glb";
+inline constexpr std::string_view kItemPickupCollectionSoundLogicalId =
+    "sounds/item_pickup_collect.wav";
 inline constexpr std::string_view kRuntimeAssetDirectoryName = "assets";
 
 std::filesystem::path ExecutableDirectory();

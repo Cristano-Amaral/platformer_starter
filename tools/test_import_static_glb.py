@@ -52,13 +52,8 @@ MINIMAL_STATIC_JSON = (
 def copy_known_sources(dest_root: Path) -> None:
     src = cooker.source_root(cooker.repo_root())
     dest = cooker.source_root(dest_root)
-    for relative in (
-        "models/test_static.glb",
-        "models/test_authored.glb",
-        "models/test_textured.glb",
-        "textures/test_checker.png",
-        "levels/level_01.level",
-    ):
+    for asset in cooker.KNOWN_ASSETS:
+        relative = cooker.portable_relative(asset["source"])
         target = dest / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / relative, target)
@@ -124,6 +119,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(ids.count("models/test_static.glb"), 1)
         self.assertIn("textures/test_checker.png", ids)
         self.assertIn("levels/level_01.level", ids)
+        self.assertIn("sounds/item_pickup_collect.wav", ids)
 
 
 class CookStageImportedGlbTests(unittest.TestCase):

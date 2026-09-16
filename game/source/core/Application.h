@@ -4,6 +4,7 @@
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
+#include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
@@ -14,6 +15,7 @@
 #include "physics/PhysicsWorld.h"
 #include "persistence/BestTimeSave.h"
 #include "platform/Window.h"
+#include "platform/ItemPickupCollectionSound.h"
 #include "render/Renderer.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -61,6 +63,7 @@ private:
     world::LevelDefinition levelDefinition{};
     platform::Window window;
     render::Renderer renderer;
+    platform::ItemPickupCollectionSound itemPickupCollectionSound;
     gameplay::Player player{{}, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
@@ -69,6 +72,7 @@ private:
     gameplay::Inventory inventory{};
     gameplay::InventoryUiState inventoryUi{};
     gameplay::ItemPickupRunState itemPickupRunState{};
+    gameplay::ItemPickupCollectionFeedbackState itemPickupCollectionFeedback{};
     gameplay::DoorLockRunState doorLockRunState{};
     gameplay::RunTimerState runTimerState;
     gameplay::SessionBestTimeState sessionBestTimeState;

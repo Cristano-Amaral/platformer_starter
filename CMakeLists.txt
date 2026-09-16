@@ -111,6 +111,7 @@ add_executable(Platformer3D
     game/source/gameplay/InventoryUi.h
     game/source/gameplay/ItemPickupRuntime.cpp
     game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/ItemPickupCollectionFeedback.h
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
@@ -135,6 +136,8 @@ add_executable(Platformer3D
     game/source/platform/Time.h
     game/source/platform/Window.cpp
     game/source/platform/Window.h
+    game/source/platform/ItemPickupCollectionSound.cpp
+    game/source/platform/ItemPickupCollectionSound.h
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
     game/source/render/CameraView.h
@@ -145,6 +148,8 @@ add_executable(Platformer3D
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
     game/source/render/ItemPickupTargetHighlight.h
+    game/source/render/ItemPickupCollectionFeedbackDraw.cpp
+    game/source/render/ItemPickupCollectionFeedbackDraw.h
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
@@ -241,6 +246,7 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/models/test_authored.glb
 #   <exe dir>/assets/models/test_textured.glb
 #   <exe dir>/assets/levels/level_01.level
+#   <exe dir>/assets/sounds/item_pickup_collect.wav
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
 # The staged level file is required at runtime; Application loads it once in Initialize.
@@ -728,6 +734,28 @@ endif()
 target_compile_definitions(ItemPickupTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
+
+# Milestone 61: Item Pickup collection feedback. No window, raylib, or Jolt.
+add_executable(ItemPickupCollectionFeedbackTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/ItemPickupCollectionFeedback.h
+    game/source/gameplay/ItemPickupCollectionFeedbackTest.cpp
+    game/source/render/ItemPickupTargetHighlight.h
+    game/source/world/ItemPickup.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(ItemPickupCollectionFeedbackTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ItemPickupCollectionFeedbackTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ItemPickupCollectionFeedbackTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 # Milestone 57: Key Item & Locked Door. Not shipped.
 add_executable(LockedDoorTest
@@ -1296,6 +1324,40 @@ else()
 endif()
 if(WIN32)
     target_link_libraries(SelectedModelHighlightStateTest PRIVATE ole32 shell32 uuid)
+endif()
+
+# Milestone 61: collection burst restore + missing collection sound. Hidden window.
+add_executable(ItemPickupCollectionFeedbackDrawTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/platform/ItemPickupCollectionSound.cpp
+    game/source/platform/ItemPickupCollectionSound.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/ItemPickupCollectionFeedbackDraw.cpp
+    game/source/render/ItemPickupCollectionFeedbackDraw.h
+    game/source/render/ItemPickupCollectionFeedbackDrawTest.cpp
+    game/source/render/StaticModelScene.cpp
+    game/source/render/StaticModelScene.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(ItemPickupCollectionFeedbackDrawTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(ItemPickupCollectionFeedbackDrawTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(ItemPickupCollectionFeedbackDrawTest PRIVATE game/source)
+target_link_libraries(ItemPickupCollectionFeedbackDrawTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(ItemPickupCollectionFeedbackDrawTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ItemPickupCollectionFeedbackDrawTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(ItemPickupCollectionFeedbackDrawTest PRIVATE ole32 shell32 uuid)
 endif()
 
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or

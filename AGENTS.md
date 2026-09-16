@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 60 — Split Milestone Documentation.
+Milestone 61 — Item Pickup Collection Feedback.
 
-Canonical file: [`docs/milestones/MILESTONE_60.md`](docs/milestones/MILESTONE_60.md)
+Canonical file: [`docs/milestones/MILESTONE_61.md`](docs/milestones/MILESTONE_61.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 59 is implemented (awaiting its own manual acceptance). Do not start Milestone 61.
+Milestone 60 is implemented (awaiting its own manual acceptance). Do not start Milestone 62.
 
 ## Source of truth
 1. Current repository code.
