@@ -4,6 +4,7 @@
 #include "core/Vec3.h"
 #include "gameplay/Player.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
+#include "gameplay/ItemPickupCollectionHud.h"
 #include "platform/RuntimePaths.h"
 #include "render/ItemPickupTargetHighlight.h"
 #include "render/ItemPickupCollectionFeedbackDraw.h"
@@ -377,6 +378,45 @@ void DrawPickupHud(const char* text)
     const int x = (GetScreenWidth() - width) / 2;
     const int y = GetScreenHeight() - font - kTimerHudMargin;
     DrawText(text, x, y, font, kGrabHudText);
+}
+
+void DrawItemPickupCollectionHud(const gameplay::ItemPickupCollectionHudState& state)
+{
+    const int active = gameplay::ActiveItemPickupCollectionHudCount(state);
+    if (active <= 0)
+    {
+        return;
+    }
+
+    const int font = kTimerHudFontSize;
+    const int lineHeight = font + 8;
+    const int promptY = GetScreenHeight() - font - kTimerHudMargin;
+    const int newestY = promptY - lineHeight - 8;
+    char text[gameplay::kItemPickupCollectionHudTextCapacity]{};
+    for (int index = 0; index < active; ++index)
+    {
+        const gameplay::ItemPickupCollectionHudEntry& entry = state.entries[index];
+        gameplay::FormatItemPickupCollectionHudText(
+            text, sizeof(text), entry.itemId, entry.quantity);
+        const unsigned char alpha = gameplay::ItemPickupCollectionHudAlpha(entry);
+        const int width = MeasureText(text, font);
+        const int x = (GetScreenWidth() - width) / 2;
+        const int y = newestY - (active - 1 - index) * lineHeight;
+        const unsigned char backgroundAlpha =
+            static_cast<unsigned char>((150 * static_cast<int>(alpha)) / 255);
+        DrawRectangle(
+            x - 8,
+            y - 4,
+            width + 16,
+            font + 8,
+            Color{18, 24, 32, backgroundAlpha});
+        DrawText(
+            text,
+            x,
+            y,
+            font,
+            Color{kGrabHudText.r, kGrabHudText.g, kGrabHudText.b, alpha});
+    }
 }
 
 void DrawInventoryPanel(const InventoryPanelView& panel)
@@ -1437,6 +1477,7 @@ void Renderer::DrawWorld(
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
         const gameplay::ItemPickupCollectionFeedbackState& itemPickupCollectionFeedback,
+        const gameplay::ItemPickupCollectionHudState& itemPickupCollectionHud,
         int lockedDoorTargetIndex,
         const char* lockedDoorPrompt,
         double elapsedSeconds,
@@ -1728,6 +1769,7 @@ void Renderer::DrawWorld(
                     ? lockedDoorPrompt
                     : "Requires item");
         }
+        DrawItemPickupCollectionHud(itemPickupCollectionHud);
     }
     if (levelCompleted)
     {

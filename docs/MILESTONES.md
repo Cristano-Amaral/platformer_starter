@@ -23,14 +23,14 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 61 — Item Pickup Collection Feedback**
+**Milestone 62 — Item Pickup Collection HUD Notification**
 
-Canonical file: [`docs/milestones/MILESTONE_61.md`](milestones/MILESTONE_61.md)
+Canonical file: [`docs/milestones/MILESTONE_62.md`](milestones/MILESTONE_62.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Milestone 60 is implemented (awaiting its own manual acceptance).
-Do not start Milestone 62.
+Milestone 61 is CLOSED.
+Do not start Milestone 63.
 
 ## Cursor loading contract
 
@@ -126,7 +126,8 @@ Historical milestone files do not override current implemented behavior.
 | 58.4 | [Milestone 58.4 — Item Pickup Target Highlight Intensity](milestones/MILESTONE_58_4.md) | complete |
 | 59 | [Milestone 59 — Item Pickup Presentation Polish](milestones/MILESTONE_59.md) | implemented, awaiting manual acceptance |
 | 60 | [Milestone 60 — Split Milestone Documentation](milestones/MILESTONE_60.md) | implemented, awaiting manual acceptance |
-| 61 | [Milestone 61 — Item Pickup Collection Feedback](milestones/MILESTONE_61.md) | implemented, awaiting manual acceptance |
+| 61 | [Milestone 61 — Item Pickup Collection Feedback](milestones/MILESTONE_61.md) | complete |
+| 62 | [Milestone 62 — Item Pickup Collection HUD Notification](milestones/MILESTONE_62.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

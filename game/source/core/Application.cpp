@@ -7,6 +7,7 @@
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
+#include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -863,6 +864,8 @@ int Application::Run()
             }
             gameplay::UpdateItemPickupCollectionFeedback(
                 itemPickupCollectionFeedback, deltaSeconds);
+            gameplay::UpdateItemPickupCollectionHud(
+                itemPickupCollectionHud, deltaSeconds);
             physicsWorld.UpdateMovingPlatform(deltaSeconds);
             player.Update(inputState, deltaSeconds, physicsWorld);
 
@@ -1010,6 +1013,10 @@ int Application::Run()
                                     itemPickupTargetIndex)],
                                 runTimerState.elapsedSeconds);
                             itemPickupCollectionSound.Play();
+                            (void)gameplay::SpawnItemPickupCollectionHud(
+                                itemPickupCollectionHud,
+                                levelDefinition.itemPickups[static_cast<std::size_t>(
+                                    itemPickupTargetIndex)]);
                         }
                     }
                     else
@@ -1532,6 +1539,7 @@ int Application::Run()
             itemPickupRunState.collected,
             itemPickupTargetIndex,
             itemPickupCollectionFeedback,
+            itemPickupCollectionHud,
             lockedDoorTargetIndex,
             lockedDoorPrompt,
             runTimerState.elapsedSeconds,
@@ -2058,6 +2066,7 @@ void Application::Initialize()
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyInventoryUiLifecycle(
@@ -2173,6 +2182,7 @@ void Application::RestartRun()
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::RestartRun, inventory);
@@ -2697,6 +2707,7 @@ void Application::ResetGameplayAfterCommittedLevel()
     itemPickupRunState =
         gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
     gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     gameplay::ApplyInventoryLifecycle(

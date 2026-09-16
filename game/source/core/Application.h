@@ -5,6 +5,7 @@
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
+#include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/PlatformerCamera.h"
@@ -73,6 +74,7 @@ private:
     gameplay::InventoryUiState inventoryUi{};
     gameplay::ItemPickupRunState itemPickupRunState{};
     gameplay::ItemPickupCollectionFeedbackState itemPickupCollectionFeedback{};
+    gameplay::ItemPickupCollectionHudState itemPickupCollectionHud{};
     gameplay::DoorLockRunState doorLockRunState{};
     gameplay::RunTimerState runTimerState;
     gameplay::SessionBestTimeState sessionBestTimeState;

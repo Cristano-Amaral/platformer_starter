@@ -3,6 +3,7 @@
 #include "core/Vec3.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
+#include "gameplay/ItemPickupCollectionHud.h"
 #include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
 #include "world/LevelDefinition.h"
@@ -242,6 +243,7 @@ public:
         const std::vector<std::uint8_t>& itemPickupCollected,
         int itemPickupTargetIndex,
         const gameplay::ItemPickupCollectionFeedbackState& itemPickupCollectionFeedback,
+        const gameplay::ItemPickupCollectionHudState& itemPickupCollectionHud,
         int lockedDoorTargetIndex,
         const char* lockedDoorPrompt,
         double elapsedSeconds,

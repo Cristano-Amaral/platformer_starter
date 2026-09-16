@@ -112,6 +112,7 @@ add_executable(Platformer3D
     game/source/gameplay/ItemPickupRuntime.cpp
     game/source/gameplay/ItemPickupRuntime.h
     game/source/gameplay/ItemPickupCollectionFeedback.h
+    game/source/gameplay/ItemPickupCollectionHud.h
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
@@ -755,6 +756,29 @@ if(MSVC)
     target_compile_options(ItemPickupCollectionFeedbackTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(ItemPickupCollectionFeedbackTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 62: Item Pickup collection HUD notification. No window, raylib, or Jolt.
+add_executable(ItemPickupCollectionHudTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/ItemPickupCollectionFeedback.h
+    game/source/gameplay/ItemPickupCollectionHud.h
+    game/source/gameplay/ItemPickupCollectionHudTest.cpp
+    game/source/render/ItemPickupTargetHighlight.h
+    game/source/world/ItemPickup.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(ItemPickupCollectionHudTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ItemPickupCollectionHudTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ItemPickupCollectionHudTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 57: Key Item & Locked Door. Not shipped.
