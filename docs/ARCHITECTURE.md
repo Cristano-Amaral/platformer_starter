@@ -3,6 +3,21 @@
 ## Direction
 The game is a 3D platformer with a side/platform-style presentation. The player moves in a constrained gameplay plane/track while the world may use full 3D geometry. Camera behavior belongs to gameplay, while camera/input/window implementation details stay behind engine/backend boundaries.
 
+## Milestone documentation
+Canonical milestone definitions live one-per-file under `docs/milestones/` as `MILESTONE_<N>.md` (decimals use underscores: Milestone 58.4 → [`MILESTONE_58_4.md`](milestones/MILESTONE_58_4.md)). [`docs/MILESTONES.md`](MILESTONES.md) is a compact index, not the historical corpus.
+
+This file describes **current** architecture. Historical milestone files do not override it.
+
+Source of truth:
+1. current repository code;
+2. tests;
+3. current architecture/docs (this file and related current docs);
+4. the active milestone file named by the prompt;
+5. the latest relevant checkpoint/current documentation;
+6. older milestone files/history.
+
+Normal implementation reads `docs/milestones/MILESTONE_<N>.md` for the named milestone. Other milestone files are read only when a specific dependency, historical decision, or ambiguity requires them.
+
 ## Dependency direction
 `gameplay -> core abstractions`
 `ui -> core/gameplay public state`
@@ -647,4 +662,4 @@ M44 separates cooker/physics **test coverage** from **canonical scene visibility
 
 **Player Inventory UI v1 (M56):** `gameplay::InventoryUiState` is Application-owned transient presentation (`open` + `selectedItemId` string). It does **not** own quantities or copy Inventory entries. Open/close uses semantic `input::InputState::toggleInventoryPressed` (`Tab` in `input/Input.cpp`). `cancelPressed` (`Esc`) closes if open; Application sets `Window::SetEscapeClosesWindow(!open)` so Esc does not quit while the panel is open. Up/Left = previous, Down/Right = next, wrap-around, one `IsKeyPressed` step (no custom repeat). Opening a non-empty Inventory preserves `selectedItemId` if it still exists, otherwise selects `Entries().front()`. Empty: no selection; navigation no-op. While open (and on the close frame), Application reuses the F2 wholesale `simulationPaused` guard so movement, jump, Grab/Drop, Item Pickup collection, Door unlock, timer, moving platforms, and doors freeze. Opening does **not** Drop a carried Dynamic Box; close resumes carry. Renderer draws a centered 2D HUD panel in `DrawWorld` (Release-safe raylib text; **no ImGui**). Development F1 **Inventory (Test)** remains a separate harness on the same production `Inventory`. NewRun / Restart / ApplyCommittedLevel close the UI and clear selection. Checkpoint and PhysicsWorld rebuild preserve a valid selection. No item-use, hotbar, equip, drop-to-world, ItemDefinition, or generic menu stack. Canonical Level 01 is unchanged.
 
-Status: Milestone 44 is CLOSED and merged. Milestone 45 is CLOSED and merged. Milestone 46 is CLOSED and merged. Milestone 47 is CLOSED and merged. Milestone 48 / 48.1 / 48.2 are CLOSED. Milestone 49 is CLOSED. Milestone 50 is CLOSED. Milestone 51 is CLOSED. Milestone 52 is CLOSED. Milestone 53 is CLOSED. Milestone 54 is CLOSED. Milestone 55 is CLOSED. Milestone 56 is CLOSED. Milestone 57 is CLOSED. Milestone 57.1 is CLOSED. Milestone 58 is CLOSED. Milestone 58.1 is CLOSED. Milestone 58.2 is CLOSED. Milestone 58.3 is CLOSED. Milestone 58.4 is CLOSED. Milestone 59 is implemented, awaiting manual acceptance. Milestone 60 has not started.
+Status: Milestone 44 is CLOSED and merged. Milestone 45 is CLOSED and merged. Milestone 46 is CLOSED and merged. Milestone 47 is CLOSED and merged. Milestone 48 / 48.1 / 48.2 are CLOSED. Milestone 49 is CLOSED. Milestone 50 is CLOSED. Milestone 51 is CLOSED. Milestone 52 is CLOSED. Milestone 53 is CLOSED. Milestone 54 is CLOSED. Milestone 55 is CLOSED. Milestone 56 is CLOSED. Milestone 57 is CLOSED. Milestone 57.1 is CLOSED. Milestone 58 is CLOSED. Milestone 58.1 is CLOSED. Milestone 58.2 is CLOSED. Milestone 58.3 is CLOSED. Milestone 58.4 is CLOSED. Milestone 59 is implemented, awaiting manual acceptance. Milestone 60 is implemented as documentation/context architecture, awaiting manual acceptance. Do not start Milestone 61.

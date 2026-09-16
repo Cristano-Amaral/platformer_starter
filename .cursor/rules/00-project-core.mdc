@@ -4,7 +4,8 @@ globs:
 alwaysApply: true
 ---
 - Read `AGENTS.md` before making architectural changes.
-- Follow the active milestone in `docs/MILESTONES.md`.
+- Follow the active milestone file named by the prompt: `docs/milestones/MILESTONE_<N>.md`.
+- Use `docs/MILESTONES.md` only as a compact index. Do not load every historical milestone unless a specific dependency requires it.
 - Keep every change buildable and testable.
 - CMake is the source of truth for builds; do not hand-author `.sln` or `.vcxproj` files.
 - Gameplay must stay independent from OS APIs and direct backend-specific calls.

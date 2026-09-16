@@ -85,3 +85,9 @@ The oversized fixture `tools/fixtures/textures/test_large_checker.png` is
 1024×512 test input only. It is not a runtime asset.
 
 See `docs/BLENDER_WORKFLOW.md` for authoring vs runtime texture roles.
+
+Milestone documentation path checks:
+
+```
+python tools/test_milestone_docs.py
+```

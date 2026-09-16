@@ -67,200 +67,35 @@ Performance conclusions must not be drawn from Debug builds.
 
 ## Milestone workflow
 For each milestone:
-1. Read `docs/MILESTONES.md` and identify the single active milestone.
-2. State a short implementation plan.
-3. Implement only that milestone.
-4. Configure/build the project.
-5. Run available tests/smoke checks.
-6. Summarize changed files, architectural decisions, how to test, and remaining known limitations.
-7. Do not mark a milestone complete if the build is broken.
+1. Identify the single active milestone from the user prompt (number or `docs/milestones/MILESTONE_<N>.md`).
+2. Read that specific canonical file. Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index if the prompt did not name a file.
+3. Inspect current repository code, tests, and architecture docs relevant to that milestone.
+4. Read other milestone files only when needed for a dependency, historical decision, or ambiguity.
+5. Do not load every historical milestone by default.
+6. State a short implementation plan.
+7. Implement only that milestone.
+8. Configure/build the project.
+9. Run available tests/smoke checks.
+10. Summarize changed files, architectural decisions, how to test, and remaining known limitations.
+11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 59 — Item Pickup Presentation Polish
-(optional visual-only idle bob/Y-spin; Target Highlight Gold Amount distinct
-from M58.4 Intensity; awaiting manual acceptance).
-Milestone 58.4 is implemented. Milestone 60 has not started.
-See `docs/MILESTONES.md` and `docs/ARCHITECTURE.md`.
+Milestone 60 — Split Milestone Documentation.
 
-Milestone 33 is complete and merged. F2 still pauses simulation, edits a
-working copy, and uses Apply Preview / Revert / Save Level Source. Viewport
-pick/highlight use the active/applied world; Inspector and the translation
-gizmo edit `workingCopy`. Debug compiles the visual editor but cannot author.
-Release has no editor.
+Canonical file: [`docs/milestones/MILESTONE_60.md`](docs/milestones/MILESTONE_60.md)
 
-M34 added world-space X/Y/Z translation for Spawn, Ground, and Elevated
-Platforms, a pending ghost, persistent Dear ImGui layout, and a
-depth-independent gizmo overlay. M35 is complete (resize, orientation widget,
-Translate-only nudge, Alt+wheel dolly). M36 is complete (F2 Dear ImGui menu
-bar: View / Transform / Level). M37 is complete: Development-only Build menu
-and Tool Output. `Build > Cook Assets` remains only `python tools/cook_assets.py`.
-M38 is complete: Development `Build > Stage Runtime Assets` and
-`Build > Cook & Stage` use `cmake -P cmake/StageRuntimeAssets.cmake`.
-Cook Assets remains cook-only. M39 is complete: Development
-`Level > Reload Runtime Level` reloads staged Level Format v1 in-process.
-It does not Save, Cook, Stage, or restart. M40 is complete: Development
-`Build > Cook, Stage & Reload`
-(canonical Cook & Stage, then one in-process M39 reload).
-M41 is complete: Development Edit menu Add / Duplicate / Delete for Platform,
-Checkpoint, Hazard, and Collectible mutates `workingCopy` only. Apply remains
-transactional. StructuralIndexMap is the session active↔working pick map.
-Pending Add/Modify uses the cyan family (selected stronger, unselected softer).
-Pending Delete is faded/desaturated with a delete outline and is not pickable.
-Visible pending workingCopy objects are viewport-pickable. Platform Add follows
-the Jolt leftover body budget (59 after M44 removed the unused dynamic-probe
-body from the canonical scene). Checkpoint/Hazard/Collectible share the v1
-256-line / 64 KiB parser guard. Edit > Add uses camera-region X/Y and spawn.z
-lane. Duplicate is +1 X and does not snap to the lane.
-M42 is complete: Development-only Object Palette and explicit viewport
-placement mode for those four categories. Palette entries are tool toggles:
-the same category again, or Esc, exits placement. Active category is highlighted with
-status text. Placement mode itself does not mutate workingCopy. Confirm reuses
-M41 Add at the resolved world center. Repeated clicks stay in the same mode.
-Gizmo/widget/ImGui/RMB gestures consume the pointer for the whole LMB hold so
-they never confirm placement. Surface-hit previews stay bright; camera-fallback
-previews use a quieter wire style. F2 close / successful Apply / Revert /
-successful Reload cancel placement. Debug has no Object Palette. Release has
-no editor.
-M43 is complete: Development-only Quick Toolbar fixed below the menu bar:
-Translate/Resize/Scale/Rotate (canonical TransformMode), Apply/Revert/Save (canonical
-LevelEditorRequest), and a persisted build selector (Debug/Development/Release/All,
-default Development) that Run maps through EditorToolRunner. View > Quick Toolbar
-shares workspace visibility. Reset Editor Layout restores toolbar visibility and
-does not reset the last build selection. The 3D viewport starts below menu+toolbar
-when the toolbar is visible.
-M44 removed the M15–M19 cooker-probe instances and the M23 cyan dynamic crate
-from the canonical runtime/editor scene. Source/cooked/staged test assets and
-their cooker/staging tests remain. Both authored slopes and the moving platform
-remain. M45 turns `dynamic_box` into a repeatable authored Dynamic Box
-(`center`, `size`, `massKg`) with a real Jolt dynamic body. Canonical Level 01
-has 0 Dynamic Boxes. Shared leftover is 59 bodies for platforms plus Dynamic
-Boxes plus Doors (`kPhysicsMaxBodies` 64 minus 5 fixed bodies).
-M46 recovers each active Dynamic Box whose runtime Jolt body center Y is
-strictly below `active.killPlane` back to its currently applied authored
-transform, with identity orientation and zero linear/angular velocity. Recovery
-is per body and does not rebuild PhysicsWorld or mutate authoring state.
-Do not add Undo/Redo, a probe framework, Level Format v2,
-or Milestone 54.
+Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
-Milestone 31 is complete and merged. One playable level (`level_01`). The sole
-live authored source is `game/assets/source/levels/level_01.level` → cooker →
-cooked → staged `<exe>/assets/levels/level_01.level` → `LoadLevelFile` →
-`LevelDefinition`. Application loads that staged file once in `Initialize` and
-owns it. There is no compiled Level 01 fallback. Missing/invalid/unsupported
-Level 01 is a fatal init error. M29 BEST save remains nonfatal. The M32 writer,
-authoring boundary, F2 editor, Apply Preview and source Save remain the live
-authoring path. Save Level Source is not Cook Assets; Cook Assets is not
-runtime staging. M38 Development `Build > Stage Runtime Assets` stages
-cooked files into `build/windows-vs2022/bin/Development/assets/` without a
-C++ build. `Build > Cook & Stage` cooks then stages. Those jobs do not
-change M37 Cook Assets / Build Development meanings. M39 Development
-`Level > Reload Runtime Level` reloads the staged runtime level in-process.
-It does not Save, Cook, Stage, or restart. M40 Development
-`Build > Cook, Stage & Reload` runs canonical Cook & Stage then one
-in-process M39 reload. M41 lifecycle edits mutate `workingCopy` only and
-still require Apply Preview, then Save, then Cook, Stage & Reload.
-M42 placement still requires that same Apply / Save / Cook, Stage & Reload
-path. M43 placement and picking use the content viewport below the Quick Toolbar.
-M44 is complete and merged. M45 adds repeatable authored Dynamic Boxes
-(Jolt dynamic bodies, mass in kg, shared platform+box leftover). Canonical
-Level 01 has 0 Dynamic Boxes. M46 adds individual runtime kill-plane recovery
-for those boxes without mutating authored state. M47 adds Development
-`Assets > Import Static GLB`: a compatible external `.glb` is copied into
-`game/assets/source/models/<filename>.glb` with project-relative identity
-`models/<filename>.glb`. Collision never overwrites. Import does not edit
-the level, cook, or stage; the next step is the existing Cook / Stage
-workflow. M48 adds a Development Content Browser over that derived
-catalog (search/filter, refresh, the same import request, and confirmed
-Delete Asset that removes canonical source plus matching cooked/staged
-copies). Browser selection is not scene selection and does not instantiate
-a level object. M48.1 adds Development Content Browser thumbnails: default
-Thumbnails grid, optional List mode, local derived cache under
-`%LOCALAPPDATA%\Platformer3D\thumbnails\`, and Reset Editor Layout restoring
-Thumbnails. M48.2 adds a Development Model Preview window that renders the
-real selected static GLB (orbit/zoom/Reset View) without instantiating it.
-M49 adds repeatable authored Static Props (`world::StaticPropSpec`: canonical
-identity plus position, Euler XYZ degrees, and visual scale). The primary
-direct-add UI is Development Content Browser **Add Static Prop**;
-`Edit > Add > Static Prop` is retained and routes the same
-`LevelEditorRequest::AddStaticProp`. Both consume the Content Browser selected
-identity, and the Edit row states that asset (or `select asset`) so the
-cross-window dependency is visible. Milestone 50 adds Development Content
-Browser **Place Static Prop**, a distinct interactive viewport placement
-mode: transient real-model preview on Ground/Platform/Slope, confirmation
-creates the existing M49 Static Prop in `workingCopy` only, and Direct Add
-remains immediate. Props are visual only (no Jolt body). Scene
-rendering resolves staged runtime assets only; a missing staged model draws a
-placeholder cube and the editor says to run Cook & Stage (no source fallback,
-no automatic cook/stage). Authored `Scale (1,1,1)` keeps the model's raw GLB
-size after the runtime loader bakes glTF node transforms; nothing normalizes
-imported geometry. The Inspector reports that loaded size and warns if the
-gameplay camera sits inside the prop AABB. Inspector edits position, rotation,
-and scale. Translate gizmo edits position; Rotate gizmo edits authored Euler
-rotation; Scale gizmo edits visual model
-scale. Primitive Resize still edits authored
-box size and is not Static Prop Scale. `DrawProp` restores default shader
-`colDiffuse`/texture0 after each model for later greybox draws in the same
-3D pass. Model Preview and thumbnails may set tight `rlSetClipPlanes` for a
-model frame; they restore `RL_CULL_DISTANCE_NEAR/FAR` after the offscreen pass,
-and `DrawWorld` establishes those same planes again before Gameplay
-`BeginMode3D`. A leaked Chest-like far plane (~6) clips the gameplay camera.
-Delete
-Asset refuses identities referenced by `workingCopy`, `active`, or
-`savedSourceBaseline`. A transient M50 placement preview is not an authored
-reference; Delete Asset cancels placement when the identity matches the
-pending preview asset. Canonical Level 01 still has 0 Static Props. Debug has
-the visual editor but cannot author. Release has no editor. Temporary Correction 5
-Gameplay framebuffer capture was removed after the clip-plane fix. M50 is
-complete. Milestone 51 adds gameplay Grab / Carry for authored Dynamic Boxes
-only (`E` toggles Grab/Drop). Carry is runtime-only: it does not mutate
-`workingCopy`, active authored definitions, Modified/Dirty, or Level Format.
-Static Props stay visual and non-grabbable. Milestone 52 adds repeatable
-authored Pressure Plates (`center`, `size`, optional `linkedDoorIndex`). Runtime Active is derived from
-current Dynamic Box AABB overlap with the applied plate AABB (no Jolt sensor
-body, no generic trigger/action framework). Milestone 53 adds repeatable
-authored Doors (`center`, `size`, `openDistance`) and a Pressure Plate → one
-Door index. Runtime Doors are kinematic solids that open +Y when any linked
-plate is Active. Canonical Level 01 has 0 Pressure Plates, 0 Doors, 0 Dynamic
-Boxes, and 0 Static Props. Milestone 54 adds Application-owned runtime player
-Inventory (`itemId` → quantity) with TryAdd / TryRemove / Query / Clear.
-Inventory is not Level authored state, is not serialized, and is not a world
-collectible. Development F1 Metrics hosts a test harness. Milestone 55 adds
-repeatable authored Item Pickups (`position`, `itemId`, `quantity`, optional
-`modelIdentity`). Runtime available/collected is Application-owned, not
-serialized, and never deletes authored definitions. Semantic `E`
-(`grabDropPressed`) drops a carried Dynamic Box, else grabs a box target, else
-collects a valid pickup via `Inventory::TryAdd`. Canonical Level 01 has 0 Item
-Pickups, 0 Doors, 0 Pressure Plates, 0 Dynamic Boxes, and 0 Static Props.
-Milestone 56 adds a read-only player-facing Inventory UI (`Tab` toggle, `Esc`
-closes, arrow navigation) that reads the production M54 Inventory. It works in
-Release without ImGui. While open, gameplay simulation pauses (same wholesale
-guard as F2). Milestone 57 is complete: authored Door `requiredItemId` (empty =
-no requirement; M57 trailing `1` maps to `key`). A required-item Door starts
-each applied run locked; `E` consumes one unit of that item via `TryRemove` to
-unlock only that runtime Door. Unlocking does not open the Door; M53 Pressure
-Plate OR still drives `desiredOpen` once unlocked. Milestone 57.1 lets a Door
-require a specific Inventory `itemId` (`card`, `key`, `red_key`) and extends
-Pressure Plates with `activateByDynamicBox` / `activateByPlayer` /
-`visibleInGameplay` (legacy defaults box-only + visible). Invisible plates
-remain editor-authorable. Milestone 58 adds per-instance Item Pickup visual
-transform (`visualOffset`, `visualRotationDegrees`, `visualScale`) so an
-assigned staged GLB can be fitted without moving gameplay `position`.
-Translate still edits gameplay `position`; Scale still edits `visualScale`;
-Milestone 58.1 Rotate edits `visualRotationDegrees` only. `visualOffset`
-remains Inspector-authored. Canonical Level 01 has 0 Item Pickups, 0 Doors, 0 Pressure
-Plates, 0 Dynamic Boxes, and 0 Static Props. Milestone 58.1 adds a Development
-Rotate gizmo for Static Prop authored rotation and Item Pickup
-`visualRotationDegrees` only. Milestone 58.2 adds a Development editor-only
-second draw of the selected Static Prop or model-backed Item Pickup using the
-same cached staged model and the current `workingCopy` transform (Item Pickup:
-`position + visualOffset`, `visualRotationDegrees`, `visualScale`). The
-generic yellow AABB is demoted for those objects; a quieter transformed
-wireframe of the local bounds may remain. Gameplay Item Pickup targeting still
-uses logical `position`. Milestone 58.3 adds Gameplay/Release golden model
-highlight for the current M55 Item Pickup target and authored
-`showInteractionBounds` (default true) controlling only the target
-interaction-bounds wire. Milestone 58.4 adds authored `targetHighlightIntensity`
-(default 0.70) mapping to golden tint alpha `round(255 * intensity)`. Milestone
-59 adds optional visual-only idle bob/Y-spin (`idleAnimationEnabled` default
-false) and `targetHighlightGoldAmount` (default 0.70) so gold push is distinct
-from highlight opacity. Do not start Milestone 60.
+Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+Milestone 59 is implemented (awaiting its own manual acceptance). Do not start Milestone 61.
+
+## Source of truth
+1. Current repository code.
+2. Tests.
+3. Current architecture/docs.
+4. Active milestone file.
+5. Latest relevant checkpoint/current documentation.
+6. Older milestone files/history.
+
+Historical milestone files do not override current implemented behavior.

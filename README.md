@@ -136,6 +136,7 @@ python tools/test_cook_level_v1.py
 python tools/test_cook_runtime_png.py
 python tools/test_stage_runtime_assets.py
 python tools/test_import_static_glb.py
+python tools/test_milestone_docs.py
 ```
 
 ## Assets
@@ -154,3 +155,5 @@ If CMake configure reports a missing cooked asset, run the cooker command above.
 
 ## Cursor
 Open the repository root in Cursor. The agent will pick up `AGENTS.md`, `.cursor/rules/*.mdc`, and `.cursor/skills/*/SKILL.md`.
+
+Canonical milestone definitions live one-per-file in [`docs/milestones/`](docs/milestones/). [`docs/MILESTONES.md`](docs/MILESTONES.md) is a compact index. Implementation prompts should name `docs/milestones/MILESTONE_<N>.md` rather than requiring the full milestone history.
