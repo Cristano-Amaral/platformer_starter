@@ -1,6 +1,7 @@
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
+#include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
@@ -156,6 +157,14 @@ int main()
             destinationResults)
             == gameplay::CompletionPresentation::DestinationContinue,
         "destination HUD is LEVEL COMPLETE continue, not Run Complete");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay,
+            false,
+            false,
+            false,
+            destinationCompletion.completed),
+        "destination completion overlay suppresses objective HUD");
 
     Expect(
         gameplay::ResolveRunCompleteInput(false, true, true, false, runComplete)
@@ -192,6 +201,23 @@ int main()
     Expect(level01.level.levelGoals.size() == 1, "canonical level_01 has one Level Goal");
     Expect(level01.level.levelGoals[0].nextLevelId == world::kLevel02Id,
         "canonical level_01 destination is level_02");
+    char hudLabel[gameplay::kGameplayObjectiveHudLevelLabelCapacity]{};
+    char hudObjective[gameplay::kGameplayObjectiveHudObjectiveCapacity]{};
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), level01.level.id);
+    gameplay::FormatGameplayObjectiveLine(
+        hudObjective, sizeof(hudObjective), level01.level.levelGoals);
+    Expect(std::string_view(hudLabel) == "LEVEL 01", "canonical level_01 HUD label");
+    Expect(
+        std::string_view(hudObjective) == gameplay::kGameplayObjectiveHudDestinationText,
+        "canonical level_01 destination objective");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(
+            gameplay::TopLevelFlow::MainMenu, false, false, false, false),
+        "Main Menu hides objective HUD");
+    Expect(
+        gameplay::ObjectiveHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false),
+        "Play shows objective HUD");
     Expect(
         std::string(PLATFORMER_LEVEL01_SOURCE_PATH).find("source") != std::string::npos,
         "source path is test-only and never the runtime loader");
@@ -406,6 +432,20 @@ int main()
     Expect(level02.level.levelGoals.size() == 1, "canonical level_02 has one terminal Goal");
     Expect(level02.level.levelGoals[0].nextLevelId.empty(), "canonical level_02 Goal is terminal");
     Expect(world::kLevel01LevelGoalCount == 1, "canonical Level 01 goal count");
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), level02.level.id);
+    gameplay::FormatGameplayObjectiveLine(
+        hudObjective, sizeof(hudObjective), level02.level.levelGoals);
+    Expect(std::string_view(hudLabel) == "LEVEL 02", "canonical level_02 HUD label");
+    Expect(
+        std::string_view(hudObjective) == gameplay::kGameplayObjectiveHudTerminalText,
+        "canonical level_02 terminal objective");
+    world::LevelDefinition hudAuthored = level01.level;
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), hudAuthored.id);
+    gameplay::FormatGameplayObjectiveLine(
+        hudObjective, sizeof(hudObjective), hudAuthored.levelGoals);
+    Expect(
+        world::AuthoredLevelDataEqual(hudAuthored, level01.level),
+        "objective HUD does not mutate canonical authored data");
 
     const std::string level01Text = ReadAll(PLATFORMER_LEVEL01_SOURCE_PATH);
     const std::string level02Text = ReadAll(PLATFORMER_LEVEL02_SOURCE_PATH);
@@ -528,6 +568,11 @@ int main()
         "failed Play does not replace");
     Expect(world::AuthoredLevelDataEqual(menuPreserved, level01.level),
         "failed Play leaves authored data intact");
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), menuPreserved.id);
+    Expect(std::string_view(hudLabel) == "LEVEL 01", "failed Play does not present a destination Level");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
+        "failed Play remains without objective HUD");
     Expect(
         menuMissing.string().find("source") == std::string::npos
             || menuMissingPrepare.status != gameplay::LevelTransitionPrepareStatus::Ready,
@@ -536,6 +581,29 @@ int main()
     gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
     Expect(flow == gameplay::TopLevelFlow::Gameplay, "successful Play enters Gameplay once");
     Expect(!menu.playPending && !menu.quitRequested, "successful Play clears menu transients");
+    Expect(
+        gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
+        "Play from Main Menu shows objective HUD");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(flow, false, true, false, false),
+        "Inventory hides objective HUD");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(flow, true, false, false, false),
+        "F2/editor hides objective HUD");
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), world::kLevel02Id);
+    gameplay::FormatGameplayObjectiveLine(
+        hudObjective, sizeof(hudObjective), level02.level.levelGoals);
+    Expect(std::string_view(hudLabel) == "LEVEL 02", "successful transition refreshes LEVEL 02");
+    Expect(
+        std::string_view(hudObjective) == gameplay::kGameplayObjectiveHudTerminalText,
+        "successful transition refreshes terminal objective");
+    gameplay::LevelTransitionSchedule failedReplace{};
+    gameplay::CaptureCompletedGoalDestination(failedReplace, world::kLevel02Id);
+    gameplay::MarkLevelTransitionFailed(failedReplace, "destination missing");
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), world::kLevel01Id);
+    Expect(
+        std::string_view(hudLabel) == "LEVEL 01",
+        "failed transition does not display destination before replace");
     Expect(gameplay::RunTimerAdvancesInFlow(flow), "Gameplay timer may advance after Play");
     Expect(
         gameplay::InventoryUiIsAvailable(flow, false, false),
@@ -555,12 +623,18 @@ int main()
         gameplay::ResultsHudShowsRunComplete(flow, resultsToMenu),
         "results HUD advertises Run Complete before Esc");
     Expect(
+        !gameplay::ObjectiveHudIsVisible(flow, false, false, resultsToMenu.active, false),
+        "Run Complete hides objective HUD");
+    Expect(
         gameplay::ResolveRunCompleteInput(true, false, false, true, resultsToMenu)
             == gameplay::RunCompleteInputAction::ReturnToMainMenu,
         "Esc Run Complete enters Main Menu exactly once");
     gameplay::EnterMainMenu(flow, menu, resultsToMenu);
     Expect(flow == gameplay::TopLevelFlow::MainMenu, "Esc leaves Gameplay");
     Expect(!resultsToMenu.active, "Esc stops showing Run Complete");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(flow, false, false, resultsToMenu.active, false),
+        "Run Complete to Main Menu hides objective HUD");
     Expect(menu.selected == gameplay::MainMenuItem::Play, "returned Main Menu selection is fresh");
     Expect(
         gameplay::ResolveRunCompleteInput(true, true, true, true, resultsToMenu)
@@ -575,6 +649,16 @@ int main()
     Expect(gameplay::PlayIsInFlight(menu), "Play after Run Complete→Menu is a fresh-run request");
     gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
     Expect(flow == gameplay::TopLevelFlow::Gameplay, "Play after menu return enters Gameplay");
+    Expect(
+        gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
+        "Play after Main Menu return restores objective HUD");
+    gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), world::kLevel01Id);
+    gameplay::FormatGameplayObjectiveLine(
+        hudObjective, sizeof(hudObjective), level01.level.levelGoals);
+    Expect(std::string_view(hudLabel) == "LEVEL 01", "fresh Play presents LEVEL 01");
+    Expect(
+        std::string_view(hudObjective) == gameplay::kGameplayObjectiveHudDestinationText,
+        "fresh Play presents destination objective");
     Expect(
         Vec3Equal(level01.level.initialSpawnVisualCenter, {0.0f, 0.8f, 0.0f}),
         "Play starts at level_01 spawn");

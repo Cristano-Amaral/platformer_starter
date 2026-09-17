@@ -8,6 +8,7 @@
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
+#include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/LevelTransition.h"
@@ -1693,6 +1694,12 @@ int Application::Run()
                 targetedDoor.requiredItemId,
                 inventory.Has(targetedDoor.requiredItemId, gameplay::kDoorUnlockQuantity));
         }
+        char objectiveLevelLabel[gameplay::kGameplayObjectiveHudLevelLabelCapacity]{};
+        char objectiveLine[gameplay::kGameplayObjectiveHudObjectiveCapacity]{};
+        gameplay::FormatGameplayLevelLabel(
+            objectiveLevelLabel, sizeof(objectiveLevelLabel), currentRuntimeLevelId);
+        gameplay::FormatGameplayObjectiveLine(
+            objectiveLine, sizeof(objectiveLine), levelDefinition.levelGoals);
         renderer.BeginFrame();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
@@ -1744,6 +1751,15 @@ int Application::Run()
                 inventoryUi.open,
                 inventory.Entries(),
                 inventoryUi.selectedItemId},
+            render::ObjectiveHudView{
+                gameplay::ObjectiveHudIsVisible(
+                    topLevelFlow,
+                    editorActive,
+                    inventoryUi.open,
+                    gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
+                    levelCompletionState.completed),
+                objectiveLevelLabel,
+                objectiveLine},
             overlay,
             worldViewRect,
             gameplay::GameplayHudIsActive(topLevelFlow, editorActive)

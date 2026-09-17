@@ -189,6 +189,15 @@ struct InventoryPanelView
     std::string_view selectedItemId{};
 };
 
+// Compact Gameplay Level/objective HUD (Milestone 67). Presentation-only;
+// Renderer does not derive, own, or persist objective state.
+struct ObjectiveHudView
+{
+    bool visible = false;
+    const char* levelLabel = nullptr;
+    const char* objectiveLine = nullptr;
+};
+
 class StaticModelSceneStore;
 
 class Renderer
@@ -258,6 +267,7 @@ public:
         bool runComplete = false,
         double runCompleteFinalSeconds = 0.0,
         InventoryPanelView inventoryPanel = {},
+        ObjectiveHudView objectiveHud = {},
         const DebugWorldOverlay& overlay = {},
         WorldViewRect viewRect = {},
         bool drawGameplayHud = true);

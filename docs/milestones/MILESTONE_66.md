@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implemented, awaiting manual acceptance.** M65 is CLOSED. Do not start Milestone 67.
+**CLOSED.** Milestone 67 is the active milestone.
 
 ## Canonical Path
 

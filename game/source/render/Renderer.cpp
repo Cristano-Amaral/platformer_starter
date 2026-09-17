@@ -5,6 +5,7 @@
 #include "gameplay/GameFlowState.h"
 #include "gameplay/Player.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
+#include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "platform/RuntimePaths.h"
 #include "render/ItemPickupTargetHighlight.h"
@@ -349,6 +350,33 @@ void DrawSessionBest(bool hasBestTime, double bestSeconds)
     const char* text = TextFormat("BEST %s", formatted);
     const int y = kTimerHudMargin + kTimerHudFontSize + kBestHudGap;
     DrawText(text, kTimerHudMargin, y, kTimerHudFontSize, kTimerHudText);
+}
+
+void DrawGameplayObjectiveHud(const ObjectiveHudView& view)
+{
+    if (!view.visible)
+    {
+        return;
+    }
+
+    if (view.levelLabel != nullptr && view.levelLabel[0] != '\0')
+    {
+        DrawText(
+            view.levelLabel,
+            gameplay::kGameplayObjectiveHudMarginX,
+            gameplay::kGameplayObjectiveHudLevelY,
+            gameplay::kGameplayObjectiveHudLevelFontSize,
+            kGrabHudText);
+    }
+    if (view.objectiveLine != nullptr && view.objectiveLine[0] != '\0')
+    {
+        DrawText(
+            view.objectiveLine,
+            gameplay::kGameplayObjectiveHudMarginX,
+            gameplay::kGameplayObjectiveHudObjectiveY,
+            gameplay::kGameplayObjectiveHudObjectiveFontSize,
+            kGrabHudMuted);
+    }
 }
 
 void DrawGrabCarryHud(bool carrying, bool hasTarget)
@@ -1528,6 +1556,7 @@ void Renderer::DrawWorld(
         bool runComplete,
         double runCompleteFinalSeconds,
         InventoryPanelView inventoryPanel,
+        ObjectiveHudView objectiveHud,
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect,
         bool drawGameplayHud)
@@ -1815,6 +1844,7 @@ void Renderer::DrawWorld(
         DrawRunTimer(elapsedSeconds);
         DrawSessionBest(hasBestTime, bestSeconds);
         DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
+        DrawGameplayObjectiveHud(objectiveHud);
         if (!inventoryPanel.visible && !runComplete)
         {
             DrawGrabCarryHud(grabHudCarrying, grabHudTarget);

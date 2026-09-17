@@ -115,6 +115,7 @@ add_executable(Platformer3D
     game/source/gameplay/ItemPickupRuntime.h
     game/source/gameplay/ItemPickupCollectionFeedback.h
     game/source/gameplay/ItemPickupCollectionHud.h
+    game/source/gameplay/GameplayObjectiveHud.h
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
@@ -796,6 +797,24 @@ else()
     target_compile_options(ItemPickupCollectionHudTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 67: Gameplay Level/objective HUD presentation. No window, raylib, or Jolt.
+add_executable(GameplayObjectiveHudTest
+    game/source/gameplay/GameFlowState.h
+    game/source/gameplay/GameplayObjectiveHud.h
+    game/source/gameplay/GameplayObjectiveHudTest.cpp
+    game/source/gameplay/ItemPickupCollectionHud.h
+    game/source/gameplay/LevelCompletionState.h
+    game/source/gameplay/LevelTransition.h
+    game/source/world/LevelGoal.h
+    game/source/world/LevelIdentity.h
+)
+target_include_directories(GameplayObjectiveHudTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(GameplayObjectiveHudTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(GameplayObjectiveHudTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # Milestone 63: Level Goal overlap, one-shot completion, reset. No window, raylib, or Jolt.
 add_executable(LevelGoalTest
     game/source/gameplay/LevelCompletionState.h
@@ -860,6 +879,7 @@ add_executable(GameFlowTest
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
     game/source/gameplay/GameFlowState.h
+    game/source/gameplay/GameplayObjectiveHud.h
     game/source/gameplay/GameFlowTest.cpp
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
