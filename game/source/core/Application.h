@@ -49,8 +49,9 @@ private:
     void PerformRespawn(gameplay::RespawnReason reason);
     void RestartRun();
     void TryFinishPendingLevelTransition();
-    void TryFinishPendingPlayAgain();
+    void TryFinishPendingFreshRun();
     void ResetGameplayAfterPlayAgain();
+    void ReturnToMainMenuFromResults();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     void SetLevelEditorActive(bool active);
     // Physics rebuilds use TryRebuild so a failure leaves the active world
@@ -79,6 +80,8 @@ private:
     gameplay::LevelCompletionState levelCompletionState;
     gameplay::LevelTransitionSchedule levelTransition;
     gameplay::RunCompleteState runCompleteState;
+    gameplay::TopLevelFlow topLevelFlow = gameplay::TopLevelFlow::MainMenu;
+    gameplay::MainMenuState mainMenuState{};
     std::string currentRuntimeLevelId;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};

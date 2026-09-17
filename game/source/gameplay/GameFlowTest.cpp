@@ -49,6 +49,13 @@ void WriteAll(const std::filesystem::path& path, std::string_view text)
     out.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
+std::string ReadAll(const std::filesystem::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
 bool Vec3Equal(core::Vec3 a, core::Vec3 b)
 {
     return a.x == b.x && a.y == b.y && a.z == b.z;
@@ -67,6 +74,12 @@ int main()
     Expect(
         std::string_view(gameplay::kRunCompleteRestartHint) == "R       RESTART LEVEL",
         "Restart Level hint");
+    Expect(
+        std::string_view(gameplay::kRunCompleteMainMenuHint) == "ESC     MAIN MENU",
+        "Main Menu hint");
+    Expect(std::string_view(gameplay::kMainMenuTitle) == "Platformer3D", "Main Menu title");
+    Expect(std::string_view(gameplay::kMainMenuPlayLabel) == "PLAY", "PLAY label");
+    Expect(std::string_view(gameplay::kMainMenuQuitLabel) == "QUIT", "QUIT label");
     Expect(
         std::string_view(gameplay::kDestinationCompleteHint) == "PRESS ENTER TO CONTINUE",
         "destination continue hint preserved");
@@ -98,6 +111,7 @@ int main()
     Expect(runComplete.capturedFinalSeconds == 12.5, "displayed final time stays frozen");
     Expect(
         gameplay::SelectCompletionPresentation(
+            gameplay::TopLevelFlow::Gameplay,
             completion.completed,
             gameplay::DestinationCompletionShowsContinueHint(transition),
             runComplete)
@@ -136,6 +150,7 @@ int main()
         "destination Enter skip remains");
     Expect(
         gameplay::SelectCompletionPresentation(
+            gameplay::TopLevelFlow::Gameplay,
             destinationCompletion.completed,
             gameplay::DestinationCompletionShowsContinueHint(destinationHold),
             destinationResults)
@@ -143,19 +158,23 @@ int main()
         "destination HUD is LEVEL COMPLETE continue, not Run Complete");
 
     Expect(
-        gameplay::ResolveRunCompleteInput(false, true, true, runComplete)
+        gameplay::ResolveRunCompleteInput(false, true, true, false, runComplete)
             == gameplay::RunCompleteInputAction::None,
         "completion frame cannot Play Again or Restart");
     Expect(
-        gameplay::ResolveRunCompleteInput(true, true, true, runComplete)
+        gameplay::ResolveRunCompleteInput(true, true, true, true, runComplete)
             == gameplay::RunCompleteInputAction::PlayAgain,
-        "Enter Play Again wins over R on the same edge frame");
+        "Enter Play Again wins over R and Esc on the same edge frame");
     Expect(
-        gameplay::ResolveRunCompleteInput(true, false, true, runComplete)
+        gameplay::ResolveRunCompleteInput(true, false, true, true, runComplete)
+            == gameplay::RunCompleteInputAction::ReturnToMainMenu,
+        "Esc Main Menu wins over R on the same edge frame");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, false, true, false, runComplete)
             == gameplay::RunCompleteInputAction::RestartCurrentLevel,
         "R restarts the current terminal Level");
     Expect(
-        gameplay::ResolveRunCompleteInput(true, false, false, runComplete)
+        gameplay::ResolveRunCompleteInput(true, false, false, false, runComplete)
             == gameplay::RunCompleteInputAction::None,
         "held absence does not emit an action");
 
@@ -164,13 +183,15 @@ int main()
     gameplay::RequestPlayAgain(runComplete);
     Expect(runComplete.playAgainPending, "repeated Enter cannot double-schedule Play Again");
     Expect(
-        gameplay::ResolveRunCompleteInput(true, true, true, runComplete)
+        gameplay::ResolveRunCompleteInput(true, true, true, true, runComplete)
             == gameplay::RunCompleteInputAction::None,
-        "in-flight Play Again ignores further Enter/R");
+        "in-flight Play Again ignores further Enter/R/Esc");
 
     const world::ParseLevelFileResult level01 = world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     Expect(level01.status == world::LoadLevelFileStatus::Loaded, "canonical level_01 loads");
-    Expect(level01.level.levelGoals.empty(), "canonical level_01 has zero Level Goals");
+    Expect(level01.level.levelGoals.size() == 1, "canonical level_01 has one Level Goal");
+    Expect(level01.level.levelGoals[0].nextLevelId == world::kLevel02Id,
+        "canonical level_01 destination is level_02");
     Expect(
         std::string(PLATFORMER_LEVEL01_SOURCE_PATH).find("source") != std::string::npos,
         "source path is test-only and never the runtime loader");
@@ -320,13 +341,17 @@ int main()
     gameplay::RequestPlayAgain(failedPlayAgain);
     Expect(!failedPlayAgain.playAgainPending, "failed Play Again does not retry every frame");
     Expect(
-        gameplay::ResolveRunCompleteInput(true, true, false, failedPlayAgain)
+        gameplay::ResolveRunCompleteInput(true, true, false, false, failedPlayAgain)
             == gameplay::RunCompleteInputAction::None,
         "Enter cannot retry a failed Play Again");
     Expect(
-        gameplay::ResolveRunCompleteInput(true, false, true, failedPlayAgain)
+        gameplay::ResolveRunCompleteInput(true, false, true, false, failedPlayAgain)
             == gameplay::RunCompleteInputAction::RestartCurrentLevel,
         "R still restarts after a failed Play Again");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, false, true, true, failedPlayAgain)
+            == gameplay::RunCompleteInputAction::ReturnToMainMenu,
+        "Esc still returns to Main Menu after a failed Play Again");
 
     WriteAll(staged01, "NOT_A_LEVEL\n");
     const gameplay::LevelTransitionPrepareResult malformed =
@@ -378,8 +403,193 @@ int main()
 
     const world::ParseLevelFileResult level02 = world::LoadLevelFile(PLATFORMER_LEVEL02_SOURCE_PATH);
     Expect(level02.status == world::LoadLevelFileStatus::Loaded, "canonical level_02 loads");
-    Expect(level02.level.levelGoals.empty(), "canonical level_02 stays fixture-free");
-    Expect(world::kLevel01LevelGoalCount == 0, "canonical Level 01 goal count");
+    Expect(level02.level.levelGoals.size() == 1, "canonical level_02 has one terminal Goal");
+    Expect(level02.level.levelGoals[0].nextLevelId.empty(), "canonical level_02 Goal is terminal");
+    Expect(world::kLevel01LevelGoalCount == 1, "canonical Level 01 goal count");
+
+    const std::string level01Text = ReadAll(PLATFORMER_LEVEL01_SOURCE_PATH);
+    const std::string level02Text = ReadAll(PLATFORMER_LEVEL02_SOURCE_PATH);
+    Expect(level01Text.find("goal -21 3.8 0 2 1.6 1.8") == std::string::npos,
+        "canonical level_01 has no legacy goal singleton");
+    Expect(level01Text.find("dynamic_box 0 5 0 1 1 1 30") == std::string::npos,
+        "canonical level_01 has no legacy dynamic_box probe");
+    Expect(level02Text.find("goal -21 3.8 0 2 1.6 1.8") == std::string::npos,
+        "canonical level_02 has no legacy goal singleton");
+    Expect(level02Text.find("level_3") == std::string::npos
+            && level02Text.find("level_03") == std::string::npos,
+        "canonical files do not name disposable level_3");
+
+    gameplay::TopLevelFlow flow = gameplay::TopLevelFlow::MainMenu;
+    gameplay::MainMenuState menu{};
+    Expect(gameplay::MainMenuBlocksGameplay(flow), "Initialize enters Main Menu");
+    Expect(!gameplay::RunTimerAdvancesInFlow(flow), "Main Menu does not advance timer");
+    Expect(
+        !gameplay::InventoryUiIsAvailable(flow, false, false),
+        "Inventory cannot open in Main Menu");
+    Expect(!gameplay::GameplayHudIsActive(flow, false), "Main Menu hides gameplay HUD");
+    Expect(gameplay::MainMenuOverlayIsVisible(flow, false), "Main Menu overlay is visible");
+    Expect(
+        !gameplay::MainMenuOverlayIsVisible(flow, true),
+        "F2 hides Main Menu overlay while editor is open");
+    Expect(
+        gameplay::GameplayHudIsActive(flow, true),
+        "Development editor from Main Menu keeps editor chrome");
+    Expect(
+        gameplay::FlowAfterEditorToggle(flow) == gameplay::TopLevelFlow::MainMenu,
+        "F2 round-trip preserves Main Menu");
+    Expect(
+        gameplay::FlowAfterEditorOpenOrSwitch(flow) == gameplay::TopLevelFlow::MainMenu,
+        "editor Open/Switch does not fabricate Gameplay");
+    Expect(
+        !gameplay::EscapeClosesWindowInFlow(flow, false, false, false),
+        "Esc does not close the window on Main Menu");
+
+    gameplay::Inventory menuInventory;
+    Expect(menuInventory.TryAdd("key", 1), "seed Inventory before Main Menu idle");
+    gameplay::InventoryUiState menuUi{};
+    Expect(
+        !gameplay::InventoryUiIsAvailable(flow, false, false),
+        "Tab/E stay inactive because Inventory UI is unavailable in Main Menu");
+    Expect(menuInventory.GetQuantity("key") == 1,
+        "Main Menu idle does not apply a fresh-run Inventory reset");
+
+    gameplay::RunCompleteState menuCannotFabricate{};
+    Expect(
+        gameplay::SelectCompletionPresentation(
+            flow, true, true, menuCannotFabricate)
+            == gameplay::CompletionPresentation::None,
+        "Main Menu cannot fabricate destination or Run Complete HUD");
+    Expect(
+        !gameplay::ResultsHudShowsRunComplete(flow, menuCannotFabricate),
+        "Main Menu hides results HUD");
+
+    Expect(menu.selected == gameplay::MainMenuItem::Play, "PLAY is the default selection");
+    Expect(
+        gameplay::ResolveMainMenuInput(false, false, false, true, menu, flow)
+            == gameplay::MainMenuInputAction::None,
+        "menu Enter cannot fire unless Main Menu was already visible");
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, true, false, menu, flow)
+            == gameplay::MainMenuInputAction::None,
+        "Down moves selection without activating");
+    Expect(menu.selected == gameplay::MainMenuItem::Quit, "Down selects QUIT");
+    Expect(
+        gameplay::ResolveMainMenuInput(true, true, false, false, menu, flow)
+            == gameplay::MainMenuInputAction::None,
+        "Up returns to PLAY");
+    Expect(menu.selected == gameplay::MainMenuItem::Play, "Up selects PLAY");
+    Expect(
+        gameplay::ResolveMainMenuInput(true, true, true, false, menu, flow)
+            == gameplay::MainMenuInputAction::None,
+        "Up+Down together is a no-op");
+    Expect(menu.selected == gameplay::MainMenuItem::Play, "Up+Down leaves PLAY selected");
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, true, true, menu, flow)
+            == gameplay::MainMenuInputAction::Play,
+        "Enter activates PLAY without also moving");
+    Expect(menu.selected == gameplay::MainMenuItem::Play, "activate uses the captured PLAY item");
+
+    gameplay::RequestPlayFromMainMenu(menu, flow);
+    Expect(gameplay::PlayIsInFlight(menu), "Play requests a fresh run exactly once");
+    gameplay::RequestPlayFromMainMenu(menu, flow);
+    Expect(menu.playPending, "repeated Enter cannot double-schedule Play");
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, false, true, menu, flow)
+            == gameplay::MainMenuInputAction::None,
+        "in-flight Play ignores further menu Enter");
+
+    gameplay::MarkPlayFailed(menu, "Initial staged level is missing. Main Menu unchanged.");
+    Expect(flow == gameplay::TopLevelFlow::MainMenu, "Play failure remains in Main Menu");
+    Expect(!gameplay::PlayIsInFlight(menu), "failed Play is not in flight");
+    Expect(menu.playFailed, "Play failure is sticky until the next explicit Play");
+    gameplay::RequestPlayFromMainMenu(menu, flow);
+    Expect(gameplay::PlayIsInFlight(menu), "a later Enter may retry Play without a per-frame storm");
+    menu.playPending = false;
+
+    gameplay::NavigateMainMenu(menu, 1);
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, false, true, menu, flow)
+            == gameplay::MainMenuInputAction::Quit,
+        "Enter on QUIT requests close");
+    gameplay::RequestQuitFromMainMenu(menu, flow);
+    Expect(menu.quitRequested, "Quit requests normal close");
+    gameplay::RequestPlayFromMainMenu(menu, flow);
+    Expect(!menu.playPending, "Quit blocks a same-state Play request");
+
+    gameplay::ResetMainMenuState(menu);
+    const std::filesystem::path menuMissing =
+        scratch / "menu-missing" / "assets" / "levels" / "level_01.level";
+    world::LevelDefinition menuPreserved = level01.level;
+    const gameplay::LevelTransitionPrepareResult menuMissingPrepare =
+        gameplay::PrepareStagedLevelDestination(menuMissing, world::kLevel01Id);
+    Expect(menuMissingPrepare.status == gameplay::LevelTransitionPrepareStatus::Missing,
+        "missing staged level_01 is atomic for Play");
+    Expect(!gameplay::TryCommitPreparedDestination(menuPreserved, menuMissingPrepare),
+        "failed Play does not replace");
+    Expect(world::AuthoredLevelDataEqual(menuPreserved, level01.level),
+        "failed Play leaves authored data intact");
+    Expect(
+        menuMissing.string().find("source") == std::string::npos
+            || menuMissingPrepare.status != gameplay::LevelTransitionPrepareStatus::Ready,
+        "Play does not source-fallback");
+
+    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
+    Expect(flow == gameplay::TopLevelFlow::Gameplay, "successful Play enters Gameplay once");
+    Expect(!menu.playPending && !menu.quitRequested, "successful Play clears menu transients");
+    Expect(gameplay::RunTimerAdvancesInFlow(flow), "Gameplay timer may advance after Play");
+    Expect(
+        gameplay::InventoryUiIsAvailable(flow, false, false),
+        "Inventory is available only after Play");
+    Expect(
+        gameplay::EscapeClosesWindowInFlow(flow, false, false, false),
+        "ordinary Gameplay Esc keeps current close behavior");
+    Expect(
+        !gameplay::EscapeClosesWindowInFlow(flow, false, true, false),
+        "Esc during Run Complete does not close the window");
+
+    gameplay::RunCompleteState resultsToMenu{};
+    Expect(
+        gameplay::TryEnterRunCompleteFromTerminalGoal(resultsToMenu, "", 9.0),
+        "seed Run Complete before Esc");
+    Expect(
+        gameplay::ResultsHudShowsRunComplete(flow, resultsToMenu),
+        "results HUD advertises Run Complete before Esc");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, false, false, true, resultsToMenu)
+            == gameplay::RunCompleteInputAction::ReturnToMainMenu,
+        "Esc Run Complete enters Main Menu exactly once");
+    gameplay::EnterMainMenu(flow, menu, resultsToMenu);
+    Expect(flow == gameplay::TopLevelFlow::MainMenu, "Esc leaves Gameplay");
+    Expect(!resultsToMenu.active, "Esc stops showing Run Complete");
+    Expect(menu.selected == gameplay::MainMenuItem::Play, "returned Main Menu selection is fresh");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, true, true, true, resultsToMenu)
+            == gameplay::RunCompleteInputAction::None,
+        "stale result input cannot leak into Main Menu");
+    Expect(
+        gameplay::ResolveMainMenuInput(false, false, false, true, menu, flow)
+            == gameplay::MainMenuInputAction::None,
+        "result-frame Enter cannot also activate PLAY");
+
+    gameplay::RequestPlayFromMainMenu(menu, flow);
+    Expect(gameplay::PlayIsInFlight(menu), "Play after Run Complete→Menu is a fresh-run request");
+    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
+    Expect(flow == gameplay::TopLevelFlow::Gameplay, "Play after menu return enters Gameplay");
+    Expect(
+        Vec3Equal(level01.level.initialSpawnVisualCenter, {0.0f, 0.8f, 0.0f}),
+        "Play starts at level_01 spawn");
+
+    gameplay::RunCompleteState noDouble{};
+    Expect(gameplay::TryEnterRunCompleteFromTerminalGoal(noDouble, "", 3.0), "seed arbitration");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, true, true, true, noDouble)
+            == gameplay::RunCompleteInputAction::PlayAgain,
+        "result arbitration emits one action");
+    gameplay::RequestPlayAgain(noDouble);
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, false, true, true, noDouble)
+            == gameplay::RunCompleteInputAction::None,
+        "in-flight results action cannot double-trigger");
 
     std::filesystem::remove_all(scratch, cleanupError);
 

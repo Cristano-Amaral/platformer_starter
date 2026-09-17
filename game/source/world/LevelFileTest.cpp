@@ -71,7 +71,9 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.collectibles[0].center, {5.0f, 2.5f, 0.0f})
         && Vec3Equal(level.collectibles[1].center, {-4.5f, 4.0f, 0.0f})
         && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
-        && level.levelGoals.empty()
+        && level.levelGoals.size() == static_cast<std::size_t>(world::kLevel01LevelGoalCount)
+        && Vec3Equal(level.levelGoals[0].size, {2.0f, 1.6f, 1.8f})
+        && level.levelGoals[0].nextLevelId == world::kLevel02Id
         && level.dynamicBoxes.empty()
         && level.pressurePlates.empty()
         && level.doors.empty()
@@ -290,7 +292,9 @@ int main()
         world::LoadLevelFile(PLATFORMER_LEVEL02_SOURCE_PATH);
     Expect(loadedLevel02.status == world::LoadLevelFileStatus::Loaded, "LoadLevelFile level_02");
     Expect(loadedLevel02.level.id == world::kLevel02Id, "level_02 id");
-    Expect(loadedLevel02.level.levelGoals.empty(), "canonical level_02 has zero Level Goals");
+    Expect(loadedLevel02.level.levelGoals.size() == 1, "canonical level_02 has one Level Goal");
+    Expect(loadedLevel02.level.levelGoals[0].nextLevelId.empty(),
+        "canonical level_02 Goal is terminal");
     Expect(world::IsWritableLevelDefinition(loadedLevel02.level), "level_02 is writable");
 
     const world::ParseLevelFileResult missing = world::LoadLevelFile(
@@ -1115,19 +1119,19 @@ int main()
         {
             const std::string oneGoal = canonical + "level_goal -21 3.8 0 2 1.6 1.8\n";
             const world::ParseLevelFileResult one = world::ParseLevelText(oneGoal);
-            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one level_goal loads");
-            Expect(one.level.levelGoals.size() == 1, "one level_goal count");
-            Expect(Vec3Equal(one.level.levelGoals[0].center, {-21.0f, 3.8f, 0.0f}),
-                "one level_goal center");
-            Expect(Vec3Equal(one.level.levelGoals[0].size, {2.0f, 1.6f, 1.8f}),
-                "one level_goal size");
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one extra level_goal loads");
+            Expect(one.level.levelGoals.size() == 2, "appended level_goal count");
+            Expect(Vec3Equal(one.level.levelGoals.back().center, {-21.0f, 3.8f, 0.0f}),
+                "appended level_goal center");
+            Expect(Vec3Equal(one.level.levelGoals.back().size, {2.0f, 1.6f, 1.8f}),
+                "appended level_goal size");
             const std::string writtenOne = world::SerializeLevelText(one.level);
-            Expect(CountRecords(writtenOne, "level_goal") == 1, "writer one level_goal");
+            Expect(CountRecords(writtenOne, "level_goal") == 2, "writer appended level_goal");
             Expect(
                 world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
-                "one level_goal round trip");
+                "appended level_goal round trip");
             Expect(writtenOne.find("completed") == std::string::npos, "runtime completion not serialized");
-            Expect(one.level.levelGoals[0].nextLevelId.empty(), "7-token goal is terminal");
+            Expect(one.level.levelGoals.back().nextLevelId.empty(), "7-token goal is terminal");
             Expect(
                 writtenOne.find("level_goal -21 3.8 0 2 1.6 1.8\n") != std::string::npos,
                 "writer omits empty destination");
@@ -1137,8 +1141,8 @@ int main()
             const world::ParseLevelFileResult destination = world::ParseLevelText(destinationGoal);
             Expect(destination.status == world::LoadLevelFileStatus::Loaded, "destination goal loads");
             Expect(
-                destination.level.levelGoals.size() == 1
-                    && destination.level.levelGoals[0].nextLevelId == "level_02",
+                destination.level.levelGoals.size() == 2
+                    && destination.level.levelGoals.back().nextLevelId == "level_02",
                 "destination goal captures nextLevelId");
             const std::string writtenDestination = world::SerializeLevelText(destination.level);
             Expect(
@@ -1149,7 +1153,7 @@ int main()
                     destination.level, world::ParseLevelText(writtenDestination).level),
                 "destination goal round trip");
             world::LevelDefinition destinationEdit = destination.level;
-            destinationEdit.levelGoals[0].nextLevelId.clear();
+            destinationEdit.levelGoals.back().nextLevelId.clear();
             Expect(
                 !world::AuthoredLevelDataEqual(destination.level, destinationEdit),
                 "authored equality detects Next Level edit");
@@ -1158,12 +1162,12 @@ int main()
                 + "level_goal -21 3.8 0 2 1.6 1.8\n"
                   "level_goal 8 1 0 2 1.6 1.8\n";
             const world::ParseLevelFileResult two = world::ParseLevelText(twoGoals);
-            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two level_goal load");
-            Expect(two.level.levelGoals.size() == 2, "two level_goal count");
-            Expect(Vec3Equal(two.level.levelGoals[1].center, {8.0f, 1.0f, 0.0f}),
-                "second level_goal center");
+            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two extra level_goal load");
+            Expect(two.level.levelGoals.size() == 3, "two extra level_goal count");
+            Expect(Vec3Equal(two.level.levelGoals.back().center, {8.0f, 1.0f, 0.0f}),
+                "second extra level_goal center");
             const std::string writtenTwo = world::SerializeLevelText(two.level);
-            Expect(CountRecords(writtenTwo, "level_goal") == 2, "writer two level_goal");
+            Expect(CountRecords(writtenTwo, "level_goal") == 3, "writer two extra level_goal");
             Expect(
                 world::AuthoredLevelDataEqual(two.level, world::ParseLevelText(writtenTwo).level),
                 "two level_goal round trip");

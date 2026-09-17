@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implemented, awaiting manual acceptance.** M64.1 is CLOSED. Do not start Milestone 66.
+**CLOSED.** Milestone 66 is the active milestone.
 
 ## Canonical Path
 

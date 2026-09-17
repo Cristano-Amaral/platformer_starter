@@ -27,7 +27,7 @@ bool Vec3Equal(core::Vec3 a, core::Vec3 b)
 
 int main()
 {
-    Expect(world::kLevel01LevelGoalCount == 0, "canonical Level 01 has zero Level Goals");
+    Expect(world::kLevel01LevelGoalCount == 1, "canonical Level 01 has one destination Goal");
     Expect(world::LevelGoalSpecIsValid({{0.0f, 1.0f, 0.0f}, world::kDefaultLevelGoalSize}),
         "valid default");
     Expect(!world::LevelGoalSpecIsValid({{0.0f, 1.0f, 0.0f}, {0.0f, 1.6f, 1.8f}}),

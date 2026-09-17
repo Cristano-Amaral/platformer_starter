@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 65 — Game Flow & Run Completion.
+Milestone 66 — Main Menu & Play Flow.
 
-Canonical file: [`docs/milestones/MILESTONE_65.md`](docs/milestones/MILESTONE_65.md)
+Canonical file: [`docs/milestones/MILESTONE_66.md`](docs/milestones/MILESTONE_66.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 64.1 is CLOSED. Milestone 65 is implemented, awaiting manual acceptance. Do not start Milestone 66.
+Milestone 65 is CLOSED. Milestone 66 is implemented, awaiting manual acceptance. Do not start Milestone 67.
 
 ## Source of truth
 1. Current repository code.

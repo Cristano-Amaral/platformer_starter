@@ -22,8 +22,12 @@ public:
     // Inventory UI need Esc without quitting; Application restores the default
     // when idle.
     void SetEscapeClosesWindow(bool enabled);
+    // Requests the normal window-close path. Does not terminate the process
+    // or skip Shutdown/destructors.
+    void RequestClose();
 
 private:
     bool initialized = false;
+    bool closeRequested = false;
 };
 }

@@ -80,14 +80,18 @@ int main()
     const world::ParseLevelFileResult level01 = world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     Expect(level01.status == world::LoadLevelFileStatus::Loaded, "canonical level_01 loads");
     Expect(level01.level.id == world::kLevel01Id, "canonical level_01 id");
-    Expect(level01.level.levelGoals.empty(), "canonical level_01 has zero Level Goals");
+    Expect(level01.level.levelGoals.size() == 1, "canonical level_01 has one Level Goal");
+    Expect(level01.level.levelGoals[0].nextLevelId == world::kLevel02Id,
+        "canonical level_01 destination is level_02");
 
     const world::ParseLevelFileResult level02 = world::LoadLevelFile(PLATFORMER_LEVEL02_SOURCE_PATH);
     Expect(level02.status == world::LoadLevelFileStatus::Loaded, "canonical level_02 loads");
     Expect(level02.level.id == world::kLevel02Id, "canonical level_02 id");
     Expect(level02.level.elevatedPlatforms.size() == 2, "level_02 has two platforms");
     Expect(level02.level.collectibles.size() == 1, "level_02 has one collectible");
-    Expect(level02.level.levelGoals.empty(), "canonical level_02 is terminal by absence");
+    Expect(level02.level.levelGoals.size() == 1, "canonical level_02 has one Level Goal");
+    Expect(level02.level.levelGoals[0].nextLevelId.empty(),
+        "canonical level_02 Goal is terminal");
     Expect(level02.level.killPlaneY == -4.0f, "level_02 kill plane differs from level_01");
     Expect(level02.level.camera.fieldOfViewY == 48.0f, "level_02 FOV differs from level_01");
     Expect(

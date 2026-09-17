@@ -1337,6 +1337,40 @@ void DrawRunCompleteMessage(double capturedFinalSeconds)
         restartY,
         kRestartHintFontSize,
         kLevelCompleteText);
+
+    const int menuWidth = MeasureText(gameplay::kRunCompleteMainMenuHint, kRestartHintFontSize);
+    const int menuX = (GetScreenWidth() - menuWidth) / 2;
+    const int menuY = restartY + kRestartHintFontSize + kBestHudGap;
+    DrawText(
+        gameplay::kRunCompleteMainMenuHint,
+        menuX,
+        menuY,
+        kRestartHintFontSize,
+        kLevelCompleteText);
+}
+
+void DrawMainMenuOverlay(bool playSelected)
+{
+    const int titleWidth = MeasureText(gameplay::kMainMenuTitle, kLevelCompleteFontSize);
+    const int titleX = (GetScreenWidth() - titleWidth) / 2;
+    const int titleY = GetScreenHeight() / 5;
+    DrawText(
+        gameplay::kMainMenuTitle, titleX, titleY, kLevelCompleteFontSize, kLevelCompleteText);
+
+    const char* playText = playSelected ? "> PLAY" : "  PLAY";
+    const char* quitText = playSelected ? "  QUIT" : "> QUIT";
+    const Color playColor = playSelected ? kLevelCompleteText : kGrabHudMuted;
+    const Color quitColor = playSelected ? kGrabHudMuted : kLevelCompleteText;
+
+    const int playWidth = MeasureText(playText, kRestartHintFontSize);
+    const int playX = (GetScreenWidth() - playWidth) / 2;
+    const int playY = titleY + kLevelCompleteFontSize + kRestartHintGap * 2;
+    DrawText(playText, playX, playY, kRestartHintFontSize, playColor);
+
+    const int quitWidth = MeasureText(quitText, kRestartHintFontSize);
+    const int quitX = (GetScreenWidth() - quitWidth) / 2;
+    const int quitY = playY + kRestartHintFontSize + kRestartHintGap;
+    DrawText(quitText, quitX, quitY, kRestartHintFontSize, quitColor);
 }
 
 }
@@ -1495,7 +1529,8 @@ void Renderer::DrawWorld(
         double runCompleteFinalSeconds,
         InventoryPanelView inventoryPanel,
         const DebugWorldOverlay& overlay,
-        WorldViewRect viewRect)
+        WorldViewRect viewRect,
+        bool drawGameplayHud)
 {
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
@@ -1748,7 +1783,10 @@ void Renderer::DrawWorld(
             LevelGoalViewKindFromEditor(overlay.drawLevelGoalAuthoredVolume));
     }
 
-    DrawItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    if (drawGameplayHud)
+    {
+        DrawItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    }
 
     // Editor overlay last in 3D: world, then marker/highlight/faded
     // pending-delete (depth on), cyan pending ghost, then the
@@ -1772,34 +1810,42 @@ void Renderer::DrawWorld(
         EndMode3D();
     }
 
-    DrawRunTimer(elapsedSeconds);
-    DrawSessionBest(hasBestTime, bestSeconds);
-    DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
-    if (!inventoryPanel.visible && !runComplete)
+    if (drawGameplayHud)
     {
-        DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
-        if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+        DrawRunTimer(elapsedSeconds);
+        DrawSessionBest(hasBestTime, bestSeconds);
+        DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
+        if (!inventoryPanel.visible && !runComplete)
         {
-            DrawPickupHud(pickupHudText);
+            DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
+            if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+            {
+                DrawPickupHud(pickupHudText);
+            }
+            else if (!grabHudCarrying && !grabHudTarget && !pickupHudTarget && doorHudTarget)
+            {
+                DrawPickupHud(
+                    lockedDoorPrompt != nullptr && lockedDoorPrompt[0] != '\0'
+                        ? lockedDoorPrompt
+                        : "Requires item");
+            }
+            DrawItemPickupCollectionHud(itemPickupCollectionHud);
         }
-        else if (!grabHudCarrying && !grabHudTarget && !pickupHudTarget && doorHudTarget)
+        if (runComplete)
         {
-            DrawPickupHud(
-                lockedDoorPrompt != nullptr && lockedDoorPrompt[0] != '\0'
-                    ? lockedDoorPrompt
-                    : "Requires item");
+            DrawRunCompleteMessage(runCompleteFinalSeconds);
         }
-        DrawItemPickupCollectionHud(itemPickupCollectionHud);
+        else if (levelCompleted)
+        {
+            DrawLevelCompleteMessage(destinationContinueHint);
+        }
+        DrawInventoryPanel(inventoryPanel);
     }
-    if (runComplete)
-    {
-        DrawRunCompleteMessage(runCompleteFinalSeconds);
-    }
-    else if (levelCompleted)
-    {
-        DrawLevelCompleteMessage(destinationContinueHint);
-    }
-    DrawInventoryPanel(inventoryPanel);
+}
+
+void Renderer::DrawMainMenu(bool playSelected)
+{
+    DrawMainMenuOverlay(playSelected);
 }
 
 void Renderer::DrawOrientationWidget(const OrientationWidgetOverlay& overlay)

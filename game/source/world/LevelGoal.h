@@ -16,7 +16,7 @@ namespace world
 // Matches editor::kMinAuthoredBoxExtent so Resize and parse share one floor.
 inline constexpr float kMinLevelGoalExtent = 0.12f;
 inline constexpr core::Vec3 kDefaultLevelGoalSize{2.0f, 1.6f, 1.8f};
-inline constexpr int kLevel01LevelGoalCount = 0;
+inline constexpr int kLevel01LevelGoalCount = 1;
 
 struct LevelGoalSpec
 {

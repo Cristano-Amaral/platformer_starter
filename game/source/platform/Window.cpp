@@ -36,6 +36,7 @@ void Window::Shutdown()
 
     CloseWindow();
     initialized = false;
+    closeRequested = false;
 }
 
 Window::~Window()
@@ -45,7 +46,16 @@ Window::~Window()
 
 bool Window::ShouldClose() const
 {
-    return WindowShouldClose();
+    return closeRequested || WindowShouldClose();
+}
+
+void Window::RequestClose()
+{
+    if (!initialized)
+    {
+        return;
+    }
+    closeRequested = true;
 }
 
 int Window::Width() const

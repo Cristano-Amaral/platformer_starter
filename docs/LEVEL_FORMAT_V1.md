@@ -124,8 +124,7 @@ probe line; this is not the historical EOL artifact). Save serializes authored
 Jolt body. Position is world center. Size is extents; each axis finite and
 `>= kMinLevelGoalExtent` (0.12). Default Add size is `2, 1.6, 1.8`. Zero,
 one, or many records are valid. Any one active goal may complete the level.
-Canonical Level 01 has **zero** Level Goals. Canonical Level 02 also has
-zero Level Goals; it is a small distinct second map, not a campaign node.
+Canonical Level 01 has **one** destination-bearing Level Goal (`nextLevelId = level_02`). Canonical Level 02 has **one** terminal Level Goal. Neither file uses the historical required singleton `goal` keyword.
 Runtime `LevelCompletionState` is **not** a Level Format field and is never
 serialized. The historical required singleton `goal` keyword is rejected.
 Presentation: Development Editor draws the authored AABB as a translucent
@@ -133,7 +132,7 @@ volume; Gameplay and Release draw the two-post marker only. The invisible
 AABB remains the completion region.
 
 An optional 8th token is the destination identity (`nextLevelId`):
-- omitted or empty → terminal goal (`RUN COMPLETE` / Enter Play Again from staged `level_01`, R Restart Current Level);
+- omitted or empty → terminal goal (`RUN COMPLETE` / Enter Play Again from staged `level_01`, R Restart Current Level, Esc Main Menu);
 - a valid `id` token such as `level_02` → destination-bearing goal (`LEVEL COMPLETE` / Enter Continue after the 1.75 s hold).
 
 The writer emits the token only when non-empty. Unsafe identities (absolute

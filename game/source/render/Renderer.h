@@ -259,7 +259,9 @@ public:
         double runCompleteFinalSeconds = 0.0,
         InventoryPanelView inventoryPanel = {},
         const DebugWorldOverlay& overlay = {},
-        WorldViewRect viewRect = {});
+        WorldViewRect viewRect = {},
+        bool drawGameplayHud = true);
+    void DrawMainMenu(bool playSelected);
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);
     void DrawEditorPlacementHud(
         bool visible,

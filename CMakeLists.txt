@@ -851,8 +851,9 @@ target_compile_definitions(LevelTransitionTest PRIVATE
     "PLATFORMER_LEVEL02_SOURCE_PATH=\"${PLATFORMER_LEVEL02_SOURCE_PATH}\""
 )
 
-# Milestone 65: terminal Run Complete vs destination hold, Play Again staged
-# level_01, Restart-current-level. No window, raylib, ImGui, or Jolt.
+# Milestone 66: Main Menu, Play fresh staged level_01, Quit, Run Complete Esc.
+# Terminal Run Complete vs destination hold, Play Again, Restart-current-level.
+# No window, raylib, ImGui, or Jolt.
 add_executable(GameFlowTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h

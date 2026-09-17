@@ -1,8 +1,9 @@
 #pragma once
 
-// Narrow M65 run-completion flow. Application-owned only.
-// Not a GameState machine, SceneManager, campaign graph, or event bus.
-// Destination-bearing goals keep M64.1 LevelTransitionSchedule authority.
+// Narrow top-level player flow: Main Menu vs Gameplay, plus M65 Run Complete.
+// Application-owned only. Not a GameState machine, SceneManager, campaign
+// graph, screen stack, or event bus. Destination-bearing goals keep M64.1
+// LevelTransitionSchedule authority.
 
 #include "world/LevelIdentity.h"
 
@@ -23,14 +24,40 @@ inline constexpr bool kRunCompleteShowsSessionBest = false;
 inline constexpr const char* kRunCompleteTitle = "RUN COMPLETE";
 inline constexpr const char* kRunCompletePlayAgainHint = "ENTER   PLAY AGAIN";
 inline constexpr const char* kRunCompleteRestartHint = "R       RESTART LEVEL";
+inline constexpr const char* kRunCompleteMainMenuHint = "ESC     MAIN MENU";
 inline constexpr const char* kDestinationCompleteHint = "PRESS ENTER TO CONTINUE";
 inline constexpr const char* kFailedDestinationRestartHint = "PRESS ENTER TO RESTART";
+
+inline constexpr const char* kMainMenuTitle = "Platformer3D";
+inline constexpr const char* kMainMenuPlayLabel = "PLAY";
+inline constexpr const char* kMainMenuQuitLabel = "QUIT";
+inline constexpr int kMainMenuItemCount = 2;
+
+enum class TopLevelFlow
+{
+    MainMenu,
+    Gameplay,
+};
+
+enum class MainMenuItem
+{
+    Play,
+    Quit,
+};
+
+enum class MainMenuInputAction
+{
+    None,
+    Play,
+    Quit,
+};
 
 enum class RunCompleteInputAction
 {
     None,
     PlayAgain,
     RestartCurrentLevel,
+    ReturnToMainMenu,
 };
 
 enum class CompletionPresentation
@@ -50,9 +77,56 @@ struct RunCompleteState
     std::string playAgainFailureMessage;
 };
 
+struct MainMenuState
+{
+    MainMenuItem selected = MainMenuItem::Play;
+    bool playPending = false;
+    bool playFailed = false;
+    std::string playFailureMessage;
+    bool quitRequested = false;
+};
+
 inline void ResetRunCompleteState(RunCompleteState& state)
 {
     state = RunCompleteState{};
+}
+
+inline void ResetMainMenuState(MainMenuState& state)
+{
+    state = MainMenuState{};
+}
+
+inline bool MainMenuBlocksGameplay(TopLevelFlow flow)
+{
+    return flow == TopLevelFlow::MainMenu;
+}
+
+inline bool RunTimerAdvancesInFlow(TopLevelFlow flow)
+{
+    return flow == TopLevelFlow::Gameplay;
+}
+
+inline bool InventoryUiIsAvailable(
+    TopLevelFlow flow,
+    bool editorActive,
+    bool runCompleteActive)
+{
+    return flow == TopLevelFlow::Gameplay && !editorActive && !runCompleteActive;
+}
+
+inline bool GameplayHudIsActive(TopLevelFlow flow, bool editorActive)
+{
+    return editorActive || flow == TopLevelFlow::Gameplay;
+}
+
+inline bool MainMenuOverlayIsVisible(TopLevelFlow flow, bool editorActive)
+{
+    return flow == TopLevelFlow::MainMenu && !editorActive;
+}
+
+inline bool ResultsHudShowsRunComplete(TopLevelFlow flow, const RunCompleteState& state)
+{
+    return flow == TopLevelFlow::Gameplay && state.active;
 }
 
 inline bool RunCompleteBlocksGameplay(const RunCompleteState& state)
@@ -60,14 +134,19 @@ inline bool RunCompleteBlocksGameplay(const RunCompleteState& state)
     return state.active;
 }
 
-inline bool ResultsHudShowsRunComplete(const RunCompleteState& state)
-{
-    return state.active;
-}
-
 inline double FrozenRunCompleteSeconds(const RunCompleteState& state)
 {
     return state.capturedFinalSeconds;
+}
+
+inline TopLevelFlow FlowAfterEditorToggle(TopLevelFlow current)
+{
+    return current;
+}
+
+inline TopLevelFlow FlowAfterEditorOpenOrSwitch(TopLevelFlow current)
+{
+    return current;
 }
 
 // Terminal nextLevelId (empty) enters results exactly once. A destination
@@ -114,12 +193,110 @@ inline bool PlayAgainIsInFlight(const RunCompleteState& state)
     return state.playAgainPending && !state.playAgainFailed;
 }
 
+inline bool PlayIsInFlight(const MainMenuState& state)
+{
+    return state.playPending && !state.playFailed;
+}
+
+inline void RequestPlayFromMainMenu(MainMenuState& state, TopLevelFlow flow)
+{
+    if (flow != TopLevelFlow::MainMenu || state.playPending || state.quitRequested)
+    {
+        return;
+    }
+    state.playPending = true;
+    state.playFailed = false;
+    state.playFailureMessage.clear();
+}
+
+inline void MarkPlayFailed(MainMenuState& state, std::string_view message)
+{
+    state.playPending = false;
+    state.playFailed = true;
+    state.playFailureMessage = std::string(message);
+}
+
+inline void RequestQuitFromMainMenu(MainMenuState& state, TopLevelFlow flow)
+{
+    if (flow != TopLevelFlow::MainMenu || state.playPending)
+    {
+        return;
+    }
+    state.quitRequested = true;
+}
+
+inline void NavigateMainMenu(MainMenuState& state, int step)
+{
+    if (step == 0 || state.playPending || state.quitRequested)
+    {
+        return;
+    }
+    const int count = kMainMenuItemCount;
+    int index = static_cast<int>(state.selected) + step;
+    index %= count;
+    if (index < 0)
+    {
+        index += count;
+    }
+    state.selected = static_cast<MainMenuItem>(index);
+}
+
+inline void EnterMainMenu(
+    TopLevelFlow& flow,
+    MainMenuState& menu,
+    RunCompleteState& runComplete)
+{
+    flow = TopLevelFlow::MainMenu;
+    ResetMainMenuState(menu);
+    ResetRunCompleteState(runComplete);
+}
+
+inline void EnterGameplayFromSuccessfulPlay(TopLevelFlow& flow, MainMenuState& menu)
+{
+    flow = TopLevelFlow::Gameplay;
+    ResetMainMenuState(menu);
+}
+
+// Activate uses the selection captured at call time. Navigation is a
+// separate edge so Enter does not also move. Menu input is ignored unless
+// Main Menu was already active at frame start (no F2/Play leak).
+inline MainMenuInputAction ResolveMainMenuInput(
+    bool mainMenuAvailableAtFrameStart,
+    bool previousPressed,
+    bool nextPressed,
+    bool activatePressed,
+    MainMenuState& state,
+    TopLevelFlow flow)
+{
+    if (!mainMenuAvailableAtFrameStart || flow != TopLevelFlow::MainMenu
+        || state.playPending || state.quitRequested)
+    {
+        return MainMenuInputAction::None;
+    }
+    if (activatePressed)
+    {
+        return state.selected == MainMenuItem::Play ? MainMenuInputAction::Play
+                                                    : MainMenuInputAction::Quit;
+    }
+    if (previousPressed && !nextPressed)
+    {
+        NavigateMainMenu(state, -1);
+    }
+    else if (nextPressed && !previousPressed)
+    {
+        NavigateMainMenu(state, 1);
+    }
+    return MainMenuInputAction::None;
+}
+
 // Requires results already visible at frame start so completion+Enter cannot
-// Play Again on the same frame. Enter wins over R if both edges fire.
+// Play Again on the same frame. Priority: Enter Play Again, then Esc Main
+// Menu, then R Restart. Destination hold never uses this path.
 inline RunCompleteInputAction ResolveRunCompleteInput(
     bool runCompleteAvailableAtFrameStart,
     bool enterPressed,
     bool restartCurrentLevelPressed,
+    bool cancelPressed,
     const RunCompleteState& state)
 {
     if (!runCompleteAvailableAtFrameStart || !state.active || state.playAgainPending)
@@ -131,6 +308,10 @@ inline RunCompleteInputAction ResolveRunCompleteInput(
         return state.playAgainFailed ? RunCompleteInputAction::None
                                      : RunCompleteInputAction::PlayAgain;
     }
+    if (cancelPressed)
+    {
+        return RunCompleteInputAction::ReturnToMainMenu;
+    }
     if (restartCurrentLevelPressed)
     {
         return RunCompleteInputAction::RestartCurrentLevel;
@@ -139,10 +320,15 @@ inline RunCompleteInputAction ResolveRunCompleteInput(
 }
 
 inline CompletionPresentation SelectCompletionPresentation(
+    TopLevelFlow flow,
     bool levelCompleted,
     bool destinationContinueHint,
     const RunCompleteState& runComplete)
 {
+    if (flow != TopLevelFlow::Gameplay)
+    {
+        return CompletionPresentation::None;
+    }
     if (runComplete.active)
     {
         return CompletionPresentation::RunComplete;
@@ -168,5 +354,18 @@ inline bool RestartStaysOnCurrentLevel(
     std::string_view afterRestartId)
 {
     return currentId == afterRestartId;
+}
+
+inline bool EscapeClosesWindowInFlow(
+    TopLevelFlow flow,
+    bool editorActive,
+    bool runCompleteActive,
+    bool inventoryOpen)
+{
+    if (editorActive || flow != TopLevelFlow::Gameplay || runCompleteActive || inventoryOpen)
+    {
+        return false;
+    }
+    return true;
 }
 }

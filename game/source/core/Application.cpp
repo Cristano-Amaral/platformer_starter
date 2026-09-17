@@ -441,6 +441,26 @@ void ReportPlayAgainFailure(
     }
 }
 
+void ReportPlayFailure(
+    const std::filesystem::path& path,
+    std::string_view message)
+{
+    std::fprintf(stderr, "Play failed. Main Menu unchanged.\n");
+    std::fprintf(stderr, "  destination: %s\n", world::kLevel01Id.data());
+    if (path.empty())
+    {
+        std::fprintf(stderr, "  path: (unavailable)\n");
+    }
+    else
+    {
+        std::fprintf(stderr, "  path: %s\n", path.string().c_str());
+    }
+    if (!message.empty())
+    {
+        std::fprintf(stderr, "  error: %s\n", std::string(message).c_str());
+    }
+}
+
 void CopyBounded(char* destination, std::size_t destinationSize, std::string_view source)
 {
     if (destination == nullptr || destinationSize == 0)
@@ -893,6 +913,7 @@ int Application::Run()
         const input::InputState inputState = input::Poll();
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        const bool editorActiveAtFrameStart = levelEditorState.active;
         // Ignore the toggle while an ImGui field owns the keyboard so typing a
         // value cannot close the editor.
         if (inputState.toggleLevelEditorPressed && !debugUi.WantsKeyboardCapture())
@@ -903,13 +924,42 @@ int Application::Run()
         {
             gameplay::CloseInventoryUi(inventoryUi);
         }
-#endif
-        const bool inventoryWasOpen = inventoryUi.open;
-#if defined(PLATFORMER_ENABLE_DEBUG_UI)
-        if (!levelEditorState.active && !runCompleteState.active)
+        const bool editorActive = levelEditorState.active;
 #else
-        if (!runCompleteState.active)
+        const bool editorActiveAtFrameStart = false;
+        const bool editorActive = false;
 #endif
+        const bool mainMenuAvailableAtFrameStart =
+            gameplay::MainMenuOverlayIsVisible(topLevelFlow, editorActiveAtFrameStart);
+        const bool runCompleteAvailableAtFrameStart =
+            gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState);
+
+        if (mainMenuAvailableAtFrameStart && !editorActive)
+        {
+            const gameplay::MainMenuInputAction menuAction = gameplay::ResolveMainMenuInput(
+                mainMenuAvailableAtFrameStart,
+                inputState.inventoryPreviousPressed,
+                inputState.inventoryNextPressed,
+                inputState.restartPressed,
+                mainMenuState,
+                topLevelFlow);
+            if (menuAction == gameplay::MainMenuInputAction::Play)
+            {
+                gameplay::RequestPlayFromMainMenu(mainMenuState, topLevelFlow);
+            }
+            else if (menuAction == gameplay::MainMenuInputAction::Quit)
+            {
+                gameplay::RequestQuitFromMainMenu(mainMenuState, topLevelFlow);
+            }
+        }
+        if (mainMenuState.quitRequested)
+        {
+            window.RequestClose();
+        }
+
+        const bool inventoryWasOpen = inventoryUi.open;
+        if (gameplay::InventoryUiIsAvailable(
+                topLevelFlow, editorActive, runCompleteState.active))
         {
             gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
         }
@@ -917,19 +967,17 @@ int Application::Run()
             gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
         const bool runCompleteBlocksGameplay =
             gameplay::RunCompleteBlocksGameplay(runCompleteState);
-#if defined(PLATFORMER_ENABLE_DEBUG_UI)
         const bool simulationPaused =
-            levelEditorState.active || inventoryBlocksGameplay || runCompleteBlocksGameplay;
-#else
-        const bool simulationPaused = inventoryBlocksGameplay || runCompleteBlocksGameplay;
-#endif
+            editorActive
+            || gameplay::MainMenuBlocksGameplay(topLevelFlow)
+            || inventoryBlocksGameplay
+            || runCompleteBlocksGameplay;
 
         bool hazardContactThisFrame = false;
         int collectedThisFrameIndex = world::kNoCollectibleIndex;
         bool restartedThisFrame = false;
         int itemPickupTargetIndex = gameplay::kNoItemPickupIndex;
         int lockedDoorTargetIndex = gameplay::kNoLockedDoorIndex;
-        const bool runCompleteAvailableAtFrameStart = runCompleteState.active;
 
         // Single simulation guard. Everything inside keeps the exact M31 order
         // and content; the editor pauses it wholesale rather than scaling time.
@@ -1146,10 +1194,15 @@ int Application::Run()
                     runCompleteAvailableAtFrameStart,
                     inputState.restartPressed,
                     inputState.respawnPressed,
+                    inputState.cancelPressed,
                     runCompleteState);
             if (runCompleteAction == gameplay::RunCompleteInputAction::PlayAgain)
             {
                 gameplay::RequestPlayAgain(runCompleteState);
+            }
+            else if (runCompleteAction == gameplay::RunCompleteInputAction::ReturnToMainMenu)
+            {
+                ReturnToMainMenuFromResults();
             }
             else if (runCompleteAction == gameplay::RunCompleteInputAction::RestartCurrentLevel)
             {
@@ -1613,10 +1666,20 @@ int Application::Run()
         else
         {
             input::SetMouseLookActive(false);
-            window.SetEscapeClosesWindow(!inventoryUi.open);
+            window.SetEscapeClosesWindow(
+                gameplay::EscapeClosesWindowInFlow(
+                    topLevelFlow,
+                    false,
+                    runCompleteState.active,
+                    inventoryUi.open));
         }
 #else
-        window.SetEscapeClosesWindow(!inventoryUi.open);
+        window.SetEscapeClosesWindow(
+            gameplay::EscapeClosesWindowInFlow(
+                topLevelFlow,
+                false,
+                runCompleteState.active,
+                inventoryUi.open));
 #endif
         char lockedDoorPrompt[64]{};
         if (lockedDoorTargetIndex >= 0
@@ -1675,15 +1738,20 @@ int Application::Run()
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
-            gameplay::ResultsHudShowsRunComplete(runCompleteState),
+            gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
             gameplay::FrozenRunCompleteSeconds(runCompleteState),
             render::InventoryPanelView{
                 inventoryUi.open,
                 inventory.Entries(),
                 inventoryUi.selectedItemId},
             overlay,
-            worldViewRect
+            worldViewRect,
+            gameplay::GameplayHudIsActive(topLevelFlow, editorActive)
         );
+        if (gameplay::MainMenuOverlayIsVisible(topLevelFlow, editorActive))
+        {
+            renderer.DrawMainMenu(mainMenuState.selected == gameplay::MainMenuItem::Play);
+        }
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
         {
@@ -2137,8 +2205,16 @@ int Application::Run()
         }
         FinishCookStageAndReloadIfReady();
 #endif
-        TryFinishPendingLevelTransition();
-        TryFinishPendingPlayAgain();
+        if (!gameplay::MainMenuBlocksGameplay(topLevelFlow))
+        {
+            TryFinishPendingLevelTransition();
+        }
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        if (!levelEditorState.active)
+#endif
+        {
+            TryFinishPendingFreshRun();
+        }
     }
 
     Shutdown();
@@ -2282,6 +2358,8 @@ void Application::Initialize()
     levelEditorState.contentBrowser.viewMode = editor::LoadContentBrowserViewMode();
 #endif
     initialized = true;
+    gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState);
+    window.SetEscapeClosesWindow(false);
 }
 
 void Application::PerformRespawn(gameplay::RespawnReason reason)
@@ -2376,7 +2454,6 @@ void Application::SetLevelEditorActive(bool active)
             levelEditorState.staticPropPlacement);
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
-        window.SetEscapeClosesWindow(true);
         gameplay::CloseInventoryUi(inventoryUi);
     }
 
@@ -3092,21 +3169,51 @@ void Application::ResetGameplayAfterLevelTransition()
     gameplay::ResetRunCompleteState(runCompleteState);
 }
 
-void Application::TryFinishPendingPlayAgain()
+void Application::ReturnToMainMenuFromResults()
 {
-    if (!gameplay::PlayAgainIsInFlight(runCompleteState))
+    gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState);
+    gameplay::ResetLevelTransitionSchedule(levelTransition);
+    levelCompletionState = gameplay::LevelCompletionState{};
+    gameplay::CloseInventoryUi(inventoryUi);
+}
+
+void Application::TryFinishPendingFreshRun()
+{
+    const bool menuPlay = gameplay::PlayIsInFlight(mainMenuState);
+    const bool resultsPlay = gameplay::PlayAgainIsInFlight(runCompleteState);
+    if (!menuPlay && !resultsPlay)
     {
         return;
     }
-    runCompleteState.playAgainPending = false;
+    if (menuPlay)
+    {
+        mainMenuState.playPending = false;
+    }
+    if (resultsPlay)
+    {
+        runCompleteState.playAgainPending = false;
+    }
 
     const std::string logicalId = world::MakeRuntimeLevelLogicalId(world::kLevel01Id);
     const std::filesystem::path stagedPath = platform::RuntimeAssetPath(logicalId);
+    const auto failFreshRun = [&](std::string_view message) {
+        if (menuPlay)
+        {
+            gameplay::MarkPlayFailed(mainMenuState, message);
+            ReportPlayFailure(stagedPath, mainMenuState.playFailureMessage);
+        }
+        else
+        {
+            gameplay::MarkPlayAgainFailed(runCompleteState, message);
+            ReportPlayAgainFailure(stagedPath, runCompleteState.playAgainFailureMessage);
+        }
+    };
+
     if (logicalId.empty() || stagedPath.empty())
     {
-        gameplay::MarkPlayAgainFailed(
-            runCompleteState, "Initial staged level path is unsafe. Active run unchanged.");
-        ReportPlayAgainFailure(stagedPath, runCompleteState.playAgainFailureMessage);
+        failFreshRun(
+            menuPlay ? "Initial staged level path is unsafe. Main Menu unchanged."
+                     : "Initial staged level path is unsafe. Active run unchanged.");
         return;
     }
 
@@ -3114,8 +3221,7 @@ void Application::TryFinishPendingPlayAgain()
         gameplay::PrepareStagedLevelDestination(stagedPath, world::kLevel01Id);
     if (prepared.status != gameplay::LevelTransitionPrepareStatus::Ready)
     {
-        gameplay::MarkPlayAgainFailed(runCompleteState, prepared.message);
-        ReportPlayAgainFailure(stagedPath, prepared.message);
+        failFreshRun(prepared.message);
         return;
     }
 
@@ -3124,9 +3230,9 @@ void Application::TryFinishPendingPlayAgain()
             prepared.candidate.initialSpawnVisualCenter,
             player.Size()))
     {
-        gameplay::MarkPlayAgainFailed(
-            runCompleteState, "Physics rebuild failed. Active run unchanged.");
-        ReportPlayAgainFailure(stagedPath, runCompleteState.playAgainFailureMessage);
+        failFreshRun(
+            menuPlay ? "Physics rebuild failed. Main Menu unchanged."
+                     : "Physics rebuild failed. Active run unchanged.");
         return;
     }
 
@@ -3136,8 +3242,12 @@ void Application::TryFinishPendingPlayAgain()
     levelLoadStatus = world::LoadLevelFileStatus::Loaded;
     levelFormatVersion = world::kLevelFileVersion;
     ResetGameplayAfterPlayAgain();
+    gameplay::EnterGameplayFromSuccessfulPlay(topLevelFlow, mainMenuState);
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    const char* successMessage = menuPlay
+        ? "Play loaded staged level_01."
+        : "Play Again loaded staged level_01.";
     if (levelEditorState.modified)
     {
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
@@ -3146,8 +3256,9 @@ void Application::TryFinishPendingPlayAgain()
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetLevelActionStatuses(levelEditorState);
-        levelEditorState.lastMessage =
-            "Play Again loaded staged level_01. Unapplied working-copy edits were kept.";
+        levelEditorState.lastMessage = menuPlay
+            ? "Play loaded staged level_01. Unapplied working-copy edits were kept."
+            : "Play Again loaded staged level_01. Unapplied working-copy edits were kept.";
     }
     else
     {
@@ -3165,7 +3276,7 @@ void Application::TryFinishPendingPlayAgain()
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetLevelActionStatuses(levelEditorState);
-        levelEditorState.lastMessage = "Play Again loaded staged level_01.";
+        levelEditorState.lastMessage = successMessage;
     }
 #endif
 }
