@@ -26,7 +26,7 @@ file. The writer emits exactly this contract.
 | Staged / runtime | `<executable directory>/assets/levels/<id>.level` |
 
 Logical runtime ids: `levels/<id>.level` via `platform::RuntimeAssetPath`.
-The runtime never reads `assets/source`. Destination-bearing Level Goals resolve only through that staged runtime convention. There is no source-tree fallback. Development Levels UI discovers authored `source/levels/*.level` files for Open/New/Next Level selection only. Extra valid source levels cook as `level_v1` and extra cooked levels stage without a per-level CMake inventory edit; required inventory remains `level_01` and `level_02`.
+The runtime never reads `assets/source`. Destination-bearing Level Goals resolve only through that staged runtime convention. There is no source-tree fallback. Development Levels UI discovers authored `source/levels/*.level` files for Open/New/Next Level selection only. Extra valid source levels cook as `level_v1` and extra cooked levels stage without a per-level CMake inventory edit; required inventory remains `level_01` and `level_02`. A deleted extra authored Level is removed from cooked and staged `levels/*.level` on the next cook/stage; other asset categories are not scanned.
 
 The Development editor writes the source row for the **current runtime level identity** (`levels/<id>.level`) and never the staged runtime
 copy. It resolves that path through `editor::AuthoringLevelSourcePath`, whose
@@ -133,8 +133,8 @@ volume; Gameplay and Release draw the two-post marker only. The invisible
 AABB remains the completion region.
 
 An optional 8th token is the destination identity (`nextLevelId`):
-- omitted or empty → terminal M63 goal (`LEVEL COMPLETE` / Enter to Restart);
-- a valid `id` token such as `level_02` → destination-bearing goal.
+- omitted or empty → terminal goal (`RUN COMPLETE` / Enter Play Again from staged `level_01`, R Restart Current Level);
+- a valid `id` token such as `level_02` → destination-bearing goal (`LEVEL COMPLETE` / Enter Continue after the 1.75 s hold).
 
 The writer emits the token only when non-empty. Unsafe identities (absolute
 paths, traversal, slashes, dots, extensions) are rejected. Runtime resolution

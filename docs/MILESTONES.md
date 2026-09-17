@@ -23,15 +23,15 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 64.1 — Editor Level Browser & Transition UX**
+**Milestone 65 — Game Flow & Run Completion**
 
-Canonical file: [`docs/milestones/MILESTONE_64_1.md`](milestones/MILESTONE_64_1.md)
+Canonical file: [`docs/milestones/MILESTONE_65.md`](milestones/MILESTONE_65.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Milestone 64 is complete.
-Milestone 64.1 is implemented, awaiting manual acceptance.
-Do not start Milestone 65.
+Milestone 64.1 is CLOSED.
+Milestone 65 is implemented, awaiting manual acceptance.
+Do not start Milestone 66.
 
 ## Cursor loading contract
 
@@ -131,7 +131,8 @@ Historical milestone files do not override current implemented behavior.
 | 62 | [Milestone 62 — Item Pickup Collection HUD Notification](milestones/MILESTONE_62.md) | implemented, awaiting manual acceptance |
 | 63 | [Milestone 63 — Level Goal / Exit](milestones/MILESTONE_63.md) | complete |
 | 64 | [Milestone 64 — Multiple Levels & Level Transition](milestones/MILESTONE_64.md) | complete |
-| 64.1 | [Milestone 64.1 — Editor Level Browser & Transition UX](milestones/MILESTONE_64_1.md) | implemented, awaiting manual acceptance |
+| 64.1 | [Milestone 64.1 — Editor Level Browser & Transition UX](milestones/MILESTONE_64_1.md) | complete |
+| 65 | [Milestone 65 — Game Flow & Run Completion](milestones/MILESTONE_65.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

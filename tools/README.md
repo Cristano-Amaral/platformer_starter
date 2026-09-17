@@ -35,8 +35,11 @@ The cooker copies known authored files from `game/assets/source/` to
 `source/levels/*.level` files discovered for Milestone 64.1 New Level. It does not
 glob every PNG under `source/textures/`. It does not glob sounds. Skips a
 rewrite when the cooked bytes already match the current cook result, writes
-`game/assets/cooked/manifest.json`, and removes only previously manifested
-cooked outputs that are no longer in the known asset list.
+`game/assets/cooked/manifest.json`, and removes previously manifested cooked
+outputs that are no longer in the known asset list. Cooked `levels/*.level`
+files that are not in the current required-plus-discovered Level inventory are
+also removed, including leftovers that were never manifested. Other cooked
+categories are not directory-scanned.
 
 Asset kinds:
 

@@ -177,7 +177,7 @@ int main()
     Expect(!terminalHold.holding && !terminalHold.pending, "terminal does not create countdown state");
     Expect(
         !gameplay::DestinationCompletionShowsContinueHint(terminalHold),
-        "terminal HUD stays Enter-to-Restart");
+        "terminal does not show destination continue hint");
     gameplay::MarkLevelTransitionFailed(schedule, "missing destination");
     Expect(!schedule.pending && schedule.failed, "failed schedule is not pending");
     Expect(!schedule.holding, "failed transition clears destination hold");

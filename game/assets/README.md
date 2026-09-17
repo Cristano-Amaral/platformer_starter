@@ -49,6 +49,8 @@ Milestone 31/64 level files:
 - cooked: `game/assets/cooked/levels/`
 - runtime: `<executable directory>/assets/levels/`
 - cooker kind: `level_v1` (UTF-8 header gate, then byte copy)
+- extra valid `source/levels/*.level` files are discovered; required inventory remains `level_01` and `level_02`
+- cooked/staged `levels/*.level` leftovers that are no longer in that inventory are removed on the next cook/stage
 - runtime never loads `source/`
 - destination-bearing Level Goals resolve only the staged runtime copy
 - destination: `game/assets/source/models/<filename>.glb` (external filename preserved)

@@ -255,6 +255,8 @@ public:
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
+        bool runComplete = false,
+        double runCompleteFinalSeconds = 0.0,
         InventoryPanelView inventoryPanel = {},
         const DebugWorldOverlay& overlay = {},
         WorldViewRect viewRect = {});

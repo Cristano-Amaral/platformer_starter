@@ -148,6 +148,8 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             self.assertEqual((dest / "nested" / "a.txt").read_text(encoding="utf-8"), "space")
 
     def test_stale_destination_file_is_left_in_place(self) -> None:
+        # Unrelated staged files stay. Discovered Level leftovers are a
+        # separate ownership-aware cleanup, covered below.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             cooked = root / "cooked"
@@ -206,6 +208,52 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
             self.assertTrue((dest / "levels" / "level_03.level").is_file())
             self.assertTrue((dest / "levels" / "level_01.level").is_file())
+
+    def test_stale_staged_level_is_removed_without_touching_other_categories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cooked = root / "cooked"
+            dest = root / "dest"
+            required = [
+                "textures/test_checker.png",
+                "models/test_static.glb",
+                "models/test_authored.glb",
+                "models/test_textured.glb",
+                "levels/level_01.level",
+                "levels/level_02.level",
+                "sounds/item_pickup_collect.wav",
+            ]
+            repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
+            for relative in required:
+                target = cooked / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(repo_cooked / relative, target)
+            extra = cooked / "levels" / "level_tmp_extra.level"
+            extra.write_text("PLATFORMER_LEVEL 1\nid level_tmp_extra\n", encoding="utf-8")
+            first = run_stage(cooked, dest, asset_list=None)
+            self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+            self.assertTrue((dest / "levels" / "level_tmp_extra.level").is_file())
+
+            extra.unlink()
+            unrelated_model = dest / "models" / "unrelated_probe.glb"
+            unrelated_orphan = dest / "orphan.txt"
+            unrelated_note = dest / "levels" / "notes.txt"
+            unrelated_model.write_bytes(b"keep-model")
+            unrelated_orphan.write_text("keep-orphan", encoding="utf-8")
+            unrelated_note.write_text("keep-note", encoding="utf-8")
+
+            second = run_stage(cooked, dest, asset_list=None)
+            self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
+            combined = second.stdout + second.stderr
+            self.assertIn("removed stale staged levels/level_tmp_extra.level", combined)
+            self.assertFalse((dest / "levels" / "level_tmp_extra.level").exists())
+            self.assertTrue((dest / "levels" / "level_01.level").is_file())
+            self.assertTrue((dest / "levels" / "level_02.level").is_file())
+            self.assertTrue(unrelated_model.is_file())
+            self.assertTrue(unrelated_orphan.is_file())
+            self.assertTrue(unrelated_note.is_file())
+            self.assertTrue((dest / "textures" / "test_checker.png").is_file())
+            self.assertTrue((dest / "sounds" / "item_pickup_collect.wav").is_file())
 
 
 if __name__ == "__main__":

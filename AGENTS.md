@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 64.1 — Editor Level Browser & Transition UX.
+Milestone 65 — Game Flow & Run Completion.
 
-Canonical file: [`docs/milestones/MILESTONE_64_1.md`](docs/milestones/MILESTONE_64_1.md)
+Canonical file: [`docs/milestones/MILESTONE_65.md`](docs/milestones/MILESTONE_65.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 64 is complete. Milestone 64.1 is implemented, awaiting manual acceptance. Do not start Milestone 65.
+Milestone 64.1 is CLOSED. Milestone 65 is implemented, awaiting manual acceptance. Do not start Milestone 66.
 
 ## Source of truth
 1. Current repository code.

@@ -9,6 +9,7 @@
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
+#include "gameplay/GameFlowState.h"
 #include "gameplay/LevelTransition.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -37,6 +38,7 @@
 #include <vector>
 
 static_assert(!gameplay::SessionBestTimeState{}.hasBestTime);
+static_assert(!gameplay::kRunCompleteShowsSessionBest);
 static_assert(core::RunTimePartsEqual(core::RunTimePartsFromSeconds(0.0), 0, 0, 0));
 static_assert(gameplay::kPlayerInventoryUiEnabled);
 #if defined(GAME_RELEASE)
@@ -419,6 +421,26 @@ void ReportLevelTransitionFailure(
     }
 }
 
+void ReportPlayAgainFailure(
+    const std::filesystem::path& path,
+    std::string_view message)
+{
+    std::fprintf(stderr, "Play Again failed. Active run unchanged.\n");
+    std::fprintf(stderr, "  destination: %s\n", world::kLevel01Id.data());
+    if (path.empty())
+    {
+        std::fprintf(stderr, "  path: (unavailable)\n");
+    }
+    else
+    {
+        std::fprintf(stderr, "  path: %s\n", path.string().c_str());
+    }
+    if (!message.empty())
+    {
+        std::fprintf(stderr, "  error: %s\n", std::string(message).c_str());
+    }
+}
+
 void CopyBounded(char* destination, std::size_t destinationSize, std::string_view source)
 {
     if (destination == nullptr || destinationSize == 0)
@@ -624,7 +646,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     bool hazardContactThisFrame,
     int collectedThisFrameIndex,
     float deltaSeconds,
-    const gameplay::LevelTransitionSchedule& levelTransition)
+    const gameplay::LevelTransitionSchedule& levelTransition,
+    const gameplay::RunCompleteState& runCompleteState)
 {
     ui::DebugMetricsSnapshot snapshot;
     snapshot.fps = static_cast<float>(platform::FramesPerSecond());
@@ -798,6 +821,10 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.bestTimeSaveStatus = persistence::SaveBestTimeStatusName(bestTimeSaveStatus);
 
     snapshot.levelCompleted = levelCompletionState.completed;
+    snapshot.runComplete = runCompleteState.active;
+    snapshot.runCompleteFinalSeconds = runCompleteState.capturedFinalSeconds;
+    snapshot.playAgainPending = runCompleteState.playAgainPending;
+    snapshot.playAgainFailed = runCompleteState.playAgainFailed;
     snapshot.levelGoalCount = static_cast<int>(level.levelGoals.size());
     snapshot.playerInsideGoal =
         world::PlayerOverlapsAnyLevelGoal(level.levelGoals, player.Position());
@@ -879,17 +906,22 @@ int Application::Run()
 #endif
         const bool inventoryWasOpen = inventoryUi.open;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
-        if (!levelEditorState.active)
+        if (!levelEditorState.active && !runCompleteState.active)
+#else
+        if (!runCompleteState.active)
 #endif
         {
             gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
         }
         const bool inventoryBlocksGameplay =
             gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
+        const bool runCompleteBlocksGameplay =
+            gameplay::RunCompleteBlocksGameplay(runCompleteState);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
-        const bool simulationPaused = levelEditorState.active || inventoryBlocksGameplay;
+        const bool simulationPaused =
+            levelEditorState.active || inventoryBlocksGameplay || runCompleteBlocksGameplay;
 #else
-        const bool simulationPaused = inventoryBlocksGameplay;
+        const bool simulationPaused = inventoryBlocksGameplay || runCompleteBlocksGameplay;
 #endif
 
         bool hazardContactThisFrame = false;
@@ -897,6 +929,7 @@ int Application::Run()
         bool restartedThisFrame = false;
         int itemPickupTargetIndex = gameplay::kNoItemPickupIndex;
         int lockedDoorTargetIndex = gameplay::kNoLockedDoorIndex;
+        const bool runCompleteAvailableAtFrameStart = runCompleteState.active;
 
         // Single simulation guard. Everything inside keeps the exact M31 order
         // and content; the editor pauses it wholesale rather than scaling time.
@@ -962,6 +995,13 @@ int Application::Run()
                     runTimerState.frozen = true;
                     gameplay::CaptureCompletedGoalDestination(
                         levelTransition, completedNextLevelId);
+                    if (gameplay::TryEnterRunCompleteFromTerminalGoal(
+                            runCompleteState,
+                            completedNextLevelId,
+                            runTimerState.elapsedSeconds))
+                    {
+                        gameplay::CloseInventoryUi(inventoryUi);
+                    }
                     if (gameplay::IsBetterSessionCompletion(
                             sessionBestTimeState,
                             runTimerState.elapsedSeconds))
@@ -1094,6 +1134,27 @@ int Application::Run()
             if (!respawnedThisFrame && !restartedThisFrame)
             {
                 camera.Update(player.Position(), deltaSeconds);
+            }
+        }
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        if (!levelEditorState.active)
+#endif
+        {
+            const gameplay::RunCompleteInputAction runCompleteAction =
+                gameplay::ResolveRunCompleteInput(
+                    runCompleteAvailableAtFrameStart,
+                    inputState.restartPressed,
+                    inputState.respawnPressed,
+                    runCompleteState);
+            if (runCompleteAction == gameplay::RunCompleteInputAction::PlayAgain)
+            {
+                gameplay::RequestPlayAgain(runCompleteState);
+            }
+            else if (runCompleteAction == gameplay::RunCompleteInputAction::RestartCurrentLevel)
+            {
+                RestartRun();
+                restartedThisFrame = true;
             }
         }
 
@@ -1614,6 +1675,8 @@ int Application::Run()
             runTimerState.elapsedSeconds,
             sessionBestTimeState.hasBestTime,
             sessionBestTimeState.bestSeconds,
+            gameplay::ResultsHudShowsRunComplete(runCompleteState),
+            gameplay::FrozenRunCompleteSeconds(runCompleteState),
             render::InventoryPanelView{
                 inventoryUi.open,
                 inventory.Entries(),
@@ -1731,7 +1794,8 @@ int Application::Run()
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
                 deltaSeconds,
-                levelTransition),
+                levelTransition,
+                runCompleteState),
             levelEditorState,
             levelDefinition,
             levelEditorView,
@@ -2074,6 +2138,7 @@ int Application::Run()
         FinishCookStageAndReloadIfReady();
 #endif
         TryFinishPendingLevelTransition();
+        TryFinishPendingPlayAgain();
     }
 
     Shutdown();
@@ -2122,6 +2187,7 @@ void Application::Initialize()
     levelDefinition = loadedLevel.level;
     currentRuntimeLevelId = loadedLevel.level.id;
     gameplay::ResetLevelTransitionSchedule(levelTransition);
+    gameplay::ResetRunCompleteState(runCompleteState);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     // M32 dirty baseline: the staged file we just loaded. Dirty therefore
     // starts false and tracks only edits applied during this session. The
@@ -2262,6 +2328,7 @@ void Application::RestartRun()
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
+    gameplay::ResetRunCompleteState(runCompleteState);
 }
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -2889,6 +2956,7 @@ void Application::ResetGameplayAfterCommittedLevel()
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
+    gameplay::ResetRunCompleteState(runCompleteState);
 }
 
 void Application::SaveLevelEditorSource()
@@ -3021,6 +3089,111 @@ void Application::ResetGameplayAfterLevelTransition()
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
+    gameplay::ResetRunCompleteState(runCompleteState);
+}
+
+void Application::TryFinishPendingPlayAgain()
+{
+    if (!gameplay::PlayAgainIsInFlight(runCompleteState))
+    {
+        return;
+    }
+    runCompleteState.playAgainPending = false;
+
+    const std::string logicalId = world::MakeRuntimeLevelLogicalId(world::kLevel01Id);
+    const std::filesystem::path stagedPath = platform::RuntimeAssetPath(logicalId);
+    if (logicalId.empty() || stagedPath.empty())
+    {
+        gameplay::MarkPlayAgainFailed(
+            runCompleteState, "Initial staged level path is unsafe. Active run unchanged.");
+        ReportPlayAgainFailure(stagedPath, runCompleteState.playAgainFailureMessage);
+        return;
+    }
+
+    const gameplay::LevelTransitionPrepareResult prepared =
+        gameplay::PrepareStagedLevelDestination(stagedPath, world::kLevel01Id);
+    if (prepared.status != gameplay::LevelTransitionPrepareStatus::Ready)
+    {
+        gameplay::MarkPlayAgainFailed(runCompleteState, prepared.message);
+        ReportPlayAgainFailure(stagedPath, prepared.message);
+        return;
+    }
+
+    if (!physicsWorld.TryRebuild(
+            prepared.candidate,
+            prepared.candidate.initialSpawnVisualCenter,
+            player.Size()))
+    {
+        gameplay::MarkPlayAgainFailed(
+            runCompleteState, "Physics rebuild failed. Active run unchanged.");
+        ReportPlayAgainFailure(stagedPath, runCompleteState.playAgainFailureMessage);
+        return;
+    }
+
+    levelDefinition = prepared.candidate;
+    currentRuntimeLevelId = prepared.candidate.id;
+    runtimeLevelPathDisplay = stagedPath.string();
+    levelLoadStatus = world::LoadLevelFileStatus::Loaded;
+    levelFormatVersion = world::kLevelFileVersion;
+    ResetGameplayAfterPlayAgain();
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    if (levelEditorState.modified)
+    {
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage =
+            "Play Again loaded staged level_01. Unapplied working-copy edits were kept.";
+    }
+    else
+    {
+        levelEditorState.workingCopy = levelDefinition;
+        levelEditorState.savedSourceBaseline = levelDefinition;
+        levelEditorState.modified = false;
+        levelEditorState.dirty = false;
+        editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+        editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
+        levelEditorState.selection =
+            editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage = "Play Again loaded staged level_01.";
+    }
+#endif
+}
+
+void Application::ResetGameplayAfterPlayAgain()
+{
+    player.ResetMovementState();
+    player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    respawnState = gameplay::RespawnState{};
+    respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
+    levelCompletionState = gameplay::LevelCompletionState{};
+    collectibleRunState =
+        gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    itemPickupRunState =
+        gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
+    doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
+    physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
+    gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
+    runTimerState = gameplay::RunTimerState{};
+    camera.ApplyLevelFraming(
+        levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
+    camera.Initialize(player.Position());
+    gameplay::ResetLevelTransitionSchedule(levelTransition);
+    gameplay::ResetRunCompleteState(runCompleteState);
 }
 
 void Application::Shutdown()

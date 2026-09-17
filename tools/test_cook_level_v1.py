@@ -223,6 +223,82 @@ class ExtraLevelDiscoveryTests(unittest.TestCase):
             self.assertTrue(staged_path.is_file())
             self.assertTrue(staged_path.as_posix().endswith("assets/levels/level_03.level"))
 
+    def test_deleted_extra_level_is_removed_from_cooked_and_staged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            extra_source = cooker.source_root(root) / "levels" / "level_tmp_extra.level"
+            extra_source.write_text(
+                "PLATFORMER_LEVEL 1\nid level_tmp_extra\n", encoding="utf-8"
+            )
+
+            first_cook = cooker.cook(root)
+            self.assertEqual(first_cook, 0)
+            cooked_extra = cooker.cooked_root(root) / "levels" / "level_tmp_extra.level"
+            self.assertTrue(cooked_extra.is_file())
+
+            dest = root / "staged" / "assets"
+            first_stage = run_stage(cooker.cooked_root(root), dest, asset_list=None)
+            self.assertEqual(first_stage.returncode, 0, first_stage.stderr + first_stage.stdout)
+            staged_extra = dest / "levels" / "level_tmp_extra.level"
+            self.assertTrue(staged_extra.is_file())
+
+            unrelated_model = dest / "models" / "unrelated_probe.glb"
+            unrelated_note = dest / "levels" / "notes.txt"
+            unrelated_orphan = dest / "orphan.txt"
+            unrelated_model.write_bytes(b"not-a-real-glb")
+            unrelated_note.write_text("keep", encoding="utf-8")
+            unrelated_orphan.write_text("keep", encoding="utf-8")
+
+            extra_source.unlink()
+            self.assertFalse(extra_source.exists())
+
+            second_cook = cooker.cook(root)
+            self.assertEqual(second_cook, 0)
+            self.assertFalse(cooked_extra.exists())
+            self.assertTrue(
+                (cooker.cooked_root(root) / "levels" / "level_01.level").is_file()
+            )
+            self.assertTrue(
+                (cooker.cooked_root(root) / "levels" / "level_02.level").is_file()
+            )
+            self.assertTrue(
+                (cooker.cooked_root(root) / "models" / "test_static.glb").is_file()
+            )
+
+            second_stage = run_stage(cooker.cooked_root(root), dest, asset_list=None)
+            self.assertEqual(
+                second_stage.returncode, 0, second_stage.stderr + second_stage.stdout
+            )
+            self.assertFalse(staged_extra.exists())
+            self.assertTrue((dest / "levels" / "level_01.level").is_file())
+            self.assertTrue((dest / "levels" / "level_02.level").is_file())
+            self.assertTrue(unrelated_model.is_file())
+            self.assertEqual(unrelated_model.read_bytes(), b"not-a-real-glb")
+            self.assertTrue(unrelated_note.is_file())
+            self.assertTrue(unrelated_orphan.is_file())
+            self.assertTrue((dest / "textures" / "test_checker.png").is_file())
+            self.assertTrue((dest / "sounds" / "item_pickup_collect.wav").is_file())
+
+    def test_unmanifested_cooked_level_is_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            self.assertEqual(cooker.cook(root), 0)
+            ghost = cooker.cooked_root(root) / "levels" / "level_ghost.level"
+            ghost.write_text("PLATFORMER_LEVEL 1\nid level_ghost\n", encoding="utf-8")
+            leftover_note = cooker.cooked_root(root) / "levels" / "notes.txt"
+            leftover_note.write_text("keep", encoding="utf-8")
+            self.assertEqual(cooker.cook(root), 0)
+            self.assertFalse(ghost.exists())
+            self.assertTrue(leftover_note.is_file())
+            self.assertTrue(
+                (cooker.cooked_root(root) / "levels" / "level_01.level").is_file()
+            )
+            self.assertTrue(
+                (cooker.cooked_root(root) / "levels" / "level_02.level").is_file()
+            )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

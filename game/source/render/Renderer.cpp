@@ -2,6 +2,7 @@
 
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
+#include "gameplay/GameFlowState.h"
 #include "gameplay/Player.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
@@ -1293,12 +1294,49 @@ void DrawLevelCompleteMessage(bool destinationContinueHint)
     DrawText(completeText, completeX, completeY, kLevelCompleteFontSize, kLevelCompleteText);
 
     const char* hintText = destinationContinueHint
-        ? "PRESS ENTER TO CONTINUE"
-        : "PRESS ENTER TO RESTART";
+        ? gameplay::kDestinationCompleteHint
+        : gameplay::kFailedDestinationRestartHint;
     const int hintWidth = MeasureText(hintText, kRestartHintFontSize);
     const int hintX = (GetScreenWidth() - hintWidth) / 2;
     const int hintY = completeY + kLevelCompleteFontSize + kRestartHintGap;
     DrawText(hintText, hintX, hintY, kRestartHintFontSize, kLevelCompleteText);
+}
+
+void DrawRunCompleteMessage(double capturedFinalSeconds)
+{
+    const int titleWidth = MeasureText(gameplay::kRunCompleteTitle, kLevelCompleteFontSize);
+    const int titleX = (GetScreenWidth() - titleWidth) / 2;
+    const int titleY = GetScreenHeight() / 10;
+    DrawText(
+        gameplay::kRunCompleteTitle, titleX, titleY, kLevelCompleteFontSize, kLevelCompleteText);
+
+    char formatted[32]{};
+    core::FormatRunTime(formatted, sizeof(formatted), capturedFinalSeconds);
+    const char* timeText = TextFormat("TIME  %s", formatted);
+    const int timeWidth = MeasureText(timeText, kTimerHudFontSize);
+    const int timeX = (GetScreenWidth() - timeWidth) / 2;
+    const int timeY = titleY + kLevelCompleteFontSize + kRestartHintGap;
+    DrawText(timeText, timeX, timeY, kTimerHudFontSize, kTimerHudText);
+
+    const int playAgainWidth = MeasureText(gameplay::kRunCompletePlayAgainHint, kRestartHintFontSize);
+    const int playAgainX = (GetScreenWidth() - playAgainWidth) / 2;
+    const int playAgainY = timeY + kTimerHudFontSize + kRestartHintGap;
+    DrawText(
+        gameplay::kRunCompletePlayAgainHint,
+        playAgainX,
+        playAgainY,
+        kRestartHintFontSize,
+        kLevelCompleteText);
+
+    const int restartWidth = MeasureText(gameplay::kRunCompleteRestartHint, kRestartHintFontSize);
+    const int restartX = (GetScreenWidth() - restartWidth) / 2;
+    const int restartY = playAgainY + kRestartHintFontSize + kBestHudGap;
+    DrawText(
+        gameplay::kRunCompleteRestartHint,
+        restartX,
+        restartY,
+        kRestartHintFontSize,
+        kLevelCompleteText);
 }
 
 }
@@ -1453,6 +1491,8 @@ void Renderer::DrawWorld(
         double elapsedSeconds,
         bool hasBestTime,
         double bestSeconds,
+        bool runComplete,
+        double runCompleteFinalSeconds,
         InventoryPanelView inventoryPanel,
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect)
@@ -1735,7 +1775,7 @@ void Renderer::DrawWorld(
     DrawRunTimer(elapsedSeconds);
     DrawSessionBest(hasBestTime, bestSeconds);
     DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
-    if (!inventoryPanel.visible)
+    if (!inventoryPanel.visible && !runComplete)
     {
         DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
         if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
@@ -1751,7 +1791,11 @@ void Renderer::DrawWorld(
         }
         DrawItemPickupCollectionHud(itemPickupCollectionHud);
     }
-    if (levelCompleted)
+    if (runComplete)
+    {
+        DrawRunCompleteMessage(runCompleteFinalSeconds);
+    }
+    else if (levelCompleted)
     {
         DrawLevelCompleteMessage(destinationContinueHint);
     }

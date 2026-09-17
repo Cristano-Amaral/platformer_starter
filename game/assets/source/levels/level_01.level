@@ -22,4 +22,5 @@ hazard -18.5 0.5 0 1.2 1 2
 collectible 5 2.5 0 1 1.2 1
 collectible -4.5 4 0 1 1.2 1
 collectible -10 3.75 0 1 1.2 1
+level_goal -21.012127 3.8 -0.17569447 2 1.6 1.8 level_02
 camera 2 3.5 12 40

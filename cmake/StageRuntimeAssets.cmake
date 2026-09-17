@@ -8,7 +8,9 @@
 #   -DPLATFORMER_STAGE_ASSET_LIST=rel/a;rel/b
 # When unset, cmake/RuntimeAssets.cmake is the inventory.
 #
-# Does not cook, compile, link, or delete stale destination files.
+# Does not cook, compile, or link. Destination files outside the discovered
+# Level category are left in place. Staged levels/*.level files that are not
+# in the current required-plus-discovered cooked Level inventory are removed.
 
 cmake_minimum_required(VERSION 3.25)
 
@@ -95,6 +97,31 @@ foreach(relative IN LISTS PLATFORMER_RUNTIME_ASSETS)
     file(COPY_FILE "${source}" "${destination}" ONLY_IF_DIFFERENT)
     message(STATUS "staged ${relative}")
 endforeach()
+
+# Converge dest/levels/*.level to this run's Level inventory only. Extra
+# cooked levels are already in PLATFORMER_RUNTIME_ASSETS. Do not glob or
+# delete models, textures, sounds, or other unrelated staged files.
+if(IS_DIRECTORY "${PLATFORMER_STAGE_DEST}/levels")
+    file(GLOB _platformer_staged_levels "${PLATFORMER_STAGE_DEST}/levels/*.level")
+    foreach(_platformer_staged_level IN LISTS _platformer_staged_levels)
+        if(_platformer_staged_level STREQUAL "")
+            continue()
+        endif()
+        cmake_path(GET _platformer_staged_level FILENAME _platformer_staged_level_name)
+        set(_platformer_staged_relative "levels/${_platformer_staged_level_name}")
+        file(TO_CMAKE_PATH "${_platformer_staged_relative}" _platformer_staged_relative)
+        list(FIND PLATFORMER_RUNTIME_ASSETS "${_platformer_staged_relative}" _platformer_staged_index)
+        if(_platformer_staged_index EQUAL -1)
+            file(REMOVE "${_platformer_staged_level}")
+            message(STATUS "removed stale staged ${_platformer_staged_relative}")
+        endif()
+    endforeach()
+    unset(_platformer_staged_levels)
+    unset(_platformer_staged_level)
+    unset(_platformer_staged_level_name)
+    unset(_platformer_staged_relative)
+    unset(_platformer_staged_index)
+endif()
 
 list(LENGTH PLATFORMER_RUNTIME_ASSETS _platformer_stage_count)
 message(STATUS "Staging complete (${_platformer_stage_count} files)")

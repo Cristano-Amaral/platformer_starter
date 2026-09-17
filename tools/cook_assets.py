@@ -14,7 +14,9 @@ are not cooker inputs. Known GLBs plus extra valid `source/models/*.glb` files
 are opaque copies after static-GLB compatibility checks. Extra valid
 `source/levels/*.level` files are cooked as `level_v1` after the header
 check so a newly created Level can enter cook/stage without a per-level
-hardcoded list. The M61 collection
+hardcoded list. Cooked `levels/*.level` files that are no longer in the
+current required-plus-discovered Level inventory are removed; other cooked
+categories are not scanned. The M61 collection
 WAV is an explicit opaque `copy`. Canonical Level v1 files (`kind: level_v1`)
 are UTF-8 text copies after a header check; C++ owns full grammar validation.
 """
@@ -364,6 +366,42 @@ def remove_stale_outputs(
             ) from exc
 
 
+def current_level_v1_identities(assets: list[dict[str, str]]) -> set[str]:
+    return {
+        portable_relative(asset["id"])
+        for asset in assets
+        if asset.get("kind") == KIND_LEVEL_V1
+    }
+
+
+def remove_stale_cooked_levels(cooked_dir: Path, current_level_ids: set[str]) -> None:
+    """Converge cooked/levels/*.level to the current Level inventory.
+
+    Ownership is the Level category only: non-recursive `*.level` files under
+    cooked/levels/. Unrelated cooked categories are not scanned or deleted.
+    This also removes leftovers that were never recorded in manifest.json.
+    """
+    levels_dir = cooked_dir / LEVELS_DIRECTORY
+    if not levels_dir.is_dir():
+        return
+    for path in sorted(levels_dir.iterdir(), key=lambda item: item.name):
+        if not path.is_file() or not path.name.endswith(LEVEL_SUFFIX):
+            continue
+        identity = portable_relative(f"{LEVELS_DIRECTORY}/{path.name}")
+        if identity in current_level_ids:
+            continue
+        stale = safe_cooked_file(cooked_dir, identity)
+        if stale is None or not stale.is_file():
+            continue
+        try:
+            stale.unlink()
+            print(f"[removed-stale] {identity}")
+        except OSError as exc:
+            raise CookError(
+                f"failed to remove stale cooked output: {stale.as_posix()}\n{exc}"
+            ) from exc
+
+
 GLB_MAGIC = b"glTF"
 GLB_VERSION = 2
 GLB_JSON_CHUNK = 0x4E4F534A
@@ -596,6 +634,7 @@ def cook(root: Path | None = None) -> int:
 
     try:
         remove_stale_outputs(cooked, previous_manifest, current_ids)
+        remove_stale_cooked_levels(cooked, current_level_v1_identities(assets))
     except CookError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

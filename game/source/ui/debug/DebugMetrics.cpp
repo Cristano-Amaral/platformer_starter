@@ -364,6 +364,10 @@ void DrawDebugMetrics(
     if (ImGui::CollapsingHeader("Level Goal", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Level completed: %s", BoolText(snapshot.levelCompleted));
+        ImGui::Text("Run complete: %s", BoolText(snapshot.runComplete));
+        ImGui::Text("Run complete time: %.3f", snapshot.runCompleteFinalSeconds);
+        ImGui::Text("Play Again pending: %s", BoolText(snapshot.playAgainPending));
+        ImGui::Text("Play Again failed: %s", BoolText(snapshot.playAgainFailed));
         ImGui::Text("Goal count: %d", snapshot.levelGoalCount);
         ImGui::Text("Goal marker: two-post gate (Gameplay); AABB is Editor-only translucent");
         ImGui::Text(
