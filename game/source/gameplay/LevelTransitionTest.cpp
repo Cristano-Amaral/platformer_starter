@@ -135,14 +135,57 @@ int main()
     Expect(!schedule.pending && schedule.destinationId.empty(), "terminal does not schedule");
     gameplay::CaptureCompletedGoalDestination(schedule, "level_02");
     Expect(schedule.pending && schedule.destinationId == "level_02", "destination schedules once");
+    Expect(schedule.holding, "destination capture starts the completion hold");
+    Expect(schedule.holdElapsedSeconds == 0.0f, "hold starts at zero");
+    Expect(
+        gameplay::DestinationTransitionHoldBlocksCommit(schedule),
+        "hold blocks immediate transition");
+    Expect(
+        gameplay::DestinationCompletionShowsContinueHint(schedule),
+        "destination HUD uses continue hint during hold");
+    gameplay::TickDestinationTransitionHold(schedule, 1.0f);
+    Expect(schedule.holdElapsedSeconds == 1.0f, "hold uses post-completion delta, not run time");
+    Expect(
+        gameplay::DestinationTransitionHoldBlocksCommit(schedule),
+        "hold still blocks before 1.75s");
     gameplay::CaptureCompletedGoalDestination(schedule, "level_01");
     Expect(schedule.destinationId == "level_02", "second capture is ignored while pending");
+    gameplay::TickDestinationTransitionHold(schedule, 0.75f);
+    Expect(
+        !gameplay::DestinationTransitionHoldBlocksCommit(schedule),
+        "timeout at 1.75s allows exactly one commit");
+    Expect(schedule.pending, "timeout does not clear pending");
+    gameplay::SkipDestinationTransitionHold(schedule);
+    Expect(schedule.skipRequested, "Enter skip is idempotent after timeout");
+    Expect(
+        !gameplay::DestinationTransitionHoldBlocksCommit(schedule),
+        "Enter skip still converges on the same commit");
+
+    gameplay::ResetLevelTransitionSchedule(schedule);
+    gameplay::CaptureCompletedGoalDestination(schedule, "level_02");
+    gameplay::SkipDestinationTransitionHold(schedule);
+    Expect(schedule.skipRequested, "Enter skip arms early transition");
+    Expect(
+        !gameplay::DestinationTransitionHoldBlocksCommit(schedule),
+        "Enter skip does not wait for timeout");
+    Expect(schedule.pending && !schedule.failed, "Enter skip does not Restart or fail");
+    gameplay::SkipDestinationTransitionHold(schedule);
+    Expect(schedule.pending, "repeated Enter cannot double-schedule");
+
+    gameplay::LevelTransitionSchedule terminalHold{};
+    gameplay::CaptureCompletedGoalDestination(terminalHold, "");
+    Expect(!terminalHold.holding && !terminalHold.pending, "terminal does not create countdown state");
+    Expect(
+        !gameplay::DestinationCompletionShowsContinueHint(terminalHold),
+        "terminal HUD stays Enter-to-Restart");
     gameplay::MarkLevelTransitionFailed(schedule, "missing destination");
     Expect(!schedule.pending && schedule.failed, "failed schedule is not pending");
+    Expect(!schedule.holding, "failed transition clears destination hold");
     gameplay::CaptureCompletedGoalDestination(schedule, "level_02");
     Expect(!schedule.pending && schedule.failed, "failed schedule does not retry");
     gameplay::ResetLevelTransitionSchedule(schedule);
-    Expect(!schedule.failed && !schedule.pending, "restart clears failed schedule");
+    Expect(!schedule.failed && !schedule.pending && !schedule.holding, "restart clears failed schedule");
+    Expect(gameplay::kDestinationTransitionHoldSeconds == 1.75f, "hold duration is 1.75 seconds");
     gameplay::CaptureCompletedGoalDestination(schedule, "level_02");
     Expect(schedule.pending, "new run can schedule after reset");
 

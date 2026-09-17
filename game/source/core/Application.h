@@ -59,6 +59,8 @@ private:
     void FinishCookStageAndReloadIfReady();
     void ImportStaticGlbAsset();
     void DeleteContentBrowserAsset();
+    bool OpenAuthoredLevelFromEditor();
+    void CreateAuthoredLevelFromEditor();
     void ResetGameplayAfterCommittedLevel();
     void SaveLevelEditorSource();
 #endif

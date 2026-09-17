@@ -14,12 +14,19 @@
 
 namespace gameplay
 {
+// Runtime-only destination completion hold. Not authored, not serialized, not
+// score/run time. Preferred readable delay before the existing deferred replace.
+inline constexpr float kDestinationTransitionHoldSeconds = 1.75f;
+
 struct LevelTransitionSchedule
 {
     bool pending = false;
     std::string destinationId;
     bool failed = false;
     std::string failureMessage;
+    bool holding = false;
+    float holdElapsedSeconds = 0.0f;
+    bool skipRequested = false;
 };
 
 inline void ResetLevelTransitionSchedule(LevelTransitionSchedule& schedule)
@@ -29,12 +36,13 @@ inline void ResetLevelTransitionSchedule(LevelTransitionSchedule& schedule)
 
 // Capture a destination exactly once after M63 completion. Empty nextLevelId
 // is terminal and does not schedule. Failed schedules do not recapture, so a
-// missing destination cannot retry every frame.
+// missing destination cannot retry every frame. Destination capture starts the
+// runtime hold; commit still waits for timeout or Enter skip.
 inline void CaptureCompletedGoalDestination(
     LevelTransitionSchedule& schedule,
     std::string_view nextLevelId)
 {
-    if (schedule.pending || schedule.failed)
+    if (schedule.pending || schedule.failed || schedule.holding)
     {
         return;
     }
@@ -44,6 +52,9 @@ inline void CaptureCompletedGoalDestination(
     }
     schedule.pending = true;
     schedule.destinationId = std::string(nextLevelId);
+    schedule.holding = true;
+    schedule.holdElapsedSeconds = 0.0f;
+    schedule.skipRequested = false;
 }
 
 inline void MarkLevelTransitionFailed(
@@ -51,8 +62,52 @@ inline void MarkLevelTransitionFailed(
     std::string_view message)
 {
     schedule.pending = false;
+    schedule.holding = false;
+    schedule.skipRequested = false;
+    schedule.holdElapsedSeconds = 0.0f;
     schedule.failed = true;
     schedule.failureMessage = std::string(message);
+}
+
+inline bool DestinationTransitionIsInFlight(const LevelTransitionSchedule& schedule)
+{
+    return !schedule.failed && schedule.pending;
+}
+
+inline bool DestinationCompletionShowsContinueHint(const LevelTransitionSchedule& schedule)
+{
+    return DestinationTransitionIsInFlight(schedule);
+}
+
+inline void TickDestinationTransitionHold(LevelTransitionSchedule& schedule, float deltaSeconds)
+{
+    if (!schedule.holding || !schedule.pending || schedule.failed)
+    {
+        return;
+    }
+    if (deltaSeconds > 0.0f)
+    {
+        schedule.holdElapsedSeconds += deltaSeconds;
+    }
+}
+
+inline void SkipDestinationTransitionHold(LevelTransitionSchedule& schedule)
+{
+    if (!schedule.holding || !schedule.pending || schedule.failed)
+    {
+        return;
+    }
+    schedule.skipRequested = true;
+}
+
+inline bool DestinationTransitionHoldBlocksCommit(const LevelTransitionSchedule& schedule)
+{
+    if (!schedule.pending || schedule.failed || schedule.skipRequested)
+    {
+        return false;
+    }
+    return schedule.holding
+        && schedule.holdElapsedSeconds < kDestinationTransitionHoldSeconds;
 }
 
 enum class LevelTransitionPrepareStatus

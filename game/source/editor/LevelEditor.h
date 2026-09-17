@@ -18,6 +18,7 @@
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSelection.h"
+#include "editor/AuthoredLevelCatalog.h"
 #include "editor/ContentBrowser.h"
 #include "editor/EditorPlacement.h"
 #include "editor/StaticPropPlacement.h"
@@ -66,6 +67,13 @@ enum class LevelEditorReloadStatus
     Error,
 };
 
+enum class AuthoredLevelPendingAction
+{
+    None,
+    Open,
+    Create,
+};
+
 // What the panel asks Application to do this frame. Application executes it
 // after the frame is presented, so no frame ever draws mismatched geometry.
 enum class LevelEditorRequest
@@ -78,6 +86,8 @@ enum class LevelEditorRequest
     CookStageAndReload,
     ImportStaticGlb,
     DeleteContentBrowserAsset,
+    OpenAuthoredLevel,
+    CreateAuthoredLevel,
     AddPlatform,
     AddCheckpoint,
     AddHazard,
@@ -149,6 +159,13 @@ struct LevelEditorState
     EditorSelection selection{};
     // Catalog/asset selection. Not scene selection and not persisted.
     ContentBrowserState contentBrowser{};
+    // Development authored-source Level list. Refresh is explicit, not per frame.
+    AuthoredLevelCatalog authoredLevels{};
+    AuthoredLevelPendingAction pendingAuthoredLevelAction = AuthoredLevelPendingAction::None;
+    std::string pendingAuthoredLevelId;
+    std::string newLevelIdInput;
+    std::string authoredLevelsStatus;
+    bool authoredLevelDiscardGuardOpen = false;
     StaticModelPreviewOrbit modelPreviewOrbit{};
     std::string modelPreviewFramedIdentity;
     CategoryStructuralPending structuralPending{};

@@ -545,13 +545,20 @@ int main()
         Expect(
             std::strcmp(defaults.contentBrowser.name, editor::kContentBrowserWindowName) == 0,
             "content browser name");
+        Expect(
+            std::strcmp(defaults.levels.name, editor::kLevelsWindowName) == 0,
+            "levels name");
         Expect(editor::FindDefaultPlacement(defaults, editor::kObjectPaletteWindowName) != nullptr,
             "object palette has a default placement");
         Expect(editor::FindDefaultPlacement(defaults, editor::kContentBrowserWindowName) != nullptr,
             "content browser has a default placement");
+        Expect(editor::FindDefaultPlacement(defaults, editor::kLevelsWindowName) != nullptr,
+            "levels has a default placement");
         Expect(editor::FindDefaultPlacement(defaults, editor::kModelPreviewWindowName) != nullptr,
             "model preview has a default placement");
         Expect(defaults.contentBrowser.y > defaults.hierarchy.y, "content browser sits below hierarchy");
+        Expect(defaults.levels.y > defaults.hierarchy.y, "levels sits below hierarchy");
+        Expect(defaults.contentBrowser.y > defaults.levels.y, "content browser sits below levels");
         Expect(defaults.toolOutput.y > defaults.contentBrowser.y, "tool output sits below content browser");
         Expect(defaults.inspector.x > defaults.metrics.x, "inspector is on the right");
         Expect(defaults.hierarchy.y > defaults.metrics.y, "hierarchy sits below metrics");

@@ -4,14 +4,18 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 TOOLS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = TOOLS_DIR.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import cook_assets as cooker  # noqa: E402
+from test_import_static_glb import copy_known_sources  # noqa: E402
+from test_stage_runtime_assets import run_stage  # noqa: E402
 
 
 class LevelV1HeaderTests(unittest.TestCase):
@@ -170,6 +174,54 @@ class LevelV1HeaderTests(unittest.TestCase):
         )
         cooker.validate_level_v1_header(payload)
         self.assertIn(b"level_02", payload)
+
+
+class ExtraLevelDiscoveryTests(unittest.TestCase):
+    def test_discovery_skips_unsafe_names_and_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sources = Path(tmp) / "game" / "assets" / "source"
+            levels = sources / "levels"
+            levels.mkdir(parents=True)
+            (levels / "level_03.level").write_text("PLATFORMER_LEVEL 1\n", encoding="utf-8")
+            (levels / "level_10.level").write_text("PLATFORMER_LEVEL 1\n", encoding="utf-8")
+            (levels / "notes.txt").write_text("nope", encoding="utf-8")
+            (levels / "bad-name.level").write_text("PLATFORMER_LEVEL 1\n", encoding="utf-8")
+            extras = cooker.discover_extra_level_v1_assets(sources)
+            ids = [item["id"] for item in extras]
+            self.assertEqual(ids, ["levels/level_03.level", "levels/level_10.level"])
+            self.assertTrue(all(item["kind"] == cooker.KIND_LEVEL_V1 for item in extras))
+
+    def test_collect_does_not_duplicate_canonical_levels(self) -> None:
+        sources = cooker.source_root(cooker.repo_root())
+        collected = cooker.collect_cook_assets(sources)
+        ids = [item["id"] for item in collected]
+        self.assertEqual(ids.count("levels/level_01.level"), 1)
+        self.assertEqual(ids.count("levels/level_02.level"), 1)
+
+    def test_created_level_cooks_and_stages_without_hardcoded_enumeration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            extra_identity = "levels/level_03.level"
+            extra_path = cooker.source_root(root) / "levels" / "level_03.level"
+            extra_path.write_text("PLATFORMER_LEVEL 1\nid level_03\n", encoding="utf-8")
+            inventory = (REPO_ROOT / "cmake" / "RuntimeAssets.cmake").read_text(encoding="utf-8")
+            self.assertNotIn("levels/level_03.level", inventory)
+            collected = cooker.collect_cook_assets(cooker.source_root(root))
+            ids = [item["id"] for item in collected]
+            self.assertEqual(ids.count(extra_identity), 1)
+            self.assertIn(extra_identity, ids)
+
+            result = cooker.cook(root)
+            self.assertEqual(result, 0)
+            cooked_path = cooker.cooked_root(root) / "levels" / "level_03.level"
+            self.assertTrue(cooked_path.is_file())
+            dest = root / "staged" / "assets"
+            stage = run_stage(cooker.cooked_root(root), dest, asset_list=None)
+            self.assertEqual(stage.returncode, 0, stage.stderr + stage.stdout)
+            staged_path = dest / "levels" / "level_03.level"
+            self.assertTrue(staged_path.is_file())
+            self.assertTrue(staged_path.as_posix().endswith("assets/levels/level_03.level"))
 
 
 if __name__ == "__main__":

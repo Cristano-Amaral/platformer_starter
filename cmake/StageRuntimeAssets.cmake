@@ -51,6 +51,25 @@ else()
     unset(_platformer_extra_cooked_models)
     unset(_platformer_extra_model)
     unset(_platformer_extra_index)
+    # M64.1: newly created authored levels are extra cooked files, not required
+    # inventory. Configure-time still uses only cmake/RuntimeAssets.cmake.
+    file(GLOB _platformer_extra_cooked_levels
+        RELATIVE "${PLATFORMER_COOKED_DIR}"
+        "${PLATFORMER_COOKED_DIR}/levels/*.level")
+    list(SORT _platformer_extra_cooked_levels)
+    foreach(_platformer_extra_level IN LISTS _platformer_extra_cooked_levels)
+        if(_platformer_extra_level STREQUAL "")
+            continue()
+        endif()
+        file(TO_CMAKE_PATH "${_platformer_extra_level}" _platformer_extra_level)
+        list(FIND PLATFORMER_RUNTIME_ASSETS "${_platformer_extra_level}" _platformer_extra_level_index)
+        if(_platformer_extra_level_index EQUAL -1)
+            list(APPEND PLATFORMER_RUNTIME_ASSETS "${_platformer_extra_level}")
+        endif()
+    endforeach()
+    unset(_platformer_extra_cooked_levels)
+    unset(_platformer_extra_level)
+    unset(_platformer_extra_level_index)
 endif()
 
 message(STATUS "Staging runtime assets")

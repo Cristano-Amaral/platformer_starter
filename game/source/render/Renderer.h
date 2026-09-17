@@ -243,6 +243,7 @@ public:
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,
         bool levelCompleted,
+        bool destinationContinueHint,
         const std::vector<std::uint8_t>& collectibleCollected,
         int collectedCount,
         const std::vector<std::uint8_t>& itemPickupCollected,

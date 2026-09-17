@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 64 — Multiple Levels & Level Transition.
+Milestone 64.1 — Editor Level Browser & Transition UX.
 
-Canonical file: [`docs/milestones/MILESTONE_64.md`](docs/milestones/MILESTONE_64.md)
+Canonical file: [`docs/milestones/MILESTONE_64_1.md`](docs/milestones/MILESTONE_64_1.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 63 is complete. Milestone 64 is implemented, awaiting manual acceptance. Do not start Milestone 65.
+Milestone 64 is complete. Milestone 64.1 is implemented, awaiting manual acceptance. Do not start Milestone 65.
 
 ## Source of truth
 1. Current repository code.

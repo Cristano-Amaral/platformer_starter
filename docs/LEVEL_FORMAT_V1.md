@@ -21,12 +21,12 @@ file. The writer emits exactly this contract.
 
 | Role | Path |
 |---|---|
-| Source (authored) | `game/assets/source/levels/level_01.level`, `game/assets/source/levels/level_02.level` |
-| Cooked | `game/assets/cooked/levels/level_01.level`, `game/assets/cooked/levels/level_02.level` |
-| Staged / runtime | `<executable directory>/assets/levels/level_01.level`, `<executable directory>/assets/levels/level_02.level` |
+| Source (authored) | `game/assets/source/levels/<id>.level` (canonical `level_01`, `level_02`; extra valid files are discovered) |
+| Cooked | `game/assets/cooked/levels/<id>.level` |
+| Staged / runtime | `<executable directory>/assets/levels/<id>.level` |
 
-Logical runtime ids: `levels/level_01.level` and `levels/level_02.level` via `platform::RuntimeAssetPath`.
-The runtime never reads `assets/source`. Destination-bearing Level Goals resolve only through that staged runtime convention. There is no source-tree fallback.
+Logical runtime ids: `levels/<id>.level` via `platform::RuntimeAssetPath`.
+The runtime never reads `assets/source`. Destination-bearing Level Goals resolve only through that staged runtime convention. There is no source-tree fallback. Development Levels UI discovers authored `source/levels/*.level` files for Open/New/Next Level selection only. Extra valid source levels cook as `level_v1` and extra cooked levels stage without a per-level CMake inventory edit; required inventory remains `level_01` and `level_02`.
 
 The Development editor writes the source row for the **current runtime level identity** (`levels/<id>.level`) and never the staged runtime
 copy. It resolves that path through `editor::AuthoringLevelSourcePath`, whose

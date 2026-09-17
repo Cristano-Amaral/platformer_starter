@@ -907,6 +907,7 @@ int Application::Run()
             {
                 runTimerState.elapsedSeconds += static_cast<double>(deltaSeconds);
             }
+            gameplay::TickDestinationTransitionHold(levelTransition, deltaSeconds);
             gameplay::UpdateItemPickupCollectionFeedback(
                 itemPickupCollectionFeedback, deltaSeconds);
             gameplay::UpdateItemPickupCollectionHud(
@@ -991,10 +992,17 @@ int Application::Run()
                 }
             }
 
-            if (!respawnedThisFrame && restartAvailableAtFrameStart && inputState.restartPressed)
+            if (!respawnedThisFrame && inputState.restartPressed)
             {
-                RestartRun();
-                restartedThisFrame = true;
+                if (gameplay::DestinationTransitionIsInFlight(levelTransition))
+                {
+                    gameplay::SkipDestinationTransitionHold(levelTransition);
+                }
+                else if (restartAvailableAtFrameStart)
+                {
+                    RestartRun();
+                    restartedThisFrame = true;
+                }
             }
 
             physicsWorld.SetGrabAim(player.Position(), player.FacingX());
@@ -1594,6 +1602,7 @@ int Application::Run()
             MakeCheckpointVisuals(
                 respawnState.activeCheckpointIndex, levelDefinition.checkpoints.size()),
             levelCompletionState.completed,
+            gameplay::DestinationCompletionShowsContinueHint(levelTransition),
             collectibleRunState.collected,
             gameplay::CollectedCount(collectibleRunState),
             itemPickupRunState.collected,
@@ -2288,6 +2297,7 @@ void Application::SetLevelEditorActive(bool active)
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         editor::RefreshContentBrowser(
             levelEditorState.contentBrowser, editor::AuthoringSourceRoot());
+        levelEditorState.authoredLevels.Refresh(editor::AuthoringSourceRoot());
 #endif
     }
     if (!active && levelEditorState.active)
@@ -2454,6 +2464,99 @@ void Application::DeleteContentBrowserAsset()
 #endif
 }
 
+bool Application::OpenAuthoredLevelFromEditor()
+{
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    editor::ResetLevelActionStatuses(levelEditorState);
+    levelEditorState.lastMessage =
+        "Open Level is available in Development only. Current Level unchanged.";
+    levelEditorState.authoredLevelsStatus = levelEditorState.lastMessage;
+    return false;
+#else
+    const std::string levelId = levelEditorState.pendingAuthoredLevelId;
+    const std::filesystem::path sourcePath = editor::AuthoringLevelSourcePath(levelId);
+    const editor::AuthoredLevelOpenPrepareResult prepared =
+        editor::PrepareAuthoredLevelOpen(sourcePath, levelId);
+    if (prepared.status != editor::AuthoredLevelOpenStatus::Ready)
+    {
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage = prepared.message;
+        levelEditorState.authoredLevelsStatus = prepared.message;
+        return false;
+    }
+
+    if (!physicsWorld.TryRebuild(
+            prepared.candidate,
+            prepared.candidate.initialSpawnVisualCenter,
+            player.Size()))
+    {
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage = "Physics rebuild failed. Current Level unchanged.";
+        levelEditorState.authoredLevelsStatus = levelEditorState.lastMessage;
+        return false;
+    }
+
+    levelDefinition = prepared.candidate;
+    currentRuntimeLevelId = prepared.candidate.id;
+    const std::string logicalId = world::MakeRuntimeLevelLogicalId(currentRuntimeLevelId);
+    const std::filesystem::path stagedPath = platform::RuntimeAssetPath(logicalId);
+    runtimeLevelPathDisplay = stagedPath.empty() ? "(unavailable)" : stagedPath.string();
+    levelLoadStatus = world::LoadLevelFileStatus::Loaded;
+    levelFormatVersion = world::kLevelFileVersion;
+    ResetGameplayAfterCommittedLevel();
+
+    levelEditorState.workingCopy = levelDefinition;
+    levelEditorState.savedSourceBaseline = levelDefinition;
+    levelEditorState.modified = false;
+    levelEditorState.dirty = false;
+    editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+    editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
+    levelEditorState.selection =
+        editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+    editor::ClearGizmoInteraction(levelEditorState.gizmo);
+    editor::CancelAllEditorPlacement(
+        levelEditorState.placementMode,
+        levelEditorState.placementPointerBlocked,
+        levelEditorState.staticPropPlacement);
+    editor::ResetLevelActionStatuses(levelEditorState);
+    levelEditorState.authoredLevels.Refresh(editor::AuthoringSourceRoot());
+    levelEditorState.pendingAuthoredLevelAction = editor::AuthoredLevelPendingAction::None;
+    levelEditorState.lastMessage =
+        "Opened authored Level. Development runtime was rebuilt from source.";
+    levelEditorState.authoredLevelsStatus = levelEditorState.lastMessage;
+    return true;
+#endif
+}
+
+void Application::CreateAuthoredLevelFromEditor()
+{
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    editor::ResetLevelActionStatuses(levelEditorState);
+    levelEditorState.lastMessage =
+        "New Level is available in Development only. Current Level unchanged.";
+    levelEditorState.authoredLevelsStatus = levelEditorState.lastMessage;
+#else
+    const std::string levelId = levelEditorState.pendingAuthoredLevelId;
+    const editor::AuthoredLevelCreateResult created = editor::TryCreateAuthoredLevel(
+        editor::AuthoringSourceRoot(), levelId, levelEditorState.authoredLevels);
+    levelEditorState.authoredLevels.Refresh(editor::AuthoringSourceRoot());
+    editor::ResetLevelActionStatuses(levelEditorState);
+    if (created.status != editor::AuthoredLevelCreateStatus::Created)
+    {
+        levelEditorState.lastMessage = created.message;
+        levelEditorState.authoredLevelsStatus = created.message;
+        return;
+    }
+
+    if (OpenAuthoredLevelFromEditor())
+    {
+        levelEditorState.lastMessage =
+            "Created and opened authored Level. Cook & Stage to enter the runtime pipeline.";
+        levelEditorState.authoredLevelsStatus = levelEditorState.lastMessage;
+    }
+#endif
+}
+
 bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
 {
     // Edit > Add / Duplicate / Delete share this set. Listing cases here
@@ -2501,6 +2604,12 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         return true;
     case editor::LevelEditorRequest::DeleteContentBrowserAsset:
         DeleteContentBrowserAsset();
+        return true;
+    case editor::LevelEditorRequest::OpenAuthoredLevel:
+        OpenAuthoredLevelFromEditor();
+        return true;
+    case editor::LevelEditorRequest::CreateAuthoredLevel:
+        CreateAuthoredLevelFromEditor();
         return true;
     case editor::LevelEditorRequest::ApplyPreview:
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
@@ -2809,6 +2918,11 @@ void Application::TryFinishPendingLevelTransition()
     {
         return;
     }
+    if (gameplay::DestinationTransitionHoldBlocksCommit(levelTransition))
+    {
+        return;
+    }
+    levelTransition.holding = false;
 
     const std::string destinationId = levelTransition.destinationId;
     levelTransition.pending = false;

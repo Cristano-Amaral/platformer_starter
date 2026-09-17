@@ -1284,7 +1284,7 @@ void DrawCheckpointMarker(
     DrawCheckpointMarkerGeometry(spec, postColor, beaconColor, false, kPendingPreviewWire);
 }
 
-void DrawLevelCompleteMessage()
+void DrawLevelCompleteMessage(bool destinationContinueHint)
 {
     const char* completeText = "LEVEL COMPLETE";
     const int completeWidth = MeasureText(completeText, kLevelCompleteFontSize);
@@ -1292,7 +1292,9 @@ void DrawLevelCompleteMessage()
     const int completeY = GetScreenHeight() / 10;
     DrawText(completeText, completeX, completeY, kLevelCompleteFontSize, kLevelCompleteText);
 
-    const char* hintText = "PRESS ENTER TO RESTART";
+    const char* hintText = destinationContinueHint
+        ? "PRESS ENTER TO CONTINUE"
+        : "PRESS ENTER TO RESTART";
     const int hintWidth = MeasureText(hintText, kRestartHintFontSize);
     const int hintX = (GetScreenWidth() - hintWidth) / 2;
     const int hintY = completeY + kLevelCompleteFontSize + kRestartHintGap;
@@ -1439,6 +1441,7 @@ void Renderer::DrawWorld(
         core::Vec3 movingPlatformSize,
         const std::vector<world::CheckpointVisualState>& checkpointVisuals,
         bool levelCompleted,
+        bool destinationContinueHint,
         const std::vector<std::uint8_t>& collectibleCollected,
         int collectedCount,
         const std::vector<std::uint8_t>& itemPickupCollected,
@@ -1750,7 +1753,7 @@ void Renderer::DrawWorld(
     }
     if (levelCompleted)
     {
-        DrawLevelCompleteMessage();
+        DrawLevelCompleteMessage(destinationContinueHint);
     }
     DrawInventoryPanel(inventoryPanel);
 }

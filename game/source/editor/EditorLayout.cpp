@@ -21,6 +21,7 @@ constexpr float kLevelEditorHeight = 260.0f;
 constexpr float kToolOutputHeight = 160.0f;
 constexpr float kObjectPaletteHeight = 200.0f;
 constexpr float kContentBrowserHeight = 180.0f;
+constexpr float kLevelsHeight = 160.0f;
 constexpr float kModelPreviewHeight = 220.0f;
 
 float Clamped(float value, float minimum, float maximum)
@@ -105,11 +106,36 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         height - toolHeight - kMargin,
         width - kMargin * 2.0f,
         toolHeight};
-    const float contentHeight = std::min(kContentBrowserHeight, height * 0.26f);
+    const float hierarchyTop = defaults.metrics.y + defaults.metrics.height + kMargin;
+    const float stackAvailable = std::max(0.0f, defaults.toolOutput.y - hierarchyTop - kMargin);
+    float hierarchyHeight = std::min(kHierarchyHeight, height * 0.55f);
+    float levelsHeight = std::min(kLevelsHeight, height * 0.24f);
+    float contentHeight = std::min(kContentBrowserHeight, height * 0.26f);
+    const float stackGaps = kMargin * 2.0f;
+    const float stackNeeded = hierarchyHeight + levelsHeight + contentHeight + stackGaps;
+    if (stackNeeded > stackAvailable && stackNeeded > 0.0f)
+    {
+        const float scale = stackAvailable / stackNeeded;
+        hierarchyHeight *= scale;
+        levelsHeight *= scale;
+        contentHeight *= scale;
+    }
+    defaults.hierarchy = {
+        kHierarchyWindowName,
+        kMargin,
+        hierarchyTop,
+        panelWidth,
+        hierarchyHeight};
+    defaults.levels = {
+        kLevelsWindowName,
+        kMargin,
+        defaults.hierarchy.y + hierarchyHeight + kMargin,
+        panelWidth,
+        levelsHeight};
     defaults.contentBrowser = {
         kContentBrowserWindowName,
         kMargin,
-        defaults.toolOutput.y - contentHeight - kMargin,
+        defaults.levels.y + levelsHeight + kMargin,
         panelWidth,
         contentHeight};
     const float previewHeight = std::min(kModelPreviewHeight, height * 0.32f);
@@ -127,13 +153,6 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         previewY,
         previewWidth,
         previewHeight};
-    const float hierarchyTop = defaults.metrics.y + defaults.metrics.height + kMargin;
-    defaults.hierarchy = {
-        kHierarchyWindowName,
-        kMargin,
-        hierarchyTop,
-        panelWidth,
-        std::min(kHierarchyHeight, defaults.contentBrowser.y - hierarchyTop - kMargin)};
 
     defaults.metrics = ClampEditorWindowPlacement(defaults.metrics, width, height);
     defaults.hierarchy = ClampEditorWindowPlacement(defaults.hierarchy, width, height);
@@ -141,6 +160,7 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
     defaults.levelEditor = ClampEditorWindowPlacement(defaults.levelEditor, width, height);
     defaults.objectPalette = ClampEditorWindowPlacement(defaults.objectPalette, width, height);
     defaults.contentBrowser = ClampEditorWindowPlacement(defaults.contentBrowser, width, height);
+    defaults.levels = ClampEditorWindowPlacement(defaults.levels, width, height);
     defaults.modelPreview = ClampEditorWindowPlacement(defaults.modelPreview, width, height);
     defaults.toolOutput = ClampEditorWindowPlacement(defaults.toolOutput, width, height);
     return defaults;
@@ -202,6 +222,10 @@ const EditorWindowPlacement* FindDefaultPlacement(
     if (std::strcmp(windowName, kContentBrowserWindowName) == 0)
     {
         return &defaults.contentBrowser;
+    }
+    if (std::strcmp(windowName, kLevelsWindowName) == 0)
+    {
+        return &defaults.levels;
     }
     if (std::strcmp(windowName, kModelPreviewWindowName) == 0)
     {

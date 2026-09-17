@@ -89,6 +89,12 @@ int main()
         !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::DeleteContentBrowserAsset),
         "Content Browser delete is not lifecycle");
     Expect(
+        !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::OpenAuthoredLevel),
+        "Open authored Level is not lifecycle");
+    Expect(
+        !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::CreateAuthoredLevel),
+        "Create authored Level is not lifecycle");
+    Expect(
         editor::ContentBrowserImportRequest() == LevelEditorRequest::ImportStaticGlb,
         "Content Browser import reuses M47 ImportStaticGlb");
     Expect(

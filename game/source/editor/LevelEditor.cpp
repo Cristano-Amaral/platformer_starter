@@ -376,17 +376,69 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             world::LevelGoalSpec& goal = level.levelGoals[state.selection.index];
             EditVec3("Center X Y Z", goal.center);
             EditVec3("Size X Y Z", goal.size);
-            char nextLevelId[64]{};
-            std::snprintf(
-                nextLevelId, sizeof(nextLevelId), "%s", goal.nextLevelId.c_str());
-            if (ImGui::InputText("Next Level", nextLevelId, sizeof(nextLevelId)))
+            const std::vector<NextLevelSelectorEntry> nextLevelChoices =
+                MakeNextLevelSelectorEntries(state.authoredLevels, goal.nextLevelId);
+            std::string preview = "None";
+            bool currentMissing = false;
+            for (const NextLevelSelectorEntry& entry : nextLevelChoices)
             {
-                if (nextLevelId[0] == '\0' || world::IsValidLevelIdToken(nextLevelId))
+                if (entry.id == goal.nextLevelId)
                 {
-                    goal.nextLevelId = nextLevelId;
+                    currentMissing = entry.missing;
+                    if (entry.id.empty())
+                    {
+                        preview = "None";
+                    }
+                    else if (entry.missing)
+                    {
+                        preview = entry.id + " (missing)";
+                    }
+                    else
+                    {
+                        preview = entry.id;
+                    }
+                    break;
                 }
             }
-            ImGui::TextUnformatted("Empty is terminal. Example: level_02");
+            if (ImGui::BeginCombo("Next Level", preview.c_str()))
+            {
+                for (const NextLevelSelectorEntry& entry : nextLevelChoices)
+                {
+                    char label[96]{};
+                    if (entry.id.empty())
+                    {
+                        std::snprintf(label, sizeof(label), "None");
+                    }
+                    else if (entry.missing)
+                    {
+                        std::snprintf(label, sizeof(label), "%s (missing)", entry.id.c_str());
+                    }
+                    else
+                    {
+                        std::snprintf(label, sizeof(label), "%s", entry.id.c_str());
+                    }
+                    const bool selected = entry.id == goal.nextLevelId;
+                    if (ImGui::Selectable(label, selected))
+                    {
+                        ApplyNextLevelSelectorId(goal, entry.id);
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (currentMissing)
+            {
+                ImGui::TextWrapped(
+                    "Authored destination is missing from discovery. The value is kept until you "
+                    "choose None or a discovered Level.");
+            }
+            else
+            {
+                ImGui::TextUnformatted("None is terminal. Selection writes the logical Level ID.");
+            }
         }
         break;
     case EditorObjectKind::DynamicBox:
@@ -1066,6 +1118,185 @@ LevelEditorRequest DrawContentBrowser(
     return request;
 }
 
+LevelEditorRequest DrawLevelsBrowser(
+    LevelEditorState& state,
+    const world::LevelDefinition& activeLevel,
+    const LevelEditorViewContext& view)
+{
+    LevelEditorRequest request = LevelEditorRequest::None;
+    ApplyEditorWindowPlacement(kLevelsWindowName, view);
+    if (!ImGui::Begin(kLevelsWindowName, &state.workspace.showLevels))
+    {
+        ImGui::End();
+        return request;
+    }
+    RecoverEditorWindowIfNeeded(kLevelsWindowName, view);
+
+    const bool authoringAvailable = IsLevelAuthoringAvailable();
+    const std::filesystem::path sourceRoot = AuthoringSourceRoot();
+    ImGui::TextUnformatted("Authored source Levels. Discovery is Development-only.");
+    ImGui::Text("Current: %s", activeLevel.id.empty() ? "(none)" : activeLevel.id.c_str());
+    ImGui::TextWrapped(
+        "Open loads the authored source file into the editor runtime. Gameplay and Release still "
+        "load staged files only. Refresh does not scan every frame.");
+
+    ImGui::BeginDisabled(!authoringAvailable);
+    if (ImGui::Button("Refresh"))
+    {
+        state.authoredLevels.Refresh(sourceRoot);
+        state.authoredLevelsStatus = "Authored Levels refreshed from the source directory.";
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("New Level"))
+    {
+        if (state.newLevelIdInput.empty())
+        {
+            state.newLevelIdInput = "level_";
+        }
+        ImGui::OpenPopup("New Level");
+    }
+    ImGui::EndDisabled();
+
+    if (ImGui::BeginPopupModal("New Level", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextUnformatted("Logical Level ID. Example: level_03");
+        char idBuffer[64]{};
+        std::snprintf(idBuffer, sizeof(idBuffer), "%s", state.newLevelIdInput.c_str());
+        if (ImGui::InputText("Level ID", idBuffer, sizeof(idBuffer)))
+        {
+            state.newLevelIdInput = idBuffer;
+        }
+        if (ImGui::Button("Create"))
+        {
+            const std::string requestedId = state.newLevelIdInput;
+            if (!world::IsValidLevelIdToken(requestedId))
+            {
+                state.authoredLevelsStatus =
+                    "Rejected: use a safe logical ID such as level_03. No file was written.";
+            }
+            else
+            {
+                state.pendingAuthoredLevelAction = AuthoredLevelPendingAction::Create;
+                state.pendingAuthoredLevelId = requestedId;
+                if (AuthoredLevelSwitchNeedsDiscard(state.modified, state.dirty))
+                {
+                    state.authoredLevelDiscardGuardOpen = true;
+                }
+                else
+                {
+                    request = LevelEditorRequest::CreateAuthoredLevel;
+                }
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::BeginChild("AuthoredLevelList", ImVec2(0.0f, 88.0f), true);
+    if (!authoringAvailable)
+    {
+        ImGui::TextUnformatted("Authoring is unavailable in this configuration.");
+    }
+    else if (state.authoredLevels.Count() == 0)
+    {
+        ImGui::TextUnformatted("No valid authored Levels discovered.");
+    }
+    else
+    {
+        for (const AuthoredLevelEntry& entry : state.authoredLevels.Entries())
+        {
+            const bool isCurrent = entry.id == activeLevel.id;
+            char label[96]{};
+            if (isCurrent)
+            {
+                std::snprintf(label, sizeof(label), "%s  (current)", entry.id.c_str());
+            }
+            else
+            {
+                std::snprintf(label, sizeof(label), "%s", entry.id.c_str());
+            }
+            if (ImGui::Selectable(label, isCurrent))
+            {
+                state.pendingAuthoredLevelAction = AuthoredLevelPendingAction::Open;
+                state.pendingAuthoredLevelId = entry.id;
+                if (AuthoredLevelSwitchNeedsDiscard(state.modified, state.dirty))
+                {
+                    state.authoredLevelDiscardGuardOpen = true;
+                }
+                else
+                {
+                    request = LevelEditorRequest::OpenAuthoredLevel;
+                }
+            }
+        }
+    }
+    ImGui::EndChild();
+
+    ImGui::BeginDisabled(
+        !authoringAvailable || state.pendingAuthoredLevelId.empty()
+            || state.pendingAuthoredLevelAction != AuthoredLevelPendingAction::Open);
+    if (ImGui::Button("Open"))
+    {
+        if (AuthoredLevelSwitchNeedsDiscard(state.modified, state.dirty))
+        {
+            state.authoredLevelDiscardGuardOpen = true;
+        }
+        else
+        {
+            request = LevelEditorRequest::OpenAuthoredLevel;
+        }
+    }
+    ImGui::EndDisabled();
+
+    if (!state.authoredLevelsStatus.empty())
+    {
+        ImGui::TextWrapped("%s", state.authoredLevelsStatus.c_str());
+    }
+
+    if (state.authoredLevelDiscardGuardOpen)
+    {
+        ImGui::OpenPopup("Discard Pending Level Edits?");
+    }
+    if (ImGui::BeginPopupModal(
+            "Discard Pending Level Edits?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextUnformatted(
+            "Pending working-copy or unsaved applied edits will be discarded.");
+        ImGui::TextWrapped(
+            "Cancel leaves the current Level, working copy, pending edits, and Dirty state "
+            "unchanged.");
+        const char* discardLabel =
+            state.pendingAuthoredLevelAction == AuthoredLevelPendingAction::Create
+            ? "Discard and Create"
+            : "Discard and Open";
+        if (ImGui::Button(discardLabel))
+        {
+            request = state.pendingAuthoredLevelAction == AuthoredLevelPendingAction::Create
+                ? LevelEditorRequest::CreateAuthoredLevel
+                : LevelEditorRequest::OpenAuthoredLevel;
+            state.authoredLevelDiscardGuardOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            state.pendingAuthoredLevelAction = AuthoredLevelPendingAction::None;
+            state.pendingAuthoredLevelId.clear();
+            state.authoredLevelDiscardGuardOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::End();
+    return request;
+}
+
 void DrawModelPreview(LevelEditorState& state, const LevelEditorViewContext& view)
 {
     ApplyEditorWindowPlacement(kModelPreviewWindowName, view);
@@ -1472,6 +1703,7 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::MenuItem("Level Editor", nullptr, &state.workspace.showLevelEditor);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         ImGui::MenuItem("Object Palette", nullptr, &state.workspace.showObjectPalette);
+        ImGui::MenuItem("Levels", nullptr, &state.workspace.showLevels);
         ImGui::MenuItem("Content Browser", nullptr, &state.workspace.showContentBrowser);
         ImGui::MenuItem("Model Preview", nullptr, &state.workspace.showModelPreview);
         ImGui::MenuItem("Quick Toolbar", nullptr, &state.workspace.showQuickToolbar);
@@ -2121,9 +2353,18 @@ LevelEditorRequest DrawLevelEditor(
 #endif
     LevelEditorRequest request = LevelEditorRequest::None;
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (state.workspace.showLevels)
+    {
+        request = DrawLevelsBrowser(state, activeLevel, view);
+    }
     if (state.workspace.showContentBrowser)
     {
-        request = DrawContentBrowser(state, view, toolRunner, cookStageReloadPending);
+        const LevelEditorRequest browserRequest =
+            DrawContentBrowser(state, view, toolRunner, cookStageReloadPending);
+        if (request == LevelEditorRequest::None)
+        {
+            request = browserRequest;
+        }
     }
     if (state.workspace.showModelPreview)
     {

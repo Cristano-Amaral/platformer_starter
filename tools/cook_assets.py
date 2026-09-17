@@ -11,9 +11,12 @@ the current working directory.
 Standalone runtime PNGs (`kind: runtime_png`) are listed explicitly and may be
 downscaled with cooker-only Pillow. Blender authoring PNGs and `.blend` files
 are not cooker inputs. Known GLBs plus extra valid `source/models/*.glb` files
-are opaque copies after static-GLB compatibility checks. The M61 collection
-WAV is an explicit opaque `copy`. Level v1 files (`kind: level_v1`) are UTF-8
-text copies after a header check; C++ owns full grammar validation.
+are opaque copies after static-GLB compatibility checks. Extra valid
+`source/levels/*.level` files are cooked as `level_v1` after the header
+check so a newly created Level can enter cook/stage without a per-level
+hardcoded list. The M61 collection
+WAV is an explicit opaque `copy`. Canonical Level v1 files (`kind: level_v1`)
+are UTF-8 text copies after a header check; C++ owns full grammar validation.
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ MANIFEST_NAME = "manifest.json"
 
 # Asset kinds are declarative. Do not glob/discover every PNG under source/textures.
 # Extra valid source/models/*.glb files are discovered (M47). PNGs stay explicit.
+# Extra valid source/levels/*.level files are discovered (M64.1). Canonical
+# level_01/level_02 remain required inventory.
 #   copy         = opaque byte copy (GLBs and the M61 collection WAV;
 #                  embedded GLB images are not inspected)
 #   runtime_png  = standalone runtime PNG (M19 policy applies to these only)
@@ -365,6 +370,8 @@ GLB_JSON_CHUNK = 0x4E4F534A
 GLB_BIN_CHUNK = 0x004E4942
 STATIC_MODELS_DIRECTORY = "models"
 STATIC_GLB_SUFFIX = ".glb"
+LEVELS_DIRECTORY = "levels"
+LEVEL_SUFFIX = ".level"
 STATIC_GLB_IMPORT_TEMP_SUFFIX = ".importing.tmp"
 
 
@@ -494,11 +501,56 @@ def discover_extra_static_glb_assets(sources: Path) -> list[dict[str, str]]:
     return extras
 
 
+def is_valid_level_id_token(token: str) -> bool:
+    if not token:
+        return False
+    first = token[0]
+    if not (("A" <= first <= "Z") or ("a" <= first <= "z") or first == "_"):
+        return False
+    return all(
+        ("A" <= ch <= "Z") or ("a" <= ch <= "z") or ("0" <= ch <= "9") or ch == "_"
+        for ch in token
+    )
+
+
+def is_safe_level_file_name(name: str) -> bool:
+    if not name or not name.endswith(LEVEL_SUFFIX) or name.startswith("."):
+        return False
+    stem = name[: -len(LEVEL_SUFFIX)]
+    return is_valid_level_id_token(stem)
+
+
+def discover_extra_level_v1_assets(sources: Path) -> list[dict[str, str]]:
+    """levels/*.level not already listed in KNOWN_ASSETS. Non-recursive."""
+    levels = sources / LEVELS_DIRECTORY
+    extras: list[dict[str, str]] = []
+    if not levels.is_dir():
+        return extras
+    for path in sorted(levels.iterdir(), key=lambda item: item.name):
+        if not path.is_file():
+            continue
+        name = path.name
+        if not is_safe_level_file_name(name):
+            continue
+        identity = portable_relative(f"{LEVELS_DIRECTORY}/{name}")
+        extras.append(
+            {
+                "id": identity,
+                "source": identity,
+                "cooked": identity,
+                "kind": KIND_LEVEL_V1,
+            }
+        )
+    return extras
+
+
 def collect_cook_assets(sources: Path) -> list[dict[str, str]]:
     merged: dict[str, dict[str, str]] = {
         portable_relative(asset["id"]): dict(asset) for asset in KNOWN_ASSETS
     }
     for extra in discover_extra_static_glb_assets(sources):
+        merged.setdefault(extra["id"], extra)
+    for extra in discover_extra_level_v1_assets(sources):
         merged.setdefault(extra["id"], extra)
     return [merged[key] for key in sorted(merged)]
 

@@ -44,6 +44,8 @@ add_executable(Platformer3D
     game/source/core/Vec3.h
     game/source/editor/AuthoringPaths.cpp
     game/source/editor/AuthoringPaths.h
+    game/source/editor/AuthoredLevelCatalog.cpp
+    game/source/editor/AuthoredLevelCatalog.h
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
     game/source/assets/StaticGlbImport.cpp
@@ -253,6 +255,7 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/models/test_textured.glb
 #   <exe dir>/assets/levels/level_01.level
 #   <exe dir>/assets/levels/level_02.level
+# Extra valid cooked levels/*.level files are discovered at staging time.
 #   <exe dir>/assets/sounds/item_pickup_collect.wav
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
@@ -842,6 +845,42 @@ else()
     target_compile_options(LevelTransitionTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(LevelTransitionTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+    "PLATFORMER_LEVEL02_SOURCE_PATH=\"${PLATFORMER_LEVEL02_SOURCE_PATH}\""
+)
+
+# Milestone 64.1: authored source discovery, New Level, Open prepare, Next Level
+# selector. No window, raylib, ImGui, or Jolt.
+add_executable(AuthoredLevelCatalogTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredLevelCatalog.cpp
+    game/source/editor/AuthoredLevelCatalog.h
+    game/source/editor/AuthoredLevelCatalogTest.cpp
+    game/source/physics/PhysicsCapacity.h
+    game/source/platform/FileReplace.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelIdentity.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(AuthoredLevelCatalogTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(AuthoredLevelCatalogTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(AuthoredLevelCatalogTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(AuthoredLevelCatalogTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(AuthoredLevelCatalogTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(AuthoredLevelCatalogTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
     "PLATFORMER_LEVEL02_SOURCE_PATH=\"${PLATFORMER_LEVEL02_SOURCE_PATH}\""
 )

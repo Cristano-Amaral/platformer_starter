@@ -179,6 +179,33 @@ class StageRuntimeAssetsTests(unittest.TestCase):
         inventory = (REPO_ROOT / "cmake" / "RuntimeAssets.cmake").read_text(encoding="utf-8")
         self.assertIn("levels/level_01.level", inventory)
         self.assertIn("levels/level_02.level", inventory)
+        self.assertNotIn("levels/level_03.level", inventory)
+
+    def test_extra_cooked_level_is_staged_without_required_inventory_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cooked = root / "cooked"
+            dest = root / "dest"
+            required = [
+                "textures/test_checker.png",
+                "models/test_static.glb",
+                "models/test_authored.glb",
+                "models/test_textured.glb",
+                "levels/level_01.level",
+                "levels/level_02.level",
+                "sounds/item_pickup_collect.wav",
+            ]
+            repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
+            for relative in required:
+                target = cooked / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(repo_cooked / relative, target)
+            extra = cooked / "levels" / "level_03.level"
+            extra.write_text("PLATFORMER_LEVEL 1\nid level_03\n", encoding="utf-8")
+            result = run_stage(cooked, dest, asset_list=None)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertTrue((dest / "levels" / "level_03.level").is_file())
+            self.assertTrue((dest / "levels" / "level_01.level").is_file())
 
 
 if __name__ == "__main__":
