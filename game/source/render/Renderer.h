@@ -270,8 +270,10 @@ public:
         ObjectiveHudView objectiveHud = {},
         const DebugWorldOverlay& overlay = {},
         WorldViewRect viewRect = {},
-        bool drawGameplayHud = true);
+        bool drawGameplayHud = true,
+        bool hideInteractionPrompts = false);
     void DrawMainMenu(bool playSelected);
+    void DrawPauseMenu(bool resumeSelected);
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);
     void DrawEditorPlacementHud(
         bool visible,

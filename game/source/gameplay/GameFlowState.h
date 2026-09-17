@@ -1,8 +1,9 @@
 #pragma once
 
-// Narrow top-level player flow: Main Menu vs Gameplay, plus M65 Run Complete.
-// Application-owned only. Not a GameState machine, SceneManager, campaign
-// graph, screen stack, or event bus. Destination-bearing goals keep M64.1
+// Narrow top-level player flow: Main Menu vs Gameplay, plus M65 Run Complete
+// and M68 Pause. Application-owned only. Pause is transient runtime overlay
+// state on Gameplay, not a GameState machine, SceneManager, campaign graph,
+// screen stack, or event bus. Destination-bearing goals keep M64.1
 // LevelTransitionSchedule authority.
 
 #include "world/LevelIdentity.h"
@@ -33,6 +34,11 @@ inline constexpr const char* kMainMenuPlayLabel = "PLAY";
 inline constexpr const char* kMainMenuQuitLabel = "QUIT";
 inline constexpr int kMainMenuItemCount = 2;
 
+inline constexpr const char* kPauseMenuTitle = "PAUSED";
+inline constexpr const char* kPauseMenuResumeLabel = "RESUME";
+inline constexpr const char* kPauseMenuMainMenuLabel = "MAIN MENU";
+inline constexpr int kPauseMenuItemCount = 2;
+
 enum class TopLevelFlow
 {
     MainMenu,
@@ -50,6 +56,20 @@ enum class MainMenuInputAction
     None,
     Play,
     Quit,
+};
+
+enum class PauseMenuItem
+{
+    Resume,
+    MainMenu,
+};
+
+enum class PauseMenuInputAction
+{
+    None,
+    EnterPause,
+    Resume,
+    ReturnToMainMenu,
 };
 
 enum class RunCompleteInputAction
@@ -86,6 +106,12 @@ struct MainMenuState
     bool quitRequested = false;
 };
 
+struct PauseMenuState
+{
+    bool active = false;
+    PauseMenuItem selected = PauseMenuItem::Resume;
+};
+
 inline void ResetRunCompleteState(RunCompleteState& state)
 {
     state = RunCompleteState{};
@@ -96,22 +122,56 @@ inline void ResetMainMenuState(MainMenuState& state)
     state = MainMenuState{};
 }
 
+inline void ResetPauseMenuState(PauseMenuState& state)
+{
+    state = PauseMenuState{};
+}
+
 inline bool MainMenuBlocksGameplay(TopLevelFlow flow)
 {
     return flow == TopLevelFlow::MainMenu;
 }
 
-inline bool RunTimerAdvancesInFlow(TopLevelFlow flow)
+inline bool RunTimerAdvancesInFlow(TopLevelFlow flow, bool pauseActive = false)
 {
-    return flow == TopLevelFlow::Gameplay;
+    return flow == TopLevelFlow::Gameplay && !pauseActive;
 }
 
 inline bool InventoryUiIsAvailable(
     TopLevelFlow flow,
     bool editorActive,
+    bool runCompleteActive,
+    bool pauseActive = false)
+{
+    return flow == TopLevelFlow::Gameplay && !editorActive && !runCompleteActive && !pauseActive;
+}
+
+// True for the whole frame that Pause is or was active, so the Resume Enter/Esc
+// edge cannot leak into gameplay on the first resumed frame.
+inline bool PauseBlocksGameplay(bool wasActive, bool isActive)
+{
+    return wasActive || isActive;
+}
+
+inline bool PauseMenuOverlayIsVisible(
+    TopLevelFlow flow,
+    bool editorActive,
+    bool pauseActive,
     bool runCompleteActive)
 {
-    return flow == TopLevelFlow::Gameplay && !editorActive && !runCompleteActive;
+    return flow == TopLevelFlow::Gameplay && pauseActive && !editorActive && !runCompleteActive;
+}
+
+inline bool PauseCanBeEntered(
+    TopLevelFlow flow,
+    bool editorActive,
+    bool inventoryBlocksGameplay,
+    bool runCompleteActive,
+    bool levelCompleted,
+    bool pauseActive)
+{
+    return flow == TopLevelFlow::Gameplay && !editorActive && !inventoryBlocksGameplay
+        && !runCompleteActive && !levelCompleted && !pauseActive;
 }
 
 inline bool GameplayHudIsActive(TopLevelFlow flow, bool editorActive)
@@ -241,20 +301,58 @@ inline void NavigateMainMenu(MainMenuState& state, int step)
     state.selected = static_cast<MainMenuItem>(index);
 }
 
+inline void EnterPause(PauseMenuState& state)
+{
+    if (state.active)
+    {
+        return;
+    }
+    state.active = true;
+    state.selected = PauseMenuItem::Resume;
+}
+
+inline void ResumePause(PauseMenuState& state)
+{
+    state.active = false;
+    state.selected = PauseMenuItem::Resume;
+}
+
+inline void NavigatePauseMenu(PauseMenuState& state, int step)
+{
+    if (step == 0 || !state.active)
+    {
+        return;
+    }
+    const int count = kPauseMenuItemCount;
+    int index = static_cast<int>(state.selected) + step;
+    index %= count;
+    if (index < 0)
+    {
+        index += count;
+    }
+    state.selected = static_cast<PauseMenuItem>(index);
+}
+
 inline void EnterMainMenu(
     TopLevelFlow& flow,
     MainMenuState& menu,
-    RunCompleteState& runComplete)
+    RunCompleteState& runComplete,
+    PauseMenuState& pause)
 {
     flow = TopLevelFlow::MainMenu;
     ResetMainMenuState(menu);
     ResetRunCompleteState(runComplete);
+    ResetPauseMenuState(pause);
 }
 
-inline void EnterGameplayFromSuccessfulPlay(TopLevelFlow& flow, MainMenuState& menu)
+inline void EnterGameplayFromSuccessfulPlay(
+    TopLevelFlow& flow,
+    MainMenuState& menu,
+    PauseMenuState& pause)
 {
     flow = TopLevelFlow::Gameplay;
     ResetMainMenuState(menu);
+    ResetPauseMenuState(pause);
 }
 
 // Activate uses the selection captured at call time. Navigation is a
@@ -287,6 +385,58 @@ inline MainMenuInputAction ResolveMainMenuInput(
         NavigateMainMenu(state, 1);
     }
     return MainMenuInputAction::None;
+}
+
+// Pause uses the same Up/Down/Enter edges as Main Menu. The Esc edge that
+// enters Pause cannot Resume in the same Resolve because Resume requires
+// Pause already active at frame start. Esc while paused is always Resume,
+// even if MAIN MENU is selected. Editor/Inventory/completion callers must
+// not invoke this when a higher-priority overlay owns Esc.
+inline PauseMenuInputAction ResolvePauseInput(
+    bool pauseWasActiveAtFrameStart,
+    bool pauseCanBeEntered,
+    bool previousPressed,
+    bool nextPressed,
+    bool activatePressed,
+    bool cancelPressed,
+    PauseMenuState& state,
+    TopLevelFlow flow)
+{
+    if (flow != TopLevelFlow::Gameplay)
+    {
+        return PauseMenuInputAction::None;
+    }
+    if (!pauseWasActiveAtFrameStart)
+    {
+        if (pauseCanBeEntered && cancelPressed)
+        {
+            return PauseMenuInputAction::EnterPause;
+        }
+        return PauseMenuInputAction::None;
+    }
+    if (!state.active)
+    {
+        return PauseMenuInputAction::None;
+    }
+    if (cancelPressed)
+    {
+        return PauseMenuInputAction::Resume;
+    }
+    if (activatePressed)
+    {
+        return state.selected == PauseMenuItem::Resume
+            ? PauseMenuInputAction::Resume
+            : PauseMenuInputAction::ReturnToMainMenu;
+    }
+    if (previousPressed && !nextPressed)
+    {
+        NavigatePauseMenu(state, -1);
+    }
+    else if (nextPressed && !previousPressed)
+    {
+        NavigatePauseMenu(state, 1);
+    }
+    return PauseMenuInputAction::None;
 }
 
 // Requires results already visible at frame start so completion+Enter cannot
@@ -360,12 +510,15 @@ inline bool EscapeClosesWindowInFlow(
     TopLevelFlow flow,
     bool editorActive,
     bool runCompleteActive,
-    bool inventoryOpen)
+    bool inventoryOpen,
+    bool pauseActive = false)
 {
-    if (editorActive || flow != TopLevelFlow::Gameplay || runCompleteActive || inventoryOpen)
+    if (editorActive || inventoryOpen || runCompleteActive || pauseActive
+        || flow != TopLevelFlow::Gameplay)
     {
         return false;
     }
-    return true;
+    // M68: ordinary Gameplay Esc enters Pause instead of closing the window.
+    return false;
 }
 }

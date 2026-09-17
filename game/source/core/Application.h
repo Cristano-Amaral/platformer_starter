@@ -82,6 +82,7 @@ private:
     gameplay::RunCompleteState runCompleteState;
     gameplay::TopLevelFlow topLevelFlow = gameplay::TopLevelFlow::MainMenu;
     gameplay::MainMenuState mainMenuState{};
+    gameplay::PauseMenuState pauseMenuState{};
     std::string currentRuntimeLevelId;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};

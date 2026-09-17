@@ -1,7 +1,6 @@
 # Milestone 67 --- Gameplay HUD & Objective Presentation
 
-**Status:** Implemented, awaiting manual acceptance. M66 is CLOSED. Do not
-start Milestone 68.
+**Status:** CLOSED. Milestone 68 is the active milestone.
 
 **Canonical path:** `docs/milestones/MILESTONE_67.md`
 

@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 67 — Gameplay HUD & Objective Presentation.
+Milestone 68 — Pause Menu & Runtime Navigation.
 
-Canonical file: [`docs/milestones/MILESTONE_67.md`](docs/milestones/MILESTONE_67.md)
+Canonical file: [`docs/milestones/MILESTONE_68.md`](docs/milestones/MILESTONE_68.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 66 is CLOSED. Milestone 67 is implemented, awaiting manual acceptance. Do not start Milestone 68.
+Milestone 67 is CLOSED. Milestone 68 is implemented, awaiting manual acceptance. Do not start Milestone 69.
 
 ## Source of truth
 1. Current repository code.

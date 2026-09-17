@@ -236,14 +236,21 @@ int main()
     Expect(
         !gameplay::ObjectiveHudIsVisible(flow, false, false, results.active, false),
         "Run Complete still hides objective HUD before Esc");
-    gameplay::EnterMainMenu(flow, menu, results);
+    gameplay::PauseMenuState hudPause{};
+    gameplay::EnterMainMenu(flow, menu, results, hudPause);
     Expect(
         !gameplay::ObjectiveHudIsVisible(flow, false, false, results.active, false),
         "Run Complete to Main Menu keeps objective HUD hidden");
-    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
+    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu, hudPause);
     Expect(
         gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
         "Main Menu Play restores objective HUD");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(flow, false, false, false, false, true),
+        "Pause suppresses objective HUD");
+    Expect(
+        gameplay::ObjectiveHudIsVisible(flow, false, false, false, false, false),
+        "Resume restores objective HUD");
 
     Expect(
         gameplay::FlowAfterEditorToggle(gameplay::TopLevelFlow::Gameplay)

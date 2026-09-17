@@ -1401,6 +1401,30 @@ void DrawMainMenuOverlay(bool playSelected)
     DrawText(quitText, quitX, quitY, kRestartHintFontSize, quitColor);
 }
 
+void DrawPauseMenuOverlay(bool resumeSelected)
+{
+    const int titleWidth = MeasureText(gameplay::kPauseMenuTitle, kLevelCompleteFontSize);
+    const int titleX = (GetScreenWidth() - titleWidth) / 2;
+    const int titleY = GetScreenHeight() / 5;
+    DrawText(
+        gameplay::kPauseMenuTitle, titleX, titleY, kLevelCompleteFontSize, kLevelCompleteText);
+
+    const char* resumeText = resumeSelected ? "> RESUME" : "  RESUME";
+    const char* menuText = resumeSelected ? "  MAIN MENU" : "> MAIN MENU";
+    const Color resumeColor = resumeSelected ? kLevelCompleteText : kGrabHudMuted;
+    const Color menuColor = resumeSelected ? kGrabHudMuted : kLevelCompleteText;
+
+    const int resumeWidth = MeasureText(resumeText, kRestartHintFontSize);
+    const int resumeX = (GetScreenWidth() - resumeWidth) / 2;
+    const int resumeY = titleY + kLevelCompleteFontSize + kRestartHintGap * 2;
+    DrawText(resumeText, resumeX, resumeY, kRestartHintFontSize, resumeColor);
+
+    const int menuWidth = MeasureText(menuText, kRestartHintFontSize);
+    const int menuX = (GetScreenWidth() - menuWidth) / 2;
+    const int menuY = resumeY + kRestartHintFontSize + kRestartHintGap;
+    DrawText(menuText, menuX, menuY, kRestartHintFontSize, menuColor);
+}
+
 }
 
 Renderer::Renderer()
@@ -1559,7 +1583,8 @@ void Renderer::DrawWorld(
         ObjectiveHudView objectiveHud,
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect,
-        bool drawGameplayHud)
+        bool drawGameplayHud,
+        bool hideInteractionPrompts)
 {
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
@@ -1847,17 +1872,20 @@ void Renderer::DrawWorld(
         DrawGameplayObjectiveHud(objectiveHud);
         if (!inventoryPanel.visible && !runComplete)
         {
-            DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
-            if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+            if (!hideInteractionPrompts)
             {
-                DrawPickupHud(pickupHudText);
-            }
-            else if (!grabHudCarrying && !grabHudTarget && !pickupHudTarget && doorHudTarget)
-            {
-                DrawPickupHud(
-                    lockedDoorPrompt != nullptr && lockedDoorPrompt[0] != '\0'
-                        ? lockedDoorPrompt
-                        : "Requires item");
+                DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
+                if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
+                {
+                    DrawPickupHud(pickupHudText);
+                }
+                else if (!grabHudCarrying && !grabHudTarget && !pickupHudTarget && doorHudTarget)
+                {
+                    DrawPickupHud(
+                        lockedDoorPrompt != nullptr && lockedDoorPrompt[0] != '\0'
+                            ? lockedDoorPrompt
+                            : "Requires item");
+                }
             }
             DrawItemPickupCollectionHud(itemPickupCollectionHud);
         }
@@ -1876,6 +1904,11 @@ void Renderer::DrawWorld(
 void Renderer::DrawMainMenu(bool playSelected)
 {
     DrawMainMenuOverlay(playSelected);
+}
+
+void Renderer::DrawPauseMenu(bool resumeSelected)
+{
+    DrawPauseMenuOverlay(resumeSelected);
 }
 
 void Renderer::DrawOrientationWidget(const OrientationWidgetOverlay& overlay)

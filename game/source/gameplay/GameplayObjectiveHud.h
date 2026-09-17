@@ -50,10 +50,11 @@ inline bool ObjectiveHudIsVisible(
     bool editorActive,
     bool inventoryOpen,
     bool runCompleteActive,
-    bool levelCompleted)
+    bool levelCompleted,
+    bool pauseActive = false)
 {
     return flow == TopLevelFlow::Gameplay && !editorActive && !inventoryOpen
-        && !runCompleteActive && !levelCompleted;
+        && !runCompleteActive && !levelCompleted && !pauseActive;
 }
 
 inline GameplayObjectiveKind ClassifyGameplayObjective(

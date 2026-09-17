@@ -85,6 +85,9 @@ int main()
         Expect(ui.open, "5. empty Inventory opens safely");
         gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressCancel());
         Expect(!ui.open, "4. Esc closes Inventory");
+        Expect(
+            gameplay::InventoryUiBlocksGameplay(true, ui.open),
+            "Esc close frame still blocks gameplay so Pause cannot share that edge");
     }
 
     {

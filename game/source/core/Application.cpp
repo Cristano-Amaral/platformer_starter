@@ -934,6 +934,8 @@ int Application::Run()
             gameplay::MainMenuOverlayIsVisible(topLevelFlow, editorActiveAtFrameStart);
         const bool runCompleteAvailableAtFrameStart =
             gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState);
+        const bool pauseWasActiveAtFrameStart = pauseMenuState.active;
+        const bool editorBlocksPauseInput = editorActiveAtFrameStart || editorActive;
 
         if (mainMenuAvailableAtFrameStart && !editorActive)
         {
@@ -960,7 +962,7 @@ int Application::Run()
 
         const bool inventoryWasOpen = inventoryUi.open;
         if (gameplay::InventoryUiIsAvailable(
-                topLevelFlow, editorActive, runCompleteState.active))
+                topLevelFlow, editorActive, runCompleteState.active, pauseMenuState.active))
         {
             gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
         }
@@ -968,11 +970,43 @@ int Application::Run()
             gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
         const bool runCompleteBlocksGameplay =
             gameplay::RunCompleteBlocksGameplay(runCompleteState);
+        if (!editorBlocksPauseInput)
+        {
+            const bool pauseCanBeEntered = gameplay::PauseCanBeEntered(
+                topLevelFlow,
+                editorActive,
+                inventoryBlocksGameplay,
+                runCompleteState.active,
+                levelCompletionState.completed,
+                pauseWasActiveAtFrameStart);
+            const gameplay::PauseMenuInputAction pauseAction = gameplay::ResolvePauseInput(
+                pauseWasActiveAtFrameStart,
+                pauseCanBeEntered,
+                inputState.inventoryPreviousPressed,
+                inputState.inventoryNextPressed,
+                inputState.restartPressed,
+                inputState.cancelPressed,
+                pauseMenuState,
+                topLevelFlow);
+            if (pauseAction == gameplay::PauseMenuInputAction::EnterPause)
+            {
+                gameplay::EnterPause(pauseMenuState);
+            }
+            else if (pauseAction == gameplay::PauseMenuInputAction::Resume)
+            {
+                gameplay::ResumePause(pauseMenuState);
+            }
+            else if (pauseAction == gameplay::PauseMenuInputAction::ReturnToMainMenu)
+            {
+                ReturnToMainMenuFromResults();
+            }
+        }
         const bool simulationPaused =
             editorActive
             || gameplay::MainMenuBlocksGameplay(topLevelFlow)
             || inventoryBlocksGameplay
-            || runCompleteBlocksGameplay;
+            || runCompleteBlocksGameplay
+            || gameplay::PauseBlocksGameplay(pauseWasActiveAtFrameStart, pauseMenuState.active);
 
         bool hazardContactThisFrame = false;
         int collectedThisFrameIndex = world::kNoCollectibleIndex;
@@ -1672,7 +1706,8 @@ int Application::Run()
                     topLevelFlow,
                     false,
                     runCompleteState.active,
-                    inventoryUi.open));
+                    inventoryUi.open,
+                    pauseMenuState.active));
         }
 #else
         window.SetEscapeClosesWindow(
@@ -1680,7 +1715,8 @@ int Application::Run()
                 topLevelFlow,
                 false,
                 runCompleteState.active,
-                inventoryUi.open));
+                inventoryUi.open,
+                pauseMenuState.active));
 #endif
         char lockedDoorPrompt[64]{};
         if (lockedDoorTargetIndex >= 0
@@ -1757,13 +1793,27 @@ int Application::Run()
                     editorActive,
                     inventoryUi.open,
                     gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
-                    levelCompletionState.completed),
+                    levelCompletionState.completed,
+                    pauseMenuState.active),
                 objectiveLevelLabel,
                 objectiveLine},
             overlay,
             worldViewRect,
-            gameplay::GameplayHudIsActive(topLevelFlow, editorActive)
+            gameplay::GameplayHudIsActive(topLevelFlow, editorActive),
+            gameplay::PauseMenuOverlayIsVisible(
+                topLevelFlow,
+                editorActive,
+                pauseMenuState.active,
+                gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState))
         );
+        if (gameplay::PauseMenuOverlayIsVisible(
+                topLevelFlow,
+                editorActive,
+                pauseMenuState.active,
+                gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState)))
+        {
+            renderer.DrawPauseMenu(pauseMenuState.selected == gameplay::PauseMenuItem::Resume);
+        }
         if (gameplay::MainMenuOverlayIsVisible(topLevelFlow, editorActive))
         {
             renderer.DrawMainMenu(mainMenuState.selected == gameplay::MainMenuItem::Play);
@@ -2374,7 +2424,7 @@ void Application::Initialize()
     levelEditorState.contentBrowser.viewMode = editor::LoadContentBrowserViewMode();
 #endif
     initialized = true;
-    gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState);
+    gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState, pauseMenuState);
     window.SetEscapeClosesWindow(false);
 }
 
@@ -3187,7 +3237,7 @@ void Application::ResetGameplayAfterLevelTransition()
 
 void Application::ReturnToMainMenuFromResults()
 {
-    gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState);
+    gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState, pauseMenuState);
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     levelCompletionState = gameplay::LevelCompletionState{};
     gameplay::CloseInventoryUi(inventoryUi);
@@ -3258,7 +3308,7 @@ void Application::TryFinishPendingFreshRun()
     levelLoadStatus = world::LoadLevelFileStatus::Loaded;
     levelFormatVersion = world::kLevelFileVersion;
     ResetGameplayAfterPlayAgain();
-    gameplay::EnterGameplayFromSuccessfulPlay(topLevelFlow, mainMenuState);
+    gameplay::EnterGameplayFromSuccessfulPlay(topLevelFlow, mainMenuState, pauseMenuState);
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     const char* successMessage = menuPlay

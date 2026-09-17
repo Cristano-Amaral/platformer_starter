@@ -23,15 +23,15 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 67 — Gameplay HUD & Objective Presentation**
+**Milestone 68 — Pause Menu & Runtime Navigation**
 
-Canonical file: [`docs/milestones/MILESTONE_67.md`](milestones/MILESTONE_67.md)
+Canonical file: [`docs/milestones/MILESTONE_68.md`](milestones/MILESTONE_68.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Milestone 66 is CLOSED.
-Milestone 67 is implemented, awaiting manual acceptance.
-Do not start Milestone 68.
+Milestone 67 is CLOSED.
+Milestone 68 is implemented, awaiting manual acceptance.
+Do not start Milestone 69.
 
 ## Cursor loading contract
 
@@ -134,7 +134,8 @@ Historical milestone files do not override current implemented behavior.
 | 64.1 | [Milestone 64.1 — Editor Level Browser & Transition UX](milestones/MILESTONE_64_1.md) | complete |
 | 65 | [Milestone 65 — Game Flow & Run Completion](milestones/MILESTONE_65.md) | complete |
 | 66 | [Milestone 66 — Main Menu & Play Flow](milestones/MILESTONE_66.md) | complete |
-| 67 | [Milestone 67 — Gameplay HUD & Objective Presentation](milestones/MILESTONE_67.md) | implemented, awaiting manual acceptance |
+| 67 | [Milestone 67 — Gameplay HUD & Objective Presentation](milestones/MILESTONE_67.md) | complete |
+| 68 | [Milestone 68 — Pause Menu & Runtime Navigation](milestones/MILESTONE_68.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

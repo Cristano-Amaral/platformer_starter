@@ -578,8 +578,10 @@ int main()
             || menuMissingPrepare.status != gameplay::LevelTransitionPrepareStatus::Ready,
         "Play does not source-fallback");
 
-    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
+    gameplay::PauseMenuState playPause{};
+    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu, playPause);
     Expect(flow == gameplay::TopLevelFlow::Gameplay, "successful Play enters Gameplay once");
+    Expect(!playPause.active, "successful Play leaves Pause inactive");
     Expect(!menu.playPending && !menu.quitRequested, "successful Play clears menu transients");
     Expect(
         gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
@@ -609,11 +611,14 @@ int main()
         gameplay::InventoryUiIsAvailable(flow, false, false),
         "Inventory is available only after Play");
     Expect(
-        gameplay::EscapeClosesWindowInFlow(flow, false, false, false),
-        "ordinary Gameplay Esc keeps current close behavior");
+        !gameplay::EscapeClosesWindowInFlow(flow, false, false, false),
+        "ordinary Gameplay Esc does not close the window");
     Expect(
         !gameplay::EscapeClosesWindowInFlow(flow, false, true, false),
         "Esc during Run Complete does not close the window");
+    Expect(
+        !gameplay::EscapeClosesWindowInFlow(flow, false, false, false, true),
+        "Esc during Pause does not close the window");
 
     gameplay::RunCompleteState resultsToMenu{};
     Expect(
@@ -629,8 +634,10 @@ int main()
         gameplay::ResolveRunCompleteInput(true, false, false, true, resultsToMenu)
             == gameplay::RunCompleteInputAction::ReturnToMainMenu,
         "Esc Run Complete enters Main Menu exactly once");
-    gameplay::EnterMainMenu(flow, menu, resultsToMenu);
+    gameplay::PauseMenuState resultsPause{};
+    gameplay::EnterMainMenu(flow, menu, resultsToMenu, resultsPause);
     Expect(flow == gameplay::TopLevelFlow::MainMenu, "Esc leaves Gameplay");
+    Expect(!resultsPause.active, "Run Complete Esc does not enter Pause");
     Expect(!resultsToMenu.active, "Esc stops showing Run Complete");
     Expect(
         !gameplay::ObjectiveHudIsVisible(flow, false, false, resultsToMenu.active, false),
@@ -647,7 +654,7 @@ int main()
 
     gameplay::RequestPlayFromMainMenu(menu, flow);
     Expect(gameplay::PlayIsInFlight(menu), "Play after Run Complete→Menu is a fresh-run request");
-    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu);
+    gameplay::EnterGameplayFromSuccessfulPlay(flow, menu, resultsPause);
     Expect(flow == gameplay::TopLevelFlow::Gameplay, "Play after menu return enters Gameplay");
     Expect(
         gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
@@ -674,6 +681,227 @@ int main()
         gameplay::ResolveRunCompleteInput(true, false, true, true, noDouble)
             == gameplay::RunCompleteInputAction::None,
         "in-flight results action cannot double-trigger");
+
+    Expect(std::string_view(gameplay::kPauseMenuTitle) == "PAUSED", "Pause title");
+    Expect(std::string_view(gameplay::kPauseMenuResumeLabel) == "RESUME", "RESUME label");
+    Expect(
+        std::string_view(gameplay::kPauseMenuMainMenuLabel) == "MAIN MENU",
+        "Pause MAIN MENU label");
+
+    gameplay::TopLevelFlow pauseFlow = gameplay::TopLevelFlow::Gameplay;
+    gameplay::PauseMenuState pause{};
+    gameplay::MainMenuState pauseMenu{};
+    gameplay::RunCompleteState pauseResults{};
+    gameplay::RunTimerState pauseTimer{};
+    pauseTimer.elapsedSeconds = 7.25;
+    gameplay::Inventory pauseInventory;
+    Expect(pauseInventory.TryAdd("key", 1), "seed Inventory before Pause");
+    gameplay::ItemPickupRunState pausePickups = gameplay::MakeClearedItemPickupRunState(1);
+    pausePickups.collected[0] = 1;
+    gameplay::DoorLockRunState pauseDoors{};
+    pauseDoors.unlocked = {1};
+    gameplay::LevelCompletionState pauseCompletion{};
+    std::string pauseRuntimeId{world::kLevel01Id};
+    world::LevelDefinition pauseAuthored = level01.level;
+    const bool pauseDirtyBefore = false;
+
+    Expect(
+        gameplay::PauseCanBeEntered(pauseFlow, false, false, false, false, false),
+        "Esc during active Gameplay can enter Pause");
+    Expect(
+        gameplay::ResolvePauseInput(
+            false, true, false, false, false, true, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::EnterPause,
+        "Gameplay Esc enters Pause instead of closing");
+    gameplay::EnterPause(pause);
+    Expect(pause.active, "Pause is active");
+    Expect(pause.selected == gameplay::PauseMenuItem::Resume, "RESUME is the default selection");
+    Expect(
+        gameplay::PauseBlocksGameplay(false, true),
+        "entering Pause blocks simulation on that frame");
+    Expect(
+        gameplay::PauseBlocksGameplay(true, true),
+        "Pause freezes gameplay simulation while active");
+    Expect(!gameplay::RunTimerAdvancesInFlow(pauseFlow, pause.active), "Pause freezes the run timer");
+    Expect(
+        !gameplay::InventoryUiIsAvailable(pauseFlow, false, false, pause.active),
+        "Pause disables Inventory open/E");
+    Expect(
+        gameplay::PauseMenuOverlayIsVisible(pauseFlow, false, pause.active, false),
+        "Pause overlay is visible during Gameplay");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(pauseFlow, false, false, false, false, pause.active),
+        "Pause suppresses the objective HUD");
+    Expect(
+        !gameplay::EscapeClosesWindowInFlow(pauseFlow, false, false, false, pause.active),
+        "Pause Esc does not quit");
+
+    const double pauseTimerCaptured = pauseTimer.elapsedSeconds;
+    if (gameplay::RunTimerAdvancesInFlow(pauseFlow, pause.active) && !pauseTimer.frozen)
+    {
+        pauseTimer.elapsedSeconds += 0.16;
+    }
+    Expect(pauseTimer.elapsedSeconds == pauseTimerCaptured, "paused timer does not advance");
+    Expect(pauseInventory.GetQuantity("key") == 1, "Pause preserves Inventory");
+    Expect(pausePickups.collected[0] == 1, "Pause preserves pickup collected flags");
+    Expect(pauseDoors.unlocked[0] == 1, "Pause preserves Door unlock flags");
+    Expect(pauseRuntimeId == world::kLevel01Id, "Pause preserves currentRuntimeLevelId");
+    Expect(!pauseCompletion.completed, "Pause does not fabricate completion");
+    Expect(
+        world::AuthoredLevelDataEqual(pauseAuthored, level01.level),
+        "Pause does not mutate authored Level data");
+    Expect(!pauseDirtyBefore, "Pause does not mark Dirty");
+
+    Expect(
+        gameplay::ResolvePauseInput(
+            false, true, false, false, false, true, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::EnterPause,
+        "the entering Esc edge cannot Resume because Pause was not active at frame start");
+    Expect(pause.active, "same-edge Esc leaves Pause active");
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, false, true, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::Resume,
+        "Esc while paused resumes");
+    gameplay::ResumePause(pause);
+    Expect(!pause.active, "RESUME clears Pause");
+    Expect(
+        gameplay::PauseBlocksGameplay(true, false),
+        "Resume still blocks gameplay on the carry-through frame");
+    Expect(gameplay::RunTimerAdvancesInFlow(pauseFlow, pause.active), "Resume allows the timer again");
+    Expect(pauseTimer.elapsedSeconds == pauseTimerCaptured, "Resume preserves the frozen timer value");
+    Expect(pauseInventory.GetQuantity("key") == 1, "Resume preserves Inventory");
+    Expect(pausePickups.collected[0] == 1, "Resume preserves pickups");
+    Expect(pauseDoors.unlocked[0] == 1, "Resume preserves Door unlock");
+    Expect(pauseRuntimeId == world::kLevel01Id, "Resume preserves currentRuntimeLevelId");
+    Expect(
+        world::AuthoredLevelDataEqual(pauseAuthored, level01.level),
+        "Resume does not mutate authored data");
+    Expect(
+        gameplay::ObjectiveHudIsVisible(pauseFlow, false, false, false, false, pause.active),
+        "Resume restores the objective HUD");
+
+    gameplay::EnterPause(pause);
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, true, false, false, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::None,
+        "Down moves Pause selection without activating");
+    Expect(pause.selected == gameplay::PauseMenuItem::MainMenu, "Down selects MAIN MENU");
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, false, true, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::Resume,
+        "Esc resumes even when MAIN MENU is selected");
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, true, false, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::ReturnToMainMenu,
+        "Enter on MAIN MENU abandons the run");
+    gameplay::EnterMainMenu(pauseFlow, pauseMenu, pauseResults, pause);
+    Expect(pauseFlow == gameplay::TopLevelFlow::MainMenu, "Pause MAIN MENU enters Main Menu");
+    Expect(!pause.active, "Pause UI is cleared on Main Menu");
+    Expect(!pauseResults.active, "Pause MAIN MENU does not fabricate Run Complete");
+    Expect(gameplay::MainMenuOverlayIsVisible(pauseFlow, false), "existing Main Menu is visible");
+    Expect(gameplay::MainMenuBlocksGameplay(pauseFlow), "Main Menu keeps simulation inactive");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(pauseFlow, false, false, false, false, pause.active),
+        "Main Menu from Pause hides objective HUD");
+    Expect(
+        world::AuthoredLevelDataEqual(pauseAuthored, level01.level),
+        "Pause MAIN MENU does not mutate authored data");
+
+    gameplay::RequestPlayFromMainMenu(pauseMenu, pauseFlow);
+    Expect(gameplay::PlayIsInFlight(pauseMenu), "PLAY after Pause MAIN MENU uses existing Play");
+    WriteAll(staged01, world::SerializeLevelText(level01.level));
+    const gameplay::LevelTransitionPrepareResult pausePlayReady =
+        gameplay::PrepareStagedLevelDestination(staged01, world::kLevel01Id);
+    Expect(
+        pausePlayReady.status == gameplay::LevelTransitionPrepareStatus::Ready,
+        "PLAY after Pause still prepares staged level_01");
+    Expect(
+        gameplay::PlayAgainLoadsInitialRuntimeLevel(pausePlayReady.candidate.id),
+        "PLAY after Pause starts staged level_01");
+    gameplay::EnterGameplayFromSuccessfulPlay(pauseFlow, pauseMenu, pause);
+    Expect(pauseFlow == gameplay::TopLevelFlow::Gameplay, "PLAY after Pause enters Gameplay");
+    Expect(!pause.active, "fresh PLAY leaves Pause inactive");
+
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, true, false, false, false),
+        "Inventory Esc is consumed before Pause can be entered");
+    Expect(
+        gameplay::ResolvePauseInput(
+            false, false, false, false, false, true, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::None,
+        "Esc while Inventory blocks gameplay does not enter Pause");
+    Expect(
+        gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false),
+        "a later Esc after Inventory close may enter Pause");
+
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true, false),
+        "destination LEVEL COMPLETE keeps authority over Pause");
+    Expect(
+        gameplay::SelectCompletionPresentation(
+            gameplay::TopLevelFlow::Gameplay, true, true, pauseResults)
+            == gameplay::CompletionPresentation::DestinationContinue,
+        "destination completion overlay remains LEVEL COMPLETE");
+
+    gameplay::RunCompleteState runCompleteOwnsEsc{};
+    Expect(
+        gameplay::TryEnterRunCompleteFromTerminalGoal(runCompleteOwnsEsc, "", 4.0),
+        "seed Run Complete for Pause arbitration");
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, true, true, false),
+        "Run Complete cannot enter Pause");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, false, false, true, runCompleteOwnsEsc)
+            == gameplay::RunCompleteInputAction::ReturnToMainMenu,
+        "Run Complete Esc MAIN MENU is unchanged");
+    Expect(
+        gameplay::ResolveRunCompleteInput(true, true, true, true, runCompleteOwnsEsc)
+            == gameplay::RunCompleteInputAction::PlayAgain,
+        "Run Complete still uses Enter > Esc > R");
+    Expect(
+        !gameplay::PauseMenuOverlayIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, true),
+        "Pause is not shown over Run Complete");
+    Expect(
+        !gameplay::PauseMenuOverlayIsVisible(
+            gameplay::TopLevelFlow::MainMenu, false, true, false),
+        "Pause is not shown over Main Menu");
+
+    gameplay::PauseMenuState editorPause{};
+    gameplay::EnterPause(editorPause);
+    Expect(
+        gameplay::FlowAfterEditorToggle(gameplay::TopLevelFlow::Gameplay)
+            == gameplay::TopLevelFlow::Gameplay,
+        "F2 from Pause keeps Gameplay flow");
+    Expect(editorPause.active, "F2 round-trip preserves Pause");
+    Expect(
+        !gameplay::PauseMenuOverlayIsVisible(
+            gameplay::TopLevelFlow::Gameplay, true, editorPause.active, false),
+        "F2 hides Pause overlay while the editor is open");
+    Expect(
+        gameplay::PauseBlocksGameplay(true, editorPause.active),
+        "closing F2 does not convert Pause into active Gameplay");
+    Expect(
+        gameplay::FlowAfterEditorOpenOrSwitch(gameplay::TopLevelFlow::Gameplay)
+            == gameplay::TopLevelFlow::Gameplay,
+        "Open/Switch is not introduced as Pause behavior");
+
+    gameplay::PauseMenuState restartPause{};
+    gameplay::EnterPause(restartPause);
+    gameplay::ResumePause(restartPause);
+    Expect(!restartPause.active, "Restart after Resume sees inactive Pause");
+    Expect(
+        gameplay::InventoryUiIsAvailable(
+            gameplay::TopLevelFlow::Gameplay, false, false, restartPause.active),
+        "Restart after Resume uses ordinary Gameplay availability");
 
     std::filesystem::remove_all(scratch, cleanupError);
 
