@@ -14,6 +14,7 @@
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/PlayerHealth.h"
 #include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
 #include "world/LevelDefinition.h"
@@ -852,6 +853,23 @@ int main()
             inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
         Expect(inventory.GetQuantity("key") == 3, "PhysicsWorld rebuild preserves Inventory");
         Expect(inventory.Entries().size() == 1, "rebuild does not duplicate inventory entries");
+        gameplay::PlayerHealthState rebuildHealth{};
+        gameplay::HazardContactState rebuildContact{};
+        gameplay::InitializePlayerHealth(rebuildHealth);
+        gameplay::TickHazardContactDamage(rebuildHealth, rebuildContact, true, 1.0f / 60.0f, true);
+        const int healthBeforeRebuild = rebuildHealth.currentHealth;
+        Expect(
+            rebuildWorld.TryRebuild(
+                parsed.level,
+                parsed.level.initialSpawnVisualCenter,
+                world::kPlayerVisualSize),
+            "TryRebuild alone does not own Health");
+        Expect(
+            rebuildHealth.currentHealth == healthBeforeRebuild,
+            "PhysicsWorld rebuild preserves Health");
+        Expect(
+            rebuildContact.cooldownRemaining == gameplay::kHazardDamageCadenceSeconds,
+            "physics rebuild does not reset Hazard contact cadence");
     }
 
     if (gFailures != 0)

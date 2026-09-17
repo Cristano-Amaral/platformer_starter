@@ -8,6 +8,7 @@
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
+#include "gameplay/PlayerHealth.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/LevelTransition.h"
 #include "gameplay/PlatformerCamera.h"
@@ -83,6 +84,8 @@ private:
     gameplay::TopLevelFlow topLevelFlow = gameplay::TopLevelFlow::MainMenu;
     gameplay::MainMenuState mainMenuState{};
     gameplay::PauseMenuState pauseMenuState{};
+    gameplay::PlayerHealthState playerHealth{};
+    gameplay::HazardContactState hazardContact{};
     std::string currentRuntimeLevelId;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};

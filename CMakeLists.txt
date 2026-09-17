@@ -116,6 +116,7 @@ add_executable(Platformer3D
     game/source/gameplay/ItemPickupCollectionFeedback.h
     game/source/gameplay/ItemPickupCollectionHud.h
     game/source/gameplay/GameplayObjectiveHud.h
+    game/source/gameplay/PlayerHealth.h
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
@@ -580,6 +581,8 @@ add_executable(PhysicsRebuildTest
     game/source/editor/EditorSelection.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
+    game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/GameFlowState.h
     game/source/physics/PhysicsCapacity.h
     game/source/physics/DynamicBoxGrab.h
     game/source/physics/PhysicsRebuildTest.cpp
@@ -805,6 +808,7 @@ add_executable(GameplayObjectiveHudTest
     game/source/gameplay/ItemPickupCollectionHud.h
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/LevelTransition.h
+    game/source/gameplay/PlayerHealth.h
     game/source/world/LevelGoal.h
     game/source/world/LevelIdentity.h
 )
@@ -813,6 +817,27 @@ if(MSVC)
     target_compile_options(GameplayObjectiveHudTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(GameplayObjectiveHudTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 69: Player Health authority, Hazard contact cadence, Health HUD
+# visibility. No window, raylib, or Jolt.
+add_executable(PlayerHealthTest
+    game/source/gameplay/GameFlowState.h
+    game/source/gameplay/GameplayObjectiveHud.h
+    game/source/gameplay/LevelCompletionState.h
+    game/source/gameplay/LevelTransition.h
+    game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/PlayerHealthTest.cpp
+    game/source/gameplay/RespawnState.h
+    game/source/gameplay/RunTimerState.h
+    game/source/world/HazardWorld.h
+    game/source/world/LevelIdentity.h
+)
+target_include_directories(PlayerHealthTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(PlayerHealthTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(PlayerHealthTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 63: Level Goal overlap, one-shot completion, reset. No window, raylib, or Jolt.
@@ -840,6 +865,7 @@ add_executable(LevelTransitionTest
     game/source/gameplay/InventoryUi.cpp
     game/source/gameplay/InventoryUi.h
     game/source/gameplay/LevelCompletionState.h
+    game/source/gameplay/PlayerHealth.h
     game/source/gameplay/LevelTransition.cpp
     game/source/gameplay/LevelTransition.h
     game/source/platform/FileReplace.h
@@ -880,6 +906,7 @@ add_executable(GameFlowTest
     game/source/gameplay/DoorLockRuntime.h
     game/source/gameplay/GameFlowState.h
     game/source/gameplay/GameplayObjectiveHud.h
+    game/source/gameplay/PlayerHealth.h
     game/source/gameplay/GameFlowTest.cpp
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h

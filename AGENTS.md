@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 68 — Pause Menu & Runtime Navigation.
+Milestone 69 — Player Health & Damage.
 
-Canonical file: [`docs/milestones/MILESTONE_68.md`](docs/milestones/MILESTONE_68.md)
+Canonical file: [`docs/milestones/MILESTONE_69.md`](docs/milestones/MILESTONE_69.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 67 is CLOSED. Milestone 68 is implemented, awaiting manual acceptance. Do not start Milestone 69.
+Milestone 68 is CLOSED. Milestone 69 is implemented, awaiting manual acceptance. Do not start Milestone 70.
 
 ## Source of truth
 1. Current repository code.

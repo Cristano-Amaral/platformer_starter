@@ -1,5 +1,6 @@
 #include "gameplay/GameFlowState.h"
 #include "gameplay/GameplayObjectiveHud.h"
+#include "gameplay/PlayerHealth.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/LevelTransition.h"
@@ -282,6 +283,48 @@ int main()
         !gameplay::ObjectiveHudIsVisible(
             failedPlayFlow, false, false, playFailedMenu.active, false),
         "failed Play remains on Main Menu without objective HUD");
+
+    gameplay::PlayerHealthState hudHealth{};
+    gameplay::InitializePlayerHealth(hudHealth);
+    char healthText[gameplay::kHealthHudTextCapacity]{};
+    gameplay::FormatHealthHudText(healthText, sizeof(healthText), hudHealth);
+    Expect(TextEquals(healthText, "HEALTH 100 / 100"), "Health HUD formats max Health");
+    Expect(
+        gameplay::kHealthHudY
+            >= gameplay::kGameplayObjectiveHudObjectiveY
+                + gameplay::kGameplayObjectiveHudObjectiveFontSize,
+        "Health HUD sits below LEVEL/OBJECTIVE");
+    Expect(
+        gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false),
+        "active Gameplay shows Health HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::MainMenu, false, false, false, false),
+        "Main Menu hides Health HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, true),
+        "Pause hides Health HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, true, false, false),
+        "Inventory hides Health HUD with objective HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true),
+        "destination completion hides Health HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, true, false),
+        "Run Complete hides Health HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, true, false, false, false),
+        "F2/editor hides Health HUD");
+    hudHealth.currentHealth = gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount;
+    gameplay::FormatHealthHudText(healthText, sizeof(healthText), hudHealth);
+    Expect(TextEquals(healthText, "HEALTH 75 / 100"), "Health HUD updates after damage");
 
     if (gFailures != 0)
     {

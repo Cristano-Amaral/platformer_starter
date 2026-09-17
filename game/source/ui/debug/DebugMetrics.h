@@ -128,6 +128,8 @@ struct DebugMetricsSnapshot
     const char* checkpoint2VisualState = "Future";
     const char* insideHazardLabel = "None";
     bool hazardContactThisFrame = false;
+    int currentHealth = 0;
+    int maxHealth = 0;
 
     int collectedCount = 0;
     std::vector<std::uint8_t> collectibleCollected{};

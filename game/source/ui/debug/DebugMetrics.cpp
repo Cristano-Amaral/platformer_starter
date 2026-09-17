@@ -337,6 +337,7 @@ void DrawDebugMetrics(
         ImGui::Text(
             "Hazard contact this frame: %s",
             BoolText(snapshot.hazardContactThisFrame));
+        ImGui::Text("Health: %d / %d", snapshot.currentHealth, snapshot.maxHealth);
     }
 
     if (ImGui::CollapsingHeader("Collectibles", ImGuiTreeNodeFlags_DefaultOpen))

@@ -6,6 +6,7 @@
 #include "gameplay/Player.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/GameplayObjectiveHud.h"
+#include "gameplay/PlayerHealth.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "platform/RuntimePaths.h"
 #include "render/ItemPickupTargetHighlight.h"
@@ -377,6 +378,21 @@ void DrawGameplayObjectiveHud(const ObjectiveHudView& view)
             gameplay::kGameplayObjectiveHudObjectiveFontSize,
             kGrabHudMuted);
     }
+}
+
+void DrawHealthHud(const HealthHudView& view)
+{
+    if (!view.visible || view.text == nullptr || view.text[0] == '\0')
+    {
+        return;
+    }
+
+    DrawText(
+        view.text,
+        gameplay::kHealthHudMarginX,
+        gameplay::kHealthHudY,
+        gameplay::kHealthHudFontSize,
+        kGrabHudText);
 }
 
 void DrawGrabCarryHud(bool carrying, bool hasTarget)
@@ -1581,6 +1597,7 @@ void Renderer::DrawWorld(
         double runCompleteFinalSeconds,
         InventoryPanelView inventoryPanel,
         ObjectiveHudView objectiveHud,
+        HealthHudView healthHud,
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect,
         bool drawGameplayHud,
@@ -1870,6 +1887,7 @@ void Renderer::DrawWorld(
         DrawSessionBest(hasBestTime, bestSeconds);
         DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
         DrawGameplayObjectiveHud(objectiveHud);
+        DrawHealthHud(healthHud);
         if (!inventoryPanel.visible && !runComplete)
         {
             if (!hideInteractionPrompts)

@@ -2,8 +2,7 @@
 
 ## Status
 
-**Implemented, awaiting manual acceptance.** Milestone 67 is CLOSED. Do not
-start Milestone 69. Do not mark M68 CLOSED.
+**CLOSED.** Milestone 69 is the active milestone.
 
 ## Goal
 

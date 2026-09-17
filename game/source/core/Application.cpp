@@ -9,6 +9,7 @@
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/GameplayObjectiveHud.h"
+#include "gameplay/PlayerHealth.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/LevelTransition.h"
@@ -668,7 +669,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     int collectedThisFrameIndex,
     float deltaSeconds,
     const gameplay::LevelTransitionSchedule& levelTransition,
-    const gameplay::RunCompleteState& runCompleteState)
+    const gameplay::RunCompleteState& runCompleteState,
+    const gameplay::PlayerHealthState& playerHealth)
 {
     ui::DebugMetricsSnapshot snapshot;
     snapshot.fps = static_cast<float>(platform::FramesPerSecond());
@@ -822,6 +824,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.insideHazardLabel = HazardIndexLabel(
         world::FindHazardIndexContaining(player.Position(), level.hazards));
     snapshot.hazardContactThisFrame = hazardContactThisFrame;
+    snapshot.currentHealth = playerHealth.currentHealth;
+    snapshot.maxHealth = playerHealth.maxHealth;
 
     snapshot.collectedCount = gameplay::CollectedCount(collectibleRunState);
     snapshot.collectedThisFrameLabel = CollectibleIndexLabel(collectedThisFrameIndex);
@@ -1041,11 +1045,6 @@ int Application::Run()
                 PerformRespawn(gameplay::RespawnReason::Fall);
                 respawnedThisFrame = true;
             }
-            else if (hazardContactThisFrame)
-            {
-                PerformRespawn(gameplay::RespawnReason::Hazard);
-                respawnedThisFrame = true;
-            }
             else if (inputState.respawnPressed)
             {
                 PerformRespawn(gameplay::RespawnReason::Manual);
@@ -1113,6 +1112,24 @@ int Application::Run()
                         collectedThisFrameIndex = collectibleIndex;
                     }
                 }
+            }
+
+            if (!respawnedThisFrame)
+            {
+                const bool hazardDamageAllowed = gameplay::HazardDamageIsAllowed(
+                    topLevelFlow,
+                    editorActive,
+                    inventoryBlocksGameplay,
+                    runCompleteBlocksGameplay,
+                    levelCompletionState.completed,
+                    gameplay::PauseBlocksGameplay(
+                        pauseWasActiveAtFrameStart, pauseMenuState.active));
+                (void)gameplay::TickHazardContactDamage(
+                    playerHealth,
+                    hazardContact,
+                    hazardContactThisFrame,
+                    deltaSeconds,
+                    hazardDamageAllowed);
             }
 
             if (!respawnedThisFrame && inputState.restartPressed)
@@ -1732,10 +1749,12 @@ int Application::Run()
         }
         char objectiveLevelLabel[gameplay::kGameplayObjectiveHudLevelLabelCapacity]{};
         char objectiveLine[gameplay::kGameplayObjectiveHudObjectiveCapacity]{};
+        char healthHudText[gameplay::kHealthHudTextCapacity]{};
         gameplay::FormatGameplayLevelLabel(
             objectiveLevelLabel, sizeof(objectiveLevelLabel), currentRuntimeLevelId);
         gameplay::FormatGameplayObjectiveLine(
             objectiveLine, sizeof(objectiveLine), levelDefinition.levelGoals);
+        gameplay::FormatHealthHudText(healthHudText, sizeof(healthHudText), playerHealth);
         renderer.BeginFrame();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
@@ -1797,6 +1816,15 @@ int Application::Run()
                     pauseMenuState.active),
                 objectiveLevelLabel,
                 objectiveLine},
+            render::HealthHudView{
+                gameplay::HealthHudIsVisible(
+                    topLevelFlow,
+                    editorActive,
+                    inventoryUi.open,
+                    gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
+                    levelCompletionState.completed,
+                    pauseMenuState.active),
+                healthHudText},
             overlay,
             worldViewRect,
             gameplay::GameplayHudIsActive(topLevelFlow, editorActive),
@@ -1929,7 +1957,8 @@ int Application::Run()
                 collectedThisFrameIndex,
                 deltaSeconds,
                 levelTransition,
-                runCompleteState),
+                runCompleteState,
+                playerHealth),
             levelEditorState,
             levelDefinition,
             levelEditorView,
@@ -2445,6 +2474,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
         inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
+    // M69: Fall/Manual respawn does not restore Health. M70 owns death/respawn Health.
 }
 
 void Application::RestartRun()
@@ -2473,6 +2503,7 @@ void Application::RestartRun()
     camera.SnapToTarget(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
 }
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -3100,6 +3131,7 @@ void Application::ResetGameplayAfterCommittedLevel()
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
 }
 
 void Application::SaveLevelEditorSource()
@@ -3233,6 +3265,7 @@ void Application::ResetGameplayAfterLevelTransition()
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    gameplay::ResetHazardContactState(hazardContact);
 }
 
 void Application::ReturnToMainMenuFromResults()
@@ -3371,6 +3404,7 @@ void Application::ResetGameplayAfterPlayAgain()
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
 }
 
 void Application::Shutdown()

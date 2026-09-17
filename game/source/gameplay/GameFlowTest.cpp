@@ -2,6 +2,7 @@
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/GameplayObjectiveHud.h"
+#include "gameplay/PlayerHealth.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
@@ -165,6 +166,23 @@ int main()
             false,
             destinationCompletion.completed),
         "destination completion overlay suppresses objective HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay,
+            false,
+            false,
+            false,
+            destinationCompletion.completed),
+        "destination completion overlay suppresses Health HUD");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay,
+            false,
+            false,
+            false,
+            destinationCompletion.completed,
+            false),
+        "destination LEVEL COMPLETE hold prevents Hazard damage");
 
     Expect(
         gameplay::ResolveRunCompleteInput(false, true, true, false, runComplete)
@@ -262,6 +280,18 @@ int main()
     Expect(inventory.Entries().empty(), "Play Again fresh Inventory via NewRun");
     Expect(!ui.open, "Play Again closes Inventory UI");
 
+    gameplay::PlayerHealthState playAgainHealth{};
+    gameplay::HazardContactState playAgainContact{};
+    gameplay::InitializePlayerHealth(playAgainHealth);
+    gameplay::TickHazardContactDamage(playAgainHealth, playAgainContact, true, 1.0f / 60.0f, true);
+    Expect(
+        playAgainHealth.currentHealth == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
+        "seed damaged Health before Play Again");
+    gameplay::ResetPlayerHealthForNewRuntime(playAgainHealth, playAgainContact);
+    Expect(
+        playAgainHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        "Play Again restores maximum Health through the existing NewRun path");
+
     gameplay::RespawnState respawn{};
     respawn.activeCheckpointIndex = 0;
     respawn.deathCount = 4;
@@ -335,6 +365,14 @@ int main()
     gameplay::ApplyInventoryLifecycle(
         restartInventory, gameplay::InventoryLifecycleEvent::RestartRun);
     Expect(restartInventory.Entries().empty(), "existing Restart Inventory clear is preserved");
+    gameplay::PlayerHealthState restartHealth{};
+    gameplay::HazardContactState restartContact{};
+    gameplay::InitializePlayerHealth(restartHealth);
+    gameplay::TickHazardContactDamage(restartHealth, restartContact, true, 1.0f / 60.0f, true);
+    gameplay::ResetPlayerHealthForNewRuntime(restartHealth, restartContact);
+    Expect(
+        restartHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        "Restart Current Level restores maximum Health");
     gameplay::RunTimerState restartTimer{};
     restartTimer.elapsedSeconds = 22.0;
     restartTimer.frozen = true;
@@ -402,6 +440,18 @@ int main()
     Expect(carry.TryAdd("key", 1), "seed linked Inventory");
     gameplay::ApplyInventoryLifecycle(carry, gameplay::InventoryLifecycleEvent::LevelTransition);
     Expect(carry.GetQuantity("key") == 1, "linked Level transition still preserves Inventory");
+    gameplay::PlayerHealthState carryHealth{};
+    gameplay::HazardContactState carryContact{};
+    gameplay::InitializePlayerHealth(carryHealth);
+    gameplay::TickHazardContactDamage(carryHealth, carryContact, true, 1.0f / 60.0f, true);
+    const int carryHealthBefore = carryHealth.currentHealth;
+    gameplay::ResetHazardContactState(carryContact);
+    Expect(
+        carryHealth.currentHealth == carryHealthBefore,
+        "successful destination transition preserves Health");
+    Expect(
+        carryContact.cooldownRemaining == 0.0f,
+        "destination replace resets local Hazard contact only");
     gameplay::RunCompleteState afterTransition{};
     gameplay::ResetRunCompleteState(afterTransition);
     Expect(!afterTransition.active, "successful destination does not leak results");
@@ -492,6 +542,21 @@ int main()
         "Tab/E stay inactive because Inventory UI is unavailable in Main Menu");
     Expect(menuInventory.GetQuantity("key") == 1,
         "Main Menu idle does not apply a fresh-run Inventory reset");
+    gameplay::PlayerHealthState menuHealth{};
+    gameplay::HazardContactState menuContact{};
+    gameplay::InitializePlayerHealth(menuHealth);
+    Expect(
+        !gameplay::HazardDamageIsAllowed(flow, false, false, false, false, false),
+        "Main Menu prevents Hazard damage");
+    Expect(
+        !gameplay::TickHazardContactDamage(menuHealth, menuContact, true, 1.0f / 60.0f, false),
+        "Main Menu overlapping Hazard does not damage");
+    Expect(
+        menuHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        "Main Menu idle leaves Health at maximum");
+    Expect(
+        !gameplay::HealthHudIsVisible(flow, false, false, false, false),
+        "Main Menu hides Health HUD");
 
     gameplay::RunCompleteState menuCannotFabricate{};
     Expect(
@@ -574,6 +639,9 @@ int main()
         !gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
         "failed Play remains without objective HUD");
     Expect(
+        !gameplay::HealthHudIsVisible(flow, false, false, false, false),
+        "failed Play remains without Health HUD");
+    Expect(
         menuMissing.string().find("source") == std::string::npos
             || menuMissingPrepare.status != gameplay::LevelTransitionPrepareStatus::Ready,
         "Play does not source-fallback");
@@ -586,12 +654,31 @@ int main()
     Expect(
         gameplay::ObjectiveHudIsVisible(flow, false, false, false, false),
         "Play from Main Menu shows objective HUD");
+    gameplay::ResetPlayerHealthForNewRuntime(menuHealth, menuContact);
+    Expect(
+        menuHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        "Main Menu PLAY restores maximum Health");
+    Expect(
+        gameplay::HealthHudIsVisible(flow, false, false, false, false),
+        "Play from Main Menu shows Health HUD");
     Expect(
         !gameplay::ObjectiveHudIsVisible(flow, false, true, false, false),
         "Inventory hides objective HUD");
     Expect(
+        !gameplay::HealthHudIsVisible(flow, false, true, false, false),
+        "Inventory hides Health HUD with the existing Gameplay HUD convention");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(flow, false, true, false, false, false),
+        "Inventory gameplay blocking prevents Hazard damage");
+    Expect(
         !gameplay::ObjectiveHudIsVisible(flow, true, false, false, false),
         "F2/editor hides objective HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(flow, true, false, false, false),
+        "F2/editor hides Health HUD");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(flow, true, false, false, false, false),
+        "Development editor gameplay blocking prevents Hazard damage");
     gameplay::FormatGameplayLevelLabel(hudLabel, sizeof(hudLabel), world::kLevel02Id);
     gameplay::FormatGameplayObjectiveLine(
         hudObjective, sizeof(hudObjective), level02.level.levelGoals);
@@ -606,6 +693,16 @@ int main()
     Expect(
         std::string_view(hudLabel) == "LEVEL 01",
         "failed transition does not display destination before replace");
+    gameplay::PlayerHealthState failedHealth{};
+    gameplay::HazardContactState failedContact{};
+    gameplay::InitializePlayerHealth(failedHealth);
+    gameplay::TickHazardContactDamage(failedHealth, failedContact, true, 1.0f / 60.0f, true);
+    const int failedHealthCaptured = failedHealth.currentHealth;
+    Expect(!gameplay::TryCommitPreparedDestination(menuPreserved, menuMissingPrepare),
+        "failed destination replace is atomic");
+    Expect(
+        failedHealth.currentHealth == failedHealthCaptured,
+        "failed destination transition preserves Health atomically");
     Expect(gameplay::RunTimerAdvancesInFlow(flow), "Gameplay timer may advance after Play");
     Expect(
         gameplay::InventoryUiIsAvailable(flow, false, false),
@@ -630,6 +727,13 @@ int main()
     Expect(
         !gameplay::ObjectiveHudIsVisible(flow, false, false, resultsToMenu.active, false),
         "Run Complete hides objective HUD");
+    Expect(
+        !gameplay::HealthHudIsVisible(flow, false, false, resultsToMenu.active, false),
+        "Run Complete hides Health HUD");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            flow, false, false, resultsToMenu.active, true, false),
+        "RUN COMPLETE prevents Hazard damage");
     Expect(
         gameplay::ResolveRunCompleteInput(true, false, false, true, resultsToMenu)
             == gameplay::RunCompleteInputAction::ReturnToMainMenu,
@@ -752,6 +856,35 @@ int main()
         "Pause does not mutate authored Level data");
     Expect(!pauseDirtyBefore, "Pause does not mark Dirty");
 
+    gameplay::PlayerHealthState pauseHealth{};
+    gameplay::HazardContactState pauseContact{};
+    gameplay::InitializePlayerHealth(pauseHealth);
+    Expect(
+        gameplay::TickHazardContactDamage(pauseHealth, pauseContact, true, 1.0f / 60.0f, true),
+        "seed Hazard damage before Pause");
+    const int pauseHealthCaptured = pauseHealth.currentHealth;
+    const float pauseCooldownCaptured = pauseContact.cooldownRemaining;
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            pauseFlow, false, false, false, false, pause.active),
+        "Pause prevents Hazard damage");
+    Expect(
+        !gameplay::TickHazardContactDamage(
+            pauseHealth,
+            pauseContact,
+            true,
+            gameplay::kHazardDamageCadenceSeconds,
+            gameplay::HazardDamageIsAllowed(
+                pauseFlow, false, false, false, false, pause.active)),
+        "paused overlap does not apply Hazard damage");
+    Expect(pauseHealth.currentHealth == pauseHealthCaptured, "Pause preserves damaged Health");
+    Expect(
+        pauseContact.cooldownRemaining == pauseCooldownCaptured,
+        "Pause does not progress Hazard cadence");
+    Expect(
+        !gameplay::HealthHudIsVisible(pauseFlow, false, false, false, false, pause.active),
+        "Pause suppresses the Health HUD");
+
     Expect(
         gameplay::ResolvePauseInput(
             false, true, false, false, false, true, pause, pauseFlow)
@@ -780,6 +913,13 @@ int main()
     Expect(
         gameplay::ObjectiveHudIsVisible(pauseFlow, false, false, false, false, pause.active),
         "Resume restores the objective HUD");
+    Expect(pauseHealth.currentHealth == pauseHealthCaptured, "Resume preserves Health");
+    Expect(
+        pauseContact.cooldownRemaining == pauseCooldownCaptured,
+        "Resume does not catch up Hazard cadence");
+    Expect(
+        gameplay::HealthHudIsVisible(pauseFlow, false, false, false, false, pause.active),
+        "Resume restores the Health HUD");
 
     gameplay::EnterPause(pause);
     Expect(
@@ -808,6 +948,12 @@ int main()
         !gameplay::ObjectiveHudIsVisible(pauseFlow, false, false, false, false, pause.active),
         "Main Menu from Pause hides objective HUD");
     Expect(
+        !gameplay::HealthHudIsVisible(pauseFlow, false, false, false, false, pause.active),
+        "Main Menu from Pause hides Health HUD");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(pauseFlow, false, false, false, false, pause.active),
+        "Main Menu from Pause prevents Hazard damage");
+    Expect(
         world::AuthoredLevelDataEqual(pauseAuthored, level01.level),
         "Pause MAIN MENU does not mutate authored data");
 
@@ -825,6 +971,10 @@ int main()
     gameplay::EnterGameplayFromSuccessfulPlay(pauseFlow, pauseMenu, pause);
     Expect(pauseFlow == gameplay::TopLevelFlow::Gameplay, "PLAY after Pause enters Gameplay");
     Expect(!pause.active, "fresh PLAY leaves Pause inactive");
+    gameplay::ResetPlayerHealthForNewRuntime(pauseHealth, pauseContact);
+    Expect(
+        pauseHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        "PLAY after Pause MAIN MENU restores maximum Health");
 
     Expect(
         !gameplay::PauseCanBeEntered(
@@ -849,6 +999,14 @@ int main()
             gameplay::TopLevelFlow::Gameplay, true, true, pauseResults)
             == gameplay::CompletionPresentation::DestinationContinue,
         "destination completion overlay remains LEVEL COMPLETE");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true),
+        "destination LEVEL COMPLETE hides Health HUD");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true, false),
+        "destination LEVEL COMPLETE prevents Hazard damage");
 
     gameplay::RunCompleteState runCompleteOwnsEsc{};
     Expect(
@@ -870,6 +1028,14 @@ int main()
         !gameplay::PauseMenuOverlayIsVisible(
             gameplay::TopLevelFlow::Gameplay, false, false, true),
         "Pause is not shown over Run Complete");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, true, true),
+        "Run Complete hides Health HUD while results own the overlay");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, true, true, false),
+        "Run Complete prevents Hazard damage");
     Expect(
         !gameplay::PauseMenuOverlayIsVisible(
             gameplay::TopLevelFlow::MainMenu, false, true, false),

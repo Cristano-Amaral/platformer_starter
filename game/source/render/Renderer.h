@@ -198,6 +198,12 @@ struct ObjectiveHudView
     const char* objectiveLine = nullptr;
 };
 
+struct HealthHudView
+{
+    bool visible = false;
+    const char* text = nullptr;
+};
+
 class StaticModelSceneStore;
 
 class Renderer
@@ -268,6 +274,7 @@ public:
         double runCompleteFinalSeconds = 0.0,
         InventoryPanelView inventoryPanel = {},
         ObjectiveHudView objectiveHud = {},
+        HealthHudView healthHud = {},
         const DebugWorldOverlay& overlay = {},
         WorldViewRect viewRect = {},
         bool drawGameplayHud = true,
