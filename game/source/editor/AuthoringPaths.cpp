@@ -1,5 +1,7 @@
 #include "editor/AuthoringPaths.h"
 
+#include "world/LevelIdentity.h"
+
 #include <string>
 
 namespace editor
@@ -55,8 +57,18 @@ std::filesystem::path AuthoringSourcePath(std::string_view logicalRelative)
     return resolved;
 }
 
+std::filesystem::path AuthoringLevelSourcePath(std::string_view levelId)
+{
+    const std::string logical = world::MakeRuntimeLevelLogicalId(levelId);
+    if (logical.empty())
+    {
+        return {};
+    }
+    return AuthoringSourcePath(logical);
+}
+
 std::filesystem::path AuthoringLevel01SourcePath()
 {
-    return AuthoringSourcePath(kLevel01AuthoringLogicalId);
+    return AuthoringLevelSourcePath(world::kLevel01Id);
 }
 }

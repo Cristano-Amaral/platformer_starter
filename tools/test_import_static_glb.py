@@ -119,6 +119,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(ids.count("models/test_static.glb"), 1)
         self.assertIn("textures/test_checker.png", ids)
         self.assertIn("levels/level_01.level", ids)
+        self.assertIn("levels/level_02.level", ids)
         self.assertIn("sounds/item_pickup_collect.wav", ids)
 
 

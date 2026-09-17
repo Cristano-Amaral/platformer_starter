@@ -189,6 +189,9 @@ int main()
             inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
         Expect(inventory.GetQuantity("key") == 2, "25. PhysicsWorld rebuild policy preserves");
         gameplay::ApplyInventoryLifecycle(
+            inventory, gameplay::InventoryLifecycleEvent::LevelTransition);
+        Expect(inventory.GetQuantity("key") == 2, "level transition preserves Inventory");
+        gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::RestartRun);
         Expect(inventory.Entries().empty(), "23. full Restart Run clears Inventory");
         Expect(inventory.TryAdd("coin", 1), "reseed after restart");

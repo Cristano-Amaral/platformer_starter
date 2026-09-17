@@ -1,6 +1,7 @@
 #include "editor/RuntimeLevelReload.h"
 
 #include "world/LevelDefinition.h"
+#include "world/LevelIdentity.h"
 #include "world/LevelWriter.h"
 
 namespace editor
@@ -72,7 +73,7 @@ RuntimeLevelReloadPrepareResult PrepareRuntimeLevelReload(
             : loaded.error + ". Active level unchanged.";
         return result;
     }
-    if (loaded.level.id != world::kLevel01Id
+    if (!world::RuntimeLevelPathStemMatchesId(stagedRuntimeLevelPath, loaded.level.id)
         || !world::IsWritableLevelDefinition(loaded.level))
     {
         result.status = RuntimeLevelReloadStatus::Invalid;

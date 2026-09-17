@@ -4,6 +4,7 @@
 // Does not activate gameplay, create physics bodies, render, or touch BEST.
 
 #include "world/LevelDefinition.h"
+#include "world/LevelIdentity.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -14,7 +15,6 @@ namespace world
 {
 inline constexpr std::string_view kLevelFileMagic = "PLATFORMER_LEVEL";
 inline constexpr int kLevelFileVersion = 1;
-inline constexpr std::string_view kLevel01RuntimeLogicalId = "levels/level_01.level";
 
 // Parser/runtime corruption guards. Not gameplay design caps.
 inline constexpr std::uintmax_t kMaxLevelFileBytes = 65536;
@@ -72,10 +72,6 @@ inline const char* LoadLevelFileStatusName(LoadLevelFileStatus status)
     }
     return "Error";
 }
-
-// Grammar rule for the `id` record: [A-Za-z_][A-Za-z0-9_]*. Shared so the
-// writer cannot emit an identifier the parser would reject.
-bool IsValidLevelIdToken(std::string_view token);
 
 // Strict in-memory parse. Empty input is Invalid, not Missing.
 ParseLevelFileResult ParseLevelText(std::string_view text);

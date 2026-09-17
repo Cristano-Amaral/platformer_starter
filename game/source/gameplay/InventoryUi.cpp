@@ -123,6 +123,10 @@ void ApplyInventoryUiLifecycle(
     case InventoryLifecycleEvent::PhysicsWorldRebuild:
         RepairInventorySelection(ui, inventory);
         break;
+    case InventoryLifecycleEvent::LevelTransition:
+        CloseInventoryUi(ui);
+        RepairInventorySelection(ui, inventory);
+        break;
     }
 }
 }

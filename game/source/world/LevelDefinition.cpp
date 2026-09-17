@@ -234,7 +234,8 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
     for (std::size_t index = 0; index < a.levelGoals.size(); ++index)
     {
         if (!Vec3Equal(a.levelGoals[index].center, b.levelGoals[index].center)
-            || !Vec3Equal(a.levelGoals[index].size, b.levelGoals[index].size))
+            || !Vec3Equal(a.levelGoals[index].size, b.levelGoals[index].size)
+            || a.levelGoals[index].nextLevelId != b.levelGoals[index].nextLevelId)
         {
             return false;
         }

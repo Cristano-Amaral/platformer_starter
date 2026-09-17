@@ -193,7 +193,16 @@ std::string SerializeLevelText(const LevelDefinition& level)
 
     for (const LevelGoalSpec& goal : level.levelGoals)
     {
-        AppendCenterSizeRecord(out, "level_goal", goal.center, goal.size);
+        out += "level_goal ";
+        AppendVec3(out, goal.center);
+        out += ' ';
+        AppendVec3(out, goal.size);
+        if (!goal.nextLevelId.empty())
+        {
+            out += ' ';
+            out += goal.nextLevelId;
+        }
+        out += '\n';
     }
 
     for (const DynamicBoxSpec& box : level.dynamicBoxes)

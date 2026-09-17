@@ -8,6 +8,7 @@
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/LevelCompletionState.h"
+#include "gameplay/LevelTransition.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
 #include "gameplay/RespawnState.h"
@@ -46,6 +47,7 @@ private:
     void Shutdown();
     void PerformRespawn(gameplay::RespawnReason reason);
     void RestartRun();
+    void TryFinishPendingLevelTransition();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     void SetLevelEditorActive(bool active);
     // Physics rebuilds use TryRebuild so a failure leaves the active world
@@ -60,6 +62,7 @@ private:
     void ResetGameplayAfterCommittedLevel();
     void SaveLevelEditorSource();
 #endif
+    void ResetGameplayAfterLevelTransition();
 
     world::LevelDefinition levelDefinition{};
     platform::Window window;
@@ -69,6 +72,8 @@ private:
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
     gameplay::LevelCompletionState levelCompletionState;
+    gameplay::LevelTransitionSchedule levelTransition;
+    std::string currentRuntimeLevelId;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};
     gameplay::InventoryUiState inventoryUi{};

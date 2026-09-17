@@ -23,15 +23,15 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 63 — Level Goal / Exit**
+**Milestone 64 — Multiple Levels & Level Transition**
 
-Canonical file: [`docs/milestones/MILESTONE_63.md`](milestones/MILESTONE_63.md)
+Canonical file: [`docs/milestones/MILESTONE_64.md`](milestones/MILESTONE_64.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Milestone 62 is implemented, awaiting manual acceptance.
-Milestone 63 is implemented, awaiting manual acceptance.
-Do not start Milestone 64.
+Milestone 63 is complete.
+Milestone 64 is implemented, awaiting manual acceptance.
+Do not start Milestone 65.
 
 ## Cursor loading contract
 
@@ -129,7 +129,8 @@ Historical milestone files do not override current implemented behavior.
 | 60 | [Milestone 60 — Split Milestone Documentation](milestones/MILESTONE_60.md) | implemented, awaiting manual acceptance |
 | 61 | [Milestone 61 — Item Pickup Collection Feedback](milestones/MILESTONE_61.md) | complete |
 | 62 | [Milestone 62 — Item Pickup Collection HUD Notification](milestones/MILESTONE_62.md) | implemented, awaiting manual acceptance |
-| 63 | [Milestone 63 — Level Goal / Exit](milestones/MILESTONE_63.md) | implemented, awaiting manual acceptance |
+| 63 | [Milestone 63 — Level Goal / Exit](milestones/MILESTONE_63.md) | complete |
+| 64 | [Milestone 64 — Multiple Levels & Level Transition](milestones/MILESTONE_64.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

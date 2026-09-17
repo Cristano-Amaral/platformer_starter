@@ -117,6 +117,8 @@ add_executable(Platformer3D
     game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
     game/source/gameplay/LevelCompletionState.h
+    game/source/gameplay/LevelTransition.cpp
+    game/source/gameplay/LevelTransition.h
     game/source/gameplay/RespawnState.h
     game/source/gameplay/RunTimerState.h
     game/source/gameplay/SessionBestTimeState.h
@@ -167,6 +169,7 @@ add_executable(Platformer3D
     game/source/world/StaticProp.h
     game/source/world/StaticProp.cpp
     game/source/world/LevelGoal.h
+    game/source/world/LevelIdentity.h
     game/source/world/LevelFile.cpp
     game/source/world/LevelFile.h
     game/source/world/LevelWriter.cpp
@@ -249,6 +252,7 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/models/test_authored.glb
 #   <exe dir>/assets/models/test_textured.glb
 #   <exe dir>/assets/levels/level_01.level
+#   <exe dir>/assets/levels/level_02.level
 #   <exe dir>/assets/sounds/item_pickup_collect.wav
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
@@ -479,8 +483,12 @@ endif()
 file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/levels/level_01.level"
     PLATFORMER_LEVEL01_SOURCE_PATH)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/levels/level_02.level"
+    PLATFORMER_LEVEL02_SOURCE_PATH)
 target_compile_definitions(LevelFileTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+    "PLATFORMER_LEVEL02_SOURCE_PATH=\"${PLATFORMER_LEVEL02_SOURCE_PATH}\""
 )
 
 # Milestone 54: player runtime Inventory API and lifecycle policy. Not shipped.
@@ -788,6 +796,7 @@ add_executable(LevelGoalTest
     game/source/gameplay/LevelCompletionState.h
     game/source/render/LevelGoalVisualization.h
     game/source/world/LevelGoal.h
+    game/source/world/LevelIdentity.h
     game/source/world/LevelGoalTest.cpp
 )
 target_include_directories(LevelGoalTest PRIVATE game/source)
@@ -796,6 +805,46 @@ if(MSVC)
 else()
     target_compile_options(LevelGoalTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Milestone 64: destination-bearing Level Goal, staged-only transition prepare,
+# Inventory carry-over policy, no SceneManager. No window, raylib, or Jolt.
+add_executable(LevelTransitionTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/InventoryUi.cpp
+    game/source/gameplay/InventoryUi.h
+    game/source/gameplay/LevelCompletionState.h
+    game/source/gameplay/LevelTransition.cpp
+    game/source/gameplay/LevelTransition.h
+    game/source/platform/FileReplace.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelIdentity.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/gameplay/LevelTransitionTest.cpp
+)
+if(WIN32)
+    target_sources(LevelTransitionTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(LevelTransitionTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(LevelTransitionTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(LevelTransitionTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LevelTransitionTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(LevelTransitionTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+    "PLATFORMER_LEVEL02_SOURCE_PATH=\"${PLATFORMER_LEVEL02_SOURCE_PATH}\""
+)
 
 # Milestone 63 correction: editor translucent AABB vs gameplay marker-only.
 # Hidden window. Not shipped.

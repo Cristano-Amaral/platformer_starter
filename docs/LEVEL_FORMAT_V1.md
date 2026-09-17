@@ -21,15 +21,15 @@ file. The writer emits exactly this contract.
 
 | Role | Path |
 |---|---|
-| Source (authored) | `game/assets/source/levels/level_01.level` |
-| Cooked | `game/assets/cooked/levels/level_01.level` |
-| Staged / runtime | `<executable directory>/assets/levels/level_01.level` |
+| Source (authored) | `game/assets/source/levels/level_01.level`, `game/assets/source/levels/level_02.level` |
+| Cooked | `game/assets/cooked/levels/level_01.level`, `game/assets/cooked/levels/level_02.level` |
+| Staged / runtime | `<executable directory>/assets/levels/level_01.level`, `<executable directory>/assets/levels/level_02.level` |
 
-Logical runtime id: `levels/level_01.level` via `platform::RuntimeAssetPath`.
-The runtime never reads `assets/source`.
+Logical runtime ids: `levels/level_01.level` and `levels/level_02.level` via `platform::RuntimeAssetPath`.
+The runtime never reads `assets/source`. Destination-bearing Level Goals resolve only through that staged runtime convention. There is no source-tree fallback.
 
-The Development editor writes only the source row and never the staged runtime
-copy. It resolves that path through `editor::AuthoringLevel01SourcePath`, whose
+The Development editor writes the source row for the **current runtime level identity** (`levels/<id>.level`) and never the staged runtime
+copy. It resolves that path through `editor::AuthoringLevelSourcePath`, whose
 root is injected by CMake for the Development configuration only. Saving the
 source does not update the cooked or staged copies; the normal
 `python tools/cook_assets.py` + `cmake --build` steps do that.
@@ -74,8 +74,10 @@ camera <ox> <oy> <oz> <fovY>
 ```
 
 `id` is `[A-Za-z_][A-Za-z0-9_]*`. The file must contain the authored identity
-(do not infer it from the filename). Application requires `level_01`; the
-parser and writer accept any valid identifier.
+(do not infer it from the filename). Application Initialize requires `level_01`.
+After a successful M64 transition the active identity is the destination
+(`level_02`). The parser and writer accept any valid identifier. Destination
+tokens on `level_goal` reuse the same identity grammar; they are not paths.
 
 ### Required repeated records
 
@@ -87,7 +89,7 @@ slope <cx> <cy> <cz> <sx> <sy> <sz> <rotZ> # exactly 2
 checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
 hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
-level_goal <cx> <cy> <cz> <sx> <sy> <sz>
+level_goal <cx> <cy> <cz> <sx> <sy> <sz> [<nextLevelId>]
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay>]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
@@ -122,12 +124,23 @@ probe line; this is not the historical EOL artifact). Save serializes authored
 Jolt body. Position is world center. Size is extents; each axis finite and
 `>= kMinLevelGoalExtent` (0.12). Default Add size is `2, 1.6, 1.8`. Zero,
 one, or many records are valid. Any one active goal may complete the level.
-Canonical Level 01 has **zero** Level Goals. Runtime `LevelCompletionState`
-is **not** a Level Format field and is never serialized. The historical
-required singleton `goal` keyword is rejected. Presentation: Development
-Editor draws the authored AABB as a translucent volume; Gameplay and Release
-draw the two-post marker only. The invisible AABB remains the completion
-region.
+Canonical Level 01 has **zero** Level Goals. Canonical Level 02 also has
+zero Level Goals; it is a small distinct second map, not a campaign node.
+Runtime `LevelCompletionState` is **not** a Level Format field and is never
+serialized. The historical required singleton `goal` keyword is rejected.
+Presentation: Development Editor draws the authored AABB as a translucent
+volume; Gameplay and Release draw the two-post marker only. The invisible
+AABB remains the completion region.
+
+An optional 8th token is the destination identity (`nextLevelId`):
+- omitted or empty → terminal M63 goal (`LEVEL COMPLETE` / Enter to Restart);
+- a valid `id` token such as `level_02` → destination-bearing goal.
+
+The writer emits the token only when non-empty. Unsafe identities (absolute
+paths, traversal, slashes, dots, extensions) are rejected. Runtime resolution
+uses staged `levels/<id>.level` only. A missing or malformed destination fails
+atomically: the current level stays loaded and completed, and the failed
+attempt is not retried every frame.
 
 `pressure_plate` is an authored axis-aligned trigger volume, not a Jolt body.
 Position is world center. Size is extents; each axis finite and

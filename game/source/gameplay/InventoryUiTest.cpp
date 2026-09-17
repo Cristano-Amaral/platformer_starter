@@ -267,6 +267,20 @@ int main()
 
     {
         gameplay::Inventory inventory;
+        Expect(inventory.TryAdd("key", 2), "transition seed");
+        gameplay::InventoryUiState panel{};
+        panel.open = true;
+        panel.selectedItemId = "key";
+        gameplay::ApplyInventoryLifecycle(
+            inventory, gameplay::InventoryLifecycleEvent::LevelTransition);
+        gameplay::ApplyInventoryUiLifecycle(
+            panel, gameplay::InventoryLifecycleEvent::LevelTransition, inventory);
+        Expect(inventory.GetQuantity("key") == 2, "level transition preserves Inventory");
+        Expect(!panel.open, "level transition closes UI");
+    }
+
+    {
+        gameplay::Inventory inventory;
         Expect(inventory.TryAdd("battery", 1), "harness coexistence seed");
         gameplay::InventoryUiState panel{};
         gameplay::OpenInventoryUi(panel, inventory);

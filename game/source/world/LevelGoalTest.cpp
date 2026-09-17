@@ -3,6 +3,7 @@
 #include "world/LevelGoal.h"
 
 #include <cstdio>
+#include <string>
 #include <vector>
 
 namespace
@@ -70,6 +71,20 @@ int main()
     const core::Vec3 authoredSize = goals[0].size;
     Expect(Vec3Equal(goals[0].center, authoredCenter) && Vec3Equal(goals[0].size, authoredSize),
         "16. completion does not mutate authored data");
+
+    std::string capturedDestination;
+    gameplay::LevelCompletionState destinationState{};
+    world::LevelGoalSpec destinationGoal = goalA;
+    destinationGoal.nextLevelId = "level_02";
+    Expect(
+        gameplay::TryCompleteLevelFromPlayerOverlap(
+            destinationState, {destinationGoal}, insideA, &capturedDestination),
+        "destination-bearing goal completes through M63 overlap");
+    Expect(capturedDestination == "level_02", "completion captures nextLevelId once");
+    Expect(
+        !gameplay::TryCompleteLevelFromPlayerOverlap(
+            destinationState, {destinationGoal}, insideA, &capturedDestination),
+        "destination is not recaptured while completed");
 
     gameplay::ResetLevelCompletionState(state);
     Expect(!state.completed, "14. Restart/Apply/reload reset");

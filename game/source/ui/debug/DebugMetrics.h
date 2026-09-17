@@ -159,6 +159,10 @@ struct DebugMetricsSnapshot
     int levelDoorCount = 0;
     core::Vec3 levelCameraOffset{};
     float levelCameraFieldOfViewY = 0.0f;
+    bool levelTransitionPending = false;
+    bool levelTransitionFailed = false;
+    char levelTransitionDestination[32]{};
+    char levelTransitionFailure[256]{};
 };
 
 void DrawDebugMetrics(

@@ -7,6 +7,7 @@
 #include "core/Vec3.h"
 #include "world/LevelGoal.h"
 
+#include <string>
 #include <vector>
 
 namespace gameplay
@@ -26,17 +27,25 @@ inline void ResetLevelCompletionState(LevelCompletionState& state)
 inline bool TryCompleteLevelFromPlayerOverlap(
     LevelCompletionState& state,
     const std::vector<world::LevelGoalSpec>& goals,
-    core::Vec3 playerVisualCenter)
+    core::Vec3 playerVisualCenter,
+    std::string* outNextLevelId = nullptr)
 {
     if (state.completed)
     {
         return false;
     }
-    if (!world::PlayerOverlapsAnyLevelGoal(goals, playerVisualCenter))
+    for (const world::LevelGoalSpec& goal : goals)
     {
-        return false;
+        if (world::PointInsideGoal(goal, playerVisualCenter))
+        {
+            state.completed = true;
+            if (outNextLevelId != nullptr)
+            {
+                *outNextLevelId = goal.nextLevelId;
+            }
+            return true;
+        }
     }
-    state.completed = true;
-    return true;
+    return false;
 }
 }

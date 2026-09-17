@@ -246,31 +246,6 @@ bool RequireSingleton(
 }
 }
 
-bool IsValidLevelIdToken(std::string_view token)
-{
-    if (token.empty())
-    {
-        return false;
-    }
-    const char first = token.front();
-    if (!((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_'))
-    {
-        return false;
-    }
-    for (const char character : token)
-    {
-        const bool ok = (character >= 'A' && character <= 'Z')
-            || (character >= 'a' && character <= 'z')
-            || (character >= '0' && character <= '9')
-            || character == '_';
-        if (!ok)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 ParseLevelFileResult ParseLevelText(std::string_view text)
 {
     if (text.empty())
@@ -547,13 +522,26 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "level_goal")
         {
-            if (!RequireTokenCount(tokens, 7, failure, lineNumber))
+            if (tokens.size() != 7 && tokens.size() != 8)
             {
+                failure = MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
                 return failure;
             }
             LevelGoalSpec goal{};
-            if (!ParseVec3(tokens, 1, goal.center) || !ParseVec3(tokens, 4, goal.size)
-                || !LevelGoalSpecIsValid(goal))
+            if (!ParseVec3(tokens, 1, goal.center) || !ParseVec3(tokens, 4, goal.size))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid level_goal");
+            }
+            if (tokens.size() == 8)
+            {
+                if (!IsValidLevelIdToken(tokens[7]))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid level_goal destination");
+                }
+                goal.nextLevelId = std::string(tokens[7]);
+            }
+            if (!LevelGoalSpecIsValid(goal))
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid level_goal");
             }

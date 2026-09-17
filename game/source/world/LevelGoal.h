@@ -4,9 +4,11 @@
 // Objective, Trigger, Receiver, Event, or Interactable.
 
 #include "core/Vec3.h"
+#include "world/LevelIdentity.h"
 #include "world/RespawnWorld.h"
 
 #include <cmath>
+#include <string>
 #include <vector>
 
 namespace world
@@ -20,6 +22,9 @@ struct LevelGoalSpec
 {
     core::Vec3 center{};
     core::Vec3 size{};
+    // Empty = terminal M63 goal. Non-empty = destination identity such as
+    // level_02. Not a path, GUID, campaign node, or spawn name.
+    std::string nextLevelId{};
 };
 
 inline bool LevelGoalSizeIsValid(core::Vec3 size)
@@ -36,7 +41,8 @@ inline bool LevelGoalCenterIsValid(core::Vec3 center)
 
 inline bool LevelGoalSpecIsValid(const LevelGoalSpec& spec)
 {
-    return LevelGoalCenterIsValid(spec.center) && LevelGoalSizeIsValid(spec.size);
+    return LevelGoalCenterIsValid(spec.center) && LevelGoalSizeIsValid(spec.size)
+        && IsValidNextLevelId(spec.nextLevelId);
 }
 
 constexpr bool PointInsideGoal(const LevelGoalSpec& spec, core::Vec3 visualCenter)

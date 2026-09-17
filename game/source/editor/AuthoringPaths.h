@@ -17,7 +17,8 @@
 
 namespace editor
 {
-// The single level M32 can author. No registry, no browser.
+// Startup still loads staged Level 01. After M64 the current runtime identity
+// may be another valid level such as level_02. No registry, no browser.
 inline constexpr std::string_view kLevel01AuthoringLogicalId = "levels/level_01.level";
 
 // True only when this configuration was built with an injected authoring root.
@@ -27,7 +28,10 @@ bool IsLevelAuthoringAvailable();
 // authoring is unavailable for this configuration.
 std::filesystem::path AuthoringSourceRoot();
 
-// Absolute path of the canonical Level 01 authoring file, or empty.
+// Absolute path under the authoring root for a logical relative identity, or
+// empty when authoring is unavailable or the identity is unsafe.
 std::filesystem::path AuthoringSourcePath(std::string_view logicalRelative);
+// Absolute source path for a validated level identity such as level_01.
+std::filesystem::path AuthoringLevelSourcePath(std::string_view levelId);
 std::filesystem::path AuthoringLevel01SourcePath();
 }

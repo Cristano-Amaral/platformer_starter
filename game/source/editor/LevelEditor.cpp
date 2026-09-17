@@ -31,6 +31,7 @@
 #endif
 #include "world/Door.h"
 #include "world/ItemPickup.h"
+#include "world/LevelIdentity.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -109,7 +110,7 @@ void ResetLevelActionStatuses(LevelEditorState& state)
 
 LevelEditorSaveResult SaveLevelSource(const world::LevelDefinition& level)
 {
-    const std::filesystem::path path = AuthoringLevel01SourcePath();
+    const std::filesystem::path path = AuthoringLevelSourcePath(level.id);
     if (path.empty())
     {
         return {LevelEditorSaveStatus::Error, "authoring root unavailable"};
@@ -375,6 +376,17 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             world::LevelGoalSpec& goal = level.levelGoals[state.selection.index];
             EditVec3("Center X Y Z", goal.center);
             EditVec3("Size X Y Z", goal.size);
+            char nextLevelId[64]{};
+            std::snprintf(
+                nextLevelId, sizeof(nextLevelId), "%s", goal.nextLevelId.c_str());
+            if (ImGui::InputText("Next Level", nextLevelId, sizeof(nextLevelId)))
+            {
+                if (nextLevelId[0] == '\0' || world::IsValidLevelIdToken(nextLevelId))
+                {
+                    goal.nextLevelId = nextLevelId;
+                }
+            }
+            ImGui::TextUnformatted("Empty is terminal. Example: level_02");
         }
         break;
     case EditorObjectKind::DynamicBox:
@@ -1234,7 +1246,7 @@ LevelEditorRequest DrawLevelControls(
 
         if (authoringAvailable)
         {
-            const std::string sourcePath = AuthoringLevel01SourcePath().string();
+            const std::string sourcePath = AuthoringLevelSourcePath(activeLevel.id).string();
             ImGui::TextWrapped("Source (read-only): %s", sourcePath.c_str());
         }
         else

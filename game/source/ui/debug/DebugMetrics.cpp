@@ -377,6 +377,13 @@ void DrawDebugMetrics(
             snapshot.goalSize.y,
             snapshot.goalSize.z);
         ImGui::Text("Player inside any goal: %s", BoolText(snapshot.playerInsideGoal));
+        ImGui::Text("Transition pending: %s", BoolText(snapshot.levelTransitionPending));
+        ImGui::Text("Transition failed: %s", BoolText(snapshot.levelTransitionFailed));
+        ImGui::Text("Destination: %s", snapshot.levelTransitionDestination);
+        if (snapshot.levelTransitionFailure[0] != '\0')
+        {
+            ImGui::TextWrapped("Transition error: %s", snapshot.levelTransitionFailure);
+        }
     }
 
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)

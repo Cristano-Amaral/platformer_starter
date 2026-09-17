@@ -117,6 +117,7 @@ void ApplyInventoryLifecycle(Inventory& inventory, InventoryLifecycleEvent event
         break;
     case InventoryLifecycleEvent::CheckpointRespawn:
     case InventoryLifecycleEvent::PhysicsWorldRebuild:
+    case InventoryLifecycleEvent::LevelTransition:
         break;
     }
 }

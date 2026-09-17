@@ -67,6 +67,7 @@ enum class InventoryLifecycleEvent
     RestartRun,
     PhysicsWorldRebuild,
     ApplyCommittedLevel,
+    LevelTransition,
 };
 
 class Inventory

@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 63 — Level Goal / Exit.
+Milestone 64 — Multiple Levels & Level Transition.
 
-Canonical file: [`docs/milestones/MILESTONE_63.md`](docs/milestones/MILESTONE_63.md)
+Canonical file: [`docs/milestones/MILESTONE_64.md`](docs/milestones/MILESTONE_64.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 62 is implemented, awaiting manual acceptance. Do not start Milestone 64.
+Milestone 63 is complete. Milestone 64 is implemented, awaiting manual acceptance. Do not start Milestone 65.
 
 ## Source of truth
 1. Current repository code.

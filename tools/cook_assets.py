@@ -85,6 +85,12 @@ KNOWN_ASSETS = (
         "kind": KIND_LEVEL_V1,
     },
     {
+        "id": "levels/level_02.level",
+        "source": "levels/level_02.level",
+        "cooked": "levels/level_02.level",
+        "kind": KIND_LEVEL_V1,
+    },
+    {
         "id": "sounds/item_pickup_collect.wav",
         "source": "sounds/item_pickup_collect.wav",
         "cooked": "sounds/item_pickup_collect.wav",

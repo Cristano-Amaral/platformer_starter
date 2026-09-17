@@ -176,6 +176,8 @@ int main()
             {kTestPlacementA.x, kTestPlacementA.y, working.initialSpawnVisualCenter.z}),
             "level goal uses camera X/Y and spawn-lane Z");
         Expect(world::LevelGoalSpecIsValid(working.levelGoals[0]), "default level goal is valid");
+        Expect(working.levelGoals[0].nextLevelId.empty(), "default level goal is terminal");
+        working.levelGoals[0].nextLevelId = "level_02";
 
         const editor::LifecycleEditResult duplicated =
             editor::DuplicateSelected(working, {editor::EditorObjectKind::Goal, 0});
@@ -188,6 +190,7 @@ int main()
             "duplicate goal offset +1 X");
         Expect(Vec3Near(working.levelGoals[1].size, working.levelGoals[0].size),
             "duplicate goal copies size");
+        Expect(working.levelGoals[1].nextLevelId == "level_02", "duplicate copies Next Level");
 
         const editor::LifecycleEditResult deleted =
             editor::DeleteSelected(working, {editor::EditorObjectKind::Goal, 0});

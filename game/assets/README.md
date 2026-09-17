@@ -43,7 +43,14 @@ Milestone 18 textured model:
 - visual-only; model collision is not supported
 - see `docs/BLENDER_WORKFLOW.md`
 
-Milestone 47 imported static models:
+Milestone 31/64 level files:
+- logical ids: `levels/level_01.level`, `levels/level_02.level`
+- source: `game/assets/source/levels/`
+- cooked: `game/assets/cooked/levels/`
+- runtime: `<executable directory>/assets/levels/`
+- cooker kind: `level_v1` (UTF-8 header gate, then byte copy)
+- runtime never loads `source/`
+- destination-bearing Level Goals resolve only the staged runtime copy
 - destination: `game/assets/source/models/<filename>.glb` (external filename preserved)
 - identity: `models/<filename>.glb` (project-relative; never an absolute path)
 - catalog: derived from valid `source/models/*.glb`; not a persistent database

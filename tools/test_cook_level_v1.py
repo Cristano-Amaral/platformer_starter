@@ -19,6 +19,11 @@ class LevelV1HeaderTests(unittest.TestCase):
         source = cooker.source_root(cooker.repo_root()) / "levels" / "level_01.level"
         cooker.validate_level_v1_header(source.read_bytes())
 
+    def test_level_02_source_header_is_accepted(self) -> None:
+        source = cooker.source_root(cooker.repo_root()) / "levels" / "level_02.level"
+        cooker.validate_level_v1_header(source.read_bytes())
+        self.assertIn(b"id level_02", source.read_bytes())
+
     def test_wrong_magic_fails(self) -> None:
         with self.assertRaises(cooker.CookError):
             cooker.validate_level_v1_header(b"PLATFORMER_SAVE 1\n")
@@ -156,6 +161,15 @@ class LevelV1HeaderTests(unittest.TestCase):
         )
         cooker.validate_level_v1_header(payload)
         self.assertIn(b"level_goal -21 3.8 0", payload)
+
+    def test_destination_bearing_level_goal_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"level_goal -21 3.8 0 2 1.6 1.8 level_02\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"level_02", payload)
 
 
 if __name__ == "__main__":

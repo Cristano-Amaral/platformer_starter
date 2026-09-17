@@ -9,6 +9,7 @@
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelGoal.h"
+#include "world/LevelIdentity.h"
 #include "world/MovingPlatform.h"
 #include "world/Door.h"
 #include "world/ItemPickup.h"
@@ -24,7 +25,6 @@
 
 namespace world
 {
-inline constexpr std::string_view kLevel01Id = "level_01";
 // Canonical Level 01 instance counts. Variable-count v1 files may differ.
 inline constexpr int kLevel01ElevatedPlatformCount = 6;
 inline constexpr int kLevel01DynamicBoxCount = 0;

@@ -286,6 +286,13 @@ int main()
     Expect(loadedFile.status == world::LoadLevelFileStatus::Loaded, "LoadLevelFile canonical");
     Expect(CanonicalLevel01Values(loadedFile.level), "LoadLevelFile canonical values");
 
+    const world::ParseLevelFileResult loadedLevel02 =
+        world::LoadLevelFile(PLATFORMER_LEVEL02_SOURCE_PATH);
+    Expect(loadedLevel02.status == world::LoadLevelFileStatus::Loaded, "LoadLevelFile level_02");
+    Expect(loadedLevel02.level.id == world::kLevel02Id, "level_02 id");
+    Expect(loadedLevel02.level.levelGoals.empty(), "canonical level_02 has zero Level Goals");
+    Expect(world::IsWritableLevelDefinition(loadedLevel02.level), "level_02 is writable");
+
     const world::ParseLevelFileResult missing = world::LoadLevelFile(
         std::filesystem::path(PLATFORMER_LEVEL01_SOURCE_PATH).parent_path()
         / "missing_level_01.level");
@@ -714,7 +721,17 @@ int main()
         WriteAll(otherIdPath, world::SerializeLevelText(otherLevel));
         const editor::RuntimeLevelReloadPrepareResult wrongId =
             editor::PrepareRuntimeLevelReload(otherIdPath, false);
-        Expect(wrongId.status == editor::RuntimeLevelReloadStatus::Invalid, "non-level_01 id Invalid");
+        Expect(wrongId.status == editor::RuntimeLevelReloadStatus::Invalid, "id/stem mismatch Invalid");
+
+        world::LevelDefinition matchingDestination = parsed.level;
+        matchingDestination.id = "level_02";
+        const std::filesystem::path matchingPath =
+            reloadDir / "assets" / "levels" / "level_02.level";
+        WriteAll(matchingPath, world::SerializeLevelText(matchingDestination));
+        const editor::RuntimeLevelReloadPrepareResult matchingId =
+            editor::PrepareRuntimeLevelReload(matchingPath, false);
+        Expect(matchingId.status == editor::RuntimeLevelReloadStatus::Ready, "matching stem/id Ready");
+        Expect(matchingId.candidate.id == "level_02", "matching candidate id");
 
         const editor::RuntimeLevelReloadReconcileResult sameBaseline =
             editor::ReconcileAfterRuntimeLevelReload(parsed.level, parsed.level);
@@ -1110,6 +1127,32 @@ int main()
                 world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
                 "one level_goal round trip");
             Expect(writtenOne.find("completed") == std::string::npos, "runtime completion not serialized");
+            Expect(one.level.levelGoals[0].nextLevelId.empty(), "7-token goal is terminal");
+            Expect(
+                writtenOne.find("level_goal -21 3.8 0 2 1.6 1.8\n") != std::string::npos,
+                "writer omits empty destination");
+
+            const std::string destinationGoal =
+                canonical + "level_goal -21 3.8 0 2 1.6 1.8 level_02\n";
+            const world::ParseLevelFileResult destination = world::ParseLevelText(destinationGoal);
+            Expect(destination.status == world::LoadLevelFileStatus::Loaded, "destination goal loads");
+            Expect(
+                destination.level.levelGoals.size() == 1
+                    && destination.level.levelGoals[0].nextLevelId == "level_02",
+                "destination goal captures nextLevelId");
+            const std::string writtenDestination = world::SerializeLevelText(destination.level);
+            Expect(
+                writtenDestination.find("level_goal -21 3.8 0 2 1.6 1.8 level_02\n") != std::string::npos,
+                "writer emits destination identity");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    destination.level, world::ParseLevelText(writtenDestination).level),
+                "destination goal round trip");
+            world::LevelDefinition destinationEdit = destination.level;
+            destinationEdit.levelGoals[0].nextLevelId.clear();
+            Expect(
+                !world::AuthoredLevelDataEqual(destination.level, destinationEdit),
+                "authored equality detects Next Level edit");
 
             const std::string twoGoals = canonical
                 + "level_goal -21 3.8 0 2 1.6 1.8\n"
@@ -1146,9 +1189,23 @@ int main()
                     == world::LoadLevelFileStatus::Invalid,
                 "short level_goal token count rejected");
             Expect(
-                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6 1.8 extra\n").status
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6 1.8 extra extra\n").status
                     == world::LoadLevelFileStatus::Invalid,
-                "extra level_goal token rejected");
+                "two extra level_goal tokens rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6 1.8 ../secret\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "traversal destination rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6 1.8 levels/level_02\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "path destination rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6 1.8 level_02.level\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "extension destination rejected");
             Expect(
                 world::ParseLevelText(canonical + "goal -21 3.8 0 2 1.6 1.8\n").status
                     == world::LoadLevelFileStatus::Invalid,

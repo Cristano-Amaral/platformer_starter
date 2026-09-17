@@ -14,5 +14,6 @@ set(PLATFORMER_RUNTIME_ASSETS
     models/test_authored.glb
     models/test_textured.glb
     levels/level_01.level
+    levels/level_02.level
     sounds/item_pickup_collect.wav
 )

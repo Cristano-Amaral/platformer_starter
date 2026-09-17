@@ -175,6 +175,11 @@ class StageRuntimeAssetsTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("PLATFORMER_COOKED_DIR is required", result.stderr + result.stdout)
 
+    def test_canonical_runtime_inventory_includes_level_02(self) -> None:
+        inventory = (REPO_ROOT / "cmake" / "RuntimeAssets.cmake").read_text(encoding="utf-8")
+        self.assertIn("levels/level_01.level", inventory)
+        self.assertIn("levels/level_02.level", inventory)
+
 
 if __name__ == "__main__":
     unittest.main()

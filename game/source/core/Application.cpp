@@ -9,6 +9,7 @@
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
+#include "gameplay/LevelTransition.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
 #include "input/Input.h"
@@ -22,6 +23,7 @@
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/LevelGoal.h"
+#include "world/LevelIdentity.h"
 #include "world/RespawnWorld.h"
 
 #include <array>
@@ -393,6 +395,30 @@ void ReportRequiredLevelFailure(
     }
 }
 
+void ReportLevelTransitionFailure(
+    const std::filesystem::path& path,
+    std::string_view destinationId,
+    std::string_view message)
+{
+    std::fprintf(stderr, "Level transition failed. Active level unchanged.\n");
+    if (!destinationId.empty())
+    {
+        std::fprintf(stderr, "  destination: %s\n", std::string(destinationId).c_str());
+    }
+    if (path.empty())
+    {
+        std::fprintf(stderr, "  path: (unavailable)\n");
+    }
+    else
+    {
+        std::fprintf(stderr, "  path: %s\n", path.string().c_str());
+    }
+    if (!message.empty())
+    {
+        std::fprintf(stderr, "  error: %s\n", std::string(message).c_str());
+    }
+}
+
 void CopyBounded(char* destination, std::size_t destinationSize, std::string_view source)
 {
     if (destination == nullptr || destinationSize == 0)
@@ -597,7 +623,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     bool restartedThisFrame,
     bool hazardContactThisFrame,
     int collectedThisFrameIndex,
-    float deltaSeconds)
+    float deltaSeconds,
+    const gameplay::LevelTransitionSchedule& levelTransition)
 {
     ui::DebugMetricsSnapshot snapshot;
     snapshot.fps = static_cast<float>(platform::FramesPerSecond());
@@ -811,6 +838,16 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.levelDoorCount = static_cast<int>(level.doors.size());
     snapshot.levelCameraOffset = level.camera.offset;
     snapshot.levelCameraFieldOfViewY = level.camera.fieldOfViewY;
+    snapshot.levelTransitionPending = levelTransition.pending;
+    snapshot.levelTransitionFailed = levelTransition.failed;
+    CopyBounded(
+        snapshot.levelTransitionDestination,
+        sizeof(snapshot.levelTransitionDestination),
+        levelTransition.destinationId);
+    CopyBounded(
+        snapshot.levelTransitionFailure,
+        sizeof(snapshot.levelTransitionFailure),
+        levelTransition.failureMessage);
     return snapshot;
 }
 #endif
@@ -913,13 +950,17 @@ int Application::Run()
                             .respawnPosition;
                 }
 
+                std::string completedNextLevelId;
                 if (gameplay::TryCompleteLevelFromPlayerOverlap(
                         levelCompletionState,
                         levelDefinition.levelGoals,
-                        player.Position()))
+                        player.Position(),
+                        &completedNextLevelId))
                 {
                     levelCompletionState.completed = true;
                     runTimerState.frozen = true;
+                    gameplay::CaptureCompletedGoalDestination(
+                        levelTransition, completedNextLevelId);
                     if (gameplay::IsBetterSessionCompletion(
                             sessionBestTimeState,
                             runTimerState.elapsedSeconds))
@@ -1680,7 +1721,8 @@ int Application::Run()
                 restartedThisFrame,
                 hazardContactThisFrame,
                 collectedThisFrameIndex,
-                deltaSeconds),
+                deltaSeconds,
+                levelTransition),
             levelEditorState,
             levelDefinition,
             levelEditorView,
@@ -2022,6 +2064,7 @@ int Application::Run()
         }
         FinishCookStageAndReloadIfReady();
 #endif
+        TryFinishPendingLevelTransition();
     }
 
     Shutdown();
@@ -2068,6 +2111,8 @@ void Application::Initialize()
     }
 
     levelDefinition = loadedLevel.level;
+    currentRuntimeLevelId = loadedLevel.level.id;
+    gameplay::ResetLevelTransitionSchedule(levelTransition);
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     // M32 dirty baseline: the staged file we just loaded. Dirty therefore
     // starts false and tracks only edits applied during this session. The
@@ -2207,6 +2252,7 @@ void Application::RestartRun()
         inventoryUi, gameplay::InventoryLifecycleEvent::RestartRun, inventory);
     runTimerState = gameplay::RunTimerState{};
     camera.SnapToTarget(player.Position());
+    gameplay::ResetLevelTransitionSchedule(levelTransition);
 }
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -2478,13 +2524,6 @@ bool Application::ApplyLevelEditorPreview()
             "Apply rejected: authored validation failed. Active level unchanged.";
         return true;
     }
-    if (levelEditorState.workingCopy.id != world::kLevel01Id)
-    {
-        editor::ResetLevelActionStatuses(levelEditorState);
-        levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Invalid;
-        levelEditorState.lastMessage = "Apply rejected: Level ID must remain level_01.";
-        return true;
-    }
 
     const world::LevelDefinition candidate = levelEditorState.workingCopy;
 
@@ -2498,6 +2537,7 @@ bool Application::ApplyLevelEditorPreview()
     }
 
     levelDefinition = candidate;
+    currentRuntimeLevelId = candidate.id;
     ResetGameplayAfterCommittedLevel();
 
     // sessionBestTimeState, the persisted BEST, and the level-loading
@@ -2556,8 +2596,8 @@ bool Application::ReloadRuntimeLevelFromStaged()
         return true;
     }
 
-    const std::filesystem::path stagedPath =
-        platform::RuntimeAssetPath(world::kLevel01RuntimeLogicalId);
+    const std::string logicalId = world::MakeRuntimeLevelLogicalId(currentRuntimeLevelId);
+    const std::filesystem::path stagedPath = platform::RuntimeAssetPath(logicalId);
     const editor::RuntimeLevelReloadPrepareResult prepared =
         editor::PrepareRuntimeLevelReload(stagedPath, levelEditorState.modified);
     if (prepared.status != editor::RuntimeLevelReloadStatus::Ready)
@@ -2595,6 +2635,8 @@ bool Application::ReloadRuntimeLevelFromStaged()
     }
 
     levelDefinition = prepared.candidate;
+    currentRuntimeLevelId = prepared.candidate.id;
+    runtimeLevelPathDisplay = stagedPath.empty() ? "(unavailable)" : stagedPath.string();
     ResetGameplayAfterCommittedLevel();
 
     const editor::RuntimeLevelReloadReconcileResult reconciled =
@@ -2737,6 +2779,7 @@ void Application::ResetGameplayAfterCommittedLevel()
     camera.ApplyLevelFraming(
         levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
     camera.Initialize(player.Position());
+    gameplay::ResetLevelTransitionSchedule(levelTransition);
 }
 
 void Application::SaveLevelEditorSource()
@@ -2759,6 +2802,112 @@ void Application::SaveLevelEditorSource()
         : "Save failed: " + result.message + ". Source left unchanged.";
 }
 #endif
+
+void Application::TryFinishPendingLevelTransition()
+{
+    if (!levelTransition.pending || levelTransition.failed)
+    {
+        return;
+    }
+
+    const std::string destinationId = levelTransition.destinationId;
+    levelTransition.pending = false;
+
+    const std::string logicalId = world::MakeRuntimeLevelLogicalId(destinationId);
+    const std::filesystem::path stagedPath = platform::RuntimeAssetPath(logicalId);
+    if (logicalId.empty() || stagedPath.empty())
+    {
+        gameplay::MarkLevelTransitionFailed(
+            levelTransition, "Destination identity or staged path is unsafe. Active level unchanged.");
+        ReportLevelTransitionFailure(stagedPath, destinationId, levelTransition.failureMessage);
+        return;
+    }
+
+    const gameplay::LevelTransitionPrepareResult prepared =
+        gameplay::PrepareStagedLevelDestination(stagedPath, destinationId);
+    if (prepared.status != gameplay::LevelTransitionPrepareStatus::Ready)
+    {
+        gameplay::MarkLevelTransitionFailed(levelTransition, prepared.message);
+        ReportLevelTransitionFailure(stagedPath, destinationId, prepared.message);
+        return;
+    }
+
+    if (!physicsWorld.TryRebuild(
+            prepared.candidate,
+            prepared.candidate.initialSpawnVisualCenter,
+            player.Size()))
+    {
+        gameplay::MarkLevelTransitionFailed(
+            levelTransition, "Physics rebuild failed. Active level unchanged.");
+        ReportLevelTransitionFailure(stagedPath, destinationId, levelTransition.failureMessage);
+        return;
+    }
+
+    levelDefinition = prepared.candidate;
+    currentRuntimeLevelId = prepared.candidate.id;
+    runtimeLevelPathDisplay = stagedPath.string();
+    levelLoadStatus = world::LoadLevelFileStatus::Loaded;
+    levelFormatVersion = world::kLevelFileVersion;
+    ResetGameplayAfterLevelTransition();
+
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    if (levelEditorState.modified)
+    {
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage =
+            "Transitioned runtime level. Unapplied working-copy edits were kept.";
+    }
+    else
+    {
+        levelEditorState.workingCopy = levelDefinition;
+        levelEditorState.savedSourceBaseline = levelDefinition;
+        levelEditorState.modified = false;
+        levelEditorState.dirty = false;
+        editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
+        editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
+        levelEditorState.selection =
+            editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+        editor::ClearGizmoInteraction(levelEditorState.gizmo);
+        editor::CancelAllEditorPlacement(
+            levelEditorState.placementMode,
+            levelEditorState.placementPointerBlocked,
+            levelEditorState.staticPropPlacement);
+        editor::ResetLevelActionStatuses(levelEditorState);
+        levelEditorState.lastMessage = "Transitioned to staged destination level.";
+    }
+#endif
+}
+
+void Application::ResetGameplayAfterLevelTransition()
+{
+    player.ResetMovementState();
+    player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    respawnState = gameplay::RespawnState{};
+    respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
+    levelCompletionState = gameplay::LevelCompletionState{};
+    collectibleRunState =
+        gameplay::MakeClearedCollectibleRunState(levelDefinition.collectibles.size());
+    itemPickupRunState =
+        gameplay::MakeClearedItemPickupRunState(levelDefinition.itemPickups.size());
+    gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
+    gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
+    doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
+    physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
+    gameplay::ApplyInventoryLifecycle(
+        inventory, gameplay::InventoryLifecycleEvent::LevelTransition);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::LevelTransition, inventory);
+    runTimerState = gameplay::RunTimerState{};
+    camera.ApplyLevelFraming(
+        levelDefinition.camera.offset, levelDefinition.camera.fieldOfViewY);
+    camera.Initialize(player.Position());
+    gameplay::ResetLevelTransitionSchedule(levelTransition);
+}
 
 void Application::Shutdown()
 {
