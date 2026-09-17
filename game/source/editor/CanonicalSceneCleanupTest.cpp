@@ -104,6 +104,9 @@ int main()
         !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::ItemPickup),
         "ItemPickup is not a placement surface");
     Expect(
+        !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::Goal),
+        "Level Goal is not a placement surface");
+    Expect(
         !editor::IsEligiblePlacementSurface(editor::EditorObjectKind::StaticProp),
         "StaticProp is not a placement surface");
     Expect(
@@ -132,6 +135,12 @@ int main()
     Expect(
         !editor::IsValidSelection(level, {editor::EditorObjectKind::ItemPickup, 0}),
         "empty Item Pickups collection is not selectable");
+    Expect(
+        !editor::IsValidSelection(level, {editor::EditorObjectKind::Goal, 0}),
+        "empty Level Goals collection is not selectable");
+    Expect(
+        editor::IsEditableSelection({editor::EditorObjectKind::Goal, 0}),
+        "Level Goal has an Inspector path");
     Expect(
         editor::IsEditableSelection({editor::EditorObjectKind::ItemPickup, 0}),
         "Item Pickup has an Inspector path");
@@ -205,10 +214,10 @@ int main()
     Expect(hierarchyHasCheckpoint, "Hierarchy lists Checkpoints");
     Expect(hierarchyHasHazard, "Hierarchy lists Hazards");
     Expect(hierarchyHasCollectible, "Hierarchy lists Collectibles");
-    Expect(hierarchyHasGoal, "Hierarchy lists Goal");
+    Expect(!hierarchyHasGoal, "empty collection has no Level Goal hierarchy rows");
     Expect(
-        hierarchy.back().selection.kind == editor::EditorObjectKind::Goal,
-        "empty collection keeps Goal last");
+        hierarchy.back().selection.kind == editor::EditorObjectKind::Collectible,
+        "empty Level Goal collection keeps last Collectible last");
 
     const editor::EditorPickingSet set =
         editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
@@ -219,6 +228,7 @@ int main()
     bool pickHasPressurePlate = false;
     bool pickHasDoor = false;
     bool pickHasItemPickup = false;
+    bool pickHasGoal = false;
     bool pickHasStaticProp = false;
     bool pickHasMovingPlatform = false;
     for (const editor::PickingProxy& proxy : set.proxies)
@@ -234,6 +244,7 @@ int main()
         pickHasDoor = pickHasDoor || proxy.selection.kind == editor::EditorObjectKind::Door;
         pickHasItemPickup =
             pickHasItemPickup || proxy.selection.kind == editor::EditorObjectKind::ItemPickup;
+        pickHasGoal = pickHasGoal || proxy.selection.kind == editor::EditorObjectKind::Goal;
         pickHasStaticProp =
             pickHasStaticProp || proxy.selection.kind == editor::EditorObjectKind::StaticProp;
         pickHasMovingPlatform = pickHasMovingPlatform
@@ -247,6 +258,7 @@ int main()
     Expect(!pickHasPressurePlate, "empty collection has no Pressure Plate pick proxy");
     Expect(!pickHasDoor, "empty collection has no Door pick proxy");
     Expect(!pickHasItemPickup, "empty collection has no Item Pickup pick proxy");
+    Expect(!pickHasGoal, "empty collection has no Level Goal pick proxy");
     Expect(!pickHasStaticProp, "empty collection has no Static Prop pick proxy");
 
     const editor::Ray3 atAuthoredCrate{{0.0f, 5.0f, 8.0f}, {0.0f, 0.0f, -1.0f}};

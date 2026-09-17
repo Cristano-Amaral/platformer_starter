@@ -270,8 +270,16 @@ EditorPickingSet BuildPickingSet(
             {kCollectiblePickingSize, kCollectiblePickingSize, kCollectiblePickingSize},
             0.0f);
     }
-    AddProxy(
-        set, EditorObjectKind::Goal, 0, appliedLevel.goal.center, appliedLevel.goal.size, 0.0f);
+    for (std::size_t index = 0; index < appliedLevel.levelGoals.size(); ++index)
+    {
+        AddProxy(
+            set,
+            EditorObjectKind::Goal,
+            index,
+            appliedLevel.levelGoals[index].center,
+            appliedLevel.levelGoals[index].size,
+            0.0f);
+    }
     for (std::size_t index = 0; index < appliedLevel.dynamicBoxes.size(); ++index)
     {
         const core::Vec3 center = index < worldState.dynamicBoxCenters.size()

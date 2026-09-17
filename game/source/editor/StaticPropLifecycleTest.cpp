@@ -57,7 +57,6 @@ world::LevelDefinition MakeActive()
     level.movingPlatform.pathMaxX = 6.0f;
     level.movingPlatform.speed = 2.5f;
     level.movingPlatform.startX = 0.0f;
-    level.goal = {{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}};
     level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
     return level;
 }

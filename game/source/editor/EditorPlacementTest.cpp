@@ -247,6 +247,12 @@ int main()
         Expect(
             Vec3Near(working.collectibles.back().size, editor::kDefaultAddedCollectibleSize),
             "Collectible At preserves collection bounds size");
+
+        Expect(editor::AddGoalAt(working, world).succeeded, "Level Goal At");
+        Expect(Vec3Near(working.levelGoals.back().center, world), "Level Goal At center");
+        Expect(
+            Vec3Near(working.levelGoals.back().size, world::kDefaultLevelGoalSize),
+            "Level Goal At uses default volume size");
     }
 
     {
@@ -616,6 +622,41 @@ int main()
         Expect(
             !editor::IsEligiblePlacementSurface(EditorObjectKind::ItemPickup),
             "Item Pickup is not a placement surface");
+    }
+
+    {
+        using editor::PlacementMode;
+        PlacementMode mode = PlacementMode::None;
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Goal);
+        Expect(mode == PlacementMode::Goal, "click Level Goal enters placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Goal);
+        Expect(mode == PlacementMode::None, "click Level Goal again exits placement");
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::ItemPickup);
+        editor::ApplyPaletteCategoryClick(mode, PlacementMode::Goal);
+        Expect(mode == PlacementMode::Goal, "click Level Goal switches from Item Pickup");
+        Expect(
+            editor::KindFromPlacementMode(mode) == EditorObjectKind::Goal,
+            "placement kind is Goal");
+        Expect(
+            editor::PlacementAddRequest(mode) == editor::LevelEditorRequest::AddGoal,
+            "placement confirm is AddGoal");
+        const editor::PlacementCandidate candidate =
+            editor::MakePlacementCandidate(PlacementMode::Goal, {2.0f, 1.5f, 0.0f});
+        Expect(candidate.visible, "Level Goal candidate visible");
+        Expect(
+            candidate.size.x == world::kDefaultLevelGoalSize.x
+                && candidate.size.y == world::kDefaultLevelGoalSize.y
+                && candidate.size.z == world::kDefaultLevelGoalSize.z,
+            "candidate uses default Level Goal size");
+        world::LevelDefinition working = MakeActiveLevel();
+        Expect(editor::AddGoalAt(working, {2.0f, 1.5f, 0.0f}).succeeded, "palette confirm Add Level Goal");
+        Expect(working.levelGoals[0].center.x == 2.0f, "placed Level Goal uses world center");
+        Expect(Vec3Near(working.levelGoals[0].size, world::kDefaultLevelGoalSize),
+            "placed Level Goal default size");
+        Expect(working.itemPickups.empty(), "Level Goal placement does not add Item Pickups");
+        Expect(
+            !editor::IsEligiblePlacementSurface(EditorObjectKind::Goal),
+            "Level Goal is not a placement surface");
     }
 
     if (gFailures != 0)

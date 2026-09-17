@@ -30,6 +30,8 @@ EditorObjectKind AddKindForRequest(LevelEditorRequest request)
         return EditorObjectKind::Door;
     case LevelEditorRequest::AddItemPickup:
         return EditorObjectKind::ItemPickup;
+    case LevelEditorRequest::AddGoal:
+        return EditorObjectKind::Goal;
     case LevelEditorRequest::AddStaticProp:
         return EditorObjectKind::StaticProp;
     default:
@@ -57,6 +59,8 @@ const char* LifecycleCategoryLabel(EditorObjectKind kind)
         return "Door";
     case EditorObjectKind::ItemPickup:
         return "Item Pickup";
+    case EditorObjectKind::Goal:
+        return "Level Goal";
     case EditorObjectKind::StaticProp:
         return "Static Prop";
     default:
@@ -83,6 +87,7 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
         case EditorObjectKind::PressurePlate:
         case EditorObjectKind::StaticProp:
         case EditorObjectKind::ItemPickup:
+        case EditorObjectKind::Goal:
             return "Level file record limit reached.";
         case EditorObjectKind::DynamicBox:
         case EditorObjectKind::Door:
@@ -136,6 +141,9 @@ LifecycleEditResult RunLifecycleMutation(
     case LevelEditorRequest::AddItemPickup:
         return worldCenterPlacement ? AddItemPickupAt(workingCopy, placementAnchor)
                                     : AddItemPickup(workingCopy, placementAnchor);
+    case LevelEditorRequest::AddGoal:
+        return worldCenterPlacement ? AddGoalAt(workingCopy, placementAnchor)
+                                    : AddGoal(workingCopy, placementAnchor);
     case LevelEditorRequest::AddStaticProp:
         return worldCenterPlacement
             ? AddStaticPropAt(workingCopy, placementAnchor, staticPropIdentity)
@@ -166,6 +174,7 @@ void SetSuccessMessage(LevelEditorState& state, LevelEditorRequest request, Edit
     case LevelEditorRequest::AddPressurePlate:
     case LevelEditorRequest::AddDoor:
     case LevelEditorRequest::AddItemPickup:
+    case LevelEditorRequest::AddGoal:
     case LevelEditorRequest::AddStaticProp:
         state.lastMessage = std::string(label) + " added.";
         return;
@@ -194,6 +203,7 @@ bool IsAuthoredLifecycleRequest(LevelEditorRequest request)
     case LevelEditorRequest::AddPressurePlate:
     case LevelEditorRequest::AddDoor:
     case LevelEditorRequest::AddItemPickup:
+    case LevelEditorRequest::AddGoal:
     case LevelEditorRequest::AddStaticProp:
     case LevelEditorRequest::DuplicateSelected:
     case LevelEditorRequest::DeleteSelected:
@@ -223,6 +233,8 @@ LevelEditorRequest EditAddMenuRequest(EditorObjectKind kind)
         return LevelEditorRequest::AddDoor;
     case EditorObjectKind::ItemPickup:
         return LevelEditorRequest::AddItemPickup;
+    case EditorObjectKind::Goal:
+        return LevelEditorRequest::AddGoal;
     case EditorObjectKind::StaticProp:
         return LevelEditorRequest::AddStaticProp;
     default:
@@ -252,6 +264,9 @@ bool CanIssueAuthoredLifecycleRequest(
         return CanAddLifecycleObject(
             authoringAvailable, workingCopy, AddKindForRequest(request), gizmoDragging);
     case LevelEditorRequest::AddItemPickup:
+        return CanAddLifecycleObject(
+            authoringAvailable, workingCopy, AddKindForRequest(request), gizmoDragging);
+    case LevelEditorRequest::AddGoal:
         return CanAddLifecycleObject(
             authoringAvailable, workingCopy, AddKindForRequest(request), gizmoDragging);
     case LevelEditorRequest::AddStaticProp:
@@ -391,6 +406,7 @@ bool HandleAuthoredLifecycleRequest(
                 || request == LevelEditorRequest::AddPressurePlate
                 || request == LevelEditorRequest::AddDoor
                 || request == LevelEditorRequest::AddItemPickup
+                || request == LevelEditorRequest::AddGoal
                 || request == LevelEditorRequest::AddStaticProp
                 || request == LevelEditorRequest::DuplicateSelected))
         {

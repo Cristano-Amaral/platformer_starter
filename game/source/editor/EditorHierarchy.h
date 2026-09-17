@@ -43,7 +43,10 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
     {
         entries.push_back({{EditorObjectKind::Collectible, index}, "Collectibles"});
     }
-    entries.push_back({{EditorObjectKind::Goal, 0}, ""});
+    for (std::size_t index = 0; index < level.levelGoals.size(); ++index)
+    {
+        entries.push_back({{EditorObjectKind::Goal, index}, "Level Goals"});
+    }
     for (std::size_t index = 0; index < level.dynamicBoxes.size(); ++index)
     {
         entries.push_back({{EditorObjectKind::DynamicBox, index}, "Dynamic Boxes"});

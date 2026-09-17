@@ -106,7 +106,7 @@ int main()
         Expect(editor::IsGizmoSelection({EditorObjectKind::Checkpoint, 0}), "checkpoint translate gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::Hazard, 0}), "hazard translate gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::Collectible, 0}), "collectible translate gizmo");
-        Expect(!editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal has no gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "goal has translate gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box has gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::PressurePlate, 0}), "Pressure Plate has gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::Door, 0}), "Door has gizmo");
@@ -145,6 +145,13 @@ int main()
         Expect(
             editor::GetEditablePosition(level, {EditorObjectKind::Collectible, 0}) != nullptr,
             "collectible has translate origin");
+        level.levelGoals.push_back({{-21.0f, 3.8f, 0.0f}, world::kDefaultLevelGoalSize});
+        Expect(
+            editor::GetEditablePosition(level, {EditorObjectKind::Goal, 0}) != nullptr,
+            "level goal has translate origin");
+        Expect(
+            editor::GetEditableSize(level, {EditorObjectKind::Goal, 0}) != nullptr,
+            "level goal has resize gizmo size");
         Expect(
             editor::GetEditableSize(level, {EditorObjectKind::Checkpoint, 0}) == nullptr,
             "checkpoint has no resize gizmo size");
@@ -690,6 +697,7 @@ int main()
         Expect(!editor::IsResizeSelection({EditorObjectKind::Checkpoint, 0}), "checkpoint is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Hazard, 0}), "hazard is not resize");
         Expect(!editor::IsResizeSelection({EditorObjectKind::Collectible, 0}), "collectible is not resize");
+        Expect(editor::IsResizeSelection({EditorObjectKind::Goal, 0}), "Level Goal is resize");
         Expect(editor::IsResizeSelection({EditorObjectKind::DynamicBox, 0}), "Dynamic Box is resize");
         Expect(editor::IsResizeSelection({EditorObjectKind::PressurePlate, 0}), "Pressure Plate is resize");
         Expect(editor::IsResizeSelection({EditorObjectKind::Door, 0}), "Door is resize");
@@ -697,7 +705,7 @@ int main()
         Expect(!editor::IsResizeSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is not primitive Resize");
         Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop is Scale selection");
         Expect(!editor::IsScaleSelection({EditorObjectKind::Spawn, 0}), "spawn is not Scale");
-        Expect(!editor::IsScaleSelection({EditorObjectKind::ElevatedPlatform, 0}), "platform is not Scale");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::Goal, 0}), "Level Goal is not Scale");
         world::LevelDefinition level = MakeStubLevel();
         Expect(
             editor::GetEditableSize(level, {EditorObjectKind::Spawn, 0}) == nullptr,
@@ -1167,6 +1175,9 @@ int main()
         Expect(
             !editor::IsRotateSelection({EditorObjectKind::PressurePlate, 0}),
             "Pressure Plate is inert under Rotate");
+        Expect(
+            !editor::IsRotateSelection({EditorObjectKind::Goal, 0}),
+            "Level Goal is inert under Rotate");
         Expect(
             editor::MakeRotateGizmoDrawRequest(prop0, working, propView, {}).visible,
             "Static Prop has Rotate gizmo request");

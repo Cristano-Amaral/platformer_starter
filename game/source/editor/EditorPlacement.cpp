@@ -2,6 +2,7 @@
 
 #include "editor/LevelEditor.h"
 #include "world/ItemPickup.h"
+#include "world/LevelGoal.h"
 
 namespace editor
 {
@@ -25,6 +26,8 @@ const char* PlacementModeName(PlacementMode mode)
         return "Door";
     case PlacementMode::ItemPickup:
         return "Item Pickup";
+    case PlacementMode::Goal:
+        return "Level Goal";
     default:
         return "None";
     }
@@ -50,6 +53,8 @@ EditorObjectKind KindFromPlacementMode(PlacementMode mode)
         return EditorObjectKind::Door;
     case PlacementMode::ItemPickup:
         return EditorObjectKind::ItemPickup;
+    case PlacementMode::Goal:
+        return EditorObjectKind::Goal;
     default:
         return EditorObjectKind::None;
     }
@@ -75,6 +80,8 @@ PlacementMode PlacementModeFromKind(EditorObjectKind kind)
         return PlacementMode::Door;
     case EditorObjectKind::ItemPickup:
         return PlacementMode::ItemPickup;
+    case EditorObjectKind::Goal:
+        return PlacementMode::Goal;
     default:
         return PlacementMode::None;
     }
@@ -100,6 +107,8 @@ LevelEditorRequest PlacementAddRequest(PlacementMode mode)
         return LevelEditorRequest::AddDoor;
     case PlacementMode::ItemPickup:
         return LevelEditorRequest::AddItemPickup;
+    case PlacementMode::Goal:
+        return LevelEditorRequest::AddGoal;
     default:
         return LevelEditorRequest::None;
     }
@@ -125,6 +134,8 @@ core::Vec3 DefaultPlacementSize(PlacementMode mode)
         return world::kDefaultDoorSize;
     case PlacementMode::ItemPickup:
         return world::kItemPickupVisualExtents;
+    case PlacementMode::Goal:
+        return world::kDefaultLevelGoalSize;
     default:
         return {};
     }
@@ -150,6 +161,8 @@ core::Vec3 DefaultPlacementOffset(PlacementMode mode)
         return kDefaultAddedDoorOffset;
     case PlacementMode::ItemPickup:
         return kDefaultAddedItemPickupOffset;
+    case PlacementMode::Goal:
+        return kDefaultAddedLevelGoalOffset;
     default:
         return {};
     }

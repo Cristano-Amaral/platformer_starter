@@ -202,13 +202,13 @@ struct ParseState
     bool seenSupportCp2 = false;
     bool seenSupportGoal = false;
     bool seenMovingPlatform = false;
-    bool seenGoal = false;
     bool seenCamera = false;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
     std::vector<CheckpointSpec> checkpoints;
     std::vector<HazardSpec> hazards;
     std::vector<CollectibleSpec> collectibles;
+    std::vector<LevelGoalSpec> levelGoals;
     std::vector<DynamicBoxSpec> dynamicBoxes;
     std::vector<PressurePlateSpec> pressurePlates;
     std::vector<DoorSpec> doors;
@@ -545,18 +545,19 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.collectibles.push_back(collectible);
             continue;
         }
-        if (keyword == "goal")
+        if (keyword == "level_goal")
         {
-            if (!RequireSingleton(state.seenGoal, failure, lineNumber, "duplicate goal")
-                || !RequireTokenCount(tokens, 7, failure, lineNumber))
+            if (!RequireTokenCount(tokens, 7, failure, lineNumber))
             {
                 return failure;
             }
-            if (!ParseVec3(tokens, 1, loaded.level.goal.center)
-                || !ParseVec3(tokens, 4, loaded.level.goal.size))
+            LevelGoalSpec goal{};
+            if (!ParseVec3(tokens, 1, goal.center) || !ParseVec3(tokens, 4, goal.size)
+                || !LevelGoalSpecIsValid(goal))
             {
-                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid goal");
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid level_goal");
             }
+            state.levelGoals.push_back(goal);
             continue;
         }
         if (keyword == "dynamic_box")
@@ -814,7 +815,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     }
     if (!state.seenId || !state.seenSpawn || !state.seenKillPlane || !state.seenGround
         || !state.seenSupportCp1 || !state.seenSupportCp2 || !state.seenSupportGoal
-        || !state.seenMovingPlatform || !state.seenGoal || !state.seenCamera)
+        || !state.seenMovingPlatform || !state.seenCamera)
     {
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "missing required record");
     }
@@ -831,6 +832,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.checkpoints = std::move(state.checkpoints);
     loaded.level.hazards = std::move(state.hazards);
     loaded.level.collectibles = std::move(state.collectibles);
+    loaded.level.levelGoals = std::move(state.levelGoals);
     loaded.level.dynamicBoxes = std::move(state.dynamicBoxes);
     loaded.level.pressurePlates = std::move(state.pressurePlates);
     loaded.level.doors = std::move(state.doors);

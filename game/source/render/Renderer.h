@@ -27,6 +27,9 @@ namespace render
 struct DebugWorldOverlay
 {
     bool drawSpawnMarker = false;
+    // Editor-only: draw the authored Level Goal AABB as a translucent volume.
+    // Gameplay/Release leave this false and draw the marker only.
+    bool drawLevelGoalAuthoredVolume = false;
     core::Vec3 spawnCenter{};
     core::Vec3 spawnSize{};
     bool drawHighlight = false;
@@ -46,7 +49,7 @@ struct DebugWorldOverlay
     // Persistent pending Add/Modify ghosts. selected=true uses stronger cyan.
     struct PendingAuthoringOverlayItem
     {
-        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate, 7 Door, 8 Item Pickup
+        int kind = 0; // 0 Platform, 1 Checkpoint, 2 Hazard, 3 Collectible, 4 Dynamic Box, 5 Static Prop, 6 Pressure Plate, 7 Door, 8 Item Pickup, 9 Level Goal
         bool selected = false;
         core::Vec3 boundsCenter{};
         core::Vec3 boundsSize{};
@@ -84,6 +87,8 @@ struct DebugWorldOverlay
     std::vector<world::HazardSpec> pendingDeleteHazards;
     std::vector<int> pendingDeleteCollectibleIndices;
     std::vector<core::Vec3> pendingDeleteCollectibleCenters;
+    std::vector<int> pendingDeleteLevelGoalIndices;
+    std::vector<world::LevelGoalSpec> pendingDeleteLevelGoals;
     std::vector<int> pendingDeleteDynamicBoxIndices;
     std::vector<core::Vec3> pendingDeleteDynamicBoxCenters;
     std::vector<core::Vec3> pendingDeleteDynamicBoxSizes;

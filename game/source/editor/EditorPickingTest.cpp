@@ -78,7 +78,7 @@ world::LevelDefinition MakeStubLevel()
     level.hazards[0] = {{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}};
     level.collectibles.resize(static_cast<std::size_t>(world::kLevel01CollectibleCount));
     level.collectibles[0] = {{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}};
-    level.goal = {{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}};
+    level.levelGoals.push_back({{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}});
     return level;
 }
 }
@@ -126,6 +126,9 @@ int main()
             editor::IsEditableSelection({editor::EditorObjectKind::Collectible, 0}),
             "collectible is inspector-editable");
         Expect(
+            editor::IsEditableSelection({editor::EditorObjectKind::Goal, 0}),
+            "level goal is inspector-editable");
+        Expect(
             editor::IsEditableSelection({editor::EditorObjectKind::Ground, 0}),
             "ground is editable");
         Expect(
@@ -154,10 +157,10 @@ int main()
         hierarchyHasGoal = hierarchyHasGoal || entry.selection.kind == editor::EditorObjectKind::Goal;
     }
     Expect(!hierarchyHasDynamicBox, "empty Dynamic Boxes collection has no hierarchy rows");
-    Expect(hierarchyHasGoal, "Hierarchy lists Goal");
+        Expect(hierarchyHasGoal, "Hierarchy lists Level Goal");
     Expect(
         hierarchy.back().selection.kind == editor::EditorObjectKind::Goal,
-        "hierarchy ends with Goal");
+        "hierarchy ends with Level Goal");
     Expect(
         hierarchy[0].selection.kind == editor::EditorObjectKind::Spawn,
         "hierarchy starts with Player Spawn");
@@ -232,7 +235,7 @@ int main()
         level.movingPlatform.centerY = 40.0f;
         level.checkpoints[0].center = {40.0f, 1.8f, 0.0f};
         level.hazards[0].center = {40.0f, 0.5f, 0.0f};
-        level.goal.center = {40.0f, 3.8f, 0.0f};
+        level.levelGoals[0].center = {40.0f, 3.8f, 0.0f};
         level.elevatedPlatforms[0] = {{0.0f, 0.0f, -4.0f}, {2.0f, 2.0f, 2.0f}};
         level.collectibles[0] = {{0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}};
         level.collectibles[1].center = {40.0f, 4.0f, 0.0f};
@@ -640,7 +643,7 @@ int main()
         active.collectibles[0].center = {40.0f, 2.5f, 0.0f};
         active.collectibles[1].center = {40.0f, 2.5f, 0.0f};
         active.collectibles[2].center = {40.0f, 2.5f, 0.0f};
-        active.goal.center = {40.0f, 3.8f, 0.0f};
+        active.levelGoals[0].center = {40.0f, 3.8f, 0.0f};
 
         world::LevelDefinition working = active;
         working.elevatedPlatforms[0].center.x = 20.0f;

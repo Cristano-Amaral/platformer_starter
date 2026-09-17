@@ -68,10 +68,10 @@ int main()
     Expect(editor::SupportsLifecycle(EditorObjectKind::Checkpoint), "checkpoint supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::Hazard), "hazard supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::Collectible), "collectible supported");
+    Expect(editor::SupportsLifecycle(EditorObjectKind::Goal), "goal supported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Spawn), "spawn unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Ground), "ground unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Camera), "camera unsupported");
-    Expect(!editor::SupportsLifecycle(EditorObjectKind::Goal), "goal unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Slope), "slope unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::MovingPlatform), "moving unsupported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic box supported");
@@ -162,6 +162,40 @@ int main()
         Expect(Vec3Near(working.collectibles[1].center,
             {kTestPlacementA.x, kTestPlacementA.y, working.initialSpawnVisualCenter.z}),
             "collectible uses camera X/Y and spawn-lane Z");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const editor::LifecycleEditResult added = editor::AddGoal(working, kTestPlacementA);
+        Expect(added.succeeded && working.levelGoals.size() == 1, "add level goal");
+        Expect(added.selection.kind == editor::EditorObjectKind::Goal, "add goal kind");
+        Expect(added.selection.index == 0, "add goal selects new");
+        Expect(Vec3Near(working.levelGoals[0].size, world::kDefaultLevelGoalSize),
+            "default level goal size");
+        Expect(Vec3Near(working.levelGoals[0].center,
+            {kTestPlacementA.x, kTestPlacementA.y, working.initialSpawnVisualCenter.z}),
+            "level goal uses camera X/Y and spawn-lane Z");
+        Expect(world::LevelGoalSpecIsValid(working.levelGoals[0]), "default level goal is valid");
+
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelected(working, {editor::EditorObjectKind::Goal, 0});
+        Expect(duplicated.succeeded && working.levelGoals.size() == 2, "duplicate level goal");
+        Expect(duplicated.selection.index == 1, "duplicate goal appended");
+        Expect(
+            NearlyEqual(
+                working.levelGoals[1].center.x,
+                working.levelGoals[0].center.x + editor::kLifecycleDuplicateOffsetX),
+            "duplicate goal offset +1 X");
+        Expect(Vec3Near(working.levelGoals[1].size, working.levelGoals[0].size),
+            "duplicate goal copies size");
+
+        const editor::LifecycleEditResult deleted =
+            editor::DeleteSelected(working, {editor::EditorObjectKind::Goal, 0});
+        Expect(deleted.succeeded && working.levelGoals.size() == 1, "delete level goal");
+        Expect(deleted.selection.kind == editor::EditorObjectKind::None, "delete goal clears selection");
+        Expect(
+            NearlyEqual(working.levelGoals[0].center.x, kTestPlacementA.x + editor::kLifecycleDuplicateOffsetX),
+            "remaining goal is the duplicate");
     }
 
     {
@@ -448,7 +482,9 @@ int main()
             "no ground duplicate");
         Expect(
             !editor::DeleteSelected(working, {EditorObjectKind::Camera, 0}).succeeded, "no camera delete");
-        Expect(!editor::DeleteSelected(working, {EditorObjectKind::Goal, 0}).succeeded, "no goal delete");
+        Expect(
+            !editor::DeleteSelected(working, {EditorObjectKind::Goal, 0}).succeeded,
+            "empty Goal delete is invalid");
         Expect(!editor::DeleteSelected(working, {EditorObjectKind::Slope, 0}).succeeded, "no slope delete");
         Expect(
             !editor::DeleteSelected(working, {EditorObjectKind::MovingPlatform, 0}).succeeded,

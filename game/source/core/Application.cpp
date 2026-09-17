@@ -771,10 +771,19 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.bestTimeSaveStatus = persistence::SaveBestTimeStatusName(bestTimeSaveStatus);
 
     snapshot.levelCompleted = levelCompletionState.completed;
-    snapshot.goalCenter = level.goal.center;
-    snapshot.goalSize = level.goal.size;
+    snapshot.levelGoalCount = static_cast<int>(level.levelGoals.size());
     snapshot.playerInsideGoal =
-        world::PointInsideGoal(level.goal, player.Position());
+        world::PlayerOverlapsAnyLevelGoal(level.levelGoals, player.Position());
+    if (!level.levelGoals.empty())
+    {
+        snapshot.goalCenter = level.levelGoals[0].center;
+        snapshot.goalSize = level.levelGoals[0].size;
+    }
+    else
+    {
+        snapshot.goalCenter = {};
+        snapshot.goalSize = {};
+    }
     snapshot.restartAvailable = levelCompletionState.completed;
     snapshot.restartedThisFrame = restartedThisFrame;
 
@@ -793,8 +802,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.levelHazardCount = static_cast<int>(level.hazards.size());
     snapshot.levelCollectibleCount = static_cast<int>(level.collectibles.size());
     snapshot.levelStaticBoxCount = 1 + snapshot.levelElevatedPlatformCount;
-    snapshot.levelHasGoal = level.goal.size.x > 0.0f && level.goal.size.y > 0.0f
-        && level.goal.size.z > 0.0f;
+    snapshot.levelHasGoal = !level.levelGoals.empty();
     snapshot.levelHasMovingPlatform = level.movingPlatform.size.x > 0.0f
         && level.movingPlatform.size.y > 0.0f && level.movingPlatform.size.z > 0.0f
         && level.movingPlatform.speed > 0.0f;
@@ -905,8 +913,10 @@ int Application::Run()
                             .respawnPosition;
                 }
 
-                if (!levelCompletionState.completed
-                    && world::PointInsideGoal(levelDefinition.goal, player.Position()))
+                if (gameplay::TryCompleteLevelFromPlayerOverlap(
+                        levelCompletionState,
+                        levelDefinition.levelGoals,
+                        player.Position()))
                 {
                     levelCompletionState.completed = true;
                     runTimerState.frozen = true;
@@ -1089,6 +1099,7 @@ int Application::Run()
 
             cameraView = editor::MakeCameraView(levelEditorState.editorCamera);
             overlay.drawSpawnMarker = true;
+            overlay.drawLevelGoalAuthoredVolume = true;
             overlay.spawnCenter = levelDefinition.initialSpawnVisualCenter;
             overlay.spawnSize = world::kPlayerVisualSize;
 
@@ -1195,6 +1206,9 @@ int Application::Run()
                 case editor::EditorObjectKind::ItemPickup:
                     item.kind = 8;
                     break;
+                case editor::EditorObjectKind::Goal:
+                    item.kind = 9;
+                    break;
                 default:
                     continue;
                 }
@@ -1289,6 +1303,9 @@ int Application::Run()
                 case editor::EditorObjectKind::ItemPickup:
                     overlay.placementCandidateKind = 8;
                     break;
+                case editor::EditorObjectKind::Goal:
+                    overlay.placementCandidateKind = 9;
+                    break;
                 default:
                     overlay.placementCandidateKind = 0;
                     break;
@@ -1321,6 +1338,8 @@ int Application::Run()
             overlay.pendingDeleteHazards = pendingDelete.hazards;
             overlay.pendingDeleteCollectibleIndices = pendingDelete.collectibleIndices;
             overlay.pendingDeleteCollectibleCenters = pendingDelete.collectibleCenters;
+            overlay.pendingDeleteLevelGoalIndices = pendingDelete.levelGoalIndices;
+            overlay.pendingDeleteLevelGoals = pendingDelete.levelGoals;
             overlay.pendingDeleteDynamicBoxIndices = pendingDelete.dynamicBoxIndices;
             overlay.pendingDeleteDynamicBoxCenters.clear();
             overlay.pendingDeleteDynamicBoxSizes.clear();

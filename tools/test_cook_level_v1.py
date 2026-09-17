@@ -148,5 +148,15 @@ class LevelV1HeaderTests(unittest.TestCase):
         self.assertIn(b"models/Chest by Quaternius - O72u4Drp8k.glb", payload)
 
 
+    def test_level_goal_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"level_goal -21 3.8 0 2 1.6 1.8\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"level_goal -21 3.8 0", payload)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

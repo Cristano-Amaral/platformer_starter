@@ -40,7 +40,6 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     }
     if (!Vec3Finite(level.initialSpawnVisualCenter) || !std::isfinite(level.killPlaneY)
         || !Vec3Finite(level.ground.center) || !PositiveSize(level.ground.size)
-        || !PositiveSize(level.goal.size) || !Vec3Finite(level.goal.center)
         || !PositiveSize(level.movingPlatform.size) || !Vec3Finite(level.camera.offset))
     {
         return false;
@@ -117,6 +116,13 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    for (const LevelGoalSpec& goal : level.levelGoals)
+    {
+        if (!LevelGoalSpecIsValid(goal))
+        {
+            return false;
+        }
+    }
     for (const DynamicBoxSpec& box : level.dynamicBoxes)
     {
         if (!DynamicBoxSpecIsValid(box))
@@ -172,6 +178,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.checkpoints.size() != b.checkpoints.size()
         || a.hazards.size() != b.hazards.size()
         || a.collectibles.size() != b.collectibles.size()
+        || a.levelGoals.size() != b.levelGoals.size()
         || a.dynamicBoxes.size() != b.dynamicBoxes.size()
         || a.pressurePlates.size() != b.pressurePlates.size()
         || a.doors.size() != b.doors.size()
@@ -220,6 +227,14 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
     {
         if (!Vec3Equal(a.collectibles[index].center, b.collectibles[index].center)
             || !Vec3Equal(a.collectibles[index].size, b.collectibles[index].size))
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.levelGoals.size(); ++index)
+    {
+        if (!Vec3Equal(a.levelGoals[index].center, b.levelGoals[index].center)
+            || !Vec3Equal(a.levelGoals[index].size, b.levelGoals[index].size))
         {
             return false;
         }
@@ -301,7 +316,6 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         && a.movingPlatform.pathMaxX == b.movingPlatform.pathMaxX
         && a.movingPlatform.speed == b.movingPlatform.speed
         && a.movingPlatform.startX == b.movingPlatform.startX
-        && Vec3Equal(a.goal.center, b.goal.center) && Vec3Equal(a.goal.size, b.goal.size)
         && Vec3Equal(a.camera.offset, b.camera.offset)
         && a.camera.fieldOfViewY == b.camera.fieldOfViewY;
 }

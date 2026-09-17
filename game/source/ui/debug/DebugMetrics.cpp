@@ -138,6 +138,7 @@ void DrawDebugMetrics(
         ImGui::Text("Hazards: %d", snapshot.levelHazardCount);
         ImGui::Text("Collectibles: %d", snapshot.levelCollectibleCount);
         ImGui::Text("Goal present: %s", BoolText(snapshot.levelHasGoal));
+        ImGui::Text("Level Goals: %d", snapshot.levelGoalCount);
         ImGui::Text("Moving platform present: %s", BoolText(snapshot.levelHasMovingPlatform));
         ImGui::Text("Dynamic Boxes: %d", snapshot.levelDynamicBoxCount);
         ImGui::Text("Pressure Plates: %d", snapshot.levelPressurePlateCount);
@@ -363,18 +364,19 @@ void DrawDebugMetrics(
     if (ImGui::CollapsingHeader("Level Goal", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("Level completed: %s", BoolText(snapshot.levelCompleted));
-        ImGui::Text("Goal marker: two-post gate (not a checkpoint)");
+        ImGui::Text("Goal count: %d", snapshot.levelGoalCount);
+        ImGui::Text("Goal marker: two-post gate (Gameplay); AABB is Editor-only translucent");
         ImGui::Text(
-            "Goal center: %.4f, %.4f, %.4f",
+            "First goal center: %.4f, %.4f, %.4f",
             snapshot.goalCenter.x,
             snapshot.goalCenter.y,
             snapshot.goalCenter.z);
         ImGui::Text(
-            "Goal size: %.4f, %.4f, %.4f",
+            "First goal size: %.4f, %.4f, %.4f",
             snapshot.goalSize.x,
             snapshot.goalSize.y,
             snapshot.goalSize.z);
-        ImGui::Text("Player inside goal: %s", BoolText(snapshot.playerInsideGoal));
+        ImGui::Text("Player inside any goal: %s", BoolText(snapshot.playerInsideGoal));
     }
 
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)

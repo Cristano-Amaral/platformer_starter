@@ -369,6 +369,14 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Size X Y Z", collectible.size);
         }
         break;
+    case EditorObjectKind::Goal:
+        if (state.selection.index < level.levelGoals.size())
+        {
+            world::LevelGoalSpec& goal = level.levelGoals[state.selection.index];
+            EditVec3("Center X Y Z", goal.center);
+            EditVec3("Size X Y Z", goal.size);
+        }
+        break;
     case EditorObjectKind::DynamicBox:
         if (state.selection.index < level.dynamicBoxes.size())
         {
@@ -637,11 +645,6 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Scale X Y Z", prop.scale);
         }
         break;
-    case EditorObjectKind::Goal:
-        ImGui::TextUnformatted("Read-only in M33.");
-        ReadOnlyVec3("Center", level.goal.center);
-        ReadOnlyVec3("Size", level.goal.size);
-        break;
     case EditorObjectKind::None:
     default:
         break;
@@ -693,6 +696,7 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Pressure Plate", PlacementMode::PressurePlate, LevelEditorRequest::AddPressurePlate);
     paletteButton("Door", PlacementMode::Door, LevelEditorRequest::AddDoor);
     paletteButton("Item Pickup", PlacementMode::ItemPickup, LevelEditorRequest::AddItemPickup);
+    paletteButton("Level Goal", PlacementMode::Goal, LevelEditorRequest::AddGoal);
 
     ImGui::Separator();
     if (StaticPropPlacementIsActive(state.staticPropPlacement))
@@ -1606,6 +1610,18 @@ LevelEditorRequest DrawEditorMenuBar(
             if (ImGui::MenuItem("Item Pickup"))
             {
                 request = EditAddMenuRequest(EditorObjectKind::ItemPickup);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::Goal)));
+            if (ImGui::MenuItem("Level Goal"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::Goal);
             }
             ImGui::EndDisabled();
             // Static Prop is the only Add entry whose enablement depends on

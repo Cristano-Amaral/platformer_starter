@@ -33,6 +33,7 @@ inline constexpr core::Vec3 kDefaultAddedHazardOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedHazardSize{1.4f, 1.0f, 2.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedCollectibleSize{1.0f, 1.2f, 1.0f};
+inline constexpr core::Vec3 kDefaultAddedLevelGoalOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedDynamicBoxOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedPressurePlateOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedDoorOffset{0.0f, 0.0f, 0.0f};
@@ -45,6 +46,7 @@ struct CategoryStructuralPending
     bool checkpoints = false;
     bool hazards = false;
     bool collectibles = false;
+    bool levelGoals = false;
     bool dynamicBoxes = false;
     bool pressurePlates = false;
     bool doors = false;
@@ -72,6 +74,7 @@ struct StructuralIndexMap
     CategoryIndexMap checkpoints;
     CategoryIndexMap hazards;
     CategoryIndexMap collectibles;
+    CategoryIndexMap levelGoals;
     CategoryIndexMap dynamicBoxes;
     CategoryIndexMap pressurePlates;
     CategoryIndexMap doors;
@@ -89,6 +92,8 @@ struct PendingDeleteVisuals
     std::vector<world::HazardSpec> hazards;
     std::vector<int> collectibleIndices;
     std::vector<core::Vec3> collectibleCenters;
+    std::vector<int> levelGoalIndices;
+    std::vector<world::LevelGoalSpec> levelGoals;
     std::vector<int> dynamicBoxIndices;
     std::vector<world::DynamicBoxSpec> dynamicBoxes;
     std::vector<int> pressurePlateIndices;
@@ -236,6 +241,9 @@ LifecycleEditResult AddHazard(
 LifecycleEditResult AddCollectible(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor);
+LifecycleEditResult AddGoal(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor);
 LifecycleEditResult AddDynamicBox(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor);
@@ -251,6 +259,9 @@ LifecycleEditResult AddHazardAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
 LifecycleEditResult AddCollectibleAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
+LifecycleEditResult AddGoalAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
 LifecycleEditResult AddDynamicBoxAt(
@@ -292,6 +303,7 @@ inline const char* CategoryCapacityReason(EditorObjectKind kind)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::Goal:
         return "Level file record limit reached.";
     case EditorObjectKind::DynamicBox:
         return "Physics body capacity reached.";

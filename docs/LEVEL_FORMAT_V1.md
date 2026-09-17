@@ -55,7 +55,7 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
+`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
 appear exactly once. Unknown keywords and trailing unrecognized content are
 `Invalid`.
 
@@ -70,7 +70,6 @@ support_index_cp1 <int>
 support_index_cp2 <int>
 support_index_goal <int>
 moving_platform <sx> <sy> <sz> <centerY> <centerZ> <pathMinX> <pathMaxX> <speed> <startX>
-goal <cx> <cy> <cz> <sx> <sy> <sz>
 camera <ox> <oy> <oz> <fovY>
 ```
 
@@ -80,7 +79,7 @@ parser and writer accept any valid identifier.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Dynamic Boxes / Pressure Plates / Doors / Item Pickups / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Dynamic Box / Pressure Plate / Door / Item Pickup / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count plus Door count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Pressure Plates, Item Pickups, and Static Props are not Jolt bodies and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping. M53 Add/Duplicate append Doors (existing plate Door indices stay valid). Door delete clears links that named D and remaps later plate links `R > D` to `R - 1`. Invalid Door links fail validation; they are never silently retargeted. M55 Add/Duplicate/Delete Item Pickups have no physics remapping and never serialize runtime collected state.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Level Goals / Dynamic Boxes / Pressure Plates / Doors / Item Pickups / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Level Goal / Dynamic Box / Pressure Plate / Door / Item Pickup / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count plus Door count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Pressure Plates, Item Pickups, Static Props, and Level Goals are not Jolt bodies and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping. M53 Add/Duplicate append Doors (existing plate Door indices stay valid). Door delete clears links that named D and remaps later plate links `R > D` to `R - 1`. Invalid Door links fail validation; they are never silently retargeted. M55 Add/Duplicate/Delete Item Pickups have no physics remapping and never serialize runtime collected state. M63 Add/Duplicate/Delete Level Goals have no physics remapping and never serialize runtime completion.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -88,6 +87,7 @@ slope <cx> <cy> <cz> <sx> <sy> <sz> <rotZ> # exactly 2
 checkpoint <cx> <cy> <cz> <sx> <sy> <sz> <rx> <ry> <rz>
 hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
+level_goal <cx> <cy> <cz> <sx> <sy> <sz>
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay>]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
@@ -105,9 +105,9 @@ Locale-independent `std::from_chars`. Whole token must parse. Reject overflow,
 NaN, Inf, leftover suffix (`1.0f`), and empty tokens. Integers for version and
 support indices.
 
-Positive sizes: each component finite and `> 0`. Dynamic Box, Pressure Plate, and Door extents must also
-be `>= kMinDynamicBoxExtent` / `kMinPressurePlateExtent` / `kMinDoorExtent` (0.12), matching the editor authored-box minimum
-so Jolt never receives a zero-volume shape and Resize/parse share one floor.
+Positive sizes: each component finite and `> 0`. Dynamic Box, Pressure Plate, Door, and Level Goal extents must also
+be `>= kMinDynamicBoxExtent` / `kMinPressurePlateExtent` / `kMinDoorExtent` / `kMinLevelGoalExtent` (0.12), matching the editor authored-box minimum
+so Resize/parse share one floor. Level Goals are not Jolt bodies.
 Moving platform: size positive, path min `<` path max, speed `> 0`, startX
 inside `[pathMinX, pathMaxX]`.
 Dynamic Box mass is kilograms: finite, `> 0`, and `<= kMaxDynamicBoxMassKg`
@@ -117,6 +117,17 @@ A historical one-record file parses as a one-element collection. Canonical
 Level 01 intentionally has **zero** Dynamic Boxes (M45 removed the legacy
 probe line; this is not the historical EOL artifact). Save serializes authored
 `center`, never the live Jolt pose.
+
+`level_goal` is a repeatable authored axis-aligned completion volume, not a
+Jolt body. Position is world center. Size is extents; each axis finite and
+`>= kMinLevelGoalExtent` (0.12). Default Add size is `2, 1.6, 1.8`. Zero,
+one, or many records are valid. Any one active goal may complete the level.
+Canonical Level 01 has **zero** Level Goals. Runtime `LevelCompletionState`
+is **not** a Level Format field and is never serialized. The historical
+required singleton `goal` keyword is rejected. Presentation: Development
+Editor draws the authored AABB as a translucent volume; Gameplay and Release
+draw the two-post marker only. The invisible AABB remains the completion
+region.
 
 `pressure_plate` is an authored axis-aligned trigger volume, not a Jolt body.
 Position is world center. Size is extents; each axis finite and
@@ -238,7 +249,7 @@ CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
 Camera follow policy: dead zone X/Y, follow sharpness.
 
 `LevelFileTest` asserts this by whitelist: every keyword the writer emits must
-be one of the 20 v1 keywords, so no runtime state can appear in output.
+be one of the 21 v1 keywords, so no runtime state can appear in output.
 
 ## Cooker
 
@@ -304,7 +315,7 @@ moving_platform
 checkpoint          variable, checkpoints index order
 hazard              variable, hazards index order
 collectible         variable, collectibles index order
-goal
+level_goal          variable, levelGoals index order
 dynamic_box         variable, dynamicBoxes index order
 pressure_plate      variable, pressurePlates index order
 door                variable, doors index order

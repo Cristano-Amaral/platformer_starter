@@ -166,7 +166,7 @@ const core::Vec3* GetEditablePosition(
     EditorSelection selection);
 
 // Mutable authored box size. Ground, Elevated Platform, Dynamic Box,
-// Pressure Plate, and Door.
+// Pressure Plate, Door, and Level Goal.
 core::Vec3* GetEditableSize(
     world::LevelDefinition& level,
     EditorSelection selection);

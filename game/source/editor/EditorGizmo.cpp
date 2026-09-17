@@ -291,6 +291,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::Goal:
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
@@ -312,6 +313,7 @@ bool IsResizeSelection(EditorSelection selection)
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
+    case EditorObjectKind::Goal:
         return true;
     default:
         return false;
@@ -368,6 +370,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.collectibles.size())
         {
             return &level.collectibles[selection.index].center;
+        }
+        break;
+    case EditorObjectKind::Goal:
+        if (selection.index < level.levelGoals.size())
+        {
+            return &level.levelGoals[selection.index].center;
         }
         break;
     case EditorObjectKind::DynamicBox:
@@ -448,6 +456,12 @@ const core::Vec3* GetEditablePosition(
             return &level.collectibles[selection.index].center;
         }
         break;
+    case EditorObjectKind::Goal:
+        if (selection.index < level.levelGoals.size())
+        {
+            return &level.levelGoals[selection.index].center;
+        }
+        break;
     case EditorObjectKind::DynamicBox:
         if (selection.index < level.dynamicBoxes.size())
         {
@@ -518,6 +532,12 @@ core::Vec3* GetEditableSize(world::LevelDefinition& level, EditorSelection selec
             return &level.doors[selection.index].size;
         }
         break;
+    case EditorObjectKind::Goal:
+        if (selection.index < level.levelGoals.size())
+        {
+            return &level.levelGoals[selection.index].size;
+        }
+        break;
     default:
         break;
     }
@@ -558,6 +578,12 @@ const core::Vec3* GetEditableSize(
         if (selection.index < level.doors.size())
         {
             return &level.doors[selection.index].size;
+        }
+        break;
+    case EditorObjectKind::Goal:
+        if (selection.index < level.levelGoals.size())
+        {
+            return &level.levelGoals[selection.index].size;
         }
         break;
     default:
@@ -704,6 +730,15 @@ bool GetGizmoPreviewBox(
             const world::CollectibleSpec& collectible = workingCopy.collectibles[selection.index];
             center = collectible.center;
             size = collectible.size;
+            return true;
+        }
+        break;
+    case EditorObjectKind::Goal:
+        if (selection.index < workingCopy.levelGoals.size())
+        {
+            const world::LevelGoalSpec& goal = workingCopy.levelGoals[selection.index];
+            center = goal.center;
+            size = goal.size;
             return true;
         }
         break;
@@ -917,6 +952,24 @@ bool AuthoredGeometryDiffers(
             workingCopy.collectibles[selection.index];
         return Vec3Differs(activeCollectible.center, workingCollectible.center)
             || Vec3Differs(activeCollectible.size, workingCollectible.size);
+    }
+    case EditorObjectKind::Goal:
+    {
+        if (selection.index >= workingCopy.levelGoals.size())
+        {
+            return false;
+        }
+        const int activeIndex = MappedActiveIndex(map, EditorObjectKind::Goal, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.levelGoals.size())
+        {
+            return true;
+        }
+        const world::LevelGoalSpec& activeGoal =
+            active.levelGoals[static_cast<std::size_t>(activeIndex)];
+        const world::LevelGoalSpec& workingGoal = workingCopy.levelGoals[selection.index];
+        return Vec3Differs(activeGoal.center, workingGoal.center)
+            || Vec3Differs(activeGoal.size, workingGoal.size);
     }
     case EditorObjectKind::DynamicBox:
     {
@@ -1222,6 +1275,7 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::Checkpoint,
         EditorObjectKind::Hazard,
         EditorObjectKind::Collectible,
+        EditorObjectKind::Goal,
         EditorObjectKind::DynamicBox,
         EditorObjectKind::PressurePlate,
         EditorObjectKind::Door,
@@ -1240,6 +1294,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.hazards.size();
             case EditorObjectKind::Collectible:
                 return workingCopy.collectibles.size();
+            case EditorObjectKind::Goal:
+                return workingCopy.levelGoals.size();
             case EditorObjectKind::DynamicBox:
                 return workingCopy.dynamicBoxes.size();
             case EditorObjectKind::PressurePlate:

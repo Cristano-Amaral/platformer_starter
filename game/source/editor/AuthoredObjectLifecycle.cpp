@@ -115,6 +115,7 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::Goal:
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
@@ -138,6 +139,7 @@ int CategoryMaxCount(EditorObjectKind kind)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::Goal:
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::ItemPickup:
@@ -159,6 +161,8 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.hazards.size();
     case EditorObjectKind::Collectible:
         return level.collectibles.size();
+    case EditorObjectKind::Goal:
+        return level.levelGoals.size();
     case EditorObjectKind::DynamicBox:
         return level.dynamicBoxes.size();
     case EditorObjectKind::PressurePlate:
@@ -217,6 +221,9 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::Collectible:
         pending.collectibles = true;
         break;
+    case EditorObjectKind::Goal:
+        pending.levelGoals = true;
+        break;
     case EditorObjectKind::DynamicBox:
         pending.dynamicBoxes = true;
         break;
@@ -251,6 +258,8 @@ bool CategoryHasStructuralPending(
         return pending.hazards;
     case EditorObjectKind::Collectible:
         return pending.collectibles;
+    case EditorObjectKind::Goal:
+        return pending.levelGoals;
     case EditorObjectKind::DynamicBox:
         return pending.dynamicBoxes;
     case EditorObjectKind::PressurePlate:
@@ -280,6 +289,8 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.hazards;
     case EditorObjectKind::Collectible:
         return &map.collectibles;
+    case EditorObjectKind::Goal:
+        return &map.levelGoals;
     case EditorObjectKind::DynamicBox:
         return &map.dynamicBoxes;
     case EditorObjectKind::PressurePlate:
@@ -307,6 +318,8 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.hazards;
     case EditorObjectKind::Collectible:
         return &map.collectibles;
+    case EditorObjectKind::Goal:
+        return &map.levelGoals;
     case EditorObjectKind::DynamicBox:
         return &map.dynamicBoxes;
     case EditorObjectKind::PressurePlate:
@@ -345,6 +358,7 @@ void ResetStructuralIndexMap(
     FillIdentity(map.checkpoints, active.checkpoints.size());
     FillIdentity(map.hazards, active.hazards.size());
     FillIdentity(map.collectibles, active.collectibles.size());
+    FillIdentity(map.levelGoals, active.levelGoals.size());
     FillIdentity(map.dynamicBoxes, active.dynamicBoxes.size());
     FillIdentity(map.pressurePlates, active.pressurePlates.size());
     FillIdentity(map.doors, active.doors.size());
@@ -360,6 +374,7 @@ void EnsureStructuralIndexMap(
         && CategoryMapMatchesActive(map.checkpoints, active.checkpoints.size())
         && CategoryMapMatchesActive(map.hazards, active.hazards.size())
         && CategoryMapMatchesActive(map.collectibles, active.collectibles.size())
+        && CategoryMapMatchesActive(map.levelGoals, active.levelGoals.size())
         && CategoryMapMatchesActive(map.dynamicBoxes, active.dynamicBoxes.size())
         && CategoryMapMatchesActive(map.pressurePlates, active.pressurePlates.size())
         && CategoryMapMatchesActive(map.doors, active.doors.size())
@@ -508,6 +523,19 @@ PendingDeleteVisuals MakePendingDeleteVisuals(
         }
         visuals.collectibleIndices.push_back(static_cast<int>(index));
         visuals.collectibleCenters.push_back(active.collectibles[index].center);
+    }
+    const std::size_t levelGoalLimit =
+        active.levelGoals.size() < map.levelGoals.activeToWorking.size()
+        ? active.levelGoals.size()
+        : map.levelGoals.activeToWorking.size();
+    for (std::size_t index = 0; index < levelGoalLimit; ++index)
+    {
+        if (map.levelGoals.activeToWorking[index] != kNoStructuralIndex)
+        {
+            continue;
+        }
+        visuals.levelGoalIndices.push_back(static_cast<int>(index));
+        visuals.levelGoals.push_back(active.levelGoals[index]);
     }
     const std::size_t dynamicBoxLimit =
         active.dynamicBoxes.size() < map.dynamicBoxes.activeToWorking.size()
@@ -710,6 +738,22 @@ LifecycleEditResult AddCollectibleAt(
     return Ok({EditorObjectKind::Collectible, workingCopy.collectibles.size() - 1});
 }
 
+LifecycleEditResult AddGoalAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::Goal))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    world::LevelGoalSpec goal{};
+    goal.center = ApplyWorldCenter(worldCenter, {});
+    goal.size = world::kDefaultLevelGoalSize;
+    workingCopy.levelGoals.push_back(goal);
+    return Ok({EditorObjectKind::Goal, workingCopy.levelGoals.size() - 1});
+}
+
 LifecycleEditResult AddDynamicBoxAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter)
@@ -822,6 +866,18 @@ LifecycleEditResult AddCollectible(
         ApplyPlacementAnchor(
             placementAnchor,
             kDefaultAddedCollectibleOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddGoal(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddGoalAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedLevelGoalOffset,
             workingCopy.initialSpawnVisualCenter.z));
 }
 
@@ -959,6 +1015,13 @@ LifecycleEditResult DuplicateSelected(
         workingCopy.collectibles.push_back(copy);
         return Ok({EditorObjectKind::Collectible, workingCopy.collectibles.size() - 1});
     }
+    case EditorObjectKind::Goal:
+    {
+        world::LevelGoalSpec copy = workingCopy.levelGoals[selection.index];
+        OffsetX(copy.center, kLifecycleDuplicateOffsetX);
+        workingCopy.levelGoals.push_back(copy);
+        return Ok({EditorObjectKind::Goal, workingCopy.levelGoals.size() - 1});
+    }
     case EditorObjectKind::DynamicBox:
     {
         world::DynamicBoxSpec copy = workingCopy.dynamicBoxes[selection.index];
@@ -1052,6 +1115,10 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::Collectible:
         workingCopy.collectibles.erase(
             workingCopy.collectibles.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::Goal:
+        workingCopy.levelGoals.erase(
+            workingCopy.levelGoals.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     case EditorObjectKind::DynamicBox:
         workingCopy.dynamicBoxes.erase(

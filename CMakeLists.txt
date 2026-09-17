@@ -141,6 +141,8 @@ add_executable(Platformer3D
     game/source/platform/ItemPickupCollectionSound.h
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
+    game/source/render/LevelGoalVisualization.cpp
+    game/source/render/LevelGoalVisualization.h
     game/source/render/CameraView.h
     game/source/render/StaticModelThumbnail.cpp
     game/source/render/StaticModelThumbnail.h
@@ -779,6 +781,53 @@ if(MSVC)
     target_compile_options(ItemPickupCollectionHudTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(ItemPickupCollectionHudTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 63: Level Goal overlap, one-shot completion, reset. No window, raylib, or Jolt.
+add_executable(LevelGoalTest
+    game/source/gameplay/LevelCompletionState.h
+    game/source/render/LevelGoalVisualization.h
+    game/source/world/LevelGoal.h
+    game/source/world/LevelGoalTest.cpp
+)
+target_include_directories(LevelGoalTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(LevelGoalTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LevelGoalTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 63 correction: editor translucent AABB vs gameplay marker-only.
+# Hidden window. Not shipped.
+add_executable(LevelGoalVisualizationTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/LevelGoalVisualization.cpp
+    game/source/render/LevelGoalVisualization.h
+    game/source/render/LevelGoalVisualizationTest.cpp
+    game/source/render/StaticModelScene.cpp
+    game/source/render/StaticModelScene.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(LevelGoalVisualizationTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(LevelGoalVisualizationTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(LevelGoalVisualizationTest PRIVATE game/source)
+target_link_libraries(LevelGoalVisualizationTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(LevelGoalVisualizationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LevelGoalVisualizationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(LevelGoalVisualizationTest PRIVATE ole32 shell32 uuid)
 endif()
 
 # Milestone 57: Key Item & Locked Door. Not shipped.

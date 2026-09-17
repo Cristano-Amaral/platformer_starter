@@ -135,6 +135,7 @@ struct DebugMetricsSnapshot
     const char* collectedThisFrameLabel = "None";
 
     bool levelCompleted = false;
+    int levelGoalCount = 0;
     core::Vec3 goalCenter{};
     core::Vec3 goalSize{};
     bool playerInsideGoal = false;

@@ -71,7 +71,7 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.collectibles[0].center, {5.0f, 2.5f, 0.0f})
         && Vec3Equal(level.collectibles[1].center, {-4.5f, 4.0f, 0.0f})
         && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
-        && Vec3Equal(level.goal.center, {-21.0f, 3.8f, 0.0f})
+        && level.levelGoals.empty()
         && level.dynamicBoxes.empty()
         && level.pressurePlates.empty()
         && level.doors.empty()
@@ -128,7 +128,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "checkpoint",
         "hazard",
         "collectible",
-        "goal",
+        "level_goal",
         "dynamic_box",
         "pressure_plate",
         "door",
@@ -298,7 +298,7 @@ int main()
         "PLATFORMER_LEVEL 2\nid level_01\n",
         world::LoadLevelFileStatus::UnsupportedVersion);
 
-    ExpectInvalid("missing required record", ReplaceFirstLineStartingWith(canonical, "goal ", ""));
+    ExpectInvalid("missing required record", ReplaceFirstLineStartingWith(canonical, "camera ", ""));
     ExpectInvalid("duplicate spawn", InsertAfterHeader(canonical, "spawn 0 0.8 0"));
     {
         const world::ParseLevelFileResult extraPlatform =
@@ -404,10 +404,10 @@ int main()
     Expect(CountRecords(written, "moving_platform") == 1, "writer moving_platform count");
     Expect(CountRecords(written, "checkpoint") == world::kLevel01CheckpointCount, "writer checkpoint count");
     Expect(CountRecords(written, "hazard") == world::kLevel01HazardCount, "writer hazard count");
-    Expect(
-        CountRecords(written, "collectible") == world::kLevel01CollectibleCount,
+    Expect(CountRecords(written, "collectible") == world::kLevel01CollectibleCount,
         "writer collectible count");
-    Expect(CountRecords(written, "goal") == 1, "writer goal count");
+    Expect(CountRecords(written, "level_goal") == world::kLevel01LevelGoalCount, "writer level_goal count");
+    Expect(CountRecords(written, "goal") == 0, "writer emits no legacy goal singleton");
     Expect(CountRecords(written, "dynamic_box") == 0, "writer dynamic_box count");
     Expect(CountRecords(written, "pressure_plate") == 0, "writer pressure_plate count");
     Expect(CountRecords(written, "door") == 0, "writer door count");
@@ -1093,6 +1093,66 @@ int main()
                 world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0 2 0 1\n").status
                     == world::LoadLevelFileStatus::Invalid,
                 "invalid pressure_plate bool flag rejected");
+        }
+
+        {
+            const std::string oneGoal = canonical + "level_goal -21 3.8 0 2 1.6 1.8\n";
+            const world::ParseLevelFileResult one = world::ParseLevelText(oneGoal);
+            Expect(one.status == world::LoadLevelFileStatus::Loaded, "one level_goal loads");
+            Expect(one.level.levelGoals.size() == 1, "one level_goal count");
+            Expect(Vec3Equal(one.level.levelGoals[0].center, {-21.0f, 3.8f, 0.0f}),
+                "one level_goal center");
+            Expect(Vec3Equal(one.level.levelGoals[0].size, {2.0f, 1.6f, 1.8f}),
+                "one level_goal size");
+            const std::string writtenOne = world::SerializeLevelText(one.level);
+            Expect(CountRecords(writtenOne, "level_goal") == 1, "writer one level_goal");
+            Expect(
+                world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(writtenOne).level),
+                "one level_goal round trip");
+            Expect(writtenOne.find("completed") == std::string::npos, "runtime completion not serialized");
+
+            const std::string twoGoals = canonical
+                + "level_goal -21 3.8 0 2 1.6 1.8\n"
+                  "level_goal 8 1 0 2 1.6 1.8\n";
+            const world::ParseLevelFileResult two = world::ParseLevelText(twoGoals);
+            Expect(two.status == world::LoadLevelFileStatus::Loaded, "two level_goal load");
+            Expect(two.level.levelGoals.size() == 2, "two level_goal count");
+            Expect(Vec3Equal(two.level.levelGoals[1].center, {8.0f, 1.0f, 0.0f}),
+                "second level_goal center");
+            const std::string writtenTwo = world::SerializeLevelText(two.level);
+            Expect(CountRecords(writtenTwo, "level_goal") == 2, "writer two level_goal");
+            Expect(
+                world::AuthoredLevelDataEqual(two.level, world::ParseLevelText(writtenTwo).level),
+                "two level_goal round trip");
+
+            Expect(
+                world::ParseLevelText(canonical + "level_goal nan 3.8 0 2 1.6 1.8\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-finite level_goal center rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 0 1.6 1.8\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero level_goal extent rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 -2 1.6 1.8\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative level_goal extent rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 0.05 1.6 1.8\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "below-minimum level_goal extent rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "short level_goal token count rejected");
+            Expect(
+                world::ParseLevelText(canonical + "level_goal -21 3.8 0 2 1.6 1.8 extra\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "extra level_goal token rejected");
+            Expect(
+                world::ParseLevelText(canonical + "goal -21 3.8 0 2 1.6 1.8\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "legacy singleton goal keyword rejected");
         }
 
         {

@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 62 — Item Pickup Collection HUD Notification.
+Milestone 63 — Level Goal / Exit.
 
-Canonical file: [`docs/milestones/MILESTONE_62.md`](docs/milestones/MILESTONE_62.md)
+Canonical file: [`docs/milestones/MILESTONE_63.md`](docs/milestones/MILESTONE_63.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 61 is CLOSED. Do not start Milestone 63.
+Milestone 62 is implemented, awaiting manual acceptance. Do not start Milestone 64.
 
 ## Source of truth
 1. Current repository code.

@@ -114,6 +114,9 @@ int main()
         editor::EditAddMenuRequest(EditorObjectKind::Door) == LevelEditorRequest::AddDoor,
         "Edit > Add > Door maps to AddDoor");
     Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::Goal) == LevelEditorRequest::AddGoal,
+        "Edit > Add > Level Goal maps to AddGoal");
+    Expect(
         editor::EditAddMenuRequest(EditorObjectKind::StaticProp) == LevelEditorRequest::AddStaticProp,
         "Edit > Add > Static Prop maps to AddStaticProp");
     Expect(
@@ -151,6 +154,9 @@ int main()
         editor::PlacementAddRequest(editor::PlacementMode::ItemPickup)
             == LevelEditorRequest::AddItemPickup,
         "Object Palette Item Pickup confirms AddItemPickup");
+    Expect(
+        editor::PlacementAddRequest(editor::PlacementMode::Goal) == LevelEditorRequest::AddGoal,
+        "Object Palette Level Goal confirms AddGoal");
 
     {
         const world::LevelDefinition active = MakeActiveLevel();

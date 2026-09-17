@@ -8,6 +8,7 @@
 #include "platform/RuntimePaths.h"
 #include "render/ItemPickupTargetHighlight.h"
 #include "render/ItemPickupCollectionFeedbackDraw.h"
+#include "render/LevelGoalVisualization.h"
 #include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
@@ -67,10 +68,7 @@ constexpr Color kCheckpointCurrentPost{48, 140, 88, 255};
 constexpr Color kCheckpointCurrentBeacon{88, 220, 124, 255};
 constexpr Color kCheckpointPreviousPost{36, 88, 56, 255};
 constexpr Color kCheckpointPreviousBeacon{64, 148, 88, 255};
-constexpr Color kGoalIncompletePost{156, 116, 52, 255};
-constexpr Color kGoalIncompleteBar{188, 148, 64, 255};
-constexpr Color kGoalCompletedPost{212, 168, 48, 255};
-constexpr Color kGoalCompletedBar{244, 212, 84, 255};
+constexpr Color kGoalVolumeIncomplete{64, 140, 92, 255};
 constexpr Color kHazardBarColor{196, 48, 36, 255};
 constexpr Color kHazardToothColor{232, 96, 40, 255};
 constexpr Color kCollectibleFill{255, 212, 64, 255};
@@ -980,6 +978,10 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     {
         DrawPendingDeleteHazard(hazard);
     }
+    for (const world::LevelGoalSpec& goal : overlay.pendingDeleteLevelGoals)
+    {
+        DrawPendingDeleteSolid(goal.center, goal.size, kGoalVolumeIncomplete);
+    }
     {
         const core::Vec3 visualSize{
             world::kCollectibleVisualSize,
@@ -1280,41 +1282,6 @@ void DrawCheckpointMarker(
     }
 
     DrawCheckpointMarkerGeometry(spec, postColor, beaconColor, false, kPendingPreviewWire);
-}
-
-void DrawLevelGoalMarker(const world::LevelGoalSpec& goal, bool levelCompleted)
-{
-    constexpr float postWidth = 0.16f;
-    constexpr float postHeight = 1.6f;
-    constexpr float barHeight = 0.16f;
-    constexpr float barDepth = 0.16f;
-    constexpr float postSpread = 0.70f;
-    constexpr float zOffset = -0.90f;
-
-    const float platformTopY =
-        goal.center.y - world::kPlayerVisualSize.y * 0.5f;
-    const float postCenterY = platformTopY + postHeight * 0.5f;
-    const float z = goal.center.z + zOffset;
-    const core::Vec3 postSize{postWidth, postHeight, postWidth};
-    const core::Vec3 leftPost{
-        goal.center.x - postSpread,
-        postCenterY,
-        z};
-    const core::Vec3 rightPost{
-        goal.center.x + postSpread,
-        postCenterY,
-        z};
-    const core::Vec3 barCenter{
-        goal.center.x,
-        platformTopY + postHeight + barHeight * 0.5f,
-        z};
-    const core::Vec3 barSize{postSpread * 2.0f + postWidth, barHeight, barDepth};
-
-    const Color postColor = levelCompleted ? kGoalCompletedPost : kGoalIncompletePost;
-    const Color barColor = levelCompleted ? kGoalCompletedBar : kGoalIncompleteBar;
-    DrawGreyboxBox(leftPost, postSize, postColor);
-    DrawGreyboxBox(rightPost, postSize, postColor);
-    DrawGreyboxBox(barCenter, barSize, barColor);
 }
 
 void DrawLevelCompleteMessage()
@@ -1726,7 +1693,17 @@ void Renderer::DrawWorld(
         DrawCheckpointMarker(
             level.checkpoints[checkpointIndex], checkpointVisuals[checkpointIndex]);
     }
-    DrawLevelGoalMarker(level.goal, levelCompleted);
+    for (std::size_t goalIndex = 0; goalIndex < level.levelGoals.size(); ++goalIndex)
+    {
+        if (OverlayMarksPendingDelete(overlay.pendingDeleteLevelGoalIndices, goalIndex))
+        {
+            continue;
+        }
+        DrawLevelGoalPresentation(
+            level.levelGoals[goalIndex],
+            levelCompleted,
+            LevelGoalViewKindFromEditor(overlay.drawLevelGoalAuthoredVolume));
+    }
 
     DrawItemPickupCollectionFeedback(itemPickupCollectionFeedback);
 

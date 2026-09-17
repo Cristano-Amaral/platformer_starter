@@ -87,7 +87,7 @@ void FormatSelectionDisplayName(
         std::snprintf(buffer, bufferSize, "Collectible %zu", selection.index);
         return;
     case EditorObjectKind::Goal:
-        std::snprintf(buffer, bufferSize, "Goal");
+        std::snprintf(buffer, bufferSize, "Level Goal %zu", selection.index);
         return;
     case EditorObjectKind::DynamicBox:
         std::snprintf(buffer, bufferSize, "Dynamic Box %zu", selection.index);
@@ -124,7 +124,6 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
     case EditorObjectKind::Camera:
     case EditorObjectKind::Ground:
     case EditorObjectKind::MovingPlatform:
-    case EditorObjectKind::Goal:
         return selection.index == 0;
     case EditorObjectKind::DynamicBox:
         return selection.index < level.dynamicBoxes.size();
@@ -146,6 +145,8 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
         return selection.index < level.hazards.size();
     case EditorObjectKind::Collectible:
         return selection.index < level.collectibles.size();
+    case EditorObjectKind::Goal:
+        return selection.index < level.levelGoals.size();
     }
     return false;
 }
@@ -161,6 +162,7 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::Checkpoint:
     case EditorObjectKind::Hazard:
     case EditorObjectKind::Collectible:
+    case EditorObjectKind::Goal:
     case EditorObjectKind::DynamicBox:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::PressurePlate:

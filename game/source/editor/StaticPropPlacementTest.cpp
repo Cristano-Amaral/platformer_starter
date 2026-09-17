@@ -62,7 +62,6 @@ world::LevelDefinition MakeActiveLevel()
     level.checkpoints.push_back({{16.5f, 1.8f, 0.0f}, {2.4f, 1.6f, 2.0f}, {16.5f, 1.8f, 0.0f}});
     level.hazards.push_back({{11.5f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
     level.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
-    level.goal = {{-8.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}};
     level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
     return level;
 }

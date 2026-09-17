@@ -191,7 +191,10 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendCenterSizeRecord(out, "collectible", collectible.center, collectible.size);
     }
 
-    AppendCenterSizeRecord(out, "goal", level.goal.center, level.goal.size);
+    for (const LevelGoalSpec& goal : level.levelGoals)
+    {
+        AppendCenterSizeRecord(out, "level_goal", goal.center, goal.size);
+    }
 
     for (const DynamicBoxSpec& box : level.dynamicBoxes)
     {

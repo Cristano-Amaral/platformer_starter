@@ -70,7 +70,7 @@ struct LevelDefinition
     std::vector<CheckpointSpec> checkpoints{};
     std::vector<HazardSpec> hazards{};
     std::vector<CollectibleSpec> collectibles{};
-    LevelGoalSpec goal{};
+    std::vector<LevelGoalSpec> levelGoals{};
     std::vector<DynamicBoxSpec> dynamicBoxes{};
     std::vector<PressurePlateSpec> pressurePlates{};
     std::vector<DoorSpec> doors{};
