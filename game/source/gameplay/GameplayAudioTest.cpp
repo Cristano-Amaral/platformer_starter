@@ -4,15 +4,23 @@
 
 #include "gameplay/GameplayAudio.h"
 #include "gameplay/GameFlowState.h"
+#include "gameplay/DoorLockRuntime.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/ItemPickupRuntime.h"
+#include "gameplay/LevelCompletionState.h"
+#include "gameplay/LevelTransition.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/RespawnState.h"
 #include "platform/GameplayAudio.h"
+#include "world/Door.h"
 #include "world/HazardWorld.h"
 #include "world/ItemPickup.h"
+#include "world/LevelGoal.h"
+#include "world/RespawnWorld.h"
 
 #include <cstdio>
+#include <cstdint>
 #include <span>
 #include <vector>
 
@@ -104,8 +112,8 @@ int main()
     Expect(
         platform::kGameplaySfxVolume == 1.0f, "fixed gameplay SFX volume is 1.0");
     Expect(
-        platform::kGameplaySfxCueCount == 7,
-        "fixed cue set is pickup/damage/death/respawn/footstep/jump/landing");
+        platform::kGameplaySfxCueCount == 12,
+        "fixed cue set includes M71/M72 plus checkpoint/plate/door/goal");
 
     {
         world::ItemPickupSpec pickup = MakePickup({1.55f, 1.0f, 0.0f});
@@ -286,7 +294,10 @@ int main()
     Expect(
         lifecycle.pickupCount == 0 && lifecycle.damageCount == 0 && lifecycle.deathCount == 0
             && lifecycle.respawnCount == 0 && lifecycle.footstepCount == 0
-            && lifecycle.jumpCount == 0 && lifecycle.landingCount == 0,
+            && lifecycle.jumpCount == 0 && lifecycle.landingCount == 0
+            && lifecycle.checkpointActivateCount == 0 && lifecycle.plateActivateCount == 0
+            && lifecycle.plateDeactivateCount == 0 && lifecycle.doorUnlockCount == 0
+            && lifecycle.levelGoalCompleteCount == 0,
         "12. Restart/Play/transition helpers do not fabricate SFX requests");
 
     const gameplay::GameplaySfxEmit emptyReload{};
@@ -529,6 +540,239 @@ int main()
         authoredHazards[0].center.x == authoredBefore.center.x && !dirty
             && workingCopy[0].center.x == authoredBefore.center.x,
         "21. movement audio never mutates authored data, workingCopy, or Dirty");
+
+    world::CheckpointSpec checkpointA{};
+    checkpointA.center = {0.0f, 1.0f, 0.0f};
+    checkpointA.size = {2.0f, 2.0f, 2.0f};
+    checkpointA.respawnPosition = {0.0f, 1.0f, 0.0f};
+    world::CheckpointSpec checkpointB = checkpointA;
+    checkpointB.center.x = 8.0f;
+    checkpointB.respawnPosition.x = 8.0f;
+    std::vector<world::CheckpointSpec> checkpoints{checkpointA, checkpointB};
+
+    gameplay::RespawnState checkpointRespawn{};
+    gameplay::GameplaySfxRequestState checkpointSfx{};
+    Expect(
+        world::TryActivateExpectedCheckpoint(
+            checkpointRespawn.activeCheckpointIndex,
+            checkpointRespawn.respawnPosition,
+            checkpoints,
+            checkpointA.center),
+        "genuine sequential Checkpoint activation succeeds");
+    gameplay::RecordGameplaySfx(checkpointSfx, gameplay::CheckpointActivatedSfx());
+    Expect(
+        checkpointSfx.checkpointActivateCount == 1,
+        "1. genuine Checkpoint activation emits exactly one Checkpoint SFX request");
+    Expect(
+        !world::TryActivateExpectedCheckpoint(
+            checkpointRespawn.activeCheckpointIndex,
+            checkpointRespawn.respawnPosition,
+            checkpoints,
+            checkpointA.center),
+        "continued overlap of the current Checkpoint is not a new activation");
+    Expect(
+        checkpointSfx.checkpointActivateCount == 1,
+        "2. continued overlap with the same active Checkpoint emits no repeat");
+
+    gameplay::RespawnState restoredCheckpoint{};
+    restoredCheckpoint.activeCheckpointIndex = 0;
+    restoredCheckpoint.respawnPosition = checkpointA.respawnPosition;
+    gameplay::GameplaySfxRequestState restoredCheckpointSfx{};
+    Expect(
+        !world::TryActivateExpectedCheckpoint(
+            restoredCheckpoint.activeCheckpointIndex,
+            restoredCheckpoint.respawnPosition,
+            checkpoints,
+            checkpointA.center),
+        "preserved active Checkpoint does not reactivate from overlap");
+    Expect(
+        restoredCheckpointSfx.checkpointActivateCount == 0,
+        "3. restored/preserved active Checkpoint does not synthesize activation audio");
+
+    gameplay::RespawnState laterCheckpoint = restoredCheckpoint;
+    Expect(
+        world::TryActivateExpectedCheckpoint(
+            laterCheckpoint.activeCheckpointIndex,
+            laterCheckpoint.respawnPosition,
+            checkpoints,
+            checkpointB.center),
+        "a later sequential Checkpoint can still activate");
+    gameplay::RecordGameplaySfx(checkpointSfx, gameplay::CheckpointActivatedSfx());
+    Expect(
+        checkpointSfx.checkpointActivateCount == 2,
+        "returning to a previous Checkpoint is not invented; next expected still activates");
+
+    std::vector<std::uint8_t> plateInactive{0};
+    std::vector<std::uint8_t> plateActive{1};
+    gameplay::PressurePlateSfxState plateTracker{};
+    gameplay::GameplaySfxRequestState plateSfx{};
+    gameplay::SynchronizePressurePlateSfx(plateTracker, plateInactive);
+    gameplay::RecordGameplaySfx(
+        plateSfx, gameplay::TickPressurePlateSfx(plateTracker, plateActive));
+    Expect(
+        plateSfx.plateActivateCount == 1 && plateSfx.plateDeactivateCount == 0,
+        "4. Pressure Plate inactive -> active emits exactly one Activate request");
+    gameplay::RecordGameplaySfx(
+        plateSfx, gameplay::TickPressurePlateSfx(plateTracker, plateActive));
+    Expect(
+        plateSfx.plateActivateCount == 1,
+        "5. held-active Pressure Plate emits no repeated Activate request");
+    gameplay::RecordGameplaySfx(
+        plateSfx, gameplay::TickPressurePlateSfx(plateTracker, plateInactive));
+    Expect(
+        plateSfx.plateDeactivateCount == 1 && plateSfx.plateActivateCount == 1,
+        "6. Pressure Plate active -> inactive emits exactly one Deactivate request");
+    gameplay::RecordGameplaySfx(
+        plateSfx, gameplay::TickPressurePlateSfx(plateTracker, plateInactive));
+    Expect(
+        plateSfx.plateDeactivateCount == 1,
+        "7. held-inactive Pressure Plate emits no repeated Deactivate request");
+    Expect(
+        plateSfx.doorUnlockCount == 0,
+        "11. Plate-driven Door movement emits no Door Unlock request");
+
+    world::DoorSpec lockedDoor{};
+    lockedDoor.center = {2.0f, 1.5f, 0.0f};
+    lockedDoor.size = world::kDefaultDoorSize;
+    lockedDoor.openDistance = world::kDefaultDoorOpenDistance;
+    lockedDoor.requiredItemId = "key";
+    std::vector<world::DoorSpec> doors{lockedDoor};
+    gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
+    gameplay::Inventory doorInventory;
+    gameplay::GameplaySfxRequestState doorSfx{};
+    Expect(
+        !gameplay::TryUnlockLockedDoor(doorInventory, locks, doors, 0),
+        "missing item fails unlock");
+    Expect(doorSfx.doorUnlockCount == 0, "9. missing-item / failed unlock emits no Door Unlock request");
+    Expect(doorInventory.TryAdd("key", 1), "seed required item");
+    Expect(gameplay::TryUnlockLockedDoor(doorInventory, locks, doors, 0), "successful item-gated unlock");
+    gameplay::RecordGameplaySfx(doorSfx, gameplay::DoorUnlockSfx());
+    Expect(
+        doorSfx.doorUnlockCount == 1 && doorInventory.GetQuantity("key") == 0
+            && gameplay::DoorIsRuntimeUnlocked(locks, 0),
+        "8. successful item-gated Door unlock emits exactly one Door Unlock request");
+    Expect(
+        !gameplay::TryUnlockLockedDoor(doorInventory, locks, doors, 0),
+        "already-unlocked Door does not unlock again");
+    Expect(doorSfx.doorUnlockCount == 1, "10. already-unlocked Door interaction emits no replay");
+    Expect(doors[0].requiredItemId == "key", "Door unlock audio does not mutate authored requiredItemId");
+
+    world::LevelGoalSpec destinationGoal{{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}, "level_02"};
+    world::LevelGoalSpec terminalGoal{{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}, {}};
+    gameplay::LevelCompletionState destinationCompletion{};
+    gameplay::GameplaySfxRequestState destinationSfx{};
+    std::string destinationId;
+    Expect(
+        gameplay::TryCompleteLevelFromPlayerOverlap(
+            destinationCompletion, {destinationGoal}, destinationGoal.center, &destinationId),
+        "destination goal completes once");
+    gameplay::RecordGameplaySfx(destinationSfx, gameplay::LevelGoalCompleteSfx());
+    Expect(
+        destinationSfx.levelGoalCompleteCount == 1,
+        "12. destination Level Goal first completion emits exactly one Goal Complete request");
+    gameplay::LevelTransitionSchedule hold{};
+    gameplay::CaptureCompletedGoalDestination(hold, destinationId);
+    for (int frame = 0; frame < 30; ++frame)
+    {
+        Expect(
+            !gameplay::TryCompleteLevelFromPlayerOverlap(
+                destinationCompletion, {destinationGoal}, destinationGoal.center, &destinationId),
+            "LEVEL COMPLETE overlap does not complete again");
+        gameplay::TickDestinationTransitionHold(hold, 1.0f / 60.0f);
+    }
+    Expect(
+        destinationSfx.levelGoalCompleteCount == 1,
+        "14. LEVEL COMPLETE hold emits no repeated Goal request");
+    gameplay::SkipDestinationTransitionHold(hold);
+    Expect(
+        destinationSfx.levelGoalCompleteCount == 1,
+        "15. deferred destination transition emits no second Goal request");
+
+    gameplay::LevelCompletionState terminalCompletion{};
+    gameplay::GameplaySfxRequestState terminalSfx{};
+    std::string terminalId = "stale";
+    Expect(
+        gameplay::TryCompleteLevelFromPlayerOverlap(
+            terminalCompletion, {terminalGoal}, terminalGoal.center, &terminalId),
+        "terminal goal completes once");
+    gameplay::RecordGameplaySfx(terminalSfx, gameplay::LevelGoalCompleteSfx());
+    gameplay::RunCompleteState runComplete{};
+    Expect(
+        gameplay::TryEnterRunCompleteFromTerminalGoal(
+            runComplete, terminalId, 12.5),
+        "terminal completion enters RUN COMPLETE");
+    Expect(
+        terminalSfx.levelGoalCompleteCount == 1,
+        "13. terminal Level Goal first completion emits exactly one Goal Complete request");
+    for (int frame = 0; frame < 16; ++frame)
+    {
+        Expect(
+            !gameplay::TryCompleteLevelFromPlayerOverlap(
+                terminalCompletion, {terminalGoal}, terminalGoal.center, &terminalId),
+            "RUN COMPLETE overlap does not complete again");
+        Expect(
+            !gameplay::TryEnterRunCompleteFromTerminalGoal(runComplete, terminalId, 99.0),
+            "RUN COMPLETE does not re-enter");
+    }
+    Expect(
+        terminalSfx.levelGoalCompleteCount == 1,
+        "16. RUN COMPLETE emits no repeated Goal request");
+
+    gameplay::PressurePlateSfxState rebuiltPlates{};
+    rebuiltPlates.previousActive = {0, 0};
+    gameplay::GameplaySfxRequestState rebuiltWorldSfx{};
+    const char* worldLifecycleNames[] = {
+        "initialization",
+        "Restart",
+        "transition",
+        "Apply/Reload",
+        "Open/Switch",
+        "physics rebuild",
+        "respawn",
+    };
+    for (const char* name : worldLifecycleNames)
+    {
+        std::vector<std::uint8_t> reconstructed{1, 0};
+        gameplay::SynchronizePressurePlateSfx(rebuiltPlates, reconstructed);
+        gameplay::RecordGameplaySfx(
+            rebuiltWorldSfx, gameplay::TickPressurePlateSfx(rebuiltPlates, reconstructed));
+        Expect(
+            rebuiltWorldSfx.plateActivateCount == 0 && rebuiltWorldSfx.plateDeactivateCount == 0
+                && rebuiltWorldSfx.checkpointActivateCount == 0
+                && rebuiltWorldSfx.doorUnlockCount == 0
+                && rebuiltWorldSfx.levelGoalCompleteCount == 0,
+            "17. reconstruction/lifecycle does not synthesize world-interaction SFX");
+        (void)name;
+    }
+
+    gameplay::PressurePlateSfxState blockedPlates{};
+    gameplay::GameplaySfxRequestState blockedWorldSfx{};
+    gameplay::SynchronizePressurePlateSfx(blockedPlates, plateInactive);
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, true),
+        "18. Pause uses existing gameplay blocker, not an audio pause authority");
+    gameplay::SynchronizePressurePlateSfx(blockedPlates, plateActive);
+    gameplay::RecordGameplaySfx(
+        blockedWorldSfx, gameplay::TickPressurePlateSfx(blockedPlates, plateActive));
+    Expect(
+        blockedWorldSfx.plateActivateCount == 0 && blockedWorldSfx.plateDeactivateCount == 0
+            && blockedWorldSfx.checkpointActivateCount == 0,
+        "18. Pause/Inventory/F2 blockers do not create catch-up/replay");
+
+    Expect(
+        checkpointSfx.pickupCount == 0 && checkpointSfx.footstepCount == 0
+            && plateSfx.jumpCount == 0 && doorSfx.landingCount == 0,
+        "19. existing M71/M72 cues remain independent of world-interaction requests");
+
+    gameplay::RecordGameplaySfx(sfx, gameplay::CheckpointActivatedSfx());
+    gameplay::RecordGameplaySfx(sfx, gameplay::DoorUnlockSfx());
+    gameplay::RecordGameplaySfx(sfx, gameplay::LevelGoalCompleteSfx());
+    Expect(
+        authoredHazards[0].center.x == authoredBefore.center.x && !dirty
+            && workingCopy[0].center.x == authoredBefore.center.x
+            && doors[0].requiredItemId == "key",
+        "23. M73 audio never mutates authored data, workingCopy, or Dirty");
 
     if (gFailures != 0)
     {

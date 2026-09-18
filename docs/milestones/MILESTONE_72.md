@@ -1,6 +1,6 @@
 # Milestone 72 --- Player Movement Audio Feedback
 
-**Status:** Implemented, awaiting manual acceptance.\
+**Status:** CLOSED\
 **Branch:** `milestone/72-player-movement-audio-feedback`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

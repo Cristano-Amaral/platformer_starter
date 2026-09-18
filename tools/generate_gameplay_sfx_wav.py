@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate project-owned Milestone 71/72 gameplay SFX WAVs.
+"""Generate project-owned Milestone 71/72/73 gameplay SFX WAVs.
 
-Damage, death, respawn, footstep, jump, and landing cues are short synthesized
-PCM WAVs. They are not third-party audio. The existing Milestone 61 pickup
-chime is owned by generate_item_pickup_collect_wav.py and is not rewritten
-here.
+Damage, death, respawn, footstep, jump, landing, checkpoint, pressure-plate,
+door-unlock, and level-goal cues are short synthesized PCM WAVs. They are not
+third-party audio. The existing Milestone 61 pickup chime is owned by
+generate_item_pickup_collect_wav.py and is not rewritten here.
 
 Re-run from the repository root:
 
@@ -18,6 +18,11 @@ Writes:
     game/assets/source/sounds/player_footstep.wav
     game/assets/source/sounds/player_jump.wav
     game/assets/source/sounds/player_land.wav
+    game/assets/source/sounds/checkpoint_activate.wav
+    game/assets/source/sounds/pressure_plate_activate.wav
+    game/assets/source/sounds/pressure_plate_deactivate.wav
+    game/assets/source/sounds/door_unlock.wav
+    game/assets/source/sounds/level_goal_complete.wav
 
 Cook/stage those source files afterwards; the game never reads this generator
 or source/.
@@ -168,12 +173,102 @@ def land_samples() -> list[float]:
     return samples
 
 
+def checkpoint_activate_samples() -> list[float]:
+    # Bright three-note crystal, higher than respawn and not the M61 pickup.
+    duration = 0.20
+    count = int(SAMPLE_RATE * duration)
+    notes = ((0.00, 1046.50), (0.06, 1318.51), (0.12, 1567.98))
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        value = 0.0
+        for start, frequency in notes:
+            if time_seconds < start:
+                continue
+            local = time_seconds - start
+            envelope = math.exp(-local * 18.0)
+            value += 0.28 * envelope * math.sin(2.0 * math.pi * frequency * time_seconds)
+        samples.append(value)
+    return samples
+
+
+def pressure_plate_activate_samples() -> list[float]:
+    # Short mid clack, drier than landing and higher than a footstep.
+    duration = 0.08
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        envelope = math.exp(-time_seconds * 36.0)
+        body = 0.48 * math.sin(2.0 * math.pi * 310.0 * time_seconds)
+        click = 0.22 * math.sin(2.0 * math.pi * 720.0 * time_seconds)
+        samples.append(0.34 * envelope * (body + click))
+    return samples
+
+
+def pressure_plate_deactivate_samples() -> list[float]:
+    # Lower, slightly longer release than plate activate.
+    duration = 0.10
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        envelope = math.exp(-time_seconds * 22.0)
+        body = 0.52 * math.sin(2.0 * math.pi * 210.0 * time_seconds)
+        click = 0.16 * math.sin(2.0 * math.pi * 480.0 * time_seconds)
+        samples.append(0.32 * envelope * (body + click))
+    return samples
+
+
+def door_unlock_samples() -> list[float]:
+    # Metallic two-click tumbler, not a plate clack and not a jump blip.
+    duration = 0.16
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        if time_seconds < 0.045:
+            envelope = math.exp(-time_seconds * 40.0)
+            frequency = 2400.0
+        else:
+            envelope = math.exp(-(time_seconds - 0.045) * 18.0)
+            frequency = 980.0
+        metallic = math.sin(2.0 * math.pi * frequency * time_seconds)
+        overtone = 0.35 * math.sin(2.0 * math.pi * frequency * 1.7 * time_seconds)
+        samples.append(0.30 * envelope * (metallic + overtone))
+    return samples
+
+
+def level_goal_complete_samples() -> list[float]:
+    # Longer major arpeggio than pickup/respawn; not the descending death cue.
+    duration = 0.36
+    count = int(SAMPLE_RATE * duration)
+    notes = ((0.00, 392.00), (0.09, 523.25), (0.18, 659.25), (0.27, 783.99))
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        value = 0.0
+        for start, frequency in notes:
+            if time_seconds < start:
+                continue
+            local = time_seconds - start
+            envelope = math.exp(-local * 10.0) * (1.0 - 0.15 * (local / duration))
+            value += 0.24 * envelope * math.sin(2.0 * math.pi * frequency * time_seconds)
+        samples.append(value)
+    return samples
+
+
 DAMAGE_NAME = "player_damage.wav"
 DEATH_NAME = "player_death.wav"
 RESPAWN_NAME = "player_respawn.wav"
 FOOTSTEP_NAME = "player_footstep.wav"
 JUMP_NAME = "player_jump.wav"
 LAND_NAME = "player_land.wav"
+CHECKPOINT_NAME = "checkpoint_activate.wav"
+PLATE_ACTIVATE_NAME = "pressure_plate_activate.wav"
+PLATE_DEACTIVATE_NAME = "pressure_plate_deactivate.wav"
+DOOR_UNLOCK_NAME = "door_unlock.wav"
+GOAL_COMPLETE_NAME = "level_goal_complete.wav"
 
 CUES = (
     (DAMAGE_NAME, damage_samples),
@@ -182,6 +277,11 @@ CUES = (
     (FOOTSTEP_NAME, footstep_samples),
     (JUMP_NAME, jump_samples),
     (LAND_NAME, land_samples),
+    (CHECKPOINT_NAME, checkpoint_activate_samples),
+    (PLATE_ACTIVATE_NAME, pressure_plate_activate_samples),
+    (PLATE_DEACTIVATE_NAME, pressure_plate_deactivate_samples),
+    (DOOR_UNLOCK_NAME, door_unlock_samples),
+    (GOAL_COMPLETE_NAME, level_goal_complete_samples),
 )
 
 

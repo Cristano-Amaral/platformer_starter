@@ -2,6 +2,7 @@
 // Authored requiredItemId, runtime lock, E arbitration, and M53 gating.
 
 #include "gameplay/DoorLockRuntime.h"
+#include "gameplay/GameplayAudio.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
@@ -760,6 +761,24 @@ int main()
                 static_cast<int>(level.dynamicBoxes.size()),
                 static_cast<int>(level.doors.size())),
             "M53 body budget unchanged");
+    }
+
+    {
+        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "key")};
+        gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
+        gameplay::Inventory inventory;
+        gameplay::GameplaySfxRequestState sfx{};
+        Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "audio: missing item");
+        Expect(sfx.doorUnlockCount == 0, "failed unlock emits no Door Unlock SFX request");
+        Expect(inventory.TryAdd("key", 1), "audio: seed key");
+        Expect(gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "audio: successful unlock");
+        gameplay::RecordGameplaySfx(sfx, gameplay::DoorUnlockSfx());
+        Expect(sfx.doorUnlockCount == 1, "successful unlock emits exactly one Door Unlock request");
+        Expect(inventory.GetQuantity("key") == 0, "audio path still consumes exactly one item");
+        Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "audio: already unlocked");
+        Expect(sfx.doorUnlockCount == 1, "already-unlocked Door emits no replay");
+        Expect(sfx.plateActivateCount == 0 && sfx.plateDeactivateCount == 0,
+            "item-gated unlock is not a Plate edge");
     }
 
     if (gFailures != 0)

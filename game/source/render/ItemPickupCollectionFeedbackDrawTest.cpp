@@ -166,6 +166,11 @@ int main()
     sound.PlayFootstep();
     sound.PlayJump();
     sound.PlayLanding();
+    sound.PlayCheckpointActivate();
+    sound.PlayPressurePlateActivate();
+    sound.PlayPressurePlateDeactivate();
+    sound.PlayDoorUnlock();
+    sound.PlayLevelGoalComplete();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload after staged Load is safe");
     sound.LoadCueFromPath(platform::GameplaySfxCue::Pickup, std::filesystem::path{});
@@ -202,6 +207,14 @@ int main()
             && !sound.IsCueLoaded(platform::GameplaySfxCue::Jump),
         "19. missing individual movement cue leaves other loaded sounds and is a no-op");
     sound.PlayJump();
+    sound.LoadCueFromPath(
+        platform::GameplaySfxCue::CheckpointActivate,
+        std::filesystem::temp_directory_path() / "platformer_missing_checkpoint.wav");
+    Expect(
+        sound.IsCueLoaded(platform::GameplaySfxCue::Pickup)
+            && !sound.IsCueLoaded(platform::GameplaySfxCue::CheckpointActivate),
+        "21. missing individual M73 cue leaves other loaded sounds and is a no-op");
+    sound.PlayCheckpointActivate();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload clears the cached sound");
     std::filesystem::remove(valid);

@@ -127,6 +127,11 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("sounds/player_footstep.wav", ids)
         self.assertIn("sounds/player_jump.wav", ids)
         self.assertIn("sounds/player_land.wav", ids)
+        self.assertIn("sounds/checkpoint_activate.wav", ids)
+        self.assertIn("sounds/pressure_plate_activate.wav", ids)
+        self.assertIn("sounds/pressure_plate_deactivate.wav", ids)
+        self.assertIn("sounds/door_unlock.wav", ids)
+        self.assertIn("sounds/level_goal_complete.wav", ids)
 
 
 class CookStageImportedGlbTests(unittest.TestCase):

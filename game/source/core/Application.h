@@ -75,6 +75,8 @@ private:
     void ResetGameplayAfterLevelTransition();
     void EmitGameplaySfx(gameplay::GameplaySfxEmit emit);
     void ReanchorPlayerMovementSfx();
+    void SynchronizePressurePlateSfx();
+    void ObservePressurePlateSfx(bool emitEdges);
 
     world::LevelDefinition levelDefinition{};
     platform::Window window;
@@ -82,6 +84,7 @@ private:
     platform::GameplayAudio gameplayAudio;
     gameplay::GameplaySfxRequestState gameplaySfxRequests{};
     gameplay::PlayerMovementSfxState playerMovementSfx{};
+    gameplay::PressurePlateSfxState pressurePlateSfx{};
     gameplay::Player player{{}, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;

@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 72 — Player Movement Audio Feedback.
+Milestone 73 — World Interaction Audio Feedback.
 
-Canonical file: [`docs/milestones/MILESTONE_72.md`](docs/milestones/MILESTONE_72.md)
+Canonical file: [`docs/milestones/MILESTONE_73.md`](docs/milestones/MILESTONE_73.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 71 is CLOSED. Milestone 72 is implemented, awaiting manual acceptance. Do not start Milestone 73.
+Milestone 72 is CLOSED. Milestone 73 is implemented, awaiting manual acceptance. Do not start Milestone 74.
 
 ## Source of truth
 1. Current repository code.

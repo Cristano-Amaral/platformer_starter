@@ -23,6 +23,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -801,6 +802,21 @@ int main()
         Expect(plateWorld.StaticBodyCount() == 9, "rebuild still ignores Pressure Plates for bodies");
         Expect(plateWorld.DynamicBodyCount() == 0, "rebuild still has zero Dynamic Boxes");
         Expect(plateWorld.GetPressurePlates().size() == 2, "rebuild keeps two plates");
+        gameplay::PressurePlateSfxState plateSfx{};
+        gameplay::GameplaySfxRequestState plateAudio{};
+        const std::vector<physics::PressurePlateRuntimeState> rebuiltPlates =
+            plateWorld.GetPressurePlates();
+        std::vector<std::uint8_t> rebuiltActive(rebuiltPlates.size());
+        for (std::size_t index = 0; index < rebuiltPlates.size(); ++index)
+        {
+            rebuiltActive[index] = rebuiltPlates[index].active ? 1 : 0;
+        }
+        gameplay::SynchronizePressurePlateSfx(plateSfx, rebuiltActive);
+        gameplay::RecordGameplaySfx(
+            plateAudio, gameplay::TickPressurePlateSfx(plateSfx, rebuiltActive));
+        Expect(
+            plateAudio.plateActivateCount == 0 && plateAudio.plateDeactivateCount == 0,
+            "physics rebuild synchronizes Plate audio without synthesizing edges");
     }
 
     {

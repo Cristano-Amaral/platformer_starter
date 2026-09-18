@@ -25,6 +25,11 @@ RESPAWN_ID = "sounds/player_respawn.wav"
 FOOTSTEP_ID = "sounds/player_footstep.wav"
 JUMP_ID = "sounds/player_jump.wav"
 LAND_ID = "sounds/player_land.wav"
+CHECKPOINT_ID = "sounds/checkpoint_activate.wav"
+PLATE_ACTIVATE_ID = "sounds/pressure_plate_activate.wav"
+PLATE_DEACTIVATE_ID = "sounds/pressure_plate_deactivate.wav"
+DOOR_UNLOCK_ID = "sounds/door_unlock.wav"
+GOAL_COMPLETE_ID = "sounds/level_goal_complete.wav"
 ALL_SOUND_IDS = (
     PICKUP_ID,
     DAMAGE_ID,
@@ -33,6 +38,11 @@ ALL_SOUND_IDS = (
     FOOTSTEP_ID,
     JUMP_ID,
     LAND_ID,
+    CHECKPOINT_ID,
+    PLATE_ACTIVATE_ID,
+    PLATE_DEACTIVATE_ID,
+    DOOR_UNLOCK_ID,
+    GOAL_COMPLETE_ID,
 )
 SOURCE_SOUNDS = cooker.source_root(cooker.repo_root()) / "sounds"
 RUNTIME_ASSETS = REPO_ROOT / "cmake" / "RuntimeAssets.cmake"
@@ -60,7 +70,7 @@ class ItemPickupCollectSoundTests(unittest.TestCase):
         self.assertGreater(data_size, 0)
         self.assertEqual(source.read_bytes(), wavgen.wav_bytes(wavgen.pcm16_frames()))
 
-    def test_m71_source_wavs_are_project_owned_pcm(self) -> None:
+    def test_gameplay_sfx_source_wavs_are_project_owned_pcm(self) -> None:
         expected = {
             DAMAGE_ID: sfxgen.cue_wav_bytes(sfxgen.DAMAGE_NAME),
             DEATH_ID: sfxgen.cue_wav_bytes(sfxgen.DEATH_NAME),
@@ -68,6 +78,11 @@ class ItemPickupCollectSoundTests(unittest.TestCase):
             FOOTSTEP_ID: sfxgen.cue_wav_bytes(sfxgen.FOOTSTEP_NAME),
             JUMP_ID: sfxgen.cue_wav_bytes(sfxgen.JUMP_NAME),
             LAND_ID: sfxgen.cue_wav_bytes(sfxgen.LAND_NAME),
+            CHECKPOINT_ID: sfxgen.cue_wav_bytes(sfxgen.CHECKPOINT_NAME),
+            PLATE_ACTIVATE_ID: sfxgen.cue_wav_bytes(sfxgen.PLATE_ACTIVATE_NAME),
+            PLATE_DEACTIVATE_ID: sfxgen.cue_wav_bytes(sfxgen.PLATE_DEACTIVATE_NAME),
+            DOOR_UNLOCK_ID: sfxgen.cue_wav_bytes(sfxgen.DOOR_UNLOCK_NAME),
+            GOAL_COMPLETE_ID: sfxgen.cue_wav_bytes(sfxgen.GOAL_COMPLETE_NAME),
         }
         for logical_id, payload in expected.items():
             source = cooker.source_root(cooker.repo_root()) / logical_id
@@ -79,6 +94,8 @@ class ItemPickupCollectSoundTests(unittest.TestCase):
             self.assertGreater(data_size, 0, logical_id)
             self.assertEqual(source.read_bytes(), payload, logical_id)
             self.assertNotEqual(payload, wavgen.wav_bytes(wavgen.pcm16_frames()), logical_id)
+        payloads = list(expected.values())
+        self.assertEqual(len(payloads), len(set(payloads)), "gameplay SFX WAV payloads are unique")
 
     def test_known_assets_lists_opaque_copy(self) -> None:
         kinds = {asset["id"]: asset["kind"] for asset in cooker.KNOWN_ASSETS}

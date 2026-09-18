@@ -828,9 +828,12 @@ else()
     target_compile_options(GameplayObjectiveHudTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Milestone 71/72: gameplay SFX request recording, lethal-hit precedence,
-# movement cadence, and authored/Dirty isolation. No window, raylib, or Jolt.
+# Milestone 71/72/73: gameplay SFX request recording, lethal-hit precedence,
+# movement cadence, world-interaction edges, and authored/Dirty isolation.
+# No window, raylib, or Jolt.
 add_executable(GameplayAudioTest
+    game/source/gameplay/DoorLockRuntime.cpp
+    game/source/gameplay/DoorLockRuntime.h
     game/source/gameplay/GameFlowState.h
     game/source/gameplay/GameplayAudio.h
     game/source/gameplay/GameplayAudioTest.cpp
@@ -838,11 +841,16 @@ add_executable(GameplayAudioTest
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
     game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/PlayerDeath.h
     game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/RespawnState.h
     game/source/platform/GameplayAudio.h
+    game/source/world/Door.h
     game/source/world/HazardWorld.h
     game/source/world/ItemPickup.h
+    game/source/world/LevelGoal.h
+    game/source/world/RespawnWorld.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
     game/source/assets/StaticGlb.cpp

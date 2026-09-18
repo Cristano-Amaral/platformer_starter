@@ -32,7 +32,10 @@ The cooker copies known authored files from `game/assets/source/` to
 `models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
 `levels/level_01.level`, `levels/level_02.level`, `sounds/item_pickup_collect.wav`,
 `sounds/player_damage.wav`, `sounds/player_death.wav`, `sounds/player_respawn.wav`,
-`sounds/player_footstep.wav`, `sounds/player_jump.wav`, `sounds/player_land.wav`) plus extra valid
+`sounds/player_footstep.wav`, `sounds/player_jump.wav`, `sounds/player_land.wav`,
+`sounds/checkpoint_activate.wav`, `sounds/pressure_plate_activate.wav`,
+`sounds/pressure_plate_deactivate.wav`, `sounds/door_unlock.wav`,
+`sounds/level_goal_complete.wav`) plus extra valid
 `source/models/*.glb` files discovered for Milestone 47 import and extra valid
 `source/levels/*.level` files discovered for Milestone 64.1 New Level. It does not
 glob every PNG under `source/textures/`. It does not glob sounds. Skips a
@@ -90,12 +93,15 @@ python tools/test_item_pickup_collect_sound.py
 
 The Milestone 61 collection chime is project-owned PCM WAV synthesized by
 `python tools/generate_item_pickup_collect_wav.py` into
-`game/assets/source/sounds/item_pickup_collect.wav`. Milestone 71/72 damage,
-death, respawn, footstep, jump, and landing cues are synthesized by
+`game/assets/source/sounds/item_pickup_collect.wav`. Milestone 71/72/73 damage,
+death, respawn, footstep, jump, landing, checkpoint, pressure-plate,
+door-unlock, and level-goal cues are synthesized by
 `python tools/generate_gameplay_sfx_wav.py` into
 `game/assets/source/sounds/player_damage.wav`, `player_death.wav`,
-`player_respawn.wav`, `player_footstep.wav`, `player_jump.wav`, and
-`player_land.wav`. Cook/stage those files; the runtime never reads the
+`player_respawn.wav`, `player_footstep.wav`, `player_jump.wav`,
+`player_land.wav`, `checkpoint_activate.wav`, `pressure_plate_activate.wav`,
+`pressure_plate_deactivate.wav`, `door_unlock.wav`, and
+`level_goal_complete.wav`. Cook/stage those files; the runtime never reads the
 generators or `source/`.
 
 See `docs/BLENDER_WORKFLOW.md` for authoring vs runtime texture roles.

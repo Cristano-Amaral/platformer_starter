@@ -54,6 +54,16 @@ std::string_view CueLogicalId(GameplaySfxCue cue)
         return kPlayerJumpSoundLogicalId;
     case GameplaySfxCue::Landing:
         return kPlayerLandSoundLogicalId;
+    case GameplaySfxCue::CheckpointActivate:
+        return kCheckpointActivateSoundLogicalId;
+    case GameplaySfxCue::PressurePlateActivate:
+        return kPressurePlateActivateSoundLogicalId;
+    case GameplaySfxCue::PressurePlateDeactivate:
+        return kPressurePlateDeactivateSoundLogicalId;
+    case GameplaySfxCue::DoorUnlock:
+        return kDoorUnlockSoundLogicalId;
+    case GameplaySfxCue::LevelGoalComplete:
+        return kLevelGoalCompleteSoundLogicalId;
     }
     return {};
 }
@@ -66,6 +76,11 @@ constexpr std::array<GameplaySfxCue, kGameplaySfxCueCount> kAllCues = {
     GameplaySfxCue::Footstep,
     GameplaySfxCue::Jump,
     GameplaySfxCue::Landing,
+    GameplaySfxCue::CheckpointActivate,
+    GameplaySfxCue::PressurePlateActivate,
+    GameplaySfxCue::PressurePlateDeactivate,
+    GameplaySfxCue::DoorUnlock,
+    GameplaySfxCue::LevelGoalComplete,
 };
 }
 
@@ -231,6 +246,31 @@ void GameplayAudio::PlayJump() const
 void GameplayAudio::PlayLanding() const
 {
     PlayCue(GameplaySfxCue::Landing);
+}
+
+void GameplayAudio::PlayCheckpointActivate() const
+{
+    PlayCue(GameplaySfxCue::CheckpointActivate);
+}
+
+void GameplayAudio::PlayPressurePlateActivate() const
+{
+    PlayCue(GameplaySfxCue::PressurePlateActivate);
+}
+
+void GameplayAudio::PlayPressurePlateDeactivate() const
+{
+    PlayCue(GameplaySfxCue::PressurePlateDeactivate);
+}
+
+void GameplayAudio::PlayDoorUnlock() const
+{
+    PlayCue(GameplaySfxCue::DoorUnlock);
+}
+
+void GameplayAudio::PlayLevelGoalComplete() const
+{
+    PlayCue(GameplaySfxCue::LevelGoalComplete);
 }
 
 bool GameplayAudio::IsCueLoaded(GameplaySfxCue cue) const

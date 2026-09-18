@@ -16,8 +16,8 @@ are opaque copies after static-GLB compatibility checks. Extra valid
 check so a newly created Level can enter cook/stage without a per-level
 hardcoded list. Cooked `levels/*.level` files that are no longer in the
 current required-plus-discovered Level inventory are removed; other cooked
-categories are not scanned. The M61 collection
-WAV is an explicit opaque `copy`. Canonical Level v1 files (`kind: level_v1`)
+categories are not scanned. The M61 collection WAV and later gameplay SFX
+WAVs are explicit opaque `copy`. Canonical Level v1 files (`kind: level_v1`)
 are UTF-8 text copies after a header check; C++ owns full grammar validation.
 """
 
@@ -137,6 +137,36 @@ KNOWN_ASSETS = (
         "id": "sounds/player_land.wav",
         "source": "sounds/player_land.wav",
         "cooked": "sounds/player_land.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/checkpoint_activate.wav",
+        "source": "sounds/checkpoint_activate.wav",
+        "cooked": "sounds/checkpoint_activate.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/pressure_plate_activate.wav",
+        "source": "sounds/pressure_plate_activate.wav",
+        "cooked": "sounds/pressure_plate_activate.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/pressure_plate_deactivate.wav",
+        "source": "sounds/pressure_plate_deactivate.wav",
+        "cooked": "sounds/pressure_plate_deactivate.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/door_unlock.wav",
+        "source": "sounds/door_unlock.wav",
+        "cooked": "sounds/door_unlock.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/level_goal_complete.wav",
+        "source": "sounds/level_goal_complete.wav",
+        "cooked": "sounds/level_goal_complete.wav",
         "kind": KIND_COPY,
     },
 )

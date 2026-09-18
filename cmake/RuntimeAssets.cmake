@@ -22,4 +22,9 @@ set(PLATFORMER_RUNTIME_ASSETS
     sounds/player_footstep.wav
     sounds/player_jump.wav
     sounds/player_land.wav
+    sounds/checkpoint_activate.wav
+    sounds/pressure_plate_activate.wav
+    sounds/pressure_plate_deactivate.wav
+    sounds/door_unlock.wav
+    sounds/level_goal_complete.wav
 )

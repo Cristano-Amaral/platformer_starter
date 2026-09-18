@@ -17,6 +17,15 @@ inline constexpr std::string_view kPlayerRespawnSoundLogicalId = "sounds/player_
 inline constexpr std::string_view kPlayerFootstepSoundLogicalId = "sounds/player_footstep.wav";
 inline constexpr std::string_view kPlayerJumpSoundLogicalId = "sounds/player_jump.wav";
 inline constexpr std::string_view kPlayerLandSoundLogicalId = "sounds/player_land.wav";
+inline constexpr std::string_view kCheckpointActivateSoundLogicalId =
+    "sounds/checkpoint_activate.wav";
+inline constexpr std::string_view kPressurePlateActivateSoundLogicalId =
+    "sounds/pressure_plate_activate.wav";
+inline constexpr std::string_view kPressurePlateDeactivateSoundLogicalId =
+    "sounds/pressure_plate_deactivate.wav";
+inline constexpr std::string_view kDoorUnlockSoundLogicalId = "sounds/door_unlock.wav";
+inline constexpr std::string_view kLevelGoalCompleteSoundLogicalId =
+    "sounds/level_goal_complete.wav";
 inline constexpr std::string_view kRuntimeAssetDirectoryName = "assets";
 
 std::filesystem::path ExecutableDirectory();

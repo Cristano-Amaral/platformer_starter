@@ -1,10 +1,15 @@
 #pragma once
 
-// Milestone 71/72: semantic gameplay SFX request recording, the lethal-hit
-// cue precedence rule, and player movement-audio presentation tracking.
-// Presentation only. Not a generic event bus, audio engine, mixer,
-// ResourceManager, locomotion state machine, or movement authority.
+// Milestone 71/72/73: semantic gameplay SFX request recording, the lethal-hit
+// cue precedence rule, player movement-audio presentation tracking, and
+// world-interaction edge observation. Presentation only. Not a generic event
+// bus, audio engine, mixer, ResourceManager, locomotion state machine,
+// Trigger/Receiver framework, or gameplay authority.
 // Application plays through platform::GameplayAudio.
+
+#include <cstdint>
+#include <span>
+#include <vector>
 
 namespace gameplay
 {
@@ -21,6 +26,11 @@ struct GameplaySfxEmit
     bool footstep = false;
     bool jump = false;
     bool landing = false;
+    bool checkpointActivate = false;
+    int plateActivateCount = 0;
+    int plateDeactivateCount = 0;
+    bool doorUnlock = false;
+    bool levelGoalComplete = false;
 };
 
 struct GameplaySfxRequestState
@@ -32,6 +42,11 @@ struct GameplaySfxRequestState
     int footstepCount = 0;
     int jumpCount = 0;
     int landingCount = 0;
+    int checkpointActivateCount = 0;
+    int plateActivateCount = 0;
+    int plateDeactivateCount = 0;
+    int doorUnlockCount = 0;
+    int levelGoalCompleteCount = 0;
 };
 
 // Runtime presentation only. Remembers cadence and grounded observation
@@ -52,6 +67,14 @@ struct PlayerMovementSfxInput
     float airborneSecondsAtStart = 0.0f;
     float horizontalVelocity = 0.0f;
     float deltaSeconds = 0.0f;
+};
+
+// Runtime presentation only. Remembers last observed Pressure Plate active
+// flags so edges can be distinguished from reconstruction. Never mutates
+// authored Plate specs.
+struct PressurePlateSfxState
+{
+    std::vector<std::uint8_t> previousActive;
 };
 
 enum class GameplayRespawnAudioKind
@@ -95,6 +118,20 @@ inline void RecordGameplaySfx(GameplaySfxRequestState& state, GameplaySfxEmit em
     if (emit.landing)
     {
         ++state.landingCount;
+    }
+    if (emit.checkpointActivate)
+    {
+        ++state.checkpointActivateCount;
+    }
+    state.plateActivateCount += emit.plateActivateCount;
+    state.plateDeactivateCount += emit.plateDeactivateCount;
+    if (emit.doorUnlock)
+    {
+        ++state.doorUnlockCount;
+    }
+    if (emit.levelGoalComplete)
+    {
+        ++state.levelGoalCompleteCount;
     }
 }
 
@@ -156,6 +193,65 @@ inline GameplaySfxEmit PickupCollectionSfx()
 {
     GameplaySfxEmit emit{};
     emit.pickup = true;
+    return emit;
+}
+
+inline GameplaySfxEmit CheckpointActivatedSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.checkpointActivate = true;
+    return emit;
+}
+
+inline GameplaySfxEmit DoorUnlockSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.doorUnlock = true;
+    return emit;
+}
+
+inline GameplaySfxEmit LevelGoalCompleteSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.levelGoalComplete = true;
+    return emit;
+}
+
+inline void SynchronizePressurePlateSfx(
+    PressurePlateSfxState& state,
+    std::span<const std::uint8_t> active)
+{
+    state.previousActive.assign(active.begin(), active.end());
+}
+
+// Observes existing runtime Active flags. Size mismatch is treated as
+// reconstruction and synchronized silently. Held-active / held-inactive
+// frames emit nothing.
+inline GameplaySfxEmit TickPressurePlateSfx(
+    PressurePlateSfxState& state,
+    std::span<const std::uint8_t> active)
+{
+    GameplaySfxEmit emit{};
+    if (state.previousActive.size() != active.size())
+    {
+        SynchronizePressurePlateSfx(state, active);
+        return emit;
+    }
+
+    for (std::size_t index = 0; index < active.size(); ++index)
+    {
+        const bool wasActive = state.previousActive[index] != 0;
+        const bool nowActive = active[index] != 0;
+        if (!wasActive && nowActive)
+        {
+            ++emit.plateActivateCount;
+        }
+        else if (wasActive && !nowActive)
+        {
+            ++emit.plateDeactivateCount;
+        }
+    }
+    SynchronizePressurePlateSfx(state, active);
     return emit;
 }
 

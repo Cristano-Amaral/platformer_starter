@@ -1,6 +1,7 @@
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
+#include "gameplay/GameplayAudio.h"
 #include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/PlayerDeath.h"
@@ -102,6 +103,11 @@ int main()
         gameplay::TryCompleteLevelFromPlayerOverlap(
             completion, {terminal}, terminal.center, &captured),
         "terminal goal completes once");
+    gameplay::GameplaySfxRequestState terminalGoalSfx{};
+    gameplay::RecordGameplaySfx(terminalGoalSfx, gameplay::LevelGoalCompleteSfx());
+    Expect(
+        terminalGoalSfx.levelGoalCompleteCount == 1,
+        "terminal Goal first completion emits exactly one Goal Complete request");
     Expect(captured.empty(), "terminal nextLevelId is empty");
     Expect(
         gameplay::TryEnterRunCompleteFromTerminalGoal(runComplete, captured, timer.elapsedSeconds),
@@ -112,6 +118,9 @@ int main()
         !gameplay::TryEnterRunCompleteFromTerminalGoal(runComplete, captured, 99.0),
         "terminal completion does not re-enter");
     Expect(runComplete.capturedFinalSeconds == 12.5, "displayed final time stays frozen");
+    Expect(
+        terminalGoalSfx.levelGoalCompleteCount == 1,
+        "RUN COMPLETE does not replay Goal Complete");
     Expect(
         gameplay::SelectCompletionPresentation(
             gameplay::TopLevelFlow::Gameplay,
@@ -131,6 +140,11 @@ int main()
         gameplay::TryCompleteLevelFromPlayerOverlap(
             destinationCompletion, {destination}, destination.center, &destinationId),
         "destination goal still completes");
+    gameplay::GameplaySfxRequestState destinationGoalSfx{};
+    gameplay::RecordGameplaySfx(destinationGoalSfx, gameplay::LevelGoalCompleteSfx());
+    Expect(
+        destinationGoalSfx.levelGoalCompleteCount == 1,
+        "destination Goal first completion emits exactly one Goal Complete request");
     Expect(
         !gameplay::TryEnterRunCompleteFromTerminalGoal(
             destinationResults, destinationId, 3.0),
@@ -151,6 +165,9 @@ int main()
     Expect(
         !gameplay::DestinationTransitionHoldBlocksCommit(destinationHold),
         "destination Enter skip remains");
+    Expect(
+        destinationGoalSfx.levelGoalCompleteCount == 1,
+        "destination hold/skip emit no second Goal Complete request");
     Expect(
         gameplay::SelectCompletionPresentation(
             gameplay::TopLevelFlow::Gameplay,

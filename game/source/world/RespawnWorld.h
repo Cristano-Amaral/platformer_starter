@@ -6,6 +6,8 @@
 
 #include "core/Vec3.h"
 
+#include <span>
+
 namespace world
 {
 inline constexpr core::Vec3 kPlayerVisualSize{0.8f, 1.6f, 0.8f};
@@ -62,6 +64,29 @@ constexpr bool IsValidCheckpointIndex(int index, int checkpointCount)
 constexpr int NextExpectedCheckpointIndex(int activeCheckpointIndex)
 {
     return activeCheckpointIndex + 1;
+}
+
+// Existing sequential activation only: the next expected Checkpoint, and only
+// on genuine overlap. Returns true when the active Checkpoint actually
+// changes. Restoration, continued overlap, and respawn at the current
+// Checkpoint do not go through this path.
+inline bool TryActivateExpectedCheckpoint(
+    int& activeCheckpointIndex,
+    core::Vec3& respawnPosition,
+    std::span<const CheckpointSpec> checkpoints,
+    core::Vec3 playerVisualCenter)
+{
+    const int checkpointCount = static_cast<int>(checkpoints.size());
+    const int expectedIndex = NextExpectedCheckpointIndex(activeCheckpointIndex);
+    if (!IsValidCheckpointIndex(expectedIndex, checkpointCount)
+        || !PointInsideCheckpoint(
+               checkpoints[static_cast<std::size_t>(expectedIndex)], playerVisualCenter))
+    {
+        return false;
+    }
+    activeCheckpointIndex = expectedIndex;
+    respawnPosition = checkpoints[static_cast<std::size_t>(expectedIndex)].respawnPosition;
+    return true;
 }
 
 // If Apply/Reload shrinks the authored list, an old active index must not be

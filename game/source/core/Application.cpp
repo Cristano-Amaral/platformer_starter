@@ -34,6 +34,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -1065,18 +1066,13 @@ int Application::Run()
             }
             else
             {
-                const int checkpointCount = static_cast<int>(levelDefinition.checkpoints.size());
-                const int expectedIndex =
-                    world::NextExpectedCheckpointIndex(respawnState.activeCheckpointIndex);
-                if (world::IsValidCheckpointIndex(expectedIndex, checkpointCount)
-                    && world::PointInsideCheckpoint(
-                           levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)],
-                           player.Position()))
+                if (world::TryActivateExpectedCheckpoint(
+                        respawnState.activeCheckpointIndex,
+                        respawnState.respawnPosition,
+                        levelDefinition.checkpoints,
+                        player.Position()))
                 {
-                    respawnState.activeCheckpointIndex = expectedIndex;
-                    respawnState.respawnPosition =
-                        levelDefinition.checkpoints[static_cast<std::size_t>(expectedIndex)]
-                            .respawnPosition;
+                    EmitGameplaySfx(gameplay::CheckpointActivatedSfx());
                 }
 
                 std::string completedNextLevelId;
@@ -1086,6 +1082,7 @@ int Application::Run()
                         player.Position(),
                         &completedNextLevelId))
                 {
+                    EmitGameplaySfx(gameplay::LevelGoalCompleteSfx());
                     levelCompletionState.completed = true;
                     runTimerState.frozen = true;
                     gameplay::CaptureCompletedGoalDestination(
@@ -1252,19 +1249,20 @@ int Application::Run()
                                         itemPickupTargetIndex)]);
                             }
                         }
-                        else
+                        else if (gameplay::TryUnlockLockedDoor(
+                                     inventory,
+                                     doorLockRunState,
+                                     levelDefinition.doors,
+                                     lockedDoorTargetIndex))
                         {
-                            (void)gameplay::TryUnlockLockedDoor(
-                                inventory,
-                                doorLockRunState,
-                                levelDefinition.doors,
-                                lockedDoorTargetIndex);
+                            EmitGameplaySfx(gameplay::DoorUnlockSfx());
                         }
                     }
                 }
 
                 physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
                 physicsWorld.Update(deltaSeconds);
+                ObservePressurePlateSfx(!respawnedThisFrame && !restartedThisFrame);
                 if (!respawnedThisFrame && !restartedThisFrame)
                 {
                     camera.Update(player.Position(), deltaSeconds);
@@ -2507,6 +2505,7 @@ void Application::Initialize()
 
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
     camera.Initialize(player.Position());
     runTimerState = gameplay::RunTimerState{};
     sessionBestTimeState = gameplay::SessionBestTimeState{};
@@ -2570,6 +2569,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
     camera.SnapToTarget(player.Position());
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
@@ -2601,6 +2601,7 @@ void Application::RestartRun()
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
 
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
@@ -3228,6 +3229,7 @@ void Application::ResetGameplayAfterCommittedLevel()
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
@@ -3365,6 +3367,7 @@ void Application::ResetGameplayAfterLevelTransition()
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
@@ -3400,6 +3403,7 @@ void Application::ReturnToMainMenuFromResults()
     gameplay::ClearPlayerDeath(playerDeath);
     gameplay::ClearDamageVignette(damageVignette);
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
 }
 
 void Application::TryFinishPendingFreshRun()
@@ -3511,6 +3515,7 @@ void Application::ResetGameplayAfterPlayAgain()
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     ReanchorPlayerMovementSfx();
+    SynchronizePressurePlateSfx();
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
@@ -3567,11 +3572,52 @@ void Application::EmitGameplaySfx(gameplay::GameplaySfxEmit emit)
     {
         gameplayAudio.PlayLanding();
     }
+    if (emit.checkpointActivate)
+    {
+        gameplayAudio.PlayCheckpointActivate();
+    }
+    for (int index = 0; index < emit.plateActivateCount; ++index)
+    {
+        gameplayAudio.PlayPressurePlateActivate();
+    }
+    for (int index = 0; index < emit.plateDeactivateCount; ++index)
+    {
+        gameplayAudio.PlayPressurePlateDeactivate();
+    }
+    if (emit.doorUnlock)
+    {
+        gameplayAudio.PlayDoorUnlock();
+    }
+    if (emit.levelGoalComplete)
+    {
+        gameplayAudio.PlayLevelGoalComplete();
+    }
 }
 
 void Application::ReanchorPlayerMovementSfx()
 {
     gameplay::ReanchorPlayerMovementSfx(playerMovementSfx, player.IsGrounded());
+}
+
+void Application::SynchronizePressurePlateSfx()
+{
+    ObservePressurePlateSfx(false);
+}
+
+void Application::ObservePressurePlateSfx(bool emitEdges)
+{
+    const std::vector<physics::PressurePlateRuntimeState> plates = physicsWorld.GetPressurePlates();
+    std::vector<std::uint8_t> active(plates.size());
+    for (std::size_t index = 0; index < plates.size(); ++index)
+    {
+        active[index] = plates[index].active ? 1 : 0;
+    }
+    if (!emitEdges)
+    {
+        gameplay::SynchronizePressurePlateSfx(pressurePlateSfx, active);
+        return;
+    }
+    EmitGameplaySfx(gameplay::TickPressurePlateSfx(pressurePlateSfx, active));
 }
 
 void Application::Shutdown()

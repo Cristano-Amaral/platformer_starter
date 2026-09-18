@@ -23,15 +23,15 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 72 — Player Movement Audio Feedback**
+**Milestone 73 — World Interaction Audio Feedback**
 
-Canonical file: [`docs/milestones/MILESTONE_72.md`](milestones/MILESTONE_72.md)
+Canonical file: [`docs/milestones/MILESTONE_73.md`](milestones/MILESTONE_73.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Milestone 71 is CLOSED.
-Milestone 72 is implemented, awaiting manual acceptance.
-Do not start Milestone 73.
+Milestone 72 is CLOSED.
+Milestone 73 is implemented, awaiting manual acceptance.
+Do not start Milestone 74.
 
 ## Cursor loading contract
 
@@ -139,7 +139,8 @@ Historical milestone files do not override current implemented behavior.
 | 69 | [Milestone 69 — Player Health & Damage](milestones/MILESTONE_69.md) | complete |
 | 70 | [Milestone 70 — Death, Damage Feedback & Respawn](milestones/MILESTONE_70.md) | complete |
 | 71 | [Milestone 71 — Gameplay Audio Foundation](milestones/MILESTONE_71.md) | complete |
-| 72 | [Milestone 72 — Player Movement Audio Feedback](milestones/MILESTONE_72.md) | implemented, awaiting manual acceptance |
+| 72 | [Milestone 72 — Player Movement Audio Feedback](milestones/MILESTONE_72.md) | complete |
+| 73 | [Milestone 73 — World Interaction Audio Feedback](milestones/MILESTONE_73.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 
