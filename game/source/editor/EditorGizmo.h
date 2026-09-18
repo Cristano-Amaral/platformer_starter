@@ -60,6 +60,9 @@ struct GizmoInteractionState
     core::Vec3 dragStartRadial{};
     int dragHandleSign = 1;
     int hoveredSign = 1;
+    // M78 Group Translate. Parallel to dragMembers; empty for single-object.
+    std::vector<EditorSelection> dragMembers{};
+    std::vector<core::Vec3> dragMemberStartPositions{};
 };
 
 struct GizmoDrawRequest
@@ -279,6 +282,12 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
     EditorSelection selection);
+std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map,
+    EditorSelection selection,
+    const std::vector<EditorSelection>& additionalSelections);
 
 inline bool PendingAuthoringContains(
     const std::vector<PendingAuthoringVisual>& visuals,
@@ -509,7 +518,8 @@ bool UpdateGizmoInteraction(
     bool selectHeld,
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences = nullptr,
-    bool invertModifier = false);
+    bool invertModifier = false,
+    const std::vector<EditorSelection>* additionalSelections = nullptr);
 
 bool IsFiniteVec3(core::Vec3 value);
 }

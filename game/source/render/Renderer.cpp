@@ -92,6 +92,7 @@ constexpr Color kGrabHudText{236, 214, 72, 255};
 constexpr Color kGrabHudMuted{200, 208, 220, 255};
 constexpr Color kSpawnMarkerFill{240, 200, 64, 255};
 constexpr Color kSelectionHighlightColor{255, 236, 64, 255};
+constexpr Color kSecondarySelectionHighlightColor{255, 168, 64, 220};
 constexpr Color kSelectedModelBoundsWire{200, 188, 72, 140};
 constexpr Color kPendingPreviewWire{72, 220, 236, 255};
 constexpr Color kPendingPreviewWireUnselected{72, 220, 236, 130};
@@ -1085,6 +1086,31 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
                 overlay.highlightSize.y,
                 overlay.highlightSize.z,
                 kSelectionHighlightColor);
+        }
+    }
+    for (const DebugWorldOverlay::SecondaryHighlightOverlay& secondary : overlay.secondaryHighlights)
+    {
+        if (!(secondary.size.x > 0.0f) || !(secondary.size.y > 0.0f)
+            || !(secondary.size.z > 0.0f))
+        {
+            continue;
+        }
+        if (secondary.rotationZDegrees != 0.0f)
+        {
+            DrawOrientedWires(
+                secondary.center,
+                secondary.size,
+                secondary.rotationZDegrees,
+                kSecondarySelectionHighlightColor);
+        }
+        else
+        {
+            DrawCubeWires(
+                ToRaylib(secondary.center),
+                secondary.size.x,
+                secondary.size.y,
+                secondary.size.z,
+                kSecondarySelectionHighlightColor);
         }
     }
     if (overlay.drawSelectedModelBounds)

@@ -28,6 +28,7 @@
 #include "editor/StaticModelFraming.h"
 
 #include <string>
+#include <vector>
 
 namespace render
 {
@@ -156,9 +157,12 @@ struct LevelEditorState
     // successfully saved source state.
     bool dirty = false;
 
-    // Single selection shared by Hierarchy, world picking, Inspector, and
+    // Primary selection shared by Hierarchy, world picking, Inspector, and
     // highlight. Not persisted. Survives F2 close/reopen in this process.
     EditorSelection selection{};
+    // M78 transient additional authored selections. Never persisted. Primary
+    // remains Inspector/gizmo-pivot authority. Empty keeps pre-M78 behavior.
+    std::vector<EditorSelection> additionalSelections{};
     // Catalog/asset selection. Not scene selection and not persisted.
     ContentBrowserState contentBrowser{};
     // Development authored-source Level list. Refresh is explicit, not per frame.

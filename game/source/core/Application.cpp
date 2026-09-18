@@ -65,6 +65,8 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
+#include "editor/EditorGroupTranslate.h"
+#include "editor/EditorSelectionSet.h"
 #include "editor/SelectedModelHighlight.h"
 #include "editor/StaticPropPlacement.h"
 #include "editor/StaticPropTransform.h"
@@ -1499,6 +1501,22 @@ int Application::Run()
             overlay.highlightCenter = highlight.center;
             overlay.highlightSize = highlight.size;
             overlay.highlightRotationZDegrees = highlight.rotationZDegrees;
+            overlay.secondaryHighlights.clear();
+            for (const editor::EditorSelection& extra : levelEditorState.additionalSelections)
+            {
+                const editor::EditorHighlightRequest secondary = editor::MakeHighlightRequest(
+                    editor::HighlightSelectionFromWorking(extra, levelEditorState.structuralMap),
+                    pickingSet);
+                if (!secondary.visible)
+                {
+                    continue;
+                }
+                render::DebugWorldOverlay::SecondaryHighlightOverlay item{};
+                item.center = secondary.center;
+                item.size = secondary.size;
+                item.rotationZDegrees = secondary.rotationZDegrees;
+                overlay.secondaryHighlights.push_back(item);
+            }
 
             overlay.collectedAuthoredCollectibleCenters.resize(
                 levelDefinition.collectibles.size());
@@ -1520,7 +1538,8 @@ int Application::Run()
                     levelDefinition,
                     levelEditorState.workingCopy,
                     levelEditorState.structuralMap,
-                    levelEditorState.selection);
+                    levelEditorState.selection,
+                    levelEditorState.additionalSelections);
             ApplyLoadedModelBoundsToPending(pendingAuthoring, modelStore);
             overlay.pendingAuthoring.clear();
             overlay.pendingAuthoring.reserve(pendingAuthoring.size());
@@ -1799,7 +1818,26 @@ int Application::Run()
             }
 
             editor::GizmoDrawRequest gizmo{};
-            if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
+            const bool multiSelected = editor::EditorSelectionSetIsMulti(
+                levelEditorState.selection, levelEditorState.additionalSelections);
+            const bool groupTranslateOk =
+                !multiSelected
+                || editor::EditorSelectionSetSupportsGroupTranslate(
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection,
+                    levelEditorState.additionalSelections);
+            if (multiSelected
+                && !editor::EditorGroupAllowsTransformMode(levelEditorState.transformMode, true))
+            {
+                gizmo = {};
+            }
+            else if (
+                levelEditorState.transformMode == editor::EditorTransformMode::Translate
+                && !groupTranslateOk)
+            {
+                gizmo = {};
+            }
+            else if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
             {
                 gizmo = editor::MakeResizeGizmoDrawRequest(
                     levelEditorState.selection,
@@ -2193,7 +2231,14 @@ int Application::Run()
             const bool selectPressedForGizmo =
                 editorInput.selectPressed && !widgetConsumedPointer;
             bool gizmoConsumedPointer = false;
-            if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
+            const bool multiSelected = editor::EditorSelectionSetIsMulti(
+                levelEditorState.selection, levelEditorState.additionalSelections);
+            if (multiSelected
+                && !editor::EditorGroupAllowsTransformMode(levelEditorState.transformMode, true))
+            {
+                editor::ClearGizmoInteraction(levelEditorState.gizmo);
+            }
+            else if (levelEditorState.transformMode == editor::EditorTransformMode::Resize)
             {
                 gizmoConsumedPointer = editor::UpdateResizeInteraction(
                     levelEditorState.gizmo,
@@ -2255,7 +2300,8 @@ int Application::Run()
                     editorInput.selectHeld,
                     editorInput.selectReleased,
                     &levelEditorState.snap,
-                    editorInput.ctrlHeld);
+                    editorInput.ctrlHeld,
+                    &levelEditorState.additionalSelections);
             }
             if (editor::ShouldCancelPlacementMode(
                     levelEditorState.placementMode,
@@ -2385,7 +2431,8 @@ int Application::Run()
                         levelDefinition,
                         levelEditorState.workingCopy,
                         levelEditorState.structuralMap,
-                        levelEditorState.selection);
+                        levelEditorState.selection,
+                        levelEditorState.additionalSelections);
                 ApplyLoadedModelBoundsToPending(pendingVisuals, renderer.StaticPropModels());
                 const std::vector<editor::PendingPickProxy> pendingProxies =
                     editor::BuildPendingPickProxies(pendingVisuals);
@@ -2398,7 +2445,11 @@ int Application::Run()
                         levelEditorState.structuralMap,
                         workingPick))
                 {
-                    levelEditorState.selection = workingPick;
+                    editor::ApplyEditorSelectionClick(
+                        levelEditorState.selection,
+                        levelEditorState.additionalSelections,
+                        workingPick,
+                        editorInput.ctrlHeld);
                 }
             }
 
@@ -2410,36 +2461,49 @@ int Application::Run()
             if (editor::NudgeAllowed(
                     levelEditorState.transformMode, keyboardCaptured, levelEditorState.gizmo.dragging))
             {
-                if (editorInput.nudgeX != 0)
-                {
-                    editor::ApplyNudge(
+                const auto applyNudgeAxis = [&](editor::EditorAxis axis, int sign) {
+                    if (sign == 0)
+                    {
+                        return;
+                    }
+                    if (!editor::EditorSelectionSetIsMulti(
+                            levelEditorState.selection, levelEditorState.additionalSelections))
+                    {
+                        editor::ApplyNudge(
+                            levelEditorState.workingCopy,
+                            levelEditorState.selection,
+                            axis,
+                            static_cast<float>(sign),
+                            editorInput.nudgePrecision,
+                            levelEditorState.transformMode);
+                        return;
+                    }
+                    if (!editor::EditorSelectionSetSupportsGroupTranslate(
+                            levelEditorState.workingCopy,
+                            levelEditorState.selection,
+                            levelEditorState.additionalSelections))
+                    {
+                        return;
+                    }
+                    const std::vector<editor::EditorSelection> members =
+                        editor::EditorSelectionSetMembers(
+                            levelEditorState.selection, levelEditorState.additionalSelections);
+                    std::vector<core::Vec3> starts;
+                    if (!editor::CaptureGroupTranslateStarts(
+                            levelEditorState.workingCopy, members, starts))
+                    {
+                        return;
+                    }
+                    (void)editor::ApplySharedTranslationDelta(
                         levelEditorState.workingCopy,
-                        levelEditorState.selection,
-                        editor::EditorAxis::X,
-                        static_cast<float>(editorInput.nudgeX),
-                        editorInput.nudgePrecision,
-                        levelEditorState.transformMode);
-                }
-                if (editorInput.nudgeY != 0)
-                {
-                    editor::ApplyNudge(
-                        levelEditorState.workingCopy,
-                        levelEditorState.selection,
-                        editor::EditorAxis::Y,
-                        static_cast<float>(editorInput.nudgeY),
-                        editorInput.nudgePrecision,
-                        levelEditorState.transformMode);
-                }
-                if (editorInput.nudgeZ != 0)
-                {
-                    editor::ApplyNudge(
-                        levelEditorState.workingCopy,
-                        levelEditorState.selection,
-                        editor::EditorAxis::Z,
-                        static_cast<float>(editorInput.nudgeZ),
-                        editorInput.nudgePrecision,
-                        levelEditorState.transformMode);
-                }
+                        members,
+                        starts,
+                        editor::NudgeWorldDelta(
+                            axis, static_cast<float>(sign), editorInput.nudgePrecision));
+                };
+                applyNudgeAxis(editor::EditorAxis::X, editorInput.nudgeX);
+                applyNudgeAxis(editor::EditorAxis::Y, editorInput.nudgeY);
+                applyNudgeAxis(editor::EditorAxis::Z, editorInput.nudgeZ);
             }
             if (editorRequest == editor::LevelEditorRequest::None
                 && editor::ShouldEmitDeleteSelectedRequest(
@@ -2448,7 +2512,9 @@ int Application::Run()
                     editor::IsLevelAuthoringAvailable(),
                     levelEditorState.workingCopy,
                     levelEditorState.selection,
-                    levelEditorState.gizmo.dragging))
+                    levelEditorState.gizmo.dragging,
+                    editor::EditorSelectionSetIsMulti(
+                        levelEditorState.selection, levelEditorState.additionalSelections)))
             {
                 editorRequest = editor::LevelEditorRequest::DeleteSelected;
             }
@@ -2721,6 +2787,10 @@ void Application::SetLevelEditorActive(bool active)
         {
             levelEditorState.selection = editor::ClearSelection();
         }
+        editor::ReconcileEditorSelectionSet(
+            levelEditorState.workingCopy,
+            levelEditorState.selection,
+            levelEditorState.additionalSelections);
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         editor::CancelAllEditorPlacement(
             levelEditorState.placementMode,
@@ -2945,6 +3015,10 @@ bool Application::OpenAuthoredLevelFromEditor()
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     levelEditorState.selection =
         editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+    editor::ReconcileEditorSelectionSet(
+        levelEditorState.workingCopy,
+        levelEditorState.selection,
+        levelEditorState.additionalSelections);
     editor::ClearGizmoInteraction(levelEditorState.gizmo);
     editor::CancelAllEditorPlacement(
         levelEditorState.placementMode,
@@ -3019,6 +3093,10 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
             levelEditorState.staticPropPlacement);
         levelEditorState.selection =
             editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+        editor::ReconcileEditorSelectionSet(
+            levelEditorState.workingCopy,
+            levelEditorState.selection,
+            levelEditorState.additionalSelections);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage = "Working copy reverted to the applied level.";
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
@@ -3089,6 +3167,10 @@ bool Application::ApplyLevelEditorPreview()
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     levelEditorState.selection =
         editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+    editor::ReconcileEditorSelectionSet(
+        levelEditorState.workingCopy,
+        levelEditorState.selection,
+        levelEditorState.additionalSelections);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
     levelEditorState.lastMessage =
@@ -3187,6 +3269,7 @@ bool Application::ReloadRuntimeLevelFromStaged()
     levelEditorState.modified = reconciled.modified;
     levelEditorState.dirty = reconciled.dirty;
     levelEditorState.selection = reconciled.selection;
+    levelEditorState.additionalSelections.clear();
     editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     editor::ClearGizmoInteraction(levelEditorState.gizmo);
@@ -3424,6 +3507,10 @@ void Application::TryFinishPendingLevelTransition()
         editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
         levelEditorState.selection =
             editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+        editor::ReconcileEditorSelectionSet(
+            levelEditorState.workingCopy,
+            levelEditorState.selection,
+            levelEditorState.additionalSelections);
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         editor::CancelAllEditorPlacement(
             levelEditorState.placementMode,
@@ -3572,6 +3659,10 @@ void Application::TryFinishPendingFreshRun()
         editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
         levelEditorState.selection =
             editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
+        editor::ReconcileEditorSelectionSet(
+            levelEditorState.workingCopy,
+            levelEditorState.selection,
+            levelEditorState.additionalSelections);
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
         editor::CancelAllEditorPlacement(
             levelEditorState.placementMode,

@@ -2,6 +2,7 @@
 
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorGizmo.h"
+#include "editor/EditorSelectionSet.h"
 
 #include <string>
 #include <string_view>
@@ -248,7 +249,8 @@ bool CanIssueAuthoredLifecycleRequest(
     EditorSelection selection,
     bool gizmoDragging,
     LevelEditorRequest request,
-    std::string_view staticPropIdentity)
+    std::string_view staticPropIdentity,
+    bool multiSelected)
 {
     switch (request)
     {
@@ -274,8 +276,16 @@ bool CanIssueAuthoredLifecycleRequest(
                    authoringAvailable, workingCopy, EditorObjectKind::StaticProp, gizmoDragging)
             && world::StaticPropIdentityIsValid(staticPropIdentity);
     case LevelEditorRequest::DuplicateSelected:
+        if (multiSelected)
+        {
+            return false;
+        }
         return CanDuplicateSelected(authoringAvailable, workingCopy, selection, gizmoDragging);
     case LevelEditorRequest::DeleteSelected:
+        if (multiSelected)
+        {
+            return false;
+        }
         return CanDeleteSelected(authoringAvailable, workingCopy, selection, gizmoDragging);
     default:
         return false;
@@ -351,6 +361,8 @@ bool HandleAuthoredLifecycleRequest(
     const EditorSelection previousSelection = state.selection;
     const CategoryStructuralPending previousPending = state.structuralPending;
     const StructuralIndexMap previousMap = state.structuralMap;
+    const bool multiSelected =
+        EditorSelectionSetIsMulti(state.selection, state.additionalSelections);
     EditorObjectKind affectedKind = AddKindForRequest(request);
     if (affectedKind == EditorObjectKind::None)
     {
@@ -363,7 +375,8 @@ bool HandleAuthoredLifecycleRequest(
             state.selection,
             state.gizmo.dragging,
             request,
-            staticPropIdentity))
+            staticPropIdentity,
+            multiSelected))
     {
         ResetLevelActionStatuses(state);
         if (!authoringAvailable)
@@ -373,6 +386,14 @@ bool HandleAuthoredLifecycleRequest(
         else if (state.gizmo.dragging)
         {
             state.lastMessage = "Lifecycle blocked: finish the gizmo drag first.";
+        }
+        else if (multiSelected && request == LevelEditorRequest::DuplicateSelected)
+        {
+            state.lastMessage = "Duplicate is not a group operation.";
+        }
+        else if (multiSelected && request == LevelEditorRequest::DeleteSelected)
+        {
+            state.lastMessage = "Delete is not a group operation.";
         }
         else if (
             request == LevelEditorRequest::DeleteSelected
@@ -446,6 +467,7 @@ bool HandleAuthoredLifecycleRequest(
     }
 
     state.selection = result.selection;
+    state.additionalSelections.clear();
     MarkCategoryStructuralPending(state.structuralPending, affectedKind);
     ApplyLifecycleToStructuralMap(
         state.structuralMap,

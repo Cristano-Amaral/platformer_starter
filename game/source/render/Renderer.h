@@ -36,6 +36,14 @@ struct DebugWorldOverlay
     core::Vec3 highlightCenter{};
     core::Vec3 highlightSize{};
     float highlightRotationZDegrees = 0.0f;
+    // M78 secondary selection wires. Primary stays drawHighlight.
+    struct SecondaryHighlightOverlay
+    {
+        core::Vec3 center{};
+        core::Vec3 size{};
+        float rotationZDegrees = 0.0f;
+    };
+    std::vector<SecondaryHighlightOverlay> secondaryHighlights;
     // M58.2 editor-only selected-model ghost. workingCopy visual transform.
     bool drawSelectedModelGhost = false;
     world::StaticPropSpec selectedModelGhost{};

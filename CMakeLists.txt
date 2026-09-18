@@ -96,6 +96,8 @@ add_executable(Platformer3D
     game/source/editor/EditorBuildPreference.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorToolCommands.cpp
     game/source/editor/EditorToolCommands.h
     game/source/editor/EditorToolRunner.cpp
@@ -388,6 +390,8 @@ add_executable(ContentBrowserThumbnailTest
     game/source/editor/EditorMath.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/StaticModelThumbnailCache.cpp
     game/source/editor/StaticModelThumbnailCache.h
     game/source/editor/StaticModelFraming.cpp
@@ -436,6 +440,8 @@ add_executable(StaticModelPreviewTest
     game/source/editor/EditorMath.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/editor/StaticModelFraming.cpp
@@ -481,6 +487,8 @@ add_executable(LevelFileTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/RuntimeLevelReload.cpp
     game/source/editor/RuntimeLevelReload.h
     game/source/platform/FileReplace.h
@@ -597,6 +605,8 @@ add_executable(PhysicsRebuildTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/PlayerHealth.h
@@ -1146,6 +1156,8 @@ add_executable(EditorPickingTest
     game/source/editor/EditorPickingTest.cpp
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/render/CameraView.h
@@ -1184,6 +1196,8 @@ add_executable(EditorGizmoTest
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/render/CameraView.h
@@ -1226,6 +1240,8 @@ add_executable(EditorViewportGridTest
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/render/CameraView.h
@@ -1309,6 +1325,8 @@ add_executable(AuthoredObjectLifecycleTest
     game/source/editor/AuthoredObjectLifecycleTest.cpp
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
@@ -1333,6 +1351,8 @@ add_executable(EditorPlacementTest
     game/source/editor/EditorPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorPlacementTest.cpp
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
@@ -1367,6 +1387,8 @@ add_executable(StaticPropPlacementTest
     game/source/editor/EditorPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/editor/LevelEditor.cpp
@@ -1417,6 +1439,8 @@ add_executable(EditorQuickToolbarTest
     game/source/editor/EditorQuickToolbarTest.cpp
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorToolCommands.cpp
     game/source/editor/EditorToolCommands.h
     game/source/editor/EditorWorkspace.cpp
@@ -1459,6 +1483,8 @@ add_executable(CanonicalSceneCleanupTest
     game/source/editor/EditorPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/physics/PhysicsCapacity.h
@@ -1497,6 +1523,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/StaticPropPlacement.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
     game/source/editor/ContentBrowser.h
@@ -1527,6 +1555,8 @@ add_executable(StaticPropRenderTransformTest
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/editor/StaticPropRenderTransformTest.cpp
@@ -1552,6 +1582,8 @@ add_executable(StaticPropLifecycleTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/StaticPropLifecycleTest.cpp
     game/source/editor/StaticPropTransform.h
     game/source/world/LevelDefinition.cpp
@@ -1624,6 +1656,8 @@ add_executable(ModelSelectionPreviewTest
     game/source/editor/EditorPicking.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
     game/source/editor/ModelSelectionPreviewTest.cpp

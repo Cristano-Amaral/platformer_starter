@@ -1,4 +1,6 @@
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/EditorSelection.h"
+#include "editor/EditorSelectionSet.h"
 #include "gameplay/CollectibleRunState.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/HazardWorld.h"
@@ -9,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -1494,6 +1497,39 @@ int main()
             "AddItemPickupAt uses world center");
         Expect(working.itemPickups.back().position.x == 9.0f, "AddItemPickupAt X");
         Expect(working.itemPickups.back().position.z == 4.0f, "AddItemPickupAt does not snap to spawn.z");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{4.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.hazards.push_back({});
+        editor::EditorSelection primary{editor::EditorObjectKind::ElevatedPlatform, 0};
+        std::vector<editor::EditorSelection> additional{
+            {editor::EditorObjectKind::ElevatedPlatform, 1},
+            {editor::EditorObjectKind::Hazard, 0}};
+        editor::ReconcileEditorSelectionSet(working, primary, additional);
+        Expect(primary.kind == editor::EditorObjectKind::ElevatedPlatform && primary.index == 0,
+            "valid primary survives reconcile");
+        Expect(additional.size() == 2, "valid additional members survive reconcile");
+
+        additional.push_back({editor::EditorObjectKind::ElevatedPlatform, 9});
+        editor::ReconcileEditorSelectionSet(working, primary, additional);
+        Expect(additional.size() == 2, "out-of-range additional is dropped");
+
+        primary = {editor::EditorObjectKind::ElevatedPlatform, 9};
+        editor::ReconcileEditorSelectionSet(working, primary, additional);
+        Expect(primary.kind == editor::EditorObjectKind::Hazard && primary.index == 0,
+            "invalid primary promotes last remaining additional");
+        Expect(additional.size() == 1, "promoted primary is removed from additional");
+
+        working.hazards.clear();
+        editor::ReconcileEditorSelectionSet(working, primary, additional);
+        Expect(primary.kind == editor::EditorObjectKind::ElevatedPlatform, "next remaining becomes primary");
+
+        editor::ClearEditorSelectionSet(primary, additional);
+        Expect(primary.kind == editor::EditorObjectKind::None && additional.empty(),
+            "clearing drops primary and secondary");
     }
 
     if (gFailures != 0)

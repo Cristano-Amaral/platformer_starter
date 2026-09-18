@@ -5,6 +5,7 @@
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorSelectionSet.h"
 #include "editor/StaticPropTransform.h"
 #include "gameplay/CollectibleRunState.h"
 #include "physics/PhysicsCapacity.h"
@@ -1840,6 +1841,68 @@ int main()
                 == std::string(
                     "Add Static Prop requires a valid Content Browser static model selection."),
             "missing identity diagnostic");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.selection = {EditorObjectKind::Hazard, 0};
+        state.additionalSelections.push_back({EditorObjectKind::Collectible, 0});
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                state.workingCopy,
+                state.selection,
+                false,
+                LevelEditorRequest::DeleteSelected,
+                {},
+                true),
+            "Delete is not a group operation");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                state.workingCopy,
+                state.selection,
+                false,
+                LevelEditorRequest::DuplicateSelected,
+                {},
+                true),
+            "Duplicate is not a group operation");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DeleteSelected, true),
+            "multi Delete request is still handled");
+        Expect(state.workingCopy.hazards.size() == active.hazards.size(),
+            "multi Delete does not delete the primary");
+        Expect(state.workingCopy.collectibles.size() == active.collectibles.size(),
+            "multi Delete does not become group Delete");
+        Expect(state.selection.kind == EditorObjectKind::Hazard, "refused Delete keeps primary");
+        Expect(state.additionalSelections.size() == 1, "refused Delete keeps additional");
+        Expect(std::string(state.lastMessage).find("group") != std::string::npos,
+            "refused group Delete explains itself");
+
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DuplicateSelected, true),
+            "multi Duplicate request is still handled");
+        Expect(state.workingCopy.hazards.size() == active.hazards.size(),
+            "multi Duplicate does not duplicate the primary");
+        Expect(state.additionalSelections.size() == 1, "refused Duplicate keeps additional");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.selection = {EditorObjectKind::Hazard, 0};
+        state.additionalSelections.push_back({EditorObjectKind::Collectible, 0});
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddCollectible, true, {1.0f, 2.0f, 3.0f}),
+            "Add while multi-selected remains allowed");
+        Expect(state.additionalSelections.empty(), "Add replaces multi-selection with the new object");
+        Expect(state.selection.kind == EditorObjectKind::Collectible, "Add selects the new object");
     }
 
     if (gFailures != 0)

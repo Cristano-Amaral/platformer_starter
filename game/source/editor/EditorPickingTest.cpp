@@ -4,6 +4,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorSelectionSet.h"
 #include "editor/EditorViewportGrid.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/StaticPropTransform.h"
@@ -1297,6 +1298,88 @@ int main()
         Expect(
             editor::PickNearest(down, after).kind == editor::EditorObjectKind::Ground,
             "Y=0 ray still selects Ground, not a grid");
+    }
+
+    // ---- M78 multi-selection click semantics ----
+    {
+        editor::EditorSelection primary{};
+        std::vector<editor::EditorSelection> additional;
+        const editor::EditorSelection platform0{editor::EditorObjectKind::ElevatedPlatform, 0};
+        const editor::EditorSelection platform1{editor::EditorObjectKind::ElevatedPlatform, 1};
+        const editor::EditorSelection pickup{editor::EditorObjectKind::ItemPickup, 0};
+
+        editor::ApplyEditorSelectionClick(primary, additional, platform0, false);
+        Expect(primary == platform0 && additional.empty(), "ordinary click creates one primary");
+
+        editor::ApplyEditorSelectionClick(primary, additional, platform1, true);
+        Expect(primary == platform1, "Ctrl+click add makes the new object primary");
+        Expect(additional.size() == 1 && additional[0] == platform0, "previous primary becomes secondary");
+
+        editor::ApplyEditorSelectionClick(primary, additional, pickup, true);
+        Expect(primary == pickup, "most recently added object is primary");
+        Expect(additional.size() == 2, "two secondary members remain");
+        Expect(additional[0] == platform0 && additional[1] == platform1, "additional keeps add order");
+
+        editor::ApplyEditorSelectionClick(primary, additional, pickup, true);
+        Expect(primary == platform1, "removing primary chooses last remaining additional");
+        Expect(additional.size() == 1 && additional[0] == platform0, "remaining secondary is oldest");
+
+        editor::ApplyEditorSelectionClick(primary, additional, platform0, true);
+        Expect(primary == platform1 && additional.empty(), "Ctrl+click removes a secondary member");
+
+        editor::ApplyEditorSelectionClick(primary, additional, editor::ClearSelection(), false);
+        Expect(primary.kind == editor::EditorObjectKind::None && additional.empty(),
+            "empty click without modifier clears primary and secondary");
+
+        editor::ApplyEditorSelectionClick(primary, additional, platform0, false);
+        editor::ApplyEditorSelectionClick(primary, additional, platform1, true);
+        const editor::EditorSelection keptPrimary = primary;
+        const std::vector<editor::EditorSelection> keptAdditional = additional;
+        editor::ApplyEditorSelectionClick(primary, additional, editor::ClearSelection(), true);
+        Expect(primary == keptPrimary && additional == keptAdditional,
+            "Ctrl+empty click does not clear selection");
+
+        editor::ApplyEditorSelectionClick(primary, additional, platform0, false);
+        Expect(primary == platform0 && additional.empty(), "ordinary click restores single-selection");
+        Expect(!editor::EditorSelectionSetIsMulti(primary, additional),
+            "single selected object is not multi");
+    }
+
+    // ---- M78 Hierarchy/viewport share the same click helper ----
+    {
+        editor::EditorSelection viewportPrimary{};
+        std::vector<editor::EditorSelection> viewportAdditional;
+        editor::EditorSelection hierarchyPrimary{};
+        std::vector<editor::EditorSelection> hierarchyAdditional;
+        const editor::EditorSelection a{editor::EditorObjectKind::Hazard, 0};
+        const editor::EditorSelection b{editor::EditorObjectKind::Collectible, 1};
+        editor::ApplyEditorSelectionClick(viewportPrimary, viewportAdditional, a, false);
+        editor::ApplyEditorSelectionClick(hierarchyPrimary, hierarchyAdditional, a, false);
+        editor::ApplyEditorSelectionClick(viewportPrimary, viewportAdditional, b, true);
+        editor::ApplyEditorSelectionClick(hierarchyPrimary, hierarchyAdditional, b, true);
+        Expect(viewportPrimary == hierarchyPrimary, "viewport and Hierarchy primary stay synchronized");
+        Expect(viewportAdditional == hierarchyAdditional,
+            "viewport and Hierarchy additional stay synchronized");
+    }
+
+    // ---- M78 visual highlight requests distinguish primary vs secondary ----
+    {
+        world::LevelDefinition level{};
+        level.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        level.elevatedPlatforms.push_back({{4.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::EditorSelection platform0{editor::EditorObjectKind::ElevatedPlatform, 0};
+        const editor::EditorSelection platform1{editor::EditorObjectKind::ElevatedPlatform, 1};
+        const editor::EditorHighlightRequest primary =
+            editor::MakeHighlightRequest(platform0, set);
+        const editor::EditorHighlightRequest secondary =
+            editor::MakeHighlightRequest(platform1, set);
+        Expect(primary.visible && secondary.visible, "both selected objects have highlight requests");
+        Expect(primary.center.x != secondary.center.x, "primary and secondary highlights differ");
+        Expect(
+            editor::MakeHighlightRequest(editor::ClearSelection(), set).visible == false,
+            "cleared selection has no highlight");
     }
 
     if (gFailures != 0)

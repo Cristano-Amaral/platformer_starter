@@ -1199,8 +1199,13 @@ const char* DeleteSelectedDisableReason(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
-    bool gizmoDragging)
+    bool gizmoDragging,
+    bool multiSelected)
 {
+    if (multiSelected)
+    {
+        return "Delete is not a group operation.";
+    }
     if (CanDeleteSelected(authoringAvailable, workingCopy, selection, gizmoDragging))
     {
         return nullptr;
@@ -1239,9 +1244,10 @@ bool ShouldEmitDeleteSelectedRequest(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
-    bool gizmoDragging)
+    bool gizmoDragging,
+    bool multiSelected)
 {
-    if (!deletePressed || imguiWantsKeyboard)
+    if (!deletePressed || imguiWantsKeyboard || multiSelected)
     {
         return false;
     }

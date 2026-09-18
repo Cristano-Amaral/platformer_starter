@@ -3,6 +3,8 @@
 #include "editor/AuthoredLifecycleCommands.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorSelectionSet.h"
+#include "editor/EditorGroupTranslate.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI) || defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "editor/AuthoringPaths.h"
@@ -337,10 +339,27 @@ void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
 
         char label[64];
         FormatSelectionDisplayName(entry.selection, label, sizeof(label));
-        const bool selected = state.selection == entry.selection;
+        const bool isPrimary = state.selection == entry.selection;
+        const bool isSecondary = ContainsEditorSelection(state.additionalSelections, entry.selection);
+        const bool selected = isPrimary || isSecondary;
+        if (isSecondary && !isPrimary)
+        {
+            const ImVec4 secondary = ImVec4(0.85f, 0.52f, 0.18f, 0.70f);
+            ImGui::PushStyleColor(ImGuiCol_Header, secondary);
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.90f, 0.58f, 0.22f, 0.85f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.92f, 0.62f, 0.24f, 0.90f));
+        }
         if (ImGui::Selectable(label, selected) && !state.gizmo.dragging)
         {
-            state.selection = entry.selection;
+            ApplyEditorSelectionClick(
+                state.selection,
+                state.additionalSelections,
+                entry.selection,
+                ImGui::GetIO().KeyCtrl);
+        }
+        if (isSecondary && !isPrimary)
+        {
+            ImGui::PopStyleColor(3);
         }
     }
     if (openGroup != nullptr && groupVisible)
@@ -362,6 +381,12 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
     RecoverEditorWindowIfNeeded(kInspectorWindowName, view);
 
     ImGui::Text("Selected: %s", SelectionDisplayName(state.selection));
+    if (EditorSelectionSetIsMulti(state.selection, state.additionalSelections))
+    {
+        ImGui::Text("Multi-selection: %zu objects (primary listed)",
+            EditorSelectionSetMembers(state.selection, state.additionalSelections).size());
+        ImGui::TextUnformatted("Inspector edits the primary selection only.");
+    }
     ImGui::Text("Editor nav speed: %.1f (session only)", state.editorCamera.movementSpeed);
     ImGui::Separator();
 
@@ -1601,7 +1626,27 @@ LevelEditorRequest DrawLevelControls(
         ImGui::TextWrapped(
             "Hold Ctrl while dragging a gizmo to invert Snap. The Snap toggle is not changed.");
         ImGui::TextWrapped(
+            "Ctrl+click adds or removes authored objects. Ordinary click replaces selection.");
+        ImGui::TextWrapped(
             "Grid visibility is independent of Snap. Minor spacing follows Translate increment.");
+        if (EditorSelectionSetIsMulti(state.selection, state.additionalSelections)
+            && state.transformMode == EditorTransformMode::Translate)
+        {
+            const char* reason = GroupTranslateDisableReason(
+                state.workingCopy, state.selection, state.additionalSelections);
+            if (reason != nullptr)
+            {
+                ImGui::TextUnformatted(reason);
+            }
+        }
+        if (EditorSelectionSetIsMulti(state.selection, state.additionalSelections))
+        {
+            const char* groupReason = MultiSelectionTransformDisableReason(state.transformMode);
+            if (groupReason != nullptr)
+            {
+                ImGui::TextUnformatted(groupReason);
+            }
+        }
         if (state.transformMode == EditorTransformMode::Resize
             && state.selection.kind != EditorObjectKind::None
             && !IsResizeSelection(state.selection))
@@ -1999,7 +2044,9 @@ LevelEditorRequest DrawEditorMenuBar(
                 state.workingCopy,
                 state.selection,
                 gizmoDragging,
-                LevelEditorRequest::DuplicateSelected));
+                LevelEditorRequest::DuplicateSelected,
+                {},
+                EditorSelectionSetIsMulti(state.selection, state.additionalSelections)));
         if (ImGui::MenuItem("Duplicate Selected"))
         {
             request = LevelEditorRequest::DuplicateSelected;
@@ -2011,7 +2058,9 @@ LevelEditorRequest DrawEditorMenuBar(
                 state.workingCopy,
                 state.selection,
                 gizmoDragging,
-                LevelEditorRequest::DeleteSelected));
+                LevelEditorRequest::DeleteSelected,
+                {},
+                EditorSelectionSetIsMulti(state.selection, state.additionalSelections)));
         if (ImGui::MenuItem("Delete Selected", "Delete"))
         {
             request = LevelEditorRequest::DeleteSelected;
@@ -2019,7 +2068,11 @@ LevelEditorRequest DrawEditorMenuBar(
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
             const char* reason = DeleteSelectedDisableReason(
-                authoringAvailable, state.workingCopy, state.selection, gizmoDragging);
+                authoringAvailable,
+                state.workingCopy,
+                state.selection,
+                gizmoDragging,
+                EditorSelectionSetIsMulti(state.selection, state.additionalSelections));
             if (reason != nullptr)
             {
                 ImGui::SetTooltip("%s", reason);

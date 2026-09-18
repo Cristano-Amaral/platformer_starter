@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 77 — Viewport Grid & Spatial Authoring Guides.
+Milestone 78 — Multi-Selection & Group Translate.
 
-Canonical file: [`docs/milestones/MILESTONE_77.md`](docs/milestones/MILESTONE_77.md)
+Canonical file: [`docs/milestones/MILESTONE_78.md`](docs/milestones/MILESTONE_78.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is implemented, awaiting manual acceptance. Do not start Milestone 78.
+Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is implemented, awaiting manual acceptance. Do not start Milestone 79.
 
 ## Source of truth
 1. Current repository code.

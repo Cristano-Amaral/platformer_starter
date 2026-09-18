@@ -1,7 +1,9 @@
 #include "editor/EditorGizmo.h"
 
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/EditorGroupTranslate.h"
 #include "editor/EditorMath.h"
+#include "editor/EditorSelectionSet.h"
 #include "editor/EditorSnap.h"
 #include "editor/StaticPropTransform.h"
 #include "world/RespawnWorld.h"
@@ -1270,6 +1272,17 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
     const StructuralIndexMap& map,
     EditorSelection selection)
 {
+    static const std::vector<EditorSelection> kNoAdditional;
+    return CollectPendingAuthoringVisuals(active, workingCopy, map, selection, kNoAdditional);
+}
+
+std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
+    const world::LevelDefinition& active,
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map,
+    EditorSelection selection,
+    const std::vector<EditorSelection>& additionalSelections)
+{
     std::vector<PendingAuthoringVisual> visuals;
     const EditorObjectKind kinds[] = {
         EditorObjectKind::ElevatedPlatform,
@@ -1321,7 +1334,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
             PendingAuthoringVisual visual{};
             visual.kind = kind;
             visual.workingIndex = index;
-            visual.selected = selection.kind == kind && selection.index == index;
+            visual.selected = EditorSelectionSetContains(
+                selection, additionalSelections, item);
             if (!GetGizmoPreviewBox(
                     workingCopy, item, visual.boundsCenter, visual.boundsSize))
             {
@@ -1508,6 +1522,8 @@ void EndGizmoDrag(GizmoInteractionState& state)
     state.dragStartRotation = {};
     state.dragStartRadial = {};
     state.dragHandleSign = 1;
+    state.dragMembers.clear();
+    state.dragMemberStartPositions.clear();
 }
 
 GizmoDrawRequest MakeResizeGizmoDrawRequest(
@@ -2183,8 +2199,14 @@ bool UpdateGizmoInteraction(
     bool selectHeld,
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences,
-    bool invertModifier)
+    bool invertModifier,
+    const std::vector<EditorSelection>* additionalSelections)
 {
+    const std::vector<EditorSelection> emptyAdditional;
+    const std::vector<EditorSelection>& additional =
+        additionalSelections != nullptr ? *additionalSelections : emptyAdditional;
+    const bool multiSelected = EditorSelectionSetIsMulti(currentSelection, additional);
+
     if (state.dragging)
     {
         if (selectReleased || !selectHeld)
@@ -2205,11 +2227,16 @@ bool UpdateGizmoInteraction(
         const float increment = snapActive
             ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Translate)
             : 0.0f;
-        const core::Vec3 newCenter = ApplyAuthoredTransformSnap(
-            intended, EditorTransformMode::Translate, state.active, snapActive, increment);
-        if (state.dragTarget.kind == EditorObjectKind::Checkpoint)
+        if (state.dragMembers.size() > 1)
         {
-            if (!SetCheckpointAssemblyCenter(workingCopy, state.dragTarget.index, newCenter))
+            if (!ApplyGroupTranslateFromPrimaryResult(
+                    workingCopy,
+                    state.dragMembers,
+                    state.dragMemberStartPositions,
+                    intended,
+                    state.active,
+                    snapActive,
+                    increment))
             {
                 ClearGizmoInteraction(state);
                 return true;
@@ -2217,7 +2244,20 @@ bool UpdateGizmoInteraction(
         }
         else
         {
-            *position = newCenter;
+            const core::Vec3 newCenter = ApplyAuthoredTransformSnap(
+                intended, EditorTransformMode::Translate, state.active, snapActive, increment);
+            if (state.dragTarget.kind == EditorObjectKind::Checkpoint)
+            {
+                if (!SetCheckpointAssemblyCenter(workingCopy, state.dragTarget.index, newCenter))
+                {
+                    ClearGizmoInteraction(state);
+                    return true;
+                }
+            }
+            else
+            {
+                *position = newCenter;
+            }
         }
         state.hovered = state.active;
         return true;
@@ -2230,6 +2270,13 @@ bool UpdateGizmoInteraction(
     }
 
     if (!IsGizmoSelection(currentSelection))
+    {
+        state.hovered = EditorAxis::None;
+        return false;
+    }
+
+    if (multiSelected
+        && !EditorSelectionSetSupportsGroupTranslate(workingCopy, currentSelection, additional))
     {
         state.hovered = EditorAxis::None;
         return false;
@@ -2249,8 +2296,23 @@ bool UpdateGizmoInteraction(
         return false;
     }
 
-    return BeginGizmoDrag(
-        state, currentSelection, state.hovered, *origin, mouseRay, view);
+    if (!BeginGizmoDrag(
+            state, currentSelection, state.hovered, *origin, mouseRay, view))
+    {
+        return false;
+    }
+
+    if (multiSelected)
+    {
+        state.dragMembers = EditorSelectionSetMembers(currentSelection, additional);
+        if (!CaptureGroupTranslateStarts(
+                workingCopy, state.dragMembers, state.dragMemberStartPositions))
+        {
+            ClearGizmoInteraction(state);
+            return true;
+        }
+    }
+    return true;
 }
 
 bool IsFiniteVec3(core::Vec3 value)

@@ -4,6 +4,8 @@
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorSelectionSet.h"
+#include "editor/EditorGroupTranslate.h"
 #include "editor/EditorSnap.h"
 #include "editor/EditorViewportGrid.h"
 #include "editor/StaticPropTransform.h"
@@ -2614,6 +2616,196 @@ int main()
             editor::LoadEditorSnapPreferencesFromLayoutPath({});
         Expect(missingFile.translateIncrement == editor::kDefaultTranslateSnapIncrement,
             "empty path uses M76 defaults");
+    }
+
+    // ---- M78 Group Translate shared snapped delta ----
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{1.10f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{3.37f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        const EditorSelection primary{EditorObjectKind::ElevatedPlatform, 0};
+        const EditorSelection secondary{EditorObjectKind::ElevatedPlatform, 1};
+        const std::vector<EditorSelection> members{primary, secondary};
+        std::vector<core::Vec3> starts;
+        Expect(editor::CaptureGroupTranslateStarts(working, members, starts), "capture starts");
+        Expect(starts[0].x == 1.10f && starts[1].x == 3.37f, "starts are drag-start poses");
+        const core::Vec3 snappedPrimary = editor::SnappedPrimaryTranslateResult(
+            {1.20f, 1.0f, 0.0f}, EditorAxis::X, true, 0.25f);
+        Expect(snappedPrimary.x == 1.25f, "M76 snaps PRIMARY result only");
+        const core::Vec3 delta = editor::SharedTranslationDelta(starts[0], snappedPrimary);
+        Expect(NearlyEqual(delta.x, 0.15f, 0.0001f), "shared delta is primary snapped minus start");
+        Expect(
+            editor::ApplySharedTranslationDelta(working, members, starts, delta),
+            "group translate applies shared delta");
+        Expect(working.elevatedPlatforms[0].center.x == 1.25f, "primary is snapped result");
+        Expect(NearlyEqual(working.elevatedPlatforms[1].center.x, 3.52f, 0.0001f),
+            "secondary is not independently snapped");
+        Expect(
+            NearlyEqual(
+                working.elevatedPlatforms[1].center.x - working.elevatedPlatforms[0].center.x,
+                2.27f,
+                0.0001f),
+            "relative offset is preserved");
+
+        working.elevatedPlatforms[0].center = {1.25f, 1.0f, 0.0f};
+        working.elevatedPlatforms[1].center = {3.52f, 1.0f, 0.0f};
+        starts[0] = {1.10f, 1.0f, 0.0f};
+        starts[1] = {3.37f, 1.0f, 0.0f};
+        for (int i = 0; i < 24; ++i)
+        {
+            Expect(
+                editor::ApplyGroupTranslateFromPrimaryResult(
+                    working, members, starts, {1.20f, 1.0f, 0.0f}, EditorAxis::X, true, 0.25f),
+                "repeated group frames stay on drag-start authority");
+        }
+        Expect(working.elevatedPlatforms[0].center.x == 1.25f, "repeated group frames do not drift primary");
+        Expect(NearlyEqual(working.elevatedPlatforms[1].center.x, 3.52f, 0.0001f),
+            "repeated group frames do not drift secondary");
+    }
+
+    // ---- M78 Ctrl snap inversion and object-specific authority ----
+    {
+        world::LevelDefinition working{};
+        world::ItemPickupSpec pickup{};
+        pickup.position = {1.10f, 0.5f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        pickup.visualOffset = {0.3f, 0.0f, 0.0f};
+        pickup.visualScale = {1.0f, 1.0f, 1.0f};
+        working.itemPickups.push_back(pickup);
+        world::DynamicBoxSpec box{};
+        box.center = {3.37f, 0.5f, 0.0f};
+        box.size = {1.0f, 1.0f, 1.0f};
+        box.massKg = 30.0f;
+        working.dynamicBoxes.push_back(box);
+        const core::Vec3 runtimeJoltPose{9.0f, 8.0f, 7.0f};
+        const EditorSelection pickupSel{EditorObjectKind::ItemPickup, 0};
+        const EditorSelection boxSel{EditorObjectKind::DynamicBox, 0};
+        Expect(editor::GetEditablePosition(working, pickupSel) == &working.itemPickups[0].position,
+            "Item Pickup Translate edits logical position");
+        Expect(editor::GetEditablePosition(working, boxSel) == &working.dynamicBoxes[0].center,
+            "Dynamic Box Translate edits authored center");
+        const std::vector<EditorSelection> members{pickupSel, boxSel};
+        std::vector<core::Vec3> starts;
+        Expect(editor::CaptureGroupTranslateStarts(working, members, starts), "mixed translatable starts");
+        editor::EditorSnapPreferences snap = editor::MakeDefaultEditorSnapPreferences();
+        snap.enabled = true;
+        const bool inverted = editor::EditorSnapIsActive(&snap, true);
+        Expect(!inverted, "Ctrl inverts enabled Snap during Group Translate");
+        Expect(
+            editor::ApplyGroupTranslateFromPrimaryResult(
+                working,
+                members,
+                starts,
+                {1.20f, 0.5f, 0.0f},
+                EditorAxis::X,
+                inverted,
+                0.25f),
+            "Ctrl inversion keeps primary unsnapped");
+        Expect(NearlyEqual(working.itemPickups[0].position.x, 1.20f, 0.0001f),
+            "inverted group translate does not snap primary");
+        Expect(NearlyEqual(working.dynamicBoxes[0].center.x, 3.47f, 0.0001f),
+            "inverted shared delta applies to Dynamic Box center");
+        Expect(working.itemPickups[0].visualOffset.x == 0.3f, "Item Pickup visualOffset is untouched");
+        Expect(runtimeJoltPose.x == 9.0f, "Dynamic Box runtime Jolt pose is not captured");
+    }
+
+    // ---- M78 unsupported member refuses partial movement ----
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{1.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        const EditorSelection platform{EditorObjectKind::ElevatedPlatform, 0};
+        const EditorSelection camera{EditorObjectKind::Camera, 0};
+        std::vector<EditorSelection> additional{camera};
+        Expect(
+            !editor::EditorSelectionSetSupportsGroupTranslate(working, platform, additional),
+            "camera in the set blocks Group Translate");
+        Expect(
+            editor::GroupTranslateDisableReason(working, platform, additional) != nullptr,
+            "unsupported member reports compact feedback");
+        const core::Vec3 platformStart = working.elevatedPlatforms[0].center;
+        const std::vector<EditorSelection> members{platform, camera};
+        std::vector<core::Vec3> starts;
+        Expect(!editor::CaptureGroupTranslateStarts(working, members, starts),
+            "unsupported member is not captured for partial movement");
+        Expect(working.elevatedPlatforms[0].center.x == platformStart.x,
+            "supported subset is not moved");
+        Expect(!editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Resize, true),
+            "Resize is not a group operation");
+        Expect(!editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Scale, true),
+            "Scale is not a group operation");
+        Expect(!editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Rotate, true),
+            "Rotate is not a group operation");
+        Expect(editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Translate, true),
+            "Translate remains the group mode");
+        Expect(editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Resize, false),
+            "single-selection Resize remains available");
+    }
+
+    // ---- M78 live Group Translate drag uses shared snapped delta ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        working.elevatedPlatforms[0].center = {1.10f, 1.0f, 0.0f};
+        working.elevatedPlatforms[1].center = {3.37f, 1.0f, 0.0f};
+        editor::GizmoInteractionState state{};
+        const render::CameraView view = MakeView({1.10f, 1.0f, 10.0f}, {1.10f, 1.0f, 0.0f});
+        const EditorSelection platform0{EditorObjectKind::ElevatedPlatform, 0};
+        const EditorSelection platform1{EditorObjectKind::ElevatedPlatform, 1};
+        std::vector<EditorSelection> additional{platform1};
+        editor::EditorSnapPreferences snap = editor::MakeDefaultEditorSnapPreferences();
+        snap.enabled = true;
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                platform0,
+                working,
+                view,
+                RayThrough(view, {1.60f, 1.0f, 0.0f}),
+                false,
+                false,
+                true,
+                true,
+                false,
+                &snap,
+                false,
+                &additional),
+            "group translate can begin on primary gizmo");
+        Expect(state.dragMembers.size() == 2, "drag captures both members");
+        const editor::Ray3 holdRay = RayThrough(view, {1.20f, 1.0f, 0.0f});
+        const core::Vec3 intended = editor::GizmoDragPosition(state, holdRay, view);
+        const core::Vec3 expectedPrimary = editor::ApplyAuthoredTransformSnap(
+            intended,
+            editor::EditorTransformMode::Translate,
+            state.active,
+            true,
+            0.25f);
+        editor::UpdateGizmoInteraction(
+            state,
+            platform0,
+            working,
+            view,
+            holdRay,
+            false,
+            false,
+            false,
+            true,
+            false,
+            &snap,
+            false,
+            &additional);
+        Expect(NearlyEqual(working.elevatedPlatforms[0].center.x, expectedPrimary.x, 0.0001f),
+            "live group translate snaps primary");
+        const float sharedDx = expectedPrimary.x - 1.10f;
+        Expect(NearlyEqual(working.elevatedPlatforms[1].center.x, 3.37f + sharedDx, 0.0001f),
+            "live secondary uses the shared delta");
+        const float independentlySnapped = editor::QuantizeToIncrement(3.37f + sharedDx, 0.25f);
+        if (!NearlyEqual(3.37f + sharedDx, independentlySnapped, 0.0001f))
+        {
+            Expect(
+                !NearlyEqual(working.elevatedPlatforms[1].center.x, independentlySnapped, 0.0001f),
+                "secondary is not independently quantized onto the grid");
+        }
+        editor::EndGizmoDrag(state);
     }
 
     if (gFailures != 0)

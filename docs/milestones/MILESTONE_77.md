@@ -1,6 +1,6 @@
 # Milestone 77 --- Viewport Grid & Spatial Authoring Guides
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/77-viewport-grid-spatial-guides`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

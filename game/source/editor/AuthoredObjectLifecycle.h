@@ -351,7 +351,8 @@ const char* DeleteSelectedDisableReason(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
-    bool gizmoDragging);
+    bool gizmoDragging,
+    bool multiSelected = false);
 
 // Delete key uses the same enable rules as Edit > Delete Selected.
 bool ShouldEmitDeleteSelectedRequest(
@@ -360,5 +361,6 @@ bool ShouldEmitDeleteSelectedRequest(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
-    bool gizmoDragging);
+    bool gizmoDragging,
+    bool multiSelected = false);
 }

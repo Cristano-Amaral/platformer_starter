@@ -25,9 +25,9 @@ inline constexpr float kMaxSnapIncrement = 1000.0f;
 inline constexpr const char* kEditorSnapIniTypeName = "Platformer3D.Snap";
 inline constexpr const char* kEditorSnapIniEntryName = "Settings";
 
-// Temporary inversion while a gizmo is manipulated. Ctrl is unused during an
-// active drag (nudge is Translate-only and suppressed while dragging). Shift
-// is camera speed; Alt is wheel dolly.
+// Temporary inversion while a gizmo is manipulated. Ctrl+click during
+// selection (not during an active drag) is the M78 add/remove modifier.
+// Shift is camera speed; Alt is wheel dolly.
 inline constexpr const char* kEditorSnapInvertModifierName = "Ctrl";
 
 struct EditorSnapPreferences
