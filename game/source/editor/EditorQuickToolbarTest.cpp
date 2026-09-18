@@ -73,6 +73,20 @@ int main()
     }
 
     {
+        editor::LevelEditorState editorState{};
+        Expect(editorState.viewportGrid.visible, "toolbar Grid defaults visible");
+        Expect(editorState.snap.enabled, "toolbar Snap defaults enabled independently");
+        editorState.snap.enabled = false;
+        Expect(editorState.viewportGrid.visible, "disabling Snap does not hide Grid");
+        editorState.viewportGrid.visible = false;
+        Expect(!editorState.snap.enabled, "hiding Grid does not enable Snap");
+        Expect(
+            editor::EffectiveEditorViewportGridMinorSpacing(editorState.snap.translateIncrement)
+                == editor::kDefaultTranslateSnapIncrement,
+            "toolbar Grid spacing follows Translate increment");
+    }
+
+    {
         EditorTransformMode mode = EditorTransformMode::Translate;
         Expect(
             editor::TrySetEditorTransformMode(mode, false, EditorTransformMode::Resize),

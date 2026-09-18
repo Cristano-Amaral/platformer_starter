@@ -4,6 +4,7 @@
 
 #include "editor/EditorLayout.h"
 #include "editor/EditorSnap.h"
+#include "editor/EditorViewportGrid.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "raylib.h"
@@ -77,6 +78,40 @@ void DebugUiBackend::Initialize()
         }
     };
     ImGui::AddSettingsHandler(&snapHandler);
+
+    static ImGuiSettingsHandler gridHandler;
+    gridHandler.TypeName = editor::kEditorViewportGridIniTypeName;
+    gridHandler.TypeHash = ImHashStr(gridHandler.TypeName);
+    gridHandler.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler*, const char* name) -> void* {
+        if (name == nullptr || std::strcmp(name, editor::kEditorViewportGridIniEntryName) != 0)
+        {
+            return nullptr;
+        }
+        editor::EditorViewportGridPreferences* prefs = editor::BoundEditorViewportGridPreferences();
+        return prefs == nullptr ? nullptr : prefs;
+    };
+    gridHandler.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler*, void* entry, const char* line) {
+        if (entry == nullptr || line == nullptr)
+        {
+            return;
+        }
+        editor::ParseEditorViewportGridPreferenceLine(
+            *static_cast<editor::EditorViewportGridPreferences*>(entry), line);
+    };
+    gridHandler.WriteAllFn = [](ImGuiContext*, ImGuiSettingsHandler* handler, ImGuiTextBuffer* outBuf) {
+        editor::EditorViewportGridPreferences* prefs = editor::BoundEditorViewportGridPreferences();
+        if (prefs == nullptr || handler == nullptr || outBuf == nullptr)
+        {
+            return;
+        }
+        const std::string section = editor::SerializeEditorViewportGridPreferencesSection(*prefs);
+        outBuf->append(section.c_str(), section.c_str() + section.size());
+        if (section.empty() || section.back() != '\n')
+        {
+            outBuf->append("\n");
+        }
+    };
+    ImGui::AddSettingsHandler(&gridHandler);
 
     initialized = true;
 }

@@ -2,6 +2,7 @@
 
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
+#include "editor/EditorViewportGrid.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/Player.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
@@ -125,9 +126,10 @@ constexpr Color kGizmoAxisX{220, 72, 72, 255};
 constexpr Color kGizmoAxisY{72, 196, 88, 255};
 constexpr Color kGizmoAxisZ{72, 128, 232, 255};
 constexpr Color kGizmoAxisActive{255, 255, 255, 255};
-
-constexpr int kGridSlices = 20;
-constexpr float kGridSpacing = 1.0f;
+constexpr Color kEditorGridMinor{78, 84, 96, 255};
+constexpr Color kEditorGridMajor{132, 140, 154, 255};
+constexpr Color kEditorGridAxisX{210, 72, 72, 255};
+constexpr Color kEditorGridAxisZ{72, 118, 220, 255};
 
 // Inventory path string for Metrics. The texture is not drawn in Level 01.
 constexpr const char* kTestTextureRuntimeRelativePath = "assets/textures/test_checker.png";
@@ -152,6 +154,41 @@ void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
     const Vector3 position = ToRaylib(center);
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
+}
+
+void DrawEditorViewportGrid(const DebugWorldOverlay& overlay)
+{
+    static_assert(192 == editor::kEditorViewportGridMaxLines);
+    const int count = overlay.editorViewportGridLineCount;
+    if (count <= 0)
+    {
+        return;
+    }
+    const int limited = count > 192 ? 192 : count;
+    const float yOffset = editor::kEditorViewportGridRenderYOffset;
+    for (int index = 0; index < limited; ++index)
+    {
+        const DebugWorldOverlay::EditorViewportGridDrawLine& line =
+            overlay.editorViewportGridLines[index];
+        Color color = kEditorGridMinor;
+        const auto kind = static_cast<editor::EditorViewportGridLineKind>(line.kind);
+        if (kind == editor::EditorViewportGridLineKind::Major)
+        {
+            color = kEditorGridMajor;
+        }
+        else if (kind == editor::EditorViewportGridLineKind::AxisX)
+        {
+            color = kEditorGridAxisX;
+        }
+        else if (kind == editor::EditorViewportGridLineKind::AxisZ)
+        {
+            color = kEditorGridAxisZ;
+        }
+        DrawLine3D(
+            Vector3{line.start.x, line.start.y + yOffset, line.start.z},
+            Vector3{line.end.x, line.end.y + yOffset, line.end.z},
+            color);
+    }
 }
 
 void DrawGhostBox(core::Vec3 center, core::Vec3 size, Color fill, Color wire)
@@ -1685,7 +1722,10 @@ void Renderer::DrawWorld(
 
     RestoreGreyboxImmediateState();
 
-    DrawGrid(kGridSlices, kGridSpacing);
+    if (DrawWorldDrawsEditorViewportGrid(overlay))
+    {
+        DrawEditorViewportGrid(overlay);
+    }
     DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
 
     const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};

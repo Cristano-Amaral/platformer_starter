@@ -18,6 +18,7 @@
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSnap.h"
+#include "editor/EditorViewportGrid.h"
 #include "editor/EditorSelection.h"
 #include "editor/AuthoredLevelCatalog.h"
 #include "editor/ContentBrowser.h"
@@ -177,6 +178,9 @@ struct LevelEditorState
     // M76 snapping. Persisted in editor_layout.ini. Reset Editor Layout does
     // not restore these defaults.
     EditorSnapPreferences snap{};
+    // M77 viewport grid. Visibility is independent of Snap. Spacing follows
+    // snap.translateIncrement. Reset Editor Layout does not restore this.
+    EditorViewportGridPreferences viewportGrid{};
     EditorWorkspaceState workspace{};
     PlacementMode placementMode = PlacementMode::None;
     // M50 transient Static Prop placement. Not authored LevelDefinition data.

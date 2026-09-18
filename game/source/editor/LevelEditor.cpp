@@ -187,6 +187,11 @@ void PersistEditorSnapPreferences(const EditorSnapPreferences& snap)
     SaveEditorSnapPreferencesToLayoutPath(EditorLayoutPath(), snap);
 }
 
+void PersistEditorViewportGridPreferences(const EditorViewportGridPreferences& grid)
+{
+    SaveEditorViewportGridPreferencesToLayoutPath(EditorLayoutPath(), grid);
+}
+
 void DrawEditorSnapControls(LevelEditorState& state, bool compact, const char* incrementId)
 {
     if (ImGui::Checkbox(compact ? "Snap##Toolbar" : "Snap", &state.snap.enabled))
@@ -222,6 +227,35 @@ void DrawEditorSnapControls(LevelEditorState& state, bool compact, const char* i
         ImGui::SetTooltip(
             "Active increment: %g",
             EditorSnapIncrementForMode(state.snap, state.transformMode));
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Checkbox(compact ? "Grid##Toolbar" : "Grid", &state.viewportGrid.visible))
+    {
+        PersistEditorViewportGridPreferences(state.viewportGrid);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip(
+            "World XZ grid at Y=0. Visibility is independent of Snap. "
+            "Minor spacing follows the Translate increment.");
+    }
+    ImGui::SameLine();
+    const float gridSpacing =
+        EffectiveEditorViewportGridMinorSpacing(state.snap.translateIncrement);
+    if (compact)
+    {
+        ImGui::TextDisabled("%g", gridSpacing);
+    }
+    else
+    {
+        ImGui::Text("Spacing %g", gridSpacing);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip(
+            "Effective minor Grid spacing (Translate increment). "
+            "This is not a separate Grid setting.");
     }
 }
 
@@ -1566,6 +1600,8 @@ LevelEditorRequest DrawLevelControls(
         DrawEditorSnapControls(state, false, "##SnapIncrementPanel");
         ImGui::TextWrapped(
             "Hold Ctrl while dragging a gizmo to invert Snap. The Snap toggle is not changed.");
+        ImGui::TextWrapped(
+            "Grid visibility is independent of Snap. Minor spacing follows Translate increment.");
         if (state.transformMode == EditorTransformMode::Resize
             && state.selection.kind != EditorObjectKind::None
             && !IsResizeSelection(state.selection))
@@ -1799,6 +1835,10 @@ LevelEditorRequest DrawEditorMenuBar(
         if (ImGui::MenuItem("Snap", "Ctrl invert", &state.snap.enabled))
         {
             PersistEditorSnapPreferences(state.snap);
+        }
+        if (ImGui::MenuItem("Grid", nullptr, &state.viewportGrid.visible))
+        {
+            PersistEditorViewportGridPreferences(state.viewportGrid);
         }
         ImGui::EndMenu();
     }

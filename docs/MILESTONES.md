@@ -23,17 +23,18 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 76 — Transform Snapping & Authoring Productivity**
+**Milestone 77 — Viewport Grid & Spatial Authoring Guides**
 
-Canonical file: [`docs/milestones/MILESTONE_76.md`](milestones/MILESTONE_76.md)
+Canonical file: [`docs/milestones/MILESTONE_77.md`](milestones/MILESTONE_77.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
 Milestone 73 is CLOSED.
 Milestone 74 is CLOSED.
 Milestone 75 is CLOSED.
-Milestone 76 is implemented, awaiting manual acceptance.
-Do not start Milestone 77.
+Milestone 76 is CLOSED.
+Milestone 77 is implemented, awaiting manual acceptance.
+Do not start Milestone 78.
 
 ## Cursor loading contract
 
@@ -145,7 +146,8 @@ Historical milestone files do not override current implemented behavior.
 | 73 | [Milestone 73 — World Interaction Audio Feedback](milestones/MILESTONE_73.md) | complete |
 | 74 | [Milestone 74 — Gameplay / Level Polish Pass](milestones/MILESTONE_74.md) | complete |
 | 75 | [Milestone 75 — UI Audio & Menu Feedback](milestones/MILESTONE_75.md) | complete |
-| 76 | [Milestone 76 — Transform Snapping & Authoring Productivity](milestones/MILESTONE_76.md) | implemented, awaiting manual acceptance |
+| 76 | [Milestone 76 — Transform Snapping & Authoring Productivity](milestones/MILESTONE_76.md) | complete |
+| 77 | [Milestone 77 — Viewport Grid & Spatial Authoring Guides](milestones/MILESTONE_77.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

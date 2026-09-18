@@ -74,6 +74,8 @@ add_executable(Platformer3D
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
     game/source/editor/EditorSnap.h
+    game/source/editor/EditorViewportGrid.cpp
+    game/source/editor/EditorViewportGrid.h
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorInput.h
     game/source/editor/EditorLayout.cpp
@@ -1137,6 +1139,8 @@ add_executable(EditorPickingTest
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
     game/source/editor/EditorSnap.h
+    game/source/editor/EditorViewportGrid.cpp
+    game/source/editor/EditorViewportGrid.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPickingTest.cpp
@@ -1169,6 +1173,8 @@ add_executable(EditorGizmoTest
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
     game/source/editor/EditorSnap.h
+    game/source/editor/EditorViewportGrid.cpp
+    game/source/editor/EditorViewportGrid.h
     game/source/editor/EditorGizmoTest.cpp
     game/source/editor/EditorLayout.cpp
     game/source/editor/EditorLayout.h
@@ -1199,6 +1205,41 @@ else()
 endif()
 if(WIN32)
     target_link_libraries(EditorGizmoTest PRIVATE ole32 shell32 uuid)
+endif()
+
+# Milestone 77: viewport-grid spacing derivation, line classification, bounded
+# generation, and layout persistence. No window, raylib, or ImGui.
+add_executable(EditorViewportGridTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
+    game/source/editor/EditorViewportGrid.cpp
+    game/source/editor/EditorViewportGrid.h
+    game/source/editor/EditorViewportGridTest.cpp
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/render/CameraView.h
+    game/source/render/Renderer.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(EditorViewportGridTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EditorViewportGridTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EditorViewportGridTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 35 Phase A orientation-widget and dolly math. No window.
@@ -1362,6 +1403,8 @@ add_executable(EditorQuickToolbarTest
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
     game/source/editor/EditorSnap.h
+    game/source/editor/EditorViewportGrid.cpp
+    game/source/editor/EditorViewportGrid.h
     game/source/editor/EditorLayout.cpp
     game/source/editor/EditorLayout.h
     game/source/editor/EditorMath.h

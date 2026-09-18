@@ -4,6 +4,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorViewportGrid.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/StaticPropTransform.h"
 #include "gameplay/CollectibleRunState.h"
@@ -1270,6 +1271,32 @@ int main()
                 editor::kStaticPropDefaultLocalMax)
                 .hit,
             "small scale still pickable at origin");
+    }
+
+    // ---- M77 viewport grid is visualization only ----
+    {
+        const world::LevelDefinition level = MakeStubLevel();
+        const editor::EditorPickingWorldState worldState =
+            editor::AuthoredPickingWorldState(level);
+        const editor::EditorPickingSet before = editor::BuildPickingSet(level, worldState);
+        editor::EditorViewportGridGenerateRequest request{};
+        request.translateIncrement = 0.25f;
+        request.focusX = 0.0f;
+        request.focusZ = 0.0f;
+        request.halfExtent = 8.0f;
+        const editor::EditorViewportGridLines lines =
+            editor::GenerateEditorViewportGridLines(request);
+        Expect(lines.count > 0, "M77 grid generates world lines");
+        const editor::EditorPickingSet after = editor::BuildPickingSet(level, worldState);
+        Expect(after.proxies.size() == before.proxies.size(),
+            "grid generation does not add picking proxies");
+        const editor::Ray3 down{{2.0f, 5.0f, 3.0f}, {0.0f, -1.0f, 0.0f}};
+        Expect(
+            editor::PickNearest(down, before).kind == editor::PickNearest(down, after).kind,
+            "grid generation does not change nearest pick");
+        Expect(
+            editor::PickNearest(down, after).kind == editor::EditorObjectKind::Ground,
+            "Y=0 ray still selects Ground, not a grid");
     }
 
     if (gFailures != 0)

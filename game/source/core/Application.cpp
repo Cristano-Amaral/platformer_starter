@@ -1426,6 +1426,28 @@ int Application::Run()
             input::SetMouseLookActive(applyLook && editorInput.lookHeld);
 
             cameraView = editor::MakeCameraView(levelEditorState.editorCamera);
+            if (editor::EditorViewportGridShouldDraw(
+                    levelEditorState.active, levelEditorState.viewportGrid.visible))
+            {
+                const editor::EditorViewportGridLines gridLines =
+                    editor::GenerateEditorViewportGridLines(
+                        editor::MakeEditorViewportGridGenerateRequest(
+                            levelEditorState.snap.translateIncrement,
+                            cameraView.position,
+                            cameraView.target));
+                overlay.editorViewportGridLineCount = gridLines.count;
+                const int gridCount =
+                    gridLines.count > editor::kEditorViewportGridMaxLines
+                    ? editor::kEditorViewportGridMaxLines
+                    : gridLines.count;
+                for (int index = 0; index < gridCount; ++index)
+                {
+                    overlay.editorViewportGridLines[index].start = gridLines.items[index].start;
+                    overlay.editorViewportGridLines[index].end = gridLines.items[index].end;
+                    overlay.editorViewportGridLines[index].kind =
+                        static_cast<int>(gridLines.items[index].kind);
+                }
+            }
             overlay.drawSpawnMarker = true;
             overlay.drawLevelGoalAuthoredVolume = true;
             overlay.spawnCenter = levelDefinition.initialSpawnVisualCenter;
@@ -2598,6 +2620,9 @@ void Application::Initialize()
     levelEditorState.contentBrowser.viewMode = editor::LoadContentBrowserViewMode();
     levelEditorState.snap = editor::LoadEditorSnapPreferencesFromLayoutPath(editor::EditorLayoutPath());
     editor::BindEditorSnapPreferences(&levelEditorState.snap);
+    levelEditorState.viewportGrid =
+        editor::LoadEditorViewportGridPreferencesFromLayoutPath(editor::EditorLayoutPath());
+    editor::BindEditorViewportGridPreferences(&levelEditorState.viewportGrid);
 #endif
     initialized = true;
     gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState, pauseMenuState);

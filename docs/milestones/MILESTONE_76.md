@@ -1,6 +1,6 @@
 # Milestone 76 --- Transform Snapping & Authoring Productivity
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/76-transform-snapping-authoring-productivity`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

@@ -5,6 +5,7 @@
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSnap.h"
+#include "editor/EditorViewportGrid.h"
 #include "editor/StaticPropTransform.h"
 #include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
@@ -2197,6 +2198,20 @@ int main()
         Expect(editor::EffectiveSnapEnabled(persisted.enabled, invertHeld) == false,
             "invert disables snapping");
         Expect(persisted.enabled, "modifier does not mutate persisted Snap toggle");
+
+        Expect(
+            editor::EffectiveEditorViewportGridMinorSpacing(0.25f) == 0.25f
+                && editor::EffectiveEditorViewportGridMinorSpacing(0.50f) == 0.50f,
+            "M77 minor spacing follows Translate increment");
+        editor::EditorViewportGridPreferences grid =
+            editor::MakeDefaultEditorViewportGridPreferences();
+        Expect(grid.visible, "M77 Grid defaults visible");
+        Expect(
+            grid.visible && !editor::EffectiveSnapEnabled(false, false),
+            "Snap off does not hide Grid");
+        Expect(
+            editor::EditorSnapIsActive(&persisted, invertHeld) == false,
+            "Ctrl inversion remains authoritative for Snap");
 
         Expect(
             editor::QuantizeToIncrement(1.10f, 0.25f) == 1.00f,

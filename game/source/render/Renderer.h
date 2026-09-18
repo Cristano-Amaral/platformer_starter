@@ -119,7 +119,30 @@ struct DebugWorldOverlay
     bool drawRotateGizmo = false;
     int gizmoHoveredSign = 1;
     int gizmoActiveSign = 1;
+    // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
+    // authored, not a Jolt body, and never a Gameplay/Release world grid.
+    int editorViewportGridLineCount = 0;
+    struct EditorViewportGridDrawLine
+    {
+        core::Vec3 start{};
+        core::Vec3 end{};
+        int kind = 0; // 0 minor, 1 major, 2 axisX, 3 axisZ
+    };
+    EditorViewportGridDrawLine editorViewportGridLines[192]{};
 };
+
+// DrawWorld no longer calls raylib DrawGrid. Gameplay and Release overlays
+// stay default-empty, so neither a legacy grid nor the M77 authoring grid
+// is drawn outside the Development editor.
+inline bool DrawWorldDrawsLegacyRaylibGrid()
+{
+    return false;
+}
+
+inline bool DrawWorldDrawsEditorViewportGrid(const DebugWorldOverlay& overlay)
+{
+    return overlay.editorViewportGridLineCount > 0;
+}
 
 // Screen-space orientation triad. Drawn after EndMode3D, before ImGui.
 struct OrientationWidgetOverlay
