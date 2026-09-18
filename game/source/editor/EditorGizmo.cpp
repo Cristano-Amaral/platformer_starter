@@ -2,6 +2,7 @@
 
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorMath.h"
+#include "editor/EditorSnap.h"
 #include "editor/StaticPropTransform.h"
 #include "world/RespawnWorld.h"
 #include "world/ItemPickup.h"
@@ -1659,7 +1660,9 @@ bool UpdateResizeInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased)
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences,
+    bool invertModifier)
 {
     if (state.dragging)
     {
@@ -1676,7 +1679,13 @@ bool UpdateResizeInteraction(
             return true;
         }
 
-        *size = GizmoResizeSize(state, mouseRay, view);
+        const core::Vec3 intended = GizmoResizeSize(state, mouseRay, view);
+        const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
+        const float increment = snapActive
+            ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Resize)
+            : 0.0f;
+        *size = ApplyAuthoredTransformSnap(
+            intended, EditorTransformMode::Resize, state.active, snapActive, increment);
         state.hovered = state.active;
         state.hoveredSign = state.dragHandleSign;
         return true;
@@ -1867,7 +1876,9 @@ bool UpdateScaleInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased)
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences,
+    bool invertModifier)
 {
     if (state.dragging)
     {
@@ -1884,7 +1895,13 @@ bool UpdateScaleInteraction(
             return true;
         }
 
-        *scale = GizmoScaleSize(state, mouseRay, view);
+        const core::Vec3 intended = GizmoScaleSize(state, mouseRay, view);
+        const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
+        const float increment = snapActive
+            ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Scale)
+            : 0.0f;
+        *scale = ApplyAuthoredTransformSnap(
+            intended, EditorTransformMode::Scale, state.active, snapActive, increment);
         state.hovered = state.active;
         state.hoveredSign = state.dragHandleSign;
         return true;
@@ -2080,7 +2097,9 @@ bool UpdateRotateInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased)
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences,
+    bool invertModifier)
 {
     if (state.dragging)
     {
@@ -2103,7 +2122,13 @@ bool UpdateRotateInteraction(
             return true;
         }
 
-        *rotation = GizmoRotateDegrees(state, mouseRay);
+        const core::Vec3 intended = GizmoRotateDegrees(state, mouseRay);
+        const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
+        const float increment = snapActive
+            ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Rotate)
+            : 0.0f;
+        *rotation = ApplyAuthoredTransformSnap(
+            intended, EditorTransformMode::Rotate, state.active, snapActive, increment);
         state.hovered = state.active;
         return true;
     }
@@ -2156,7 +2181,9 @@ bool UpdateGizmoInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased)
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences,
+    bool invertModifier)
 {
     if (state.dragging)
     {
@@ -2173,7 +2200,13 @@ bool UpdateGizmoInteraction(
             return true;
         }
 
-        const core::Vec3 newCenter = GizmoDragPosition(state, mouseRay, view);
+        const core::Vec3 intended = GizmoDragPosition(state, mouseRay, view);
+        const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
+        const float increment = snapActive
+            ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Translate)
+            : 0.0f;
+        const core::Vec3 newCenter = ApplyAuthoredTransformSnap(
+            intended, EditorTransformMode::Translate, state.active, snapActive, increment);
         if (state.dragTarget.kind == EditorObjectKind::Checkpoint)
         {
             if (!SetCheckpointAssemblyCenter(workingCopy, state.dragTarget.index, newCenter))

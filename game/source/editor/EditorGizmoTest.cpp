@@ -4,6 +4,7 @@
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
+#include "editor/EditorSnap.h"
 #include "editor/StaticPropTransform.h"
 #include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
@@ -14,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -2179,6 +2181,424 @@ int main()
             "Revert clears pending Add/Modify visuals");
         Expect(editor::MakePendingDeleteVisuals(active, map).collectibleCenters.empty(),
             "Revert clears pending-delete visuals");
+    }
+
+    // ---- M76 snapping math (ImGui-free) ----
+    {
+        Expect(
+            editor::EffectiveSnapEnabled(true, false) && !editor::EffectiveSnapEnabled(true, true),
+            "Ctrl inverts enabled Snap");
+        Expect(
+            !editor::EffectiveSnapEnabled(false, false) && editor::EffectiveSnapEnabled(false, true),
+            "Ctrl inverts disabled Snap");
+        editor::EditorSnapPreferences persisted = editor::MakeDefaultEditorSnapPreferences();
+        persisted.enabled = true;
+        const bool invertHeld = true;
+        Expect(editor::EffectiveSnapEnabled(persisted.enabled, invertHeld) == false,
+            "invert disables snapping");
+        Expect(persisted.enabled, "modifier does not mutate persisted Snap toggle");
+
+        Expect(
+            editor::QuantizeToIncrement(1.10f, 0.25f) == 1.00f,
+            "translate 0.25 snaps positive 1.10 to 1.00");
+        Expect(
+            editor::QuantizeToIncrement(1.13f, 0.25f) == 1.25f,
+            "translate 0.25 snaps positive 1.13 to 1.25");
+        Expect(
+            editor::QuantizeToIncrement(-1.10f, 0.25f) == -1.00f,
+            "translate 0.25 snaps negative -1.10 to -1.00");
+        Expect(
+            editor::QuantizeToIncrement(-1.13f, 0.25f) == -1.25f,
+            "translate 0.25 snaps negative -1.13 to -1.25");
+        Expect(editor::QuantizeToIncrement(1.00f, 0.25f) == 1.00f, "exact +boundary stays");
+        Expect(editor::QuantizeToIncrement(-0.50f, 0.25f) == -0.50f, "exact -boundary stays");
+        Expect(editor::QuantizeToIncrement(0.125f, 0.25f) == 0.25f,
+            "half increment +0.125 rounds away from zero");
+        Expect(editor::QuantizeToIncrement(-0.125f, 0.25f) == -0.25f,
+            "half increment -0.125 rounds away from zero");
+        Expect(editor::QuantizeToIncrement(0.124f, 0.25f) == 0.0f, "just below +half goes toward zero");
+        Expect(editor::QuantizeToIncrement(0.126f, 0.25f) == 0.25f, "just above +half goes away from zero");
+
+        float repeated = editor::QuantizeToIncrement(0.37f, 0.25f);
+        Expect(repeated == 0.25f, "0.37 snaps to 0.25");
+        for (int i = 0; i < 64; ++i)
+        {
+            repeated = editor::QuantizeToIncrement(repeated, 0.25f);
+        }
+        Expect(repeated == 0.25f, "repeated quantize does not drift");
+
+        Expect(
+            NearlyEqual(editor::QuantizeToIncrement(0.14f, 0.10f), 0.10f, 0.0001f),
+            "scale 0.10 snaps 0.14 to 0.10");
+        Expect(
+            NearlyEqual(editor::QuantizeToIncrement(0.16f, 0.10f), 0.20f, 0.0001f),
+            "scale 0.10 snaps 0.16 to 0.20");
+        Expect(editor::QuantizeToIncrement(22.0f, 15.0f) == 15.0f, "rotate 15 snaps 22 to 15");
+        Expect(editor::QuantizeToIncrement(23.0f, 15.0f) == 30.0f, "rotate 15 snaps 23 to 30");
+        Expect(editor::QuantizeToIncrement(-7.0f, 15.0f) == 0.0f, "rotate 15 snaps -7 to 0");
+        Expect(editor::QuantizeToIncrement(-8.0f, 15.0f) == -15.0f, "rotate 15 snaps -8 to -15");
+
+        const core::Vec3 snappedX = editor::QuantizeVec3Axis({1.10f, 2.2f, 3.3f}, EditorAxis::X, 0.25f);
+        Expect(snappedX.x == 1.00f && snappedX.y == 2.2f && snappedX.z == 3.3f,
+            "quantization is per-axis");
+
+        const core::Vec3 tinyResize = editor::ApplyAuthoredTransformSnap(
+            {0.05f, 1.0f, 1.0f},
+            editor::EditorTransformMode::Resize,
+            EditorAxis::X,
+            true,
+            0.25f);
+        Expect(tinyResize.x == editor::kMinAuthoredBoxExtent, "resize snap still clamps minimum");
+        Expect(tinyResize.y == 1.0f && tinyResize.z == 1.0f, "resize snap leaves other axes");
+
+        const core::Vec3 snappedResize = editor::ApplyAuthoredTransformSnap(
+            {1.10f, 1.0f, 1.0f},
+            editor::EditorTransformMode::Resize,
+            EditorAxis::X,
+            true,
+            0.25f);
+        Expect(snappedResize.x == 1.00f, "resize 0.25 snaps 1.10 to 1.00");
+
+        const core::Vec3 unsnappedResize = editor::ApplyAuthoredTransformSnap(
+            {1.10f, 1.0f, 1.0f},
+            editor::EditorTransformMode::Resize,
+            EditorAxis::X,
+            false,
+            0.25f);
+        Expect(unsnappedResize.x == 1.10f, "snap disabled preserves unsnapped resize");
+
+        const core::Vec3 tinyScale = editor::ApplyAuthoredTransformSnap(
+            {0.02f, 1.0f, 1.0f},
+            editor::EditorTransformMode::Scale,
+            EditorAxis::X,
+            true,
+            0.10f);
+        Expect(tinyScale.x == world::kMinStaticPropScale, "scale snap still clamps minimum");
+
+        const core::Vec3 snappedScale = editor::ApplyAuthoredTransformSnap(
+            {1.14f, 1.0f, 1.0f},
+            editor::EditorTransformMode::Scale,
+            EditorAxis::X,
+            true,
+            0.10f);
+        Expect(NearlyEqual(snappedScale.x, 1.10f, 0.0001f), "scale 0.10 snaps 1.14 to 1.10");
+
+        const core::Vec3 unsnappedTranslate = editor::ApplyAuthoredTransformSnap(
+            {1.10f, 2.0f, 3.0f},
+            editor::EditorTransformMode::Translate,
+            EditorAxis::X,
+            false,
+            0.25f);
+        Expect(unsnappedTranslate.x == 1.10f, "snap disabled preserves unsnapped translate");
+    }
+
+    // ---- M76 live gizmo snap uses drag-start authority ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        working.elevatedPlatforms[0].center = {0.0f, 1.0f, 0.0f};
+        editor::GizmoInteractionState state{};
+        const render::CameraView view = MakeView({0.0f, 1.0f, 10.0f}, {0.0f, 1.0f, 0.0f});
+        const EditorSelection platform0{EditorObjectKind::ElevatedPlatform, 0};
+        editor::EditorSnapPreferences snap = editor::MakeDefaultEditorSnapPreferences();
+        snap.enabled = true;
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                platform0,
+                working,
+                view,
+                RayThrough(view, {0.5f, 1.0f, 0.0f}),
+                false,
+                false,
+                true,
+                true,
+                false,
+                &snap,
+                false),
+            "snapped translate can begin");
+        const core::Vec3 dragStart = state.dragStartPosition;
+        const editor::Ray3 holdRay = RayThrough(view, {1.10f, 1.0f, 0.0f});
+        const core::Vec3 intended = editor::GizmoDragPosition(state, holdRay, view);
+        const core::Vec3 expected = editor::ApplyAuthoredTransformSnap(
+            intended,
+            editor::EditorTransformMode::Translate,
+            state.active,
+            true,
+            0.25f);
+        editor::UpdateGizmoInteraction(
+            state,
+            platform0,
+            working,
+            view,
+            holdRay,
+            false,
+            false,
+            false,
+            true,
+            false,
+            &snap,
+            false);
+        Expect(working.elevatedPlatforms[0].center.x == expected.x, "live translate snap writes quantized X");
+        Expect(NearlyEqual(working.elevatedPlatforms[0].center.y, 1.0f), "live translate snap keeps Y");
+        Expect(Vec3Near(state.dragStartPosition, dragStart, 0.0001f), "drag-start pose is stable");
+        for (int i = 0; i < 32; ++i)
+        {
+            editor::UpdateGizmoInteraction(
+                state,
+                platform0,
+                working,
+                view,
+                holdRay,
+                false,
+                false,
+                false,
+                true,
+                false,
+                &snap,
+                false);
+        }
+        Expect(working.elevatedPlatforms[0].center.x == expected.x, "repeated snapped frames do not drift");
+
+        snap.enabled = false;
+        working.elevatedPlatforms[0].center = dragStart;
+        editor::EndGizmoDrag(state);
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                platform0,
+                working,
+                view,
+                RayThrough(view, {0.5f, 1.0f, 0.0f}),
+                false,
+                false,
+                true,
+                true,
+                false,
+                &snap,
+                false),
+            "unsnapped translate can begin");
+        const editor::Ray3 unsnappedRay = RayThrough(view, {1.10f, 1.0f, 0.0f});
+        const core::Vec3 unsnappedIntended = editor::GizmoDragPosition(state, unsnappedRay, view);
+        editor::UpdateGizmoInteraction(
+            state,
+            platform0,
+            working,
+            view,
+            unsnappedRay,
+            false,
+            false,
+            false,
+            true,
+            false,
+            &snap,
+            false);
+        Expect(
+            working.elevatedPlatforms[0].center.x == unsnappedIntended.x,
+            "snap disabled keeps unsnapped translate");
+        Expect(snap.enabled == false, "unsnapped drag does not enable persisted Snap");
+        editor::EndGizmoDrag(state);
+
+        snap.enabled = false;
+        working.elevatedPlatforms[0].center = {0.0f, 1.0f, 0.0f};
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                platform0,
+                working,
+                view,
+                RayThrough(view, {0.5f, 1.0f, 0.0f}),
+                false,
+                false,
+                true,
+                true,
+                false,
+                &snap,
+                true),
+            "Ctrl can temporarily enable Snap");
+        const editor::Ray3 invertRay = RayThrough(view, {1.10f, 1.0f, 0.0f});
+        const core::Vec3 invertIntended = editor::GizmoDragPosition(state, invertRay, view);
+        const core::Vec3 invertExpected = editor::ApplyAuthoredTransformSnap(
+            invertIntended,
+            editor::EditorTransformMode::Translate,
+            state.active,
+            true,
+            0.25f);
+        editor::UpdateGizmoInteraction(
+            state,
+            platform0,
+            working,
+            view,
+            invertRay,
+            false,
+            false,
+            false,
+            true,
+            false,
+            &snap,
+            true);
+        Expect(
+            working.elevatedPlatforms[0].center.x == invertExpected.x,
+            "Ctrl temporarily enables translate snap");
+        Expect(snap.enabled == false, "temporary enable does not persist Snap on");
+        editor::EndGizmoDrag(state);
+    }
+
+    // ---- M76 Dynamic Box authored vs runtime ----
+    {
+        world::LevelDefinition working{};
+        working.dynamicBoxes.push_back(
+            {{1.10f, 2.0f, 0.0f}, world::kDefaultDynamicBoxSize, world::kDefaultDynamicBoxMassKg});
+        const core::Vec3 runtimeCenter{9.0f, 8.0f, 7.0f};
+        const core::Vec3 intended = editor::ApplyAuthoredTransformSnap(
+            working.dynamicBoxes[0].center,
+            editor::EditorTransformMode::Translate,
+            EditorAxis::X,
+            true,
+            0.25f);
+        working.dynamicBoxes[0].center = intended;
+        Expect(working.dynamicBoxes[0].center.x == 1.00f, "Dynamic Box snap writes authored center");
+        Expect(runtimeCenter.x == 9.0f && runtimeCenter.y == 8.0f && runtimeCenter.z == 7.0f,
+            "Dynamic Box snap does not capture runtime Jolt pose");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::DynamicBox, 0}),
+            "Dynamic Box still has no Scale");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::DynamicBox, 0}),
+            "Dynamic Box still has no Rotate");
+    }
+
+    // ---- M76 Item Pickup Rotate still edits visualRotationDegrees ----
+    {
+        world::LevelDefinition working{};
+        world::ItemPickupSpec pickup{};
+        pickup.position = {3.0f, 1.0f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        pickup.visualRotationDegrees = {7.0f, 0.0f, 0.0f};
+        pickup.visualScale = {1.0f, 1.0f, 1.0f};
+        working.itemPickups.push_back(pickup);
+        const EditorSelection pickup0{EditorObjectKind::ItemPickup, 0};
+        Expect(editor::IsRotateSelection(pickup0), "Item Pickup remains Rotate-supported");
+        Expect(
+            editor::GetEditableRotation(working, pickup0) == &working.itemPickups[0].visualRotationDegrees,
+            "Rotate authority stays visualRotationDegrees");
+        Expect(
+            editor::GetEditablePosition(working, pickup0) == &working.itemPickups[0].position,
+            "Translate authority stays logical position");
+        *editor::GetEditableRotation(working, pickup0) = editor::ApplyAuthoredTransformSnap(
+            working.itemPickups[0].visualRotationDegrees,
+            editor::EditorTransformMode::Rotate,
+            EditorAxis::X,
+            true,
+            15.0f);
+        Expect(working.itemPickups[0].visualRotationDegrees.x == 0.0f, "Item Pickup Rotate snaps visual X");
+        Expect(working.itemPickups[0].position.x == 3.0f, "Item Pickup Rotate does not move logical position");
+    }
+
+    // ---- M76 unsupported combinations stay unsupported ----
+    {
+        Expect(!editor::IsGizmoSelection({EditorObjectKind::Camera, 0}), "Camera still has no Translate");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Spawn, 0}), "Spawn still has no Resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Checkpoint, 0}), "Checkpoint still has no Resize");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::StaticProp, 0}), "Static Prop still has no Resize");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::ElevatedPlatform, 0}),
+            "Platform still has no Scale");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::Door, 0}), "Door still has no Rotate");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::Ground, 0}), "Ground still has no Rotate");
+        Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop keeps Scale");
+        Expect(editor::IsRotateSelection({EditorObjectKind::StaticProp, 0}), "Static Prop keeps Rotate");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "Goal keeps Translate");
+        Expect(editor::IsResizeSelection({EditorObjectKind::Goal, 0}), "Goal keeps Resize");
+    }
+
+    // ---- M76 layout persistence / defaults / invalid values ----
+    {
+        const char* oldLayout =
+            "[Window][Hierarchy]\n"
+            "Pos=8,8\n"
+            "Size=340,400\n";
+        const editor::EditorSnapPreferences fromOld =
+            editor::ParseEditorSnapPreferencesFromLayoutText(oldLayout);
+        Expect(fromOld.enabled, "old layout defaults Snap enabled");
+        Expect(fromOld.translateIncrement == editor::kDefaultTranslateSnapIncrement,
+            "old layout defaults Translate increment");
+        Expect(fromOld.resizeIncrement == editor::kDefaultResizeSnapIncrement,
+            "old layout defaults Resize increment");
+        Expect(fromOld.scaleIncrement == editor::kDefaultScaleSnapIncrement,
+            "old layout defaults Scale increment");
+        Expect(fromOld.rotateIncrementDegrees == editor::kDefaultRotateSnapIncrementDegrees,
+            "old layout defaults Rotate increment");
+
+        editor::EditorSnapPreferences custom = editor::MakeDefaultEditorSnapPreferences();
+        custom.enabled = false;
+        custom.translateIncrement = 0.5f;
+        custom.resizeIncrement = 1.0f;
+        custom.scaleIncrement = 0.25f;
+        custom.rotateIncrementDegrees = 45.0f;
+        const std::string merged =
+            editor::MergeEditorSnapPreferencesIntoLayoutText(oldLayout, custom);
+        Expect(merged.find("[Window][Hierarchy]") != std::string::npos,
+            "merge keeps existing ImGui windows");
+        const editor::EditorSnapPreferences roundTrip =
+            editor::ParseEditorSnapPreferencesFromLayoutText(merged);
+        Expect(!roundTrip.enabled, "round-trip preserves Snap off");
+        Expect(roundTrip.translateIncrement == 0.5f, "round-trip Translate increment");
+        Expect(roundTrip.resizeIncrement == 1.0f, "round-trip Resize increment");
+        Expect(NearlyEqual(roundTrip.scaleIncrement, 0.25f, 0.0001f), "round-trip Scale increment");
+        Expect(roundTrip.rotateIncrementDegrees == 45.0f, "round-trip Rotate increment");
+
+        const char* invalidLayout =
+            "[Platformer3D.Snap][Settings]\n"
+            "Enabled=1\n"
+            "Translate=-4\n"
+            "Resize=nan\n"
+            "Scale=0\n"
+            "Rotate=5000\n";
+        const editor::EditorSnapPreferences sanitized =
+            editor::ParseEditorSnapPreferencesFromLayoutText(invalidLayout);
+        Expect(sanitized.translateIncrement == editor::kDefaultTranslateSnapIncrement,
+            "negative increment falls back");
+        Expect(sanitized.resizeIncrement == editor::kDefaultResizeSnapIncrement,
+            "NaN increment falls back");
+        Expect(sanitized.scaleIncrement == editor::kDefaultScaleSnapIncrement,
+            "zero increment falls back");
+        Expect(sanitized.rotateIncrementDegrees == editor::kMaxSnapIncrement,
+            "huge increment clamps to max");
+
+        const std::filesystem::path temp =
+            std::filesystem::temp_directory_path() / "platformer3d_m76_snap";
+        std::filesystem::remove_all(temp);
+        std::filesystem::create_directories(temp);
+        const std::filesystem::path layoutPath = temp / "editor_layout.ini";
+        {
+            std::ofstream out(layoutPath, std::ios::binary);
+            out << oldLayout;
+        }
+        Expect(
+            editor::LoadEditorSnapPreferencesFromLayoutPath(layoutPath).enabled,
+            "missing M76 fields load defaults from disk");
+        Expect(
+            editor::SaveEditorSnapPreferencesToLayoutPath(layoutPath, custom),
+            "layout save writes M76 section");
+        const editor::EditorSnapPreferences loaded =
+            editor::LoadEditorSnapPreferencesFromLayoutPath(layoutPath);
+        Expect(!loaded.enabled && loaded.translateIncrement == 0.5f, "disk round-trip");
+        std::string onDisk;
+        {
+            std::ifstream in(layoutPath);
+            std::string line;
+            while (std::getline(in, line))
+            {
+                onDisk += line;
+                onDisk += '\n';
+            }
+        }
+        Expect(onDisk.find("[Window][Hierarchy]") != std::string::npos,
+            "disk merge keeps Hierarchy window");
+        std::filesystem::remove_all(temp);
+
+        const editor::EditorSnapPreferences missingFile =
+            editor::LoadEditorSnapPreferencesFromLayoutPath({});
+        Expect(missingFile.translateIncrement == editor::kDefaultTranslateSnapIncrement,
+            "empty path uses M76 defaults");
     }
 
     if (gFailures != 0)

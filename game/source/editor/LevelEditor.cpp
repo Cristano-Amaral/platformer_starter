@@ -182,6 +182,49 @@ void EditVec3(const char* label, core::Vec3& value)
     ImGui::InputFloat3(label, &value.x, kFloatFormat);
 }
 
+void PersistEditorSnapPreferences(const EditorSnapPreferences& snap)
+{
+    SaveEditorSnapPreferencesToLayoutPath(EditorLayoutPath(), snap);
+}
+
+void DrawEditorSnapControls(LevelEditorState& state, bool compact, const char* incrementId)
+{
+    if (ImGui::Checkbox(compact ? "Snap##Toolbar" : "Snap", &state.snap.enabled))
+    {
+        PersistEditorSnapPreferences(state.snap);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip(
+            "Hold %s while dragging a gizmo to invert Snap. The stored toggle is unchanged.",
+            kEditorSnapInvertModifierName);
+    }
+
+    ImGui::SameLine();
+    ImGui::TextUnformatted(compact ? "Inc" : EditorSnapIncrementLabel(state.transformMode));
+    ImGui::SameLine();
+    float* increment = EditorSnapIncrementPointer(state.snap, state.transformMode);
+    float value = *increment;
+    const char* format =
+        state.transformMode == EditorTransformMode::Rotate ? "%.1f" : "%.2f";
+    ImGui::SetNextItemWidth(compact ? 56.0f : 72.0f);
+    if (ImGui::InputFloat(incrementId, &value, 0.0f, 0.0f, format))
+    {
+        *increment = value;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit())
+    {
+        *increment = SanitizeSnapIncrement(value, EditorSnapDefaultIncrement(state.transformMode));
+        PersistEditorSnapPreferences(state.snap);
+    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip(
+            "Active increment: %g",
+            EditorSnapIncrementForMode(state.snap, state.transformMode));
+    }
+}
+
 void ReadOnlyVec3(const char* label, core::Vec3 value)
 {
     ImGui::Text("%s: %.6f  %.6f  %.6f", label, value.x, value.y, value.z);
@@ -1520,6 +1563,9 @@ LevelEditorRequest DrawLevelControls(
         {
             ImGui::TextUnformatted("Mode locked while a gizmo drag is active.");
         }
+        DrawEditorSnapControls(state, false, "##SnapIncrementPanel");
+        ImGui::TextWrapped(
+            "Hold Ctrl while dragging a gizmo to invert Snap. The Snap toggle is not changed.");
         if (state.transformMode == EditorTransformMode::Resize
             && state.selection.kind != EditorObjectKind::None
             && !IsResizeSelection(state.selection))
@@ -1750,6 +1796,10 @@ LevelEditorRequest DrawEditorMenuBar(
                 state.transformMode, state.gizmo.dragging, EditorTransformMode::Rotate);
         }
         ImGui::EndDisabled();
+        if (ImGui::MenuItem("Snap", "Ctrl invert", &state.snap.enabled))
+        {
+            PersistEditorSnapPreferences(state.snap);
+        }
         ImGui::EndMenu();
     }
 
@@ -2175,6 +2225,9 @@ LevelEditorRequest DrawEditorQuickToolbar(
         "Rotate",
         "Rotate (Static Prop rotation / Item Pickup visual rotation)",
         EditorTransformMode::Rotate);
+
+    ImGui::SameLine();
+    DrawEditorSnapControls(state, true, "##SnapIncrementToolbar");
 
     ImGui::SameLine();
     ImGui::TextDisabled("|");

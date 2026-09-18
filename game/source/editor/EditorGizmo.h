@@ -18,6 +18,7 @@
 namespace editor
 {
 struct StructuralIndexMap;
+struct EditorSnapPreferences;
 enum class EditorAxis
 {
     None,
@@ -413,7 +414,9 @@ bool UpdateResizeInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased);
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences = nullptr,
+    bool invertModifier = false);
 
 GizmoDrawRequest MakeScaleGizmoDrawRequest(
     EditorSelection selection,
@@ -447,7 +450,9 @@ bool UpdateScaleInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased);
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences = nullptr,
+    bool invertModifier = false);
 
 GizmoDrawRequest MakeRotateGizmoDrawRequest(
     EditorSelection selection,
@@ -485,7 +490,9 @@ bool UpdateRotateInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased);
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences = nullptr,
+    bool invertModifier = false);
 
 // Live per-frame interaction. Uses the tested pick/drag helpers. Returns true
 // when this frame's LMB must not also world-pick (active drag, drag start, or
@@ -500,7 +507,9 @@ bool UpdateGizmoInteraction(
     bool lookHeld,
     bool selectPressed,
     bool selectHeld,
-    bool selectReleased);
+    bool selectReleased,
+    const EditorSnapPreferences* snapPreferences = nullptr,
+    bool invertModifier = false);
 
 bool IsFiniteVec3(core::Vec3 value);
 }

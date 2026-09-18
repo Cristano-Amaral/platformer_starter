@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 75 — UI Audio & Menu Feedback.
+Milestone 76 — Transform Snapping & Authoring Productivity.
 
-Canonical file: [`docs/milestones/MILESTONE_75.md`](docs/milestones/MILESTONE_75.md)
+Canonical file: [`docs/milestones/MILESTONE_76.md`](docs/milestones/MILESTONE_76.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is implemented, awaiting manual acceptance. Do not start Milestone 76.
+Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is implemented, awaiting manual acceptance. Do not start Milestone 77.
 
 ## Source of truth
 1. Current repository code.

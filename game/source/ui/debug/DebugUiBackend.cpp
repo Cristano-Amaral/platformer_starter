@@ -3,10 +3,13 @@
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 
 #include "editor/EditorLayout.h"
+#include "editor/EditorSnap.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "raylib.h"
 #include "rlImGui.h"
 
+#include <cstring>
 #include <filesystem>
 
 namespace ui
@@ -38,6 +41,43 @@ void DebugUiBackend::Initialize()
     {
         ImGui::GetIO().IniFilename = nullptr;
     }
+
+    static ImGuiSettingsHandler snapHandler;
+    snapHandler.TypeName = editor::kEditorSnapIniTypeName;
+    snapHandler.TypeHash = ImHashStr(snapHandler.TypeName);
+    snapHandler.ReadOpenFn = [](ImGuiContext*, ImGuiSettingsHandler*, const char* name) -> void* {
+        if (name == nullptr || std::strcmp(name, editor::kEditorSnapIniEntryName) != 0)
+        {
+            return nullptr;
+        }
+        editor::EditorSnapPreferences* prefs = editor::BoundEditorSnapPreferences();
+        return prefs == nullptr ? nullptr : prefs;
+    };
+    snapHandler.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler*, void* entry, const char* line) {
+        if (entry == nullptr || line == nullptr)
+        {
+            return;
+        }
+        editor::ParseEditorSnapPreferenceLine(
+            *static_cast<editor::EditorSnapPreferences*>(entry), line);
+        editor::SanitizeEditorSnapPreferences(
+            *static_cast<editor::EditorSnapPreferences*>(entry));
+    };
+    snapHandler.WriteAllFn = [](ImGuiContext*, ImGuiSettingsHandler* handler, ImGuiTextBuffer* outBuf) {
+        editor::EditorSnapPreferences* prefs = editor::BoundEditorSnapPreferences();
+        if (prefs == nullptr || handler == nullptr || outBuf == nullptr)
+        {
+            return;
+        }
+        const std::string section = editor::SerializeEditorSnapPreferencesSection(*prefs);
+        outBuf->append(section.c_str(), section.c_str() + section.size());
+        if (section.empty() || section.back() != '\n')
+        {
+            outBuf->append("\n");
+        }
+    };
+    ImGui::AddSettingsHandler(&snapHandler);
+
     initialized = true;
 }
 

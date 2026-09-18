@@ -60,6 +60,7 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/StaticModelThumbnailCache.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
+#include "editor/EditorLayout.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
@@ -2182,7 +2183,9 @@ int Application::Run()
                     editorInput.lookHeld,
                     selectPressedForGizmo,
                     editorInput.selectHeld,
-                    editorInput.selectReleased);
+                    editorInput.selectReleased,
+                    &levelEditorState.snap,
+                    editorInput.ctrlHeld);
             }
             else if (levelEditorState.transformMode == editor::EditorTransformMode::Scale)
             {
@@ -2196,7 +2199,9 @@ int Application::Run()
                     editorInput.lookHeld,
                     selectPressedForGizmo,
                     editorInput.selectHeld,
-                    editorInput.selectReleased);
+                    editorInput.selectReleased,
+                    &levelEditorState.snap,
+                    editorInput.ctrlHeld);
             }
             else if (levelEditorState.transformMode == editor::EditorTransformMode::Rotate)
             {
@@ -2210,7 +2215,9 @@ int Application::Run()
                     editorInput.lookHeld,
                     selectPressedForGizmo,
                     editorInput.selectHeld,
-                    editorInput.selectReleased);
+                    editorInput.selectReleased,
+                    &levelEditorState.snap,
+                    editorInput.ctrlHeld);
             }
             else
             {
@@ -2224,7 +2231,9 @@ int Application::Run()
                     editorInput.lookHeld,
                     selectPressedForGizmo,
                     editorInput.selectHeld,
-                    editorInput.selectReleased);
+                    editorInput.selectReleased,
+                    &levelEditorState.snap,
+                    editorInput.ctrlHeld);
             }
             if (editor::ShouldCancelPlacementMode(
                     levelEditorState.placementMode,
@@ -2587,6 +2596,8 @@ void Application::Initialize()
     debugUi.Initialize();
     levelEditorState.selectedBuildTarget = editor::LoadEditorBuildSelection();
     levelEditorState.contentBrowser.viewMode = editor::LoadContentBrowserViewMode();
+    levelEditorState.snap = editor::LoadEditorSnapPreferencesFromLayoutPath(editor::EditorLayoutPath());
+    editor::BindEditorSnapPreferences(&levelEditorState.snap);
 #endif
     initialized = true;
     gameplay::EnterMainMenu(topLevelFlow, mainMenuState, runCompleteState, pauseMenuState);

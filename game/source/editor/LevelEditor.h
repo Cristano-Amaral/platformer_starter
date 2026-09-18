@@ -17,6 +17,7 @@
 #include "editor/EditorBuildPreference.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
+#include "editor/EditorSnap.h"
 #include "editor/EditorSelection.h"
 #include "editor/AuthoredLevelCatalog.h"
 #include "editor/ContentBrowser.h"
@@ -173,6 +174,9 @@ struct LevelEditorState
     EditorCamera editorCamera{};
     GizmoInteractionState gizmo{};
     EditorTransformMode transformMode = EditorTransformMode::Translate;
+    // M76 snapping. Persisted in editor_layout.ini. Reset Editor Layout does
+    // not restore these defaults.
+    EditorSnapPreferences snap{};
     EditorWorkspaceState workspace{};
     PlacementMode placementMode = PlacementMode::None;
     // M50 transient Static Prop placement. Not authored LevelDefinition data.

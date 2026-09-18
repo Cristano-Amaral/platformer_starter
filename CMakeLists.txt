@@ -72,6 +72,8 @@ add_executable(Platformer3D
     game/source/editor/StaticModelFraming.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorInput.h
     game/source/editor/EditorLayout.cpp
@@ -1133,6 +1135,8 @@ add_executable(EditorPickingTest
     game/source/editor/EditorMath.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPickingTest.cpp
@@ -1153,8 +1157,9 @@ else()
     target_compile_options(EditorPickingTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Milestone 34 translation-gizmo math and editor-layout path. No window, raylib,
-# Jolt, or ImGui: live drag/render is exercised by Platformer3D, not this test.
+# Milestone 34 translation-gizmo math, editor-layout path, and Milestone 76
+# snapping/quantization. No window, raylib, or ImGui: live drag/render is
+# exercised by Platformer3D, not this test.
 add_executable(EditorGizmoTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
@@ -1162,6 +1167,8 @@ add_executable(EditorGizmoTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorGizmoTest.cpp
     game/source/editor/EditorLayout.cpp
     game/source/editor/EditorLayout.h
@@ -1310,6 +1317,8 @@ add_executable(StaticPropPlacementTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
@@ -1351,6 +1360,8 @@ add_executable(EditorQuickToolbarTest
     game/source/editor/EditorCamera.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorLayout.cpp
     game/source/editor/EditorLayout.h
     game/source/editor/EditorMath.h
@@ -1432,6 +1443,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/AuthoredLifecycleIntegrationTest.cpp
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
@@ -1561,6 +1574,8 @@ add_executable(ModelSelectionPreviewTest
     game/source/editor/AuthoredObjectLifecycle.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
     game/source/editor/EditorMath.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h

@@ -1,6 +1,6 @@
 # Milestone 75 --- UI Audio & Menu Feedback
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/75-ui-audio-menu-feedback`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 
