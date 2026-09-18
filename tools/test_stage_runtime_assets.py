@@ -196,6 +196,9 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "levels/level_01.level",
                 "levels/level_02.level",
                 "sounds/item_pickup_collect.wav",
+                "sounds/player_damage.wav",
+                "sounds/player_death.wav",
+                "sounds/player_respawn.wav",
             ]
             repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
             for relative in required:
@@ -222,6 +225,9 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "levels/level_01.level",
                 "levels/level_02.level",
                 "sounds/item_pickup_collect.wav",
+                "sounds/player_damage.wav",
+                "sounds/player_death.wav",
+                "sounds/player_respawn.wav",
             ]
             repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
             for relative in required:
@@ -254,6 +260,9 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             self.assertTrue(unrelated_note.is_file())
             self.assertTrue((dest / "textures" / "test_checker.png").is_file())
             self.assertTrue((dest / "sounds" / "item_pickup_collect.wav").is_file())
+            self.assertTrue((dest / "sounds" / "player_damage.wav").is_file())
+            self.assertTrue((dest / "sounds" / "player_death.wav").is_file())
+            self.assertTrue((dest / "sounds" / "player_respawn.wav").is_file())
 
 
 if __name__ == "__main__":

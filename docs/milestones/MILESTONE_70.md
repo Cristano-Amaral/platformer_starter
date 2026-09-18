@@ -1,6 +1,6 @@
 # Milestone 70 --- Death, Damage Feedback & Respawn
 
-**Status:** Implemented, awaiting manual acceptance.\
+**Status:** CLOSED
 **Branch:** `milestone/70-death-damage-feedback-respawn`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

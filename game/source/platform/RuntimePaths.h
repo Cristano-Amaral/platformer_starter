@@ -11,6 +11,9 @@ inline constexpr std::string_view kTestAuthoredModelLogicalId = "models/test_aut
 inline constexpr std::string_view kTestTexturedModelLogicalId = "models/test_textured.glb";
 inline constexpr std::string_view kItemPickupCollectionSoundLogicalId =
     "sounds/item_pickup_collect.wav";
+inline constexpr std::string_view kPlayerDamageSoundLogicalId = "sounds/player_damage.wav";
+inline constexpr std::string_view kPlayerDeathSoundLogicalId = "sounds/player_death.wav";
+inline constexpr std::string_view kPlayerRespawnSoundLogicalId = "sounds/player_respawn.wav";
 inline constexpr std::string_view kRuntimeAssetDirectoryName = "assets";
 
 std::filesystem::path ExecutableDirectory();

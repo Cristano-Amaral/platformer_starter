@@ -16,4 +16,7 @@ set(PLATFORMER_RUNTIME_ASSETS
     levels/level_01.level
     levels/level_02.level
     sounds/item_pickup_collect.wav
+    sounds/player_damage.wav
+    sounds/player_death.wav
+    sounds/player_respawn.wav
 )

@@ -2,7 +2,7 @@
 // fails safely. Hidden window. Not shipped.
 
 #include "gameplay/ItemPickupCollectionFeedback.h"
-#include "platform/ItemPickupCollectionSound.h"
+#include "platform/GameplayAudio.h"
 #include "render/ItemPickupCollectionFeedbackDraw.h"
 #include "render/StaticModelScene.h"
 
@@ -150,29 +150,49 @@ int main()
     SetConfigFlags(FLAG_WINDOW_HIDDEN);
     InitWindow(640, 360, "ItemPickupCollectionFeedbackDrawTest");
 
-    platform::ItemPickupCollectionSound sound;
-    sound.Play();
-    Expect(!sound.IsLoaded(), "12. Play without load is safe");
-    sound.LoadFromPath(std::filesystem::path{});
-    Expect(!sound.IsLoaded(), "12. empty path fails safely");
-    sound.Play();
+    platform::GameplayAudio sound;
+    sound.PlayPickup();
+    Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "12. Play without load is safe");
+    sound.Load();
+    const int firstLoadAttempts = sound.LoadAttemptCount();
+    sound.Load();
+    Expect(
+        firstLoadAttempts == 1 && sound.LoadAttemptCount() == 1,
+        "14. second Load does not reload fixed gameplay sounds");
+    sound.PlayPickup();
+    sound.PlayDamage();
+    sound.PlayDeath();
+    sound.PlayRespawn();
+    sound.Unload();
+    Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload after staged Load is safe");
+    sound.LoadCueFromPath(platform::GameplaySfxCue::Pickup, std::filesystem::path{});
+    Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "12. empty path fails safely");
+    sound.PlayPickup();
     const std::filesystem::path missing =
         std::filesystem::temp_directory_path() / "platformer_missing_pickup_collect.wav";
     std::filesystem::remove(missing);
-    sound.LoadFromPath(missing);
-    Expect(!sound.IsLoaded(), "12. missing sound fails safely");
-    sound.Play();
+    sound.LoadCueFromPath(platform::GameplaySfxCue::Pickup, missing);
+    Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "12. missing sound fails safely");
+    sound.PlayPickup();
 
     const std::filesystem::path valid =
         std::filesystem::temp_directory_path() / "platformer_test_pickup_collect.wav";
     WritePcm16Wav(valid);
-    sound.LoadFromPath(valid);
-    Expect(sound.IsLoaded(), "11. valid short WAV loads once");
-    sound.Play();
-    sound.Play();
-    Expect(sound.IsLoaded(), "11. repeated Play keeps the cached sound");
+    sound.LoadCueFromPath(platform::GameplaySfxCue::Pickup, valid);
+    Expect(sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "11. valid short WAV loads once");
+    sound.PlayPickup();
+    sound.PlayPickup();
+    Expect(sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "11. repeated Play keeps the cached sound");
+    sound.LoadCueFromPath(
+        platform::GameplaySfxCue::Damage,
+        std::filesystem::temp_directory_path() / "platformer_missing_damage.wav");
+    Expect(
+        sound.IsCueLoaded(platform::GameplaySfxCue::Pickup)
+            && !sound.IsCueLoaded(platform::GameplaySfxCue::Damage),
+        "13. missing individual cue leaves other loaded sounds and is a no-op");
+    sound.PlayDamage();
     sound.Unload();
-    Expect(!sound.IsLoaded(), "unload clears the cached sound");
+    Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload clears the cached sound");
     std::filesystem::remove(valid);
 
     gameplay::ItemPickupCollectionFeedbackState feedback{};

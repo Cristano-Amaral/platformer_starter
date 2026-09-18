@@ -9,6 +9,7 @@
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/GameplayObjectiveHud.h"
+#include "gameplay/GameplayAudio.h"
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/DoorLockRuntime.h"
@@ -1148,11 +1149,14 @@ int Application::Run()
                 {
                     gameplay::BeginDamageVignette(damageVignette);
                 }
-                if (gameplay::TryBeginPlayerDeath(
-                        playerDeath, healthBeforeDamage, playerHealth.currentHealth))
+                const bool beganPlayerDeath = gameplay::TryBeginPlayerDeath(
+                    playerDeath, healthBeforeDamage, playerHealth.currentHealth);
+                if (beganPlayerDeath)
                 {
                     gameplay::CloseInventoryUi(inventoryUi);
                 }
+                EmitGameplaySfx(
+                    gameplay::ResolveHazardOutcomeSfx(appliedHazardDamage, beganPlayerDeath));
             }
 
             if (!gameplay::PlayerDeathIsActive(playerDeath))
@@ -1240,7 +1244,7 @@ int Application::Run()
                                     levelDefinition.itemPickups[static_cast<std::size_t>(
                                         itemPickupTargetIndex)],
                                     runTimerState.elapsedSeconds);
-                                itemPickupCollectionSound.Play();
+                                EmitGameplaySfx(gameplay::PickupCollectionSfx());
                                 (void)gameplay::SpawnItemPickupCollectionHud(
                                     itemPickupCollectionHud,
                                     levelDefinition.itemPickups[static_cast<std::size_t>(
@@ -2444,11 +2448,11 @@ void Application::Initialize()
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
     renderer.LoadRuntimeAssets();
-    itemPickupCollectionSound.Load();
+    gameplayAudio.Load();
 
     if (!physicsWorld.Initialize(levelDefinition))
     {
-        itemPickupCollectionSound.Unload();
+        gameplayAudio.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2460,7 +2464,7 @@ void Application::Initialize()
             levelDefinition.initialSpawnVisualCenter, player.Size()))
     {
         physicsWorld.Shutdown();
-        itemPickupCollectionSound.Unload();
+        gameplayAudio.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2481,7 +2485,7 @@ void Application::Initialize()
     {
         std::fprintf(stderr, "RunTimeFormat scaffolding check failed.\n");
         physicsWorld.Shutdown();
-        itemPickupCollectionSound.Unload();
+        gameplayAudio.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2491,7 +2495,7 @@ void Application::Initialize()
     {
         std::fprintf(stderr, "BestTimeSave format scaffolding check failed.\n");
         physicsWorld.Shutdown();
-        itemPickupCollectionSound.Unload();
+        gameplayAudio.Unload();
         renderer.UnloadRuntimeAssets();
         window.Shutdown();
         initialized = false;
@@ -2548,6 +2552,7 @@ void Application::PerformDeathRespawn()
         != world::kNoHazardIndex;
     gameplay::ResetHazardContactAfterDeathRespawn(hazardContact, overlapsHazard);
     gameplay::ClearPlayerDeath(playerDeath);
+    EmitGameplaySfx(gameplay::ResolveRespawnSfx(gameplay::GameplayRespawnAudioKind::HealthDeath));
 }
 
 void Application::RestartRun()
@@ -3490,6 +3495,27 @@ void Application::ResetGameplayAfterPlayAgain()
     gameplay::ClearPlayerDeath(playerDeath);
 }
 
+void Application::EmitGameplaySfx(gameplay::GameplaySfxEmit emit)
+{
+    gameplay::RecordGameplaySfx(gameplaySfxRequests, emit);
+    if (emit.pickup)
+    {
+        gameplayAudio.PlayPickup();
+    }
+    if (emit.damage)
+    {
+        gameplayAudio.PlayDamage();
+    }
+    if (emit.death)
+    {
+        gameplayAudio.PlayDeath();
+    }
+    if (emit.respawn)
+    {
+        gameplayAudio.PlayRespawn();
+    }
+}
+
 void Application::Shutdown()
 {
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -3503,7 +3529,7 @@ void Application::Shutdown()
     debugUi.Shutdown();
 #endif
     physicsWorld.Shutdown();
-    itemPickupCollectionSound.Unload();
+    gameplayAudio.Unload();
     renderer.UnloadRuntimeAssets();
     window.Shutdown();
     initialized = false;

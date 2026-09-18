@@ -8,6 +8,7 @@
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
+#include "gameplay/GameplayAudio.h"
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/LevelCompletionState.h"
@@ -20,7 +21,7 @@
 #include "physics/PhysicsWorld.h"
 #include "persistence/BestTimeSave.h"
 #include "platform/Window.h"
-#include "platform/ItemPickupCollectionSound.h"
+#include "platform/GameplayAudio.h"
 #include "render/Renderer.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -72,11 +73,13 @@ private:
     void SaveLevelEditorSource();
 #endif
     void ResetGameplayAfterLevelTransition();
+    void EmitGameplaySfx(gameplay::GameplaySfxEmit emit);
 
     world::LevelDefinition levelDefinition{};
     platform::Window window;
     render::Renderer renderer;
-    platform::ItemPickupCollectionSound itemPickupCollectionSound;
+    platform::GameplayAudio gameplayAudio;
+    gameplay::GameplaySfxRequestState gameplaySfxRequests{};
     gameplay::Player player{{}, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;

@@ -103,6 +103,24 @@ KNOWN_ASSETS = (
         "cooked": "sounds/item_pickup_collect.wav",
         "kind": KIND_COPY,
     },
+    {
+        "id": "sounds/player_damage.wav",
+        "source": "sounds/player_damage.wav",
+        "cooked": "sounds/player_damage.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/player_death.wav",
+        "source": "sounds/player_death.wav",
+        "cooked": "sounds/player_death.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/player_respawn.wav",
+        "source": "sounds/player_respawn.wav",
+        "cooked": "sounds/player_respawn.wav",
+        "kind": KIND_COPY,
+    },
 )
 
 

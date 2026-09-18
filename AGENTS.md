@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 70 — Death, Damage Feedback & Respawn.
+Milestone 71 — Gameplay Audio Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_70.md`](docs/milestones/MILESTONE_70.md)
+Canonical file: [`docs/milestones/MILESTONE_71.md`](docs/milestones/MILESTONE_71.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 69 is CLOSED. Milestone 70 is implemented, awaiting manual acceptance. Do not start Milestone 71.
+Milestone 70 is CLOSED. Milestone 71 is implemented, awaiting manual acceptance. Do not start Milestone 72.
 
 ## Source of truth
 1. Current repository code.

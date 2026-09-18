@@ -279,6 +279,9 @@ class ExtraLevelDiscoveryTests(unittest.TestCase):
             self.assertTrue(unrelated_orphan.is_file())
             self.assertTrue((dest / "textures" / "test_checker.png").is_file())
             self.assertTrue((dest / "sounds" / "item_pickup_collect.wav").is_file())
+            self.assertTrue((dest / "sounds" / "player_damage.wav").is_file())
+            self.assertTrue((dest / "sounds" / "player_death.wav").is_file())
+            self.assertTrue((dest / "sounds" / "player_respawn.wav").is_file())
 
     def test_unmanifested_cooked_level_is_removed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

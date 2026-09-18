@@ -116,6 +116,7 @@ add_executable(Platformer3D
     game/source/gameplay/ItemPickupCollectionFeedback.h
     game/source/gameplay/ItemPickupCollectionHud.h
     game/source/gameplay/GameplayObjectiveHud.h
+    game/source/gameplay/GameplayAudio.h
     game/source/gameplay/PlayerHealth.h
     game/source/gameplay/PlayerDeath.h
     game/source/gameplay/DoorLockRuntime.cpp
@@ -145,8 +146,8 @@ add_executable(Platformer3D
     game/source/platform/Time.h
     game/source/platform/Window.cpp
     game/source/platform/Window.h
-    game/source/platform/ItemPickupCollectionSound.cpp
-    game/source/platform/ItemPickupCollectionSound.h
+    game/source/platform/GameplayAudio.cpp
+    game/source/platform/GameplayAudio.h
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
     game/source/render/LevelGoalVisualization.cpp
@@ -262,6 +263,9 @@ set_target_properties(Platformer3D PROPERTIES
 # Extra valid cooked levels/*.level files are discovered at staging time.
 # Staged levels/*.level files not in that current inventory are removed.
 #   <exe dir>/assets/sounds/item_pickup_collect.wav
+#   <exe dir>/assets/sounds/player_damage.wav
+#   <exe dir>/assets/sounds/player_death.wav
+#   <exe dir>/assets/sounds/player_respawn.wav
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
 # The staged level file is required at runtime; Application loads it once in Initialize.
@@ -819,6 +823,33 @@ if(MSVC)
     target_compile_options(GameplayObjectiveHudTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(GameplayObjectiveHudTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 71: gameplay SFX request recording, lethal-hit precedence, and
+# authored/Dirty isolation. No window, raylib, or Jolt.
+add_executable(GameplayAudioTest
+    game/source/gameplay/GameFlowState.h
+    game/source/gameplay/GameplayAudio.h
+    game/source/gameplay/GameplayAudioTest.cpp
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/PlayerDeath.h
+    game/source/gameplay/PlayerHealth.h
+    game/source/platform/GameplayAudio.h
+    game/source/world/HazardWorld.h
+    game/source/world/ItemPickup.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+)
+target_include_directories(GameplayAudioTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(GameplayAudioTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(GameplayAudioTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 69: Player Health authority, Hazard contact cadence, Health HUD
@@ -1588,12 +1619,12 @@ if(WIN32)
     target_link_libraries(SelectedModelHighlightStateTest PRIVATE ole32 shell32 uuid)
 endif()
 
-# Milestone 61: collection burst restore + missing collection sound. Hidden window.
+# Milestone 61/71: collection burst restore + gameplay SFX load/unload. Hidden window.
 add_executable(ItemPickupCollectionFeedbackDrawTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
-    game/source/platform/ItemPickupCollectionSound.cpp
-    game/source/platform/ItemPickupCollectionSound.h
+    game/source/platform/GameplayAudio.cpp
+    game/source/platform/GameplayAudio.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/render/ItemPickupCollectionFeedbackDraw.cpp

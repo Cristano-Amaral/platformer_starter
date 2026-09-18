@@ -30,7 +30,8 @@ No Blender.
 The cooker copies known authored files from `game/assets/source/` to
 `game/assets/cooked/` by explicit identity (`textures/test_checker.png`,
 `models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
-`levels/level_01.level`, `levels/level_02.level`, `sounds/item_pickup_collect.wav`) plus extra valid
+`levels/level_01.level`, `levels/level_02.level`, `sounds/item_pickup_collect.wav`,
+`sounds/player_damage.wav`, `sounds/player_death.wav`, `sounds/player_respawn.wav`) plus extra valid
 `source/models/*.glb` files discovered for Milestone 47 import and extra valid
 `source/levels/*.level` files discovered for Milestone 64.1 New Level. It does not
 glob every PNG under `source/textures/`. It does not glob sounds. Skips a
@@ -43,7 +44,7 @@ categories are not directory-scanned.
 
 Asset kinds:
 
-- `copy`: opaque byte copy. Used for GLBs and the Milestone 61 collection WAV.
+- `copy`: opaque byte copy. Used for GLBs and the Milestone 61/71 gameplay WAVs.
   Embedded GLB images are not inspected or resized.
 - `runtime_png`: standalone runtime PNG. Recipe `runtime_png.max512.lanczos.v1`
   downscales with Pillow `Image.Resampling.LANCZOS` when either dimension
@@ -88,8 +89,11 @@ python tools/test_item_pickup_collect_sound.py
 
 The Milestone 61 collection chime is project-owned PCM WAV synthesized by
 `python tools/generate_item_pickup_collect_wav.py` into
-`game/assets/source/sounds/item_pickup_collect.wav`. Cook/stage that file;
-the runtime never reads the generator or `source/`.
+`game/assets/source/sounds/item_pickup_collect.wav`. Milestone 71 damage, death,
+and respawn cues are synthesized by `python tools/generate_gameplay_sfx_wav.py`
+into `game/assets/source/sounds/player_damage.wav`, `player_death.wav`, and
+`player_respawn.wav`. Cook/stage those files; the runtime never reads the
+generators or `source/`.
 
 See `docs/BLENDER_WORKFLOW.md` for authoring vs runtime texture roles.
 
