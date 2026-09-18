@@ -6,12 +6,19 @@
 
 namespace gameplay
 {
+struct PlayerUpdateResult
+{
+    bool jumpAccepted = false;
+    bool becameGrounded = false;
+    float airborneSecondsAtStart = 0.0f;
+};
+
 class Player
 {
 public:
     Player(core::Vec3 position, core::Vec3 size);
 
-    void Update(
+    PlayerUpdateResult Update(
         const input::InputState& input,
         float deltaSeconds,
         physics::PhysicsWorld& physicsWorld);

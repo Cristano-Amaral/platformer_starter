@@ -13,6 +13,7 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
+#include "gameplay/GameplayAudio.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/PlayerHealth.h"
 #include "world/DynamicBox.h"
@@ -870,6 +871,25 @@ int main()
         Expect(
             rebuildContact.cooldownRemaining == gameplay::kHazardDamageCadenceSeconds,
             "physics rebuild does not reset Hazard contact cadence");
+        gameplay::PlayerMovementSfxState rebuildSfx{};
+        rebuildSfx.anchored = true;
+        rebuildSfx.previousGrounded = false;
+        rebuildSfx.strideDistanceAccumulated = 4.0f;
+        gameplay::ReanchorPlayerMovementSfx(rebuildSfx, true);
+        gameplay::GameplaySfxRequestState rebuildAudio{};
+        gameplay::PlayerMovementSfxInput rebuildInput{};
+        rebuildInput.allowed = true;
+        rebuildInput.grounded = true;
+        rebuildInput.deltaSeconds = 1.0f / 60.0f;
+        gameplay::RecordGameplaySfx(
+            rebuildAudio, gameplay::TickPlayerMovementSfx(rebuildSfx, rebuildInput));
+        Expect(
+            rebuildAudio.footstepCount == 0 && rebuildAudio.jumpCount == 0
+                && rebuildAudio.landingCount == 0,
+            "physics rebuild re-anchors movement audio without synthesizing cues");
+        Expect(
+            rebuildHealth.currentHealth == healthBeforeRebuild,
+            "movement-audio re-anchor does not change Health");
     }
 
     if (gFailures != 0)

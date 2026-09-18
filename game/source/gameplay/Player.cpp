@@ -38,11 +38,14 @@ Player::Player(core::Vec3 position, core::Vec3 size)
 {
 }
 
-void Player::Update(
+PlayerUpdateResult Player::Update(
     const input::InputState& input,
     float deltaSeconds,
     physics::PhysicsWorld& physicsWorld)
 {
+    const bool wasGrounded = grounded;
+    const float airborneSecondsAtStart = grounded ? 0.0f : timeSinceGrounded;
+
     if (input.jumpPressed)
     {
         jumpBufferRemaining = kJumpBufferTime;
@@ -64,6 +67,7 @@ void Player::Update(
     physicsWorld.MovePlayer({horizontalVelocity, verticalVelocity}, deltaSeconds);
     ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
 
+    const bool groundedAfterMove = grounded;
     if (jumped)
     {
         grounded = false;
@@ -73,7 +77,7 @@ void Player::Update(
     UpdateCoyoteState(deltaSeconds);
 
     // Buffered jump after this frame's landing, without a second independent Y integrate.
-    TryJump();
+    const bool bufferedJump = TryJump();
 
     if (jumpBufferRemaining > 0.0f)
     {
@@ -83,6 +87,12 @@ void Player::Update(
             jumpBufferRemaining = 0.0f;
         }
     }
+
+    PlayerUpdateResult result{};
+    result.jumpAccepted = jumped || bufferedJump;
+    result.becameGrounded = !wasGrounded && groundedAfterMove && !jumped;
+    result.airborneSecondsAtStart = airborneSecondsAtStart;
+    return result;
 }
 
 void Player::ApplyPhysicsState(const physics::PlayerPhysicsState& state)

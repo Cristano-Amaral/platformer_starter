@@ -124,6 +124,9 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("sounds/player_damage.wav", ids)
         self.assertIn("sounds/player_death.wav", ids)
         self.assertIn("sounds/player_respawn.wav", ids)
+        self.assertIn("sounds/player_footstep.wav", ids)
+        self.assertIn("sounds/player_jump.wav", ids)
+        self.assertIn("sounds/player_land.wav", ids)
 
 
 class CookStageImportedGlbTests(unittest.TestCase):

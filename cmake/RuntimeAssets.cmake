@@ -19,4 +19,7 @@ set(PLATFORMER_RUNTIME_ASSETS
     sounds/player_damage.wav
     sounds/player_death.wav
     sounds/player_respawn.wav
+    sounds/player_footstep.wav
+    sounds/player_jump.wav
+    sounds/player_land.wav
 )

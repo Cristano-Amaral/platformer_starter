@@ -1,6 +1,6 @@
 # Milestone 71 — Gameplay Audio Foundation
 
-**Status:** Implemented, awaiting manual acceptance.
+**Status:** CLOSED\
 **Branch:** `milestone/71-gameplay-audio-foundation`  
 **Recommended Cursor model:** Grok 4.6 High — Fast OFF
 

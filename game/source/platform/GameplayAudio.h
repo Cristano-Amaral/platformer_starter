@@ -1,6 +1,6 @@
 #pragma once
 
-// Milestone 71: narrow Application-owned gameplay SFX owner. Loads the
+// Milestone 71/72: narrow Application-owned gameplay SFX owner. Loads the
 // fixed staged cue set once, plays semantic one-shots, and unloads before
 // the audio device/window shut down. Not a generic AudioEngine,
 // ResourceManager, mixer, event bus, or music system.
@@ -17,9 +17,12 @@ enum class GameplaySfxCue
     Damage,
     Death,
     Respawn,
+    Footstep,
+    Jump,
+    Landing,
 };
 
-inline constexpr int kGameplaySfxCueCount = 4;
+inline constexpr int kGameplaySfxCueCount = 7;
 
 class GameplayAudio
 {
@@ -40,6 +43,9 @@ public:
     void PlayDamage() const;
     void PlayDeath() const;
     void PlayRespawn() const;
+    void PlayFootstep() const;
+    void PlayJump() const;
+    void PlayLanding() const;
 
     bool IsCueLoaded(GameplaySfxCue cue) const;
     int LoadAttemptCount() const;

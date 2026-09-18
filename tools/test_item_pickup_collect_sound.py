@@ -22,7 +22,18 @@ PICKUP_ID = "sounds/item_pickup_collect.wav"
 DAMAGE_ID = "sounds/player_damage.wav"
 DEATH_ID = "sounds/player_death.wav"
 RESPAWN_ID = "sounds/player_respawn.wav"
-ALL_SOUND_IDS = (PICKUP_ID, DAMAGE_ID, DEATH_ID, RESPAWN_ID)
+FOOTSTEP_ID = "sounds/player_footstep.wav"
+JUMP_ID = "sounds/player_jump.wav"
+LAND_ID = "sounds/player_land.wav"
+ALL_SOUND_IDS = (
+    PICKUP_ID,
+    DAMAGE_ID,
+    DEATH_ID,
+    RESPAWN_ID,
+    FOOTSTEP_ID,
+    JUMP_ID,
+    LAND_ID,
+)
 SOURCE_SOUNDS = cooker.source_root(cooker.repo_root()) / "sounds"
 RUNTIME_ASSETS = REPO_ROOT / "cmake" / "RuntimeAssets.cmake"
 
@@ -54,6 +65,9 @@ class ItemPickupCollectSoundTests(unittest.TestCase):
             DAMAGE_ID: sfxgen.cue_wav_bytes(sfxgen.DAMAGE_NAME),
             DEATH_ID: sfxgen.cue_wav_bytes(sfxgen.DEATH_NAME),
             RESPAWN_ID: sfxgen.cue_wav_bytes(sfxgen.RESPAWN_NAME),
+            FOOTSTEP_ID: sfxgen.cue_wav_bytes(sfxgen.FOOTSTEP_NAME),
+            JUMP_ID: sfxgen.cue_wav_bytes(sfxgen.JUMP_NAME),
+            LAND_ID: sfxgen.cue_wav_bytes(sfxgen.LAND_NAME),
         }
         for logical_id, payload in expected.items():
             source = cooker.source_root(cooker.repo_root()) / logical_id

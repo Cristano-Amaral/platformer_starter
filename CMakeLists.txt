@@ -266,6 +266,9 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/sounds/player_damage.wav
 #   <exe dir>/assets/sounds/player_death.wav
 #   <exe dir>/assets/sounds/player_respawn.wav
+#   <exe dir>/assets/sounds/player_footstep.wav
+#   <exe dir>/assets/sounds/player_jump.wav
+#   <exe dir>/assets/sounds/player_land.wav
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
 # The staged level file is required at runtime; Application loads it once in Initialize.
@@ -825,8 +828,8 @@ else()
     target_compile_options(GameplayObjectiveHudTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Milestone 71: gameplay SFX request recording, lethal-hit precedence, and
-# authored/Dirty isolation. No window, raylib, or Jolt.
+# Milestone 71/72: gameplay SFX request recording, lethal-hit precedence,
+# movement cadence, and authored/Dirty isolation. No window, raylib, or Jolt.
 add_executable(GameplayAudioTest
     game/source/gameplay/GameFlowState.h
     game/source/gameplay/GameplayAudio.h

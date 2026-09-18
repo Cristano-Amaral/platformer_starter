@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 71 — Gameplay Audio Foundation.
+Milestone 72 — Player Movement Audio Feedback.
 
-Canonical file: [`docs/milestones/MILESTONE_71.md`](docs/milestones/MILESTONE_71.md)
+Canonical file: [`docs/milestones/MILESTONE_72.md`](docs/milestones/MILESTONE_72.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 70 is CLOSED. Milestone 71 is implemented, awaiting manual acceptance. Do not start Milestone 72.
+Milestone 71 is CLOSED. Milestone 72 is implemented, awaiting manual acceptance. Do not start Milestone 73.
 
 ## Source of truth
 1. Current repository code.

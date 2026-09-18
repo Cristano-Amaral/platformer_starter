@@ -1045,7 +1045,8 @@ int Application::Run()
             gameplay::UpdateItemPickupCollectionHud(
                 itemPickupCollectionHud, deltaSeconds);
             physicsWorld.UpdateMovingPlatform(deltaSeconds);
-            player.Update(inputState, deltaSeconds, physicsWorld);
+            const gameplay::PlayerUpdateResult playerUpdate =
+                player.Update(inputState, deltaSeconds, physicsWorld);
 
             hazardContactThisFrame =
                 world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
@@ -1269,6 +1270,39 @@ int Application::Run()
                     camera.Update(player.Position(), deltaSeconds);
                 }
             }
+
+            const bool movementSfxAllowed = !respawnedThisFrame && !restartedThisFrame
+                && !gameplay::PlayerDeathIsActive(playerDeath)
+                && gameplay::HazardDamageIsAllowed(
+                    topLevelFlow,
+                    editorActive,
+                    inventoryBlocksGameplay,
+                    runCompleteBlocksGameplay,
+                    levelCompletionState.completed,
+                    gameplay::PauseBlocksGameplay(
+                        pauseWasActiveAtFrameStart, pauseMenuState.active),
+                    gameplay::PlayerDeathBlocksGameplay(
+                        deathWasActiveAtFrameStart, gameplay::PlayerDeathIsActive(playerDeath)));
+            if (movementSfxAllowed)
+            {
+                gameplay::PlayerMovementSfxInput movementInput{};
+                movementInput.allowed = true;
+                movementInput.grounded = player.IsGrounded();
+                movementInput.becameGrounded = playerUpdate.becameGrounded;
+                movementInput.jumpAccepted = playerUpdate.jumpAccepted;
+                movementInput.airborneSecondsAtStart = playerUpdate.airborneSecondsAtStart;
+                movementInput.horizontalVelocity = player.HorizontalVelocity();
+                movementInput.deltaSeconds = deltaSeconds;
+                EmitGameplaySfx(gameplay::TickPlayerMovementSfx(playerMovementSfx, movementInput));
+            }
+            else
+            {
+                ReanchorPlayerMovementSfx();
+            }
+        }
+        else
+        {
+            ReanchorPlayerMovementSfx();
         }
 
         if (gameplay::PlayerDeathIsActive(playerDeath) && !editorActive)
@@ -2472,6 +2506,7 @@ void Application::Initialize()
     }
 
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    ReanchorPlayerMovementSfx();
     camera.Initialize(player.Position());
     runTimerState = gameplay::RunTimerState{};
     sessionBestTimeState = gameplay::SessionBestTimeState{};
@@ -2534,6 +2569,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     physicsWorld.ResetCharacter(respawnState.respawnPosition, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    ReanchorPlayerMovementSfx();
     camera.SnapToTarget(player.Position());
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
@@ -2564,6 +2600,7 @@ void Application::RestartRun()
     physicsWorld.ResetCharacter(levelDefinition.initialSpawnVisualCenter, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    ReanchorPlayerMovementSfx();
 
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
@@ -3190,6 +3227,7 @@ void Application::ResetGameplayAfterCommittedLevel()
 {
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    ReanchorPlayerMovementSfx();
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
@@ -3326,6 +3364,7 @@ void Application::ResetGameplayAfterLevelTransition()
 {
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    ReanchorPlayerMovementSfx();
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
@@ -3360,6 +3399,7 @@ void Application::ReturnToMainMenuFromResults()
     gameplay::CloseInventoryUi(inventoryUi);
     gameplay::ClearPlayerDeath(playerDeath);
     gameplay::ClearDamageVignette(damageVignette);
+    ReanchorPlayerMovementSfx();
 }
 
 void Application::TryFinishPendingFreshRun()
@@ -3470,6 +3510,7 @@ void Application::ResetGameplayAfterPlayAgain()
 {
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    ReanchorPlayerMovementSfx();
     respawnState = gameplay::RespawnState{};
     respawnState.respawnPosition = levelDefinition.initialSpawnVisualCenter;
     levelCompletionState = gameplay::LevelCompletionState{};
@@ -3514,6 +3555,23 @@ void Application::EmitGameplaySfx(gameplay::GameplaySfxEmit emit)
     {
         gameplayAudio.PlayRespawn();
     }
+    if (emit.footstep)
+    {
+        gameplayAudio.PlayFootstep();
+    }
+    if (emit.jump)
+    {
+        gameplayAudio.PlayJump();
+    }
+    if (emit.landing)
+    {
+        gameplayAudio.PlayLanding();
+    }
+}
+
+void Application::ReanchorPlayerMovementSfx()
+{
+    gameplay::ReanchorPlayerMovementSfx(playerMovementSfx, player.IsGrounded());
 }
 
 void Application::Shutdown()

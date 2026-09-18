@@ -163,6 +163,9 @@ int main()
     sound.PlayDamage();
     sound.PlayDeath();
     sound.PlayRespawn();
+    sound.PlayFootstep();
+    sound.PlayJump();
+    sound.PlayLanding();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload after staged Load is safe");
     sound.LoadCueFromPath(platform::GameplaySfxCue::Pickup, std::filesystem::path{});
@@ -191,6 +194,14 @@ int main()
             && !sound.IsCueLoaded(platform::GameplaySfxCue::Damage),
         "13. missing individual cue leaves other loaded sounds and is a no-op");
     sound.PlayDamage();
+    sound.LoadCueFromPath(
+        platform::GameplaySfxCue::Jump,
+        std::filesystem::temp_directory_path() / "platformer_missing_jump.wav");
+    Expect(
+        sound.IsCueLoaded(platform::GameplaySfxCue::Pickup)
+            && !sound.IsCueLoaded(platform::GameplaySfxCue::Jump),
+        "19. missing individual movement cue leaves other loaded sounds and is a no-op");
+    sound.PlayJump();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload clears the cached sound");
     std::filesystem::remove(valid);

@@ -1,18 +1,26 @@
 #pragma once
 
-// Milestone 71: semantic gameplay SFX request recording and the lethal-hit
-// cue precedence rule. Presentation only. Not a generic event bus, audio
-// engine, mixer, or ResourceManager. Application plays through
-// platform::GameplayAudio.
+// Milestone 71/72: semantic gameplay SFX request recording, the lethal-hit
+// cue precedence rule, and player movement-audio presentation tracking.
+// Presentation only. Not a generic event bus, audio engine, mixer,
+// ResourceManager, locomotion state machine, or movement authority.
+// Application plays through platform::GameplayAudio.
 
 namespace gameplay
 {
+inline constexpr float kFootstepStrideDistance = 2.0f;
+inline constexpr float kFootstepMinHorizontalSpeed = 1.0f;
+inline constexpr float kLandingMinAirborneSeconds = 0.12f;
+
 struct GameplaySfxEmit
 {
     bool pickup = false;
     bool damage = false;
     bool death = false;
     bool respawn = false;
+    bool footstep = false;
+    bool jump = false;
+    bool landing = false;
 };
 
 struct GameplaySfxRequestState
@@ -21,6 +29,29 @@ struct GameplaySfxRequestState
     int damageCount = 0;
     int deathCount = 0;
     int respawnCount = 0;
+    int footstepCount = 0;
+    int jumpCount = 0;
+    int landingCount = 0;
+};
+
+// Runtime presentation only. Remembers cadence and grounded observation
+// across frames; never mutates authored Level data.
+struct PlayerMovementSfxState
+{
+    bool anchored = false;
+    bool previousGrounded = false;
+    float strideDistanceAccumulated = 0.0f;
+};
+
+struct PlayerMovementSfxInput
+{
+    bool allowed = false;
+    bool grounded = false;
+    bool becameGrounded = false;
+    bool jumpAccepted = false;
+    float airborneSecondsAtStart = 0.0f;
+    float horizontalVelocity = 0.0f;
+    float deltaSeconds = 0.0f;
 };
 
 enum class GameplayRespawnAudioKind
@@ -53,6 +84,72 @@ inline void RecordGameplaySfx(GameplaySfxRequestState& state, GameplaySfxEmit em
     {
         ++state.respawnCount;
     }
+    if (emit.footstep)
+    {
+        ++state.footstepCount;
+    }
+    if (emit.jump)
+    {
+        ++state.jumpCount;
+    }
+    if (emit.landing)
+    {
+        ++state.landingCount;
+    }
+}
+
+inline void ReanchorPlayerMovementSfx(PlayerMovementSfxState& state, bool grounded)
+{
+    state.anchored = true;
+    state.previousGrounded = grounded;
+    state.strideDistanceAccumulated = 0.0f;
+}
+
+// Observes authoritative movement results. Caps at one footstep per tick so a
+// hitch or leftover distance cannot burst. Blocked/unanchored ticks re-anchor
+// without emitting and without accumulating cadence.
+inline GameplaySfxEmit TickPlayerMovementSfx(
+    PlayerMovementSfxState& state,
+    const PlayerMovementSfxInput& input)
+{
+    GameplaySfxEmit emit{};
+    if (!input.allowed || !state.anchored)
+    {
+        ReanchorPlayerMovementSfx(state, input.grounded);
+        return emit;
+    }
+
+    if (input.jumpAccepted)
+    {
+        emit.jump = true;
+    }
+
+    if (input.becameGrounded
+        && input.airborneSecondsAtStart >= kLandingMinAirborneSeconds)
+    {
+        emit.landing = true;
+    }
+
+    const float absSpeed =
+        input.horizontalVelocity < 0.0f ? -input.horizontalVelocity : input.horizontalVelocity;
+    const bool groundedMoving = input.grounded && !input.becameGrounded && !input.jumpAccepted
+        && absSpeed >= kFootstepMinHorizontalSpeed && input.deltaSeconds > 0.0f;
+    if (groundedMoving)
+    {
+        state.strideDistanceAccumulated += absSpeed * input.deltaSeconds;
+        if (state.strideDistanceAccumulated >= kFootstepStrideDistance)
+        {
+            emit.footstep = true;
+            state.strideDistanceAccumulated -= kFootstepStrideDistance;
+        }
+    }
+    else
+    {
+        state.strideDistanceAccumulated = 0.0f;
+    }
+
+    state.previousGrounded = input.grounded;
+    return emit;
 }
 
 inline GameplaySfxEmit PickupCollectionSfx()

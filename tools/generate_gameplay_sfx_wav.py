@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generate project-owned Milestone 71 gameplay SFX WAVs.
+"""Generate project-owned Milestone 71/72 gameplay SFX WAVs.
 
-Damage, death, and respawn cues are short synthesized PCM WAVs. They are not
-third-party audio. The existing Milestone 61 pickup chime is owned by
-generate_item_pickup_collect_wav.py and is not rewritten here.
+Damage, death, respawn, footstep, jump, and landing cues are short synthesized
+PCM WAVs. They are not third-party audio. The existing Milestone 61 pickup
+chime is owned by generate_item_pickup_collect_wav.py and is not rewritten
+here.
 
 Re-run from the repository root:
 
@@ -14,6 +15,9 @@ Writes:
     game/assets/source/sounds/player_damage.wav
     game/assets/source/sounds/player_death.wav
     game/assets/source/sounds/player_respawn.wav
+    game/assets/source/sounds/player_footstep.wav
+    game/assets/source/sounds/player_jump.wav
+    game/assets/source/sounds/player_land.wav
 
 Cook/stage those source files afterwards; the game never reads this generator
 or source/.
@@ -121,14 +125,63 @@ def respawn_samples() -> list[float]:
     return samples
 
 
+def footstep_samples() -> list[float]:
+    # Short quiet tap, lower and drier than damage so a walking cadence stays
+    # readable without matching the Hazard thud.
+    duration = 0.07
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        envelope = math.exp(-time_seconds * 42.0)
+        body = 0.42 * math.sin(2.0 * math.pi * 92.0 * time_seconds)
+        noise = 0.18 * math.sin(2.0 * math.pi * 390.0 * time_seconds)
+        samples.append(0.28 * envelope * (body + noise))
+    return samples
+
+
+def jump_samples() -> list[float]:
+    # Brief rising blip, distinct from the M71 respawn two-tone.
+    duration = 0.11
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        t = time_seconds / duration
+        frequency = 240.0 + (420.0 - 240.0) * t
+        envelope = math.exp(-time_seconds * 16.0) * (1.0 - 0.2 * t)
+        samples.append(0.30 * envelope * math.sin(2.0 * math.pi * frequency * time_seconds))
+    return samples
+
+
+def land_samples() -> list[float]:
+    # Heavier low thud than a footstep; shorter than death.
+    duration = 0.10
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        envelope = math.exp(-time_seconds * 24.0)
+        thud = 0.62 * math.sin(2.0 * math.pi * 64.0 * time_seconds)
+        body = 0.22 * math.sin(2.0 * math.pi * 48.0 * time_seconds)
+        samples.append(0.36 * envelope * (thud + body))
+    return samples
+
+
 DAMAGE_NAME = "player_damage.wav"
 DEATH_NAME = "player_death.wav"
 RESPAWN_NAME = "player_respawn.wav"
+FOOTSTEP_NAME = "player_footstep.wav"
+JUMP_NAME = "player_jump.wav"
+LAND_NAME = "player_land.wav"
 
 CUES = (
     (DAMAGE_NAME, damage_samples),
     (DEATH_NAME, death_samples),
     (RESPAWN_NAME, respawn_samples),
+    (FOOTSTEP_NAME, footstep_samples),
+    (JUMP_NAME, jump_samples),
+    (LAND_NAME, land_samples),
 )
 
 

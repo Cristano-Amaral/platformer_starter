@@ -74,12 +74,14 @@ private:
 #endif
     void ResetGameplayAfterLevelTransition();
     void EmitGameplaySfx(gameplay::GameplaySfxEmit emit);
+    void ReanchorPlayerMovementSfx();
 
     world::LevelDefinition levelDefinition{};
     platform::Window window;
     render::Renderer renderer;
     platform::GameplayAudio gameplayAudio;
     gameplay::GameplaySfxRequestState gameplaySfxRequests{};
+    gameplay::PlayerMovementSfxState playerMovementSfx{};
     gameplay::Player player{{}, world::kPlayerVisualSize};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;

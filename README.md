@@ -113,7 +113,7 @@ Tests:
 .\build\windows-vs2022\Development\InventoryUiTest.exe      # M56 player Inventory UI / focus
 .\build\windows-vs2022\Development\ItemPickupTest.exe       # M55/M58 Item Pickup targeting / visual transform
 .\build\windows-vs2022\Development\ItemPickupCollectionFeedbackTest.exe # M61 collection feedback trigger/lifecycle
-.\build\windows-vs2022\Development\GameplayAudioTest.exe # M71 gameplay SFX requests / lethal-hit rule
+.\build\windows-vs2022\Development\GameplayAudioTest.exe # M71/M72 gameplay SFX requests / movement cadence
 .\build\windows-vs2022\Development\ItemPickupCollectionFeedbackDrawTest.exe # M61 burst restore + M71 SFX load/unload
 .\build\windows-vs2022\Development\ItemPickupCollectionHudTest.exe # M62 collection HUD notification
 .\build\windows-vs2022\Development\ItemPickupTargetHighlightTest.exe # M58.3/M58.4 target highlight presentation
@@ -157,7 +157,7 @@ python tools/test_milestone_docs.py
 - Milestone 18: `models/test_textured.glb` embeds (or must embed) its Base Color; `test_textured_basecolor.png` is authoring-only and is not a runtime asset. See `docs/BLENDER_WORKFLOW.md`.
 - Blender authoring: `docs/BLENDER_WORKFLOW.md`. `.blend` files are not cooked or loaded at runtime.
 - Cooker: `python tools/cook_assets.py`. Standalone runtime PNGs (`runtime_png`) use recipe `runtime_png.max512.lanczos.v1` (max 512 px, LANCZOS, no upscale). Pillow `12.3.0` is cooker-only (`python -m pip install -r tools/requirements.txt`). Blender authoring PNGs are not cooker inputs. Known GLBs plus extra valid `source/models/*.glb` files are opaque copies after static-GLB checks. PNGs under `source/textures/` remain explicit-list only.
-- Milestone 61/71 gameplay SFX: `sounds/item_pickup_collect.wav`, `sounds/player_damage.wav`, `sounds/player_death.wav`, `sounds/player_respawn.wav`. Project-owned PCM WAVs; cook/stage; runtime never reads `source/`.
+- Milestone 61/71/72 gameplay SFX: `sounds/item_pickup_collect.wav`, `sounds/player_damage.wav`, `sounds/player_death.wav`, `sounds/player_respawn.wav`, `sounds/player_footstep.wav`, `sounds/player_jump.wav`, `sounds/player_land.wav`. Project-owned PCM WAVs; cook/stage; runtime never reads `source/`.
 - Runtime: CMake POST_BUILD and the M38 staging script (`cmake -P cmake/StageRuntimeAssets.cmake`) copy cooked files to `<exe dir>/assets/...`. Inventory: `cmake/RuntimeAssets.cmake`. The game never loads from `source/`.
 
 If CMake configure reports a missing cooked asset, run the cooker command above.

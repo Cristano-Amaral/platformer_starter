@@ -14,6 +14,9 @@ inline constexpr std::string_view kItemPickupCollectionSoundLogicalId =
 inline constexpr std::string_view kPlayerDamageSoundLogicalId = "sounds/player_damage.wav";
 inline constexpr std::string_view kPlayerDeathSoundLogicalId = "sounds/player_death.wav";
 inline constexpr std::string_view kPlayerRespawnSoundLogicalId = "sounds/player_respawn.wav";
+inline constexpr std::string_view kPlayerFootstepSoundLogicalId = "sounds/player_footstep.wav";
+inline constexpr std::string_view kPlayerJumpSoundLogicalId = "sounds/player_jump.wav";
+inline constexpr std::string_view kPlayerLandSoundLogicalId = "sounds/player_land.wav";
 inline constexpr std::string_view kRuntimeAssetDirectoryName = "assets";
 
 std::filesystem::path ExecutableDirectory();

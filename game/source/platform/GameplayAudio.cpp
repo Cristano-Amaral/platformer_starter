@@ -48,6 +48,12 @@ std::string_view CueLogicalId(GameplaySfxCue cue)
         return kPlayerDeathSoundLogicalId;
     case GameplaySfxCue::Respawn:
         return kPlayerRespawnSoundLogicalId;
+    case GameplaySfxCue::Footstep:
+        return kPlayerFootstepSoundLogicalId;
+    case GameplaySfxCue::Jump:
+        return kPlayerJumpSoundLogicalId;
+    case GameplaySfxCue::Landing:
+        return kPlayerLandSoundLogicalId;
     }
     return {};
 }
@@ -57,6 +63,9 @@ constexpr std::array<GameplaySfxCue, kGameplaySfxCueCount> kAllCues = {
     GameplaySfxCue::Damage,
     GameplaySfxCue::Death,
     GameplaySfxCue::Respawn,
+    GameplaySfxCue::Footstep,
+    GameplaySfxCue::Jump,
+    GameplaySfxCue::Landing,
 };
 }
 
@@ -207,6 +216,21 @@ void GameplayAudio::PlayDeath() const
 void GameplayAudio::PlayRespawn() const
 {
     PlayCue(GameplaySfxCue::Respawn);
+}
+
+void GameplayAudio::PlayFootstep() const
+{
+    PlayCue(GameplaySfxCue::Footstep);
+}
+
+void GameplayAudio::PlayJump() const
+{
+    PlayCue(GameplaySfxCue::Jump);
+}
+
+void GameplayAudio::PlayLanding() const
+{
+    PlayCue(GameplaySfxCue::Landing);
 }
 
 bool GameplayAudio::IsCueLoaded(GameplaySfxCue cue) const

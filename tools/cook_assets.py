@@ -121,6 +121,24 @@ KNOWN_ASSETS = (
         "cooked": "sounds/player_respawn.wav",
         "kind": KIND_COPY,
     },
+    {
+        "id": "sounds/player_footstep.wav",
+        "source": "sounds/player_footstep.wav",
+        "cooked": "sounds/player_footstep.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/player_jump.wav",
+        "source": "sounds/player_jump.wav",
+        "cooked": "sounds/player_jump.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/player_land.wav",
+        "source": "sounds/player_land.wav",
+        "cooked": "sounds/player_land.wav",
+        "kind": KIND_COPY,
+    },
 )
 
 
