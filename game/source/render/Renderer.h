@@ -204,6 +204,17 @@ struct HealthHudView
     const char* text = nullptr;
 };
 
+struct DamageVignetteView
+{
+    float opacity = 0.0f;
+};
+
+struct DeathHudView
+{
+    bool visible = false;
+    const char* title = nullptr;
+};
+
 class StaticModelSceneStore;
 
 class Renderer
@@ -278,7 +289,9 @@ public:
         const DebugWorldOverlay& overlay = {},
         WorldViewRect viewRect = {},
         bool drawGameplayHud = true,
-        bool hideInteractionPrompts = false);
+        bool hideInteractionPrompts = false,
+        DamageVignetteView damageVignette = {},
+        DeathHudView deathHud = {});
     void DrawMainMenu(bool playSelected);
     void DrawPauseMenu(bool resumeSelected);
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);

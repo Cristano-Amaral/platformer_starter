@@ -141,9 +141,11 @@ inline bool InventoryUiIsAvailable(
     TopLevelFlow flow,
     bool editorActive,
     bool runCompleteActive,
-    bool pauseActive = false)
+    bool pauseActive = false,
+    bool deathActive = false)
 {
-    return flow == TopLevelFlow::Gameplay && !editorActive && !runCompleteActive && !pauseActive;
+    return flow == TopLevelFlow::Gameplay && !editorActive && !runCompleteActive && !pauseActive
+        && !deathActive;
 }
 
 // True for the whole frame that Pause is or was active, so the Resume Enter/Esc
@@ -168,10 +170,11 @@ inline bool PauseCanBeEntered(
     bool inventoryBlocksGameplay,
     bool runCompleteActive,
     bool levelCompleted,
-    bool pauseActive)
+    bool pauseActive,
+    bool deathActive = false)
 {
     return flow == TopLevelFlow::Gameplay && !editorActive && !inventoryBlocksGameplay
-        && !runCompleteActive && !levelCompleted && !pauseActive;
+        && !runCompleteActive && !levelCompleted && !pauseActive && !deathActive;
 }
 
 inline bool GameplayHudIsActive(TopLevelFlow flow, bool editorActive)

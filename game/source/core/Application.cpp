@@ -10,6 +10,7 @@
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/PlayerDeath.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/LevelTransition.h"
@@ -916,12 +917,15 @@ int Application::Run()
     {
         const float deltaSeconds = platform::DeltaSeconds();
         const input::InputState inputState = input::Poll();
+        const bool deathWasActiveAtFrameStart = gameplay::PlayerDeathIsActive(playerDeath);
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         const bool editorActiveAtFrameStart = levelEditorState.active;
         // Ignore the toggle while an ImGui field owns the keyboard so typing a
-        // value cannot close the editor.
-        if (inputState.toggleLevelEditorPressed && !debugUi.WantsKeyboardCapture())
+        // value cannot close the editor. Death also blocks F2 so the brief
+        // death delay cannot advance invisibly through an editor round-trip.
+        if (inputState.toggleLevelEditorPressed && !debugUi.WantsKeyboardCapture()
+            && !deathWasActiveAtFrameStart)
         {
             SetLevelEditorActive(!levelEditorState.active);
         }
@@ -966,7 +970,11 @@ int Application::Run()
 
         const bool inventoryWasOpen = inventoryUi.open;
         if (gameplay::InventoryUiIsAvailable(
-                topLevelFlow, editorActive, runCompleteState.active, pauseMenuState.active))
+                topLevelFlow,
+                editorActive,
+                runCompleteState.active,
+                pauseMenuState.active,
+                deathWasActiveAtFrameStart))
         {
             gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
         }
@@ -982,7 +990,8 @@ int Application::Run()
                 inventoryBlocksGameplay,
                 runCompleteState.active,
                 levelCompletionState.completed,
-                pauseWasActiveAtFrameStart);
+                pauseWasActiveAtFrameStart,
+                deathWasActiveAtFrameStart);
             const gameplay::PauseMenuInputAction pauseAction = gameplay::ResolvePauseInput(
                 pauseWasActiveAtFrameStart,
                 pauseCanBeEntered,
@@ -1010,7 +1019,9 @@ int Application::Run()
             || gameplay::MainMenuBlocksGameplay(topLevelFlow)
             || inventoryBlocksGameplay
             || runCompleteBlocksGameplay
-            || gameplay::PauseBlocksGameplay(pauseWasActiveAtFrameStart, pauseMenuState.active);
+            || gameplay::PauseBlocksGameplay(pauseWasActiveAtFrameStart, pauseMenuState.active)
+            || gameplay::PlayerDeathBlocksGameplay(
+                deathWasActiveAtFrameStart, gameplay::PlayerDeathIsActive(playerDeath));
 
         bool hazardContactThisFrame = false;
         int collectedThisFrameIndex = world::kNoCollectibleIndex;
@@ -1123,117 +1134,145 @@ int Application::Run()
                     runCompleteBlocksGameplay,
                     levelCompletionState.completed,
                     gameplay::PauseBlocksGameplay(
-                        pauseWasActiveAtFrameStart, pauseMenuState.active));
-                (void)gameplay::TickHazardContactDamage(
+                        pauseWasActiveAtFrameStart, pauseMenuState.active),
+                    gameplay::PlayerDeathBlocksGameplay(
+                        deathWasActiveAtFrameStart, gameplay::PlayerDeathIsActive(playerDeath)));
+                const int healthBeforeDamage = playerHealth.currentHealth;
+                const bool appliedHazardDamage = gameplay::TickHazardContactDamage(
                     playerHealth,
                     hazardContact,
                     hazardContactThisFrame,
                     deltaSeconds,
                     hazardDamageAllowed);
-            }
-
-            if (!respawnedThisFrame && inputState.restartPressed)
-            {
-                if (gameplay::DestinationTransitionIsInFlight(levelTransition))
+                if (appliedHazardDamage)
                 {
-                    gameplay::SkipDestinationTransitionHold(levelTransition);
+                    gameplay::BeginDamageVignette(damageVignette);
                 }
-                else if (restartAvailableAtFrameStart)
+                if (gameplay::TryBeginPlayerDeath(
+                        playerDeath, healthBeforeDamage, playerHealth.currentHealth))
                 {
-                    RestartRun();
-                    restartedThisFrame = true;
+                    gameplay::CloseInventoryUi(inventoryUi);
                 }
             }
 
-            physicsWorld.SetGrabAim(player.Position(), player.FacingX());
+            if (!gameplay::PlayerDeathIsActive(playerDeath))
             {
-                const std::size_t pickupCount = levelDefinition.itemPickups.size();
-                std::vector<std::uint8_t> losBlocked(pickupCount, 0);
-                for (std::size_t index = 0; index < pickupCount; ++index)
+                gameplay::TickDamageVignette(damageVignette, deltaSeconds, true);
+
+                if (!respawnedThisFrame && inputState.restartPressed)
                 {
-                    if (!gameplay::ItemPickupIsAvailable(itemPickupRunState, index))
+                    if (gameplay::DestinationTransitionIsInFlight(levelTransition))
                     {
-                        continue;
+                        gameplay::SkipDestinationTransitionHold(levelTransition);
                     }
-                    if (physicsWorld.WorldSolidBlocksSegment(
-                            player.Position(), levelDefinition.itemPickups[index].position))
+                    else if (restartAvailableAtFrameStart)
                     {
-                        losBlocked[index] = 1;
+                        RestartRun();
+                        restartedThisFrame = true;
                     }
                 }
-                itemPickupTargetIndex = gameplay::FindItemPickupTargetIndex(
-                    player.Position(),
-                    player.FacingX(),
-                    levelDefinition.itemPickups,
-                    itemPickupRunState.collected,
-                    losBlocked);
-            }
-            if (!physicsWorld.GetGrabState().carrying)
-            {
-                const std::size_t doorCount = levelDefinition.doors.size();
-                std::vector<std::uint8_t> doorLosBlocked(doorCount, 0);
-                for (std::size_t index = 0; index < doorCount; ++index)
+
+                physicsWorld.SetGrabAim(player.Position(), player.FacingX());
                 {
-                    if (!world::DoorRequiresInventoryItem(levelDefinition.doors[index])
-                        || gameplay::DoorIsRuntimeUnlocked(doorLockRunState, index))
+                    const std::size_t pickupCount = levelDefinition.itemPickups.size();
+                    std::vector<std::uint8_t> losBlocked(pickupCount, 0);
+                    for (std::size_t index = 0; index < pickupCount; ++index)
                     {
-                        continue;
-                    }
-                    if (physicsWorld.WorldSolidBlocksSegmentIgnoringDoor(
-                            player.Position(), levelDefinition.doors[index].center, static_cast<int>(index)))
-                    {
-                        doorLosBlocked[index] = 1;
-                    }
-                }
-                lockedDoorTargetIndex = gameplay::FindLockedDoorTargetIndex(
-                    player.Position(),
-                    player.FacingX(),
-                    levelDefinition.doors,
-                    doorLockRunState.unlocked,
-                    doorLosBlocked);
-            }
-            if (!respawnedThisFrame && !restartedThisFrame && inputState.grabDropPressed)
-            {
-                const bool wasCarrying = physicsWorld.GetGrabState().carrying;
-                physicsWorld.HandleGrabDrop();
-                if (!wasCarrying && !physicsWorld.GetGrabState().carrying)
-                {
-                    if (itemPickupTargetIndex != gameplay::kNoItemPickupIndex)
-                    {
-                        if (gameplay::TryCollectItemPickup(
-                                inventory,
-                                itemPickupRunState,
-                                levelDefinition.itemPickups,
-                                itemPickupTargetIndex))
+                        if (!gameplay::ItemPickupIsAvailable(itemPickupRunState, index))
                         {
-                            (void)gameplay::SpawnItemPickupCollectionFeedback(
-                                itemPickupCollectionFeedback,
-                                levelDefinition.itemPickups[static_cast<std::size_t>(
-                                    itemPickupTargetIndex)],
-                                runTimerState.elapsedSeconds);
-                            itemPickupCollectionSound.Play();
-                            (void)gameplay::SpawnItemPickupCollectionHud(
-                                itemPickupCollectionHud,
-                                levelDefinition.itemPickups[static_cast<std::size_t>(
-                                    itemPickupTargetIndex)]);
+                            continue;
+                        }
+                        if (physicsWorld.WorldSolidBlocksSegment(
+                                player.Position(), levelDefinition.itemPickups[index].position))
+                        {
+                            losBlocked[index] = 1;
                         }
                     }
-                    else
+                    itemPickupTargetIndex = gameplay::FindItemPickupTargetIndex(
+                        player.Position(),
+                        player.FacingX(),
+                        levelDefinition.itemPickups,
+                        itemPickupRunState.collected,
+                        losBlocked);
+                }
+                if (!physicsWorld.GetGrabState().carrying)
+                {
+                    const std::size_t doorCount = levelDefinition.doors.size();
+                    std::vector<std::uint8_t> doorLosBlocked(doorCount, 0);
+                    for (std::size_t index = 0; index < doorCount; ++index)
                     {
-                        (void)gameplay::TryUnlockLockedDoor(
-                            inventory,
-                            doorLockRunState,
-                            levelDefinition.doors,
-                            lockedDoorTargetIndex);
+                        if (!world::DoorRequiresInventoryItem(levelDefinition.doors[index])
+                            || gameplay::DoorIsRuntimeUnlocked(doorLockRunState, index))
+                        {
+                            continue;
+                        }
+                        if (physicsWorld.WorldSolidBlocksSegmentIgnoringDoor(
+                                player.Position(),
+                                levelDefinition.doors[index].center,
+                                static_cast<int>(index)))
+                        {
+                            doorLosBlocked[index] = 1;
+                        }
+                    }
+                    lockedDoorTargetIndex = gameplay::FindLockedDoorTargetIndex(
+                        player.Position(),
+                        player.FacingX(),
+                        levelDefinition.doors,
+                        doorLockRunState.unlocked,
+                        doorLosBlocked);
+                }
+                if (!respawnedThisFrame && !restartedThisFrame && inputState.grabDropPressed)
+                {
+                    const bool wasCarrying = physicsWorld.GetGrabState().carrying;
+                    physicsWorld.HandleGrabDrop();
+                    if (!wasCarrying && !physicsWorld.GetGrabState().carrying)
+                    {
+                        if (itemPickupTargetIndex != gameplay::kNoItemPickupIndex)
+                        {
+                            if (gameplay::TryCollectItemPickup(
+                                    inventory,
+                                    itemPickupRunState,
+                                    levelDefinition.itemPickups,
+                                    itemPickupTargetIndex))
+                            {
+                                (void)gameplay::SpawnItemPickupCollectionFeedback(
+                                    itemPickupCollectionFeedback,
+                                    levelDefinition.itemPickups[static_cast<std::size_t>(
+                                        itemPickupTargetIndex)],
+                                    runTimerState.elapsedSeconds);
+                                itemPickupCollectionSound.Play();
+                                (void)gameplay::SpawnItemPickupCollectionHud(
+                                    itemPickupCollectionHud,
+                                    levelDefinition.itemPickups[static_cast<std::size_t>(
+                                        itemPickupTargetIndex)]);
+                            }
+                        }
+                        else
+                        {
+                            (void)gameplay::TryUnlockLockedDoor(
+                                inventory,
+                                doorLockRunState,
+                                levelDefinition.doors,
+                                lockedDoorTargetIndex);
+                        }
                     }
                 }
-            }
 
-            physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
-            physicsWorld.Update(deltaSeconds);
-            if (!respawnedThisFrame && !restartedThisFrame)
+                physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
+                physicsWorld.Update(deltaSeconds);
+                if (!respawnedThisFrame && !restartedThisFrame)
+                {
+                    camera.Update(player.Position(), deltaSeconds);
+                }
+            }
+        }
+
+        if (gameplay::PlayerDeathIsActive(playerDeath) && !editorActive)
+        {
+            gameplay::TickPlayerDeathDelay(playerDeath, deltaSeconds);
+            if (gameplay::PlayerDeathDelayElapsed(playerDeath))
             {
-                camera.Update(player.Position(), deltaSeconds);
+                PerformDeathRespawn();
             }
         }
 
@@ -1813,7 +1852,8 @@ int Application::Run()
                     inventoryUi.open,
                     gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
                     levelCompletionState.completed,
-                    pauseMenuState.active),
+                    pauseMenuState.active,
+                    gameplay::PlayerDeathIsActive(playerDeath)),
                 objectiveLevelLabel,
                 objectiveLine},
             render::HealthHudView{
@@ -1823,7 +1863,8 @@ int Application::Run()
                     inventoryUi.open,
                     gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
                     levelCompletionState.completed,
-                    pauseMenuState.active),
+                    pauseMenuState.active,
+                    gameplay::PlayerDeathIsActive(playerDeath)),
                 healthHudText},
             overlay,
             worldViewRect,
@@ -1833,6 +1874,26 @@ int Application::Run()
                 editorActive,
                 pauseMenuState.active,
                 gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState))
+                || gameplay::PlayerDeathBlocksGameplay(
+                    deathWasActiveAtFrameStart, gameplay::PlayerDeathIsActive(playerDeath)),
+            render::DamageVignetteView{
+                gameplay::DamageVignetteIsVisible(
+                    topLevelFlow,
+                    editorActive,
+                    inventoryUi.open,
+                    gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState),
+                    levelCompletionState.completed,
+                    pauseMenuState.active,
+                    gameplay::PlayerDeathIsActive(playerDeath))
+                    ? gameplay::DamageVignetteOpacity(damageVignette)
+                    : 0.0f},
+            render::DeathHudView{
+                gameplay::PlayerDeathIsActive(playerDeath)
+                    && topLevelFlow == gameplay::TopLevelFlow::Gameplay
+                    && !editorActive
+                    && !gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState)
+                    && !levelCompletionState.completed,
+                gameplay::kPlayerDeathTitle}
         );
         if (gameplay::PauseMenuOverlayIsVisible(
                 topLevelFlow,
@@ -2474,7 +2535,19 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
         inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
-    // M69: Fall/Manual respawn does not restore Health. M70 owns death/respawn Health.
+    // Fall/Manual respawn does not restore Health. Health-zero death uses
+    // PerformDeathRespawn, which restores maximum Health after this teleport.
+}
+
+void Application::PerformDeathRespawn()
+{
+    PerformRespawn(gameplay::RespawnReason::Hazard);
+    gameplay::RestorePlayerHealthAfterDeathRespawn(playerHealth);
+    const bool overlapsHazard =
+        world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
+        != world::kNoHazardIndex;
+    gameplay::ResetHazardContactAfterDeathRespawn(hazardContact, overlapsHazard);
+    gameplay::ClearPlayerDeath(playerDeath);
 }
 
 void Application::RestartRun()
@@ -2504,6 +2577,8 @@ void Application::RestartRun()
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
     gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
+    gameplay::ClearDamageVignette(damageVignette);
+    gameplay::ClearPlayerDeath(playerDeath);
 }
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -3132,6 +3207,8 @@ void Application::ResetGameplayAfterCommittedLevel()
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
     gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
+    gameplay::ClearDamageVignette(damageVignette);
+    gameplay::ClearPlayerDeath(playerDeath);
 }
 
 void Application::SaveLevelEditorSource()
@@ -3266,6 +3343,8 @@ void Application::ResetGameplayAfterLevelTransition()
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
     gameplay::ResetHazardContactState(hazardContact);
+    gameplay::ClearDamageVignette(damageVignette);
+    gameplay::ClearPlayerDeath(playerDeath);
 }
 
 void Application::ReturnToMainMenuFromResults()
@@ -3274,6 +3353,8 @@ void Application::ReturnToMainMenuFromResults()
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     levelCompletionState = gameplay::LevelCompletionState{};
     gameplay::CloseInventoryUi(inventoryUi);
+    gameplay::ClearPlayerDeath(playerDeath);
+    gameplay::ClearDamageVignette(damageVignette);
 }
 
 void Application::TryFinishPendingFreshRun()
@@ -3405,6 +3486,8 @@ void Application::ResetGameplayAfterPlayAgain()
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
     gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
+    gameplay::ClearDamageVignette(damageVignette);
+    gameplay::ClearPlayerDeath(playerDeath);
 }
 
 void Application::Shutdown()

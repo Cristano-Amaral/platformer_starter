@@ -3,6 +3,7 @@
 #include "gameplay/GameFlowState.h"
 #include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/PlayerDeath.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
@@ -1068,6 +1069,36 @@ int main()
         gameplay::InventoryUiIsAvailable(
             gameplay::TopLevelFlow::Gameplay, false, false, restartPause.active),
         "Restart after Resume uses ordinary Gameplay availability");
+
+    gameplay::PlayerDeathState flowDeath{};
+    Expect(
+        gameplay::TryBeginPlayerDeath(flowDeath, gameplay::kHazardDamageAmount, 0),
+        "lethal Health transition starts death from Gameplay");
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death prevents Pause from opening");
+    Expect(
+        !gameplay::InventoryUiIsAvailable(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true),
+        "death prevents Inventory from opening");
+    Expect(
+        gameplay::ResolvePauseInput(
+            false, false, false, false, false, true, restartPause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::None,
+        "Esc during death does not enter Pause");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death blocks Hazard damage");
+    Expect(
+        !gameplay::TryBeginPlayerDeath(flowDeath, 0, 0),
+        "F2-blocked death does not duplicate itself");
+    gameplay::ClearPlayerDeath(flowDeath);
+    Expect(
+        gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, false),
+        "Pause returns after death respawn completes");
 
     std::filesystem::remove_all(scratch, cleanupError);
 

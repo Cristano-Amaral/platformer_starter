@@ -1,8 +1,9 @@
 #pragma once
 
-// Milestone 69: Application-owned Player Health and Hazard contact damage.
-// Runtime-only. Not authored, not serialized, not a Stats/Attribute/Combat
-// system, and not player death/respawn (M70).
+// Milestone 69/70: Application-owned Player Health, Hazard contact damage,
+// and the Damage Vignette trigger. Runtime-only. Not authored, not
+// serialized, and not a Stats/Attribute/Combat system. Player death phase
+// lives in PlayerDeath.h.
 
 #include "gameplay/GameFlowState.h"
 
@@ -14,6 +15,12 @@ namespace gameplay
 inline constexpr int kMaxPlayerHealth = 100;
 inline constexpr int kHazardDamageAmount = 25;
 inline constexpr float kHazardDamageCadenceSeconds = 1.0f;
+inline constexpr float kDamageVignetteDurationSeconds = 0.35f;
+inline constexpr float kDamageVignettePeakOpacity = 0.45f;
+inline constexpr float kDamageVignetteEdgeFraction = 0.18f;
+inline constexpr unsigned char kDamageVignetteRed = 196;
+inline constexpr unsigned char kDamageVignetteGreen = 24;
+inline constexpr unsigned char kDamageVignetteBlue = 32;
 
 inline constexpr std::size_t kHealthHudTextCapacity = 32;
 inline constexpr int kHealthHudMarginX = 20;
@@ -34,9 +41,65 @@ struct HazardContactState
     float cooldownRemaining = 0.0f;
 };
 
+struct DamageVignetteState
+{
+    float remainingSeconds = 0.0f;
+};
+
 inline void ResetHazardContactState(HazardContactState& contact)
 {
     contact.cooldownRemaining = 0.0f;
+}
+
+// After Health-zero death respawn: clear stale cadence so the lethal
+// contact cannot catch up. If the destination spawn/Checkpoint currently
+// overlaps a Hazard, arm the existing cadence instead of applying the
+// first-step immediate tick. Leaving still resets to immediate re-entry.
+inline void ResetHazardContactAfterDeathRespawn(
+    HazardContactState& contact,
+    bool respawnOverlapsHazard)
+{
+    ResetHazardContactState(contact);
+    if (respawnOverlapsHazard)
+    {
+        contact.cooldownRemaining = kHazardDamageCadenceSeconds;
+    }
+}
+
+inline void ClearDamageVignette(DamageVignetteState& vignette)
+{
+    vignette.remainingSeconds = 0.0f;
+}
+
+inline void BeginDamageVignette(DamageVignetteState& vignette)
+{
+    vignette.remainingSeconds = kDamageVignetteDurationSeconds;
+}
+
+inline void TickDamageVignette(
+    DamageVignetteState& vignette,
+    float deltaSeconds,
+    bool allowedToAge)
+{
+    if (!allowedToAge || vignette.remainingSeconds <= 0.0f)
+    {
+        return;
+    }
+    vignette.remainingSeconds -= deltaSeconds;
+    if (vignette.remainingSeconds < 0.0f)
+    {
+        vignette.remainingSeconds = 0.0f;
+    }
+}
+
+inline float DamageVignetteOpacity(const DamageVignetteState& vignette)
+{
+    if (vignette.remainingSeconds <= 0.0f || kDamageVignetteDurationSeconds <= 0.0f)
+    {
+        return 0.0f;
+    }
+    return (vignette.remainingSeconds / kDamageVignetteDurationSeconds)
+        * kDamageVignettePeakOpacity;
 }
 
 inline void InitializePlayerHealth(PlayerHealthState& health)
@@ -89,10 +152,12 @@ inline bool HazardDamageIsAllowed(
     bool inventoryBlocksGameplay,
     bool runCompleteActive,
     bool levelCompleted,
-    bool pauseBlocksGameplay)
+    bool pauseBlocksGameplay,
+    bool deathBlocksGameplay = false)
 {
     return flow == TopLevelFlow::Gameplay && !editorActive && !inventoryBlocksGameplay
-        && !runCompleteActive && !levelCompleted && !pauseBlocksGameplay;
+        && !runCompleteActive && !levelCompleted && !pauseBlocksGameplay
+        && !deathBlocksGameplay;
 }
 
 inline bool HealthHudIsVisible(
@@ -101,8 +166,23 @@ inline bool HealthHudIsVisible(
     bool inventoryOpen,
     bool runCompleteActive,
     bool levelCompleted,
-    bool pauseActive = false)
+    bool pauseActive = false,
+    bool deathActive = false)
 {
+    return flow == TopLevelFlow::Gameplay && !editorActive && !inventoryOpen
+        && !runCompleteActive && !levelCompleted && !pauseActive && !deathActive;
+}
+
+inline bool DamageVignetteIsVisible(
+    TopLevelFlow flow,
+    bool editorActive,
+    bool inventoryOpen,
+    bool runCompleteActive,
+    bool levelCompleted,
+    bool pauseActive,
+    bool deathActive)
+{
+    (void)deathActive;
     return flow == TopLevelFlow::Gameplay && !editorActive && !inventoryOpen
         && !runCompleteActive && !levelCompleted && !pauseActive;
 }

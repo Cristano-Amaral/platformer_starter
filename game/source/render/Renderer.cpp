@@ -7,6 +7,7 @@
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/PlayerDeath.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "platform/RuntimePaths.h"
 #include "render/ItemPickupTargetHighlight.h"
@@ -393,6 +394,67 @@ void DrawHealthHud(const HealthHudView& view)
         gameplay::kHealthHudY,
         gameplay::kHealthHudFontSize,
         kGrabHudText);
+}
+
+void DrawDamageVignette(const DamageVignetteView& view)
+{
+    if (view.opacity <= 0.0f)
+    {
+        return;
+    }
+
+    const float clamped =
+        view.opacity > gameplay::kDamageVignettePeakOpacity
+            ? gameplay::kDamageVignettePeakOpacity
+            : view.opacity;
+    const unsigned char alpha = static_cast<unsigned char>(clamped * 255.0f + 0.5f);
+    if (alpha == 0)
+    {
+        return;
+    }
+
+    const Color edge{
+        gameplay::kDamageVignetteRed,
+        gameplay::kDamageVignetteGreen,
+        gameplay::kDamageVignetteBlue,
+        alpha};
+    const Color clear{
+        gameplay::kDamageVignetteRed,
+        gameplay::kDamageVignetteGreen,
+        gameplay::kDamageVignetteBlue,
+        0};
+    const int width = GetScreenWidth();
+    const int height = GetScreenHeight();
+    const int edgeX = static_cast<int>(static_cast<float>(width) * gameplay::kDamageVignetteEdgeFraction);
+    const int edgeY = static_cast<int>(static_cast<float>(height) * gameplay::kDamageVignetteEdgeFraction);
+    if (edgeX <= 0 || edgeY <= 0)
+    {
+        return;
+    }
+
+    DrawRectangleGradientV(0, 0, width, edgeY, edge, clear);
+    DrawRectangleGradientV(0, height - edgeY, width, edgeY, clear, edge);
+    DrawRectangleGradientH(0, 0, edgeX, height, edge, clear);
+    DrawRectangleGradientH(width - edgeX, 0, edgeX, height, clear, edge);
+}
+
+void DrawDeathHud(const DeathHudView& view)
+{
+    if (!view.visible)
+    {
+        return;
+    }
+
+    const unsigned char overlayAlpha = static_cast<unsigned char>(
+        gameplay::kPlayerDeathOverlayOpacity * 255.0f + 0.5f);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color{0, 0, 0, overlayAlpha});
+
+    const char* title =
+        view.title != nullptr && view.title[0] != '\0' ? view.title : gameplay::kPlayerDeathTitle;
+    const int titleWidth = MeasureText(title, kLevelCompleteFontSize);
+    const int titleX = (GetScreenWidth() - titleWidth) / 2;
+    const int titleY = GetScreenHeight() / 10;
+    DrawText(title, titleX, titleY, kLevelCompleteFontSize, kLevelCompleteText);
 }
 
 void DrawGrabCarryHud(bool carrying, bool hasTarget)
@@ -1601,7 +1663,9 @@ void Renderer::DrawWorld(
         const DebugWorldOverlay& overlay,
         WorldViewRect viewRect,
         bool drawGameplayHud,
-        bool hideInteractionPrompts)
+        bool hideInteractionPrompts,
+        DamageVignetteView damageVignette,
+        DeathHudView deathHud)
 {
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
@@ -1888,9 +1952,14 @@ void Renderer::DrawWorld(
         DrawCollectedCounter(collectedCount, static_cast<int>(level.collectibles.size()));
         DrawGameplayObjectiveHud(objectiveHud);
         DrawHealthHud(healthHud);
+        DrawDamageVignette(damageVignette);
+        if (deathHud.visible)
+        {
+            DrawDeathHud(deathHud);
+        }
         if (!inventoryPanel.visible && !runComplete)
         {
-            if (!hideInteractionPrompts)
+            if (!hideInteractionPrompts && !deathHud.visible)
             {
                 DrawGrabCarryHud(grabHudCarrying, grabHudTarget);
                 if (!grabHudCarrying && !grabHudTarget && pickupHudTarget)
@@ -1905,7 +1974,10 @@ void Renderer::DrawWorld(
                             : "Requires item");
                 }
             }
-            DrawItemPickupCollectionHud(itemPickupCollectionHud);
+            if (!deathHud.visible)
+            {
+                DrawItemPickupCollectionHud(itemPickupCollectionHud);
+            }
         }
         if (runComplete)
         {

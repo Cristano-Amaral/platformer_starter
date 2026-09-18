@@ -325,6 +325,14 @@ int main()
     hudHealth.currentHealth = gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount;
     gameplay::FormatHealthHudText(healthText, sizeof(healthText), hudHealth);
     Expect(TextEquals(healthText, "HEALTH 75 / 100"), "Health HUD updates after damage");
+    Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death hides Health HUD so YOU DIED has priority");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death hides objective HUD so YOU DIED has priority");
 
     if (gFailures != 0)
     {

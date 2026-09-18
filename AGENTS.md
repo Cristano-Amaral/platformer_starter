@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 69 — Player Health & Damage.
+Milestone 70 — Death, Damage Feedback & Respawn.
 
-Canonical file: [`docs/milestones/MILESTONE_69.md`](docs/milestones/MILESTONE_69.md)
+Canonical file: [`docs/milestones/MILESTONE_70.md`](docs/milestones/MILESTONE_70.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 68 is CLOSED. Milestone 69 is implemented, awaiting manual acceptance. Do not start Milestone 70.
+Milestone 69 is CLOSED. Milestone 70 is implemented, awaiting manual acceptance. Do not start Milestone 71.
 
 ## Source of truth
 1. Current repository code.

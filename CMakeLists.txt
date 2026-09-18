@@ -117,6 +117,7 @@ add_executable(Platformer3D
     game/source/gameplay/ItemPickupCollectionHud.h
     game/source/gameplay/GameplayObjectiveHud.h
     game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/PlayerDeath.h
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
     game/source/world/ItemPickup.h
@@ -809,6 +810,7 @@ add_executable(GameplayObjectiveHudTest
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/LevelTransition.h
     game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/PlayerDeath.h
     game/source/world/LevelGoal.h
     game/source/world/LevelIdentity.h
 )
@@ -827,6 +829,7 @@ add_executable(PlayerHealthTest
     game/source/gameplay/LevelCompletionState.h
     game/source/gameplay/LevelTransition.h
     game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/PlayerDeath.h
     game/source/gameplay/PlayerHealthTest.cpp
     game/source/gameplay/RespawnState.h
     game/source/gameplay/RunTimerState.h
@@ -907,6 +910,7 @@ add_executable(GameFlowTest
     game/source/gameplay/GameFlowState.h
     game/source/gameplay/GameplayObjectiveHud.h
     game/source/gameplay/PlayerHealth.h
+    game/source/gameplay/PlayerDeath.h
     game/source/gameplay/GameFlowTest.cpp
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h

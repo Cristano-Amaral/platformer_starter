@@ -1,4 +1,5 @@
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/PlayerDeath.h"
 #include "gameplay/GameplayObjectiveHud.h"
 
 #include "gameplay/LevelCompletionState.h"
@@ -192,8 +193,33 @@ int main()
     Expect(gameplay::ApplyPlayerDamage(clampHealth, -10) == 0, "damage cannot increase Health");
     Expect(clampHealth.currentHealth == 0, "negative amounts leave zero Health unchanged");
 
+    gameplay::PlayerDeathState lethalDeath{};
+    Expect(
+        gameplay::TryBeginPlayerDeath(lethalDeath, gameplay::kHazardDamageAmount, 0),
+        "5. Health >0 to 0 enters death exactly once");
+    Expect(gameplay::PlayerDeathIsActive(lethalDeath), "death phase is active after the transition");
+    Expect(
+        lethalDeath.remainingSeconds == gameplay::kPlayerDeathDelaySeconds,
+        "death delay starts at the named constant");
+    Expect(
+        !gameplay::TryBeginPlayerDeath(lethalDeath, 0, 0),
+        "5. remaining at zero does not re-enter death");
+    Expect(gameplay::PlayerDeathIsActive(lethalDeath), "duplicate begin is ignored");
+    for (int frame = 0; frame < 8; ++frame)
+    {
+        clampContact.cooldownRemaining = 0.0f;
+        Expect(
+            !gameplay::TickHazardContactDamage(clampHealth, clampContact, true, 1.0f / 60.0f, true),
+            "Health stays clamped at zero during death");
+        Expect(clampHealth.currentHealth == 0, "6. Health remains 0 during the death phase");
+        Expect(
+            !gameplay::TryBeginPlayerDeath(lethalDeath, 0, 0),
+            "zero Health does not duplicate death");
+    }
+
     gameplay::RespawnState respawn{};
     respawn.activeCheckpointIndex = 0;
+    respawn.respawnPosition = {16.5f, 1.8f, 0.0f};
     respawn.deathCount = 2;
     const gameplay::RespawnState respawnBeforeZero = respawn;
     gameplay::LevelCompletionState completion{};
@@ -205,30 +231,30 @@ int main()
     int pickupCollected = 1;
     int collectibleCollected = 1;
     int doorUnlocked = 1;
+    int plateActive = 1;
+    core::Vec3 boxCenter{4.0f, 1.0f, 0.0f};
     std::string runtimeId{world::kLevel01Id};
     bool dirty = false;
     std::vector<world::HazardSpec> workingCopy = authoredHazards;
 
-    for (int frame = 0; frame < 8; ++frame)
-    {
-        clampContact.cooldownRemaining = 0.0f;
-        gameplay::TickHazardContactDamage(clampHealth, clampContact, true, 1.0f / 60.0f, true);
-    }
-    Expect(clampHealth.currentHealth == 0, "zero Health remains clamped");
     Expect(
-        respawn.activeCheckpointIndex == respawnBeforeZero.activeCheckpointIndex
-            && respawn.deathCount == respawnBeforeZero.deathCount,
-        "5. zero Health does not respawn or restore a Checkpoint");
-    Expect(!completion.completed, "5. zero Health does not complete or reload the Level");
-    Expect(!runComplete.active, "5. zero Health does not enter Run Complete / Game Over");
-    Expect(!transition.pending, "5. zero Health does not schedule a transition");
-    Expect(timer.elapsedSeconds == 9.5, "5. zero Health does not reset the timer");
-    Expect(inventoryQuantity == 1, "5. zero Health does not reset Inventory");
-    Expect(pickupCollected == 1, "5. zero Health does not reset pickups");
-    Expect(collectibleCollected == 1, "5. zero Health does not reset collectibles");
-    Expect(doorUnlocked == 1, "5. zero Health does not reset Doors");
-    Expect(runtimeId == world::kLevel01Id, "5. zero Health does not change currentRuntimeLevelId");
-    Expect(!dirty, "5. zero Health does not mark Dirty");
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "8. Pause cannot be entered during death");
+    Expect(
+        !gameplay::InventoryUiIsAvailable(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true),
+        "8. Inventory cannot open during death");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "7. Hazard damage is blocked during death");
+    Expect(
+        gameplay::PlayerDeathBlocksGameplay(true, true),
+        "7. death blocks ordinary gameplay progression");
+    Expect(
+        gameplay::PlayerDeathBlocksGameplay(true, false),
+        "respawn frame still blocks gameplay input carry-through");
 
     gameplay::PlayerHealthState transitionHealth{};
     gameplay::HazardContactState transitionContact{};
@@ -319,6 +345,19 @@ int main()
     Expect(gameplay::kHealthHudMarginX == 20, "Health HUD uses the existing left margin");
 
     Expect(
+        !gameplay::HealthHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death hides ordinary Health HUD");
+    Expect(
+        !gameplay::ObjectiveHudIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death hides ordinary objective HUD");
+    Expect(
+        gameplay::DamageVignetteIsVisible(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death may keep the Damage Vignette as initial feedback");
+
+    Expect(
         authoredHazards.size() == 1
             && authoredHazards[0].center.x == authoredHazardBefore.center.x
             && authoredHazards[0].size.y == authoredHazardBefore.size.y,
@@ -328,6 +367,175 @@ int main()
 
     gameplay::FormatHealthHudText(hud, sizeof(hud), clampHealth);
     Expect(TextEquals(hud, "HEALTH 0 / 100"), "HUD updates immediately at zero Health");
+
+    Expect(gameplay::kDamageVignetteDurationSeconds == 0.35f, "vignette duration is 0.35 s");
+    Expect(gameplay::kDamageVignettePeakOpacity == 0.45f, "vignette peak opacity is 0.45");
+    Expect(gameplay::kDamageVignetteEdgeFraction == 0.18f, "vignette edge fraction is 0.18");
+    Expect(gameplay::kPlayerDeathDelaySeconds == 1.25f, "9. death delay is 1.25 s");
+
+    gameplay::DamageVignetteState vignette{};
+    gameplay::PlayerHealthState vignetteHealth{};
+    gameplay::HazardContactState vignetteContact{};
+    gameplay::InitializePlayerHealth(vignetteHealth);
+    Expect(
+        gameplay::TickHazardContactDamage(
+            vignetteHealth, vignetteContact, true, 1.0f / 60.0f, true),
+        "successful non-lethal damage occurs");
+    gameplay::BeginDamageVignette(vignette);
+    Expect(
+        vignette.remainingSeconds == gameplay::kDamageVignetteDurationSeconds,
+        "1. successful damage starts the Damage Vignette");
+    Expect(
+        gameplay::DamageVignetteOpacity(vignette) == gameplay::kDamageVignettePeakOpacity,
+        "vignette starts at peak opacity");
+
+    gameplay::DamageVignetteState blockedVignette{};
+    gameplay::PlayerHealthState blockedHealth = vignetteHealth;
+    gameplay::HazardContactState blockedContact = vignetteContact;
+    Expect(
+        !gameplay::TickHazardContactDamage(
+            blockedHealth, blockedContact, true, 1.0f / 60.0f, false),
+        "blocked Hazard overlap applies no damage");
+    Expect(
+        blockedVignette.remainingSeconds == 0.0f,
+        "2. blocked/no-op damage does not trigger the vignette");
+    Expect(
+        !gameplay::TickHazardContactDamage(
+            clampHealth, clampContact, true, 1.0f / 60.0f, true),
+        "zero-Health overlap is a no-op");
+    Expect(
+        blockedVignette.remainingSeconds == 0.0f,
+        "2. zero-Health overlap does not trigger the vignette");
+
+    const float remainingAtStart = vignette.remainingSeconds;
+    gameplay::TickDamageVignette(vignette, 0.10f, false);
+    Expect(
+        vignette.remainingSeconds == remainingAtStart,
+        "4. Pause/Inventory/editor blocking does not age the vignette");
+    gameplay::TickDamageVignette(vignette, 0.10f, true);
+    Expect(
+        vignette.remainingSeconds == remainingAtStart - 0.10f,
+        "3. vignette fades only while gameplay is allowed to age");
+    gameplay::BeginDamageVignette(vignette);
+    Expect(
+        vignette.remainingSeconds == gameplay::kDamageVignetteDurationSeconds,
+        "later successful damage refreshes the vignette");
+    gameplay::TickDamageVignette(vignette, gameplay::kDamageVignetteDurationSeconds, true);
+    Expect(vignette.remainingSeconds == 0.0f, "3. vignette reaches zero at the named duration");
+    Expect(gameplay::DamageVignetteOpacity(vignette) == 0.0f, "elapsed vignette is invisible");
+
+    gameplay::TickPlayerDeathDelay(lethalDeath, 0.25f);
+    Expect(
+        lethalDeath.remainingSeconds == gameplay::kPlayerDeathDelaySeconds - 0.25f,
+        "9. death delay is deterministic");
+    Expect(gameplay::PlayerDeathIsActive(lethalDeath), "death stays active before the delay elapses");
+    gameplay::TickPlayerDeathDelay(lethalDeath, gameplay::kPlayerDeathDelaySeconds);
+    Expect(gameplay::PlayerDeathDelayElapsed(lethalDeath), "delay reaching zero is ready to respawn");
+
+    Expect(
+        gameplay::DeathUsesActiveCheckpoint(respawn)
+            && gameplay::ResolveDeathRespawnPosition(respawn).x == respawnBeforeZero.respawnPosition.x,
+        "10. active Checkpoint is the death respawn destination");
+    gameplay::RestorePlayerHealthAfterDeathRespawn(clampHealth);
+    Expect(
+        clampHealth.currentHealth == gameplay::kMaxPlayerHealth
+            && clampHealth.maxHealth == gameplay::kMaxPlayerHealth,
+        "12. death respawn restores Health to maximum");
+    Expect(
+        respawn.activeCheckpointIndex == respawnBeforeZero.activeCheckpointIndex,
+        "10. death does not clear the active Checkpoint");
+    Expect(runtimeId == world::kLevel01Id, "13. death respawn preserves currentRuntimeLevelId");
+    Expect(inventoryQuantity == 1, "14. death respawn preserves Inventory");
+    Expect(pickupCollected == 1, "15. death respawn preserves collected pickups");
+    Expect(doorUnlocked == 1, "16. death respawn preserves Door unlock state");
+    Expect(plateActive == 1, "16. death respawn preserves Pressure Plate runtime");
+    Expect(boxCenter.x == 4.0f, "16. death respawn preserves Dynamic Box runtime pose");
+    Expect(collectibleCollected == 1, "16. death respawn preserves run-local collectibles");
+    Expect(timer.elapsedSeconds == 9.5, "17. death does not reset the run timer");
+    Expect(!completion.completed, "death does not complete the Level");
+    Expect(!runComplete.active, "death does not enter RUN COMPLETE");
+    Expect(!transition.pending, "death does not schedule a Level transition");
+    Expect(!dirty, "24. death never marks Dirty");
+    gameplay::ClearPlayerDeath(lethalDeath);
+    Expect(!gameplay::PlayerDeathIsActive(lethalDeath), "death clears after respawn");
+
+    gameplay::RespawnState spawnOnly{};
+    spawnOnly.respawnPosition = {0.0f, 1.0f, 0.0f};
+    Expect(
+        !gameplay::DeathUsesActiveCheckpoint(spawnOnly),
+        "11. no active Checkpoint uses the current Level player spawn");
+    Expect(
+        gameplay::ResolveDeathRespawnPosition(spawnOnly).x == 0.0f
+            && gameplay::ResolveDeathRespawnPosition(spawnOnly).y == 1.0f,
+        "11. death respawn destination is the stored Level spawn");
+
+    gameplay::HazardContactState staleContact{};
+    staleContact.cooldownRemaining = 0.15f;
+    gameplay::ResetHazardContactAfterDeathRespawn(staleContact, false);
+    Expect(staleContact.cooldownRemaining == 0.0f, "18. death respawn clears stale Hazard cadence");
+    gameplay::PlayerHealthState afterRespawnHealth{};
+    gameplay::InitializePlayerHealth(afterRespawnHealth);
+    Expect(
+        gameplay::TickHazardContactDamage(
+            afterRespawnHealth, staleContact, true, 1.0f / 60.0f, true),
+        "non-overlapping spawn keeps first-step damage for a later Hazard entry");
+
+    gameplay::HazardContactState overlapContact{};
+    overlapContact.cooldownRemaining = 0.0f;
+    gameplay::ResetHazardContactAfterDeathRespawn(overlapContact, true);
+    Expect(
+        overlapContact.cooldownRemaining == gameplay::kHazardDamageCadenceSeconds,
+        "18. spawn/Checkpoint overlapping a Hazard arms cadence instead of first-tick damage");
+    gameplay::PlayerHealthState overlapHealth{};
+    gameplay::InitializePlayerHealth(overlapHealth);
+    Expect(
+        !gameplay::TickHazardContactDamage(
+            overlapHealth, overlapContact, true, 1.0f / 60.0f, true),
+        "19. overlapping spawn does not apply catch-up or immediate death damage");
+    Expect(
+        overlapHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        "19. no immediate repeated death loop at an overlapping spawn");
+    Expect(
+        !gameplay::TickHazardContactDamage(
+            overlapHealth, overlapContact, false, 1.0f / 60.0f, true),
+        "leaving the overlapping spawn Hazard resets cadence");
+    Expect(overlapContact.cooldownRemaining == 0.0f, "leave after spawn-safety restores immediate re-entry");
+
+    gameplay::DamageVignetteState respawnVignette = vignette;
+    gameplay::RestorePlayerHealthAfterDeathRespawn(afterRespawnHealth);
+    Expect(
+        respawnVignette.remainingSeconds == vignette.remainingSeconds,
+        "respawn itself does not retrigger the Damage Vignette");
+
+    gameplay::PlayerHealthState fallHealth{};
+    gameplay::InitializePlayerHealth(fallHealth);
+    gameplay::ApplyPlayerDamage(fallHealth, gameplay::kHazardDamageAmount);
+    const int fallHealthBefore = fallHealth.currentHealth;
+    Expect(
+        fallHealthBefore == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
+        "Fall/Manual respawn does not restore Health");
+    Expect(
+        fallHealth.currentHealth == fallHealthBefore,
+        "11b. M70 does not redefine Fall/Manual Health restoration");
+
+    gameplay::FormatHealthHudText(hud, sizeof(hud), afterRespawnHealth);
+    Expect(TextEquals(hud, "HEALTH 100 / 100"), "after respawn Health HUD shows maximum");
+
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::MainMenu, false, false, false, false, false, false),
+        "23. Main Menu cannot receive Hazard/death activity");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true, false, false),
+        "23. LEVEL COMPLETE cannot receive Hazard/death activity");
+    Expect(
+        !gameplay::HazardDamageIsAllowed(
+            gameplay::TopLevelFlow::Gameplay, false, false, true, true, false, false),
+        "23. RUN COMPLETE cannot receive Hazard/death activity");
+    Expect(
+        !gameplay::TryBeginPlayerDeath(lethalDeath, 0, 0),
+        "23. completion/menu cannot begin death from zero Health");
 
     if (gFailures != 0)
     {

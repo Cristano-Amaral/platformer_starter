@@ -9,6 +9,7 @@
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/PlayerDeath.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/LevelTransition.h"
 #include "gameplay/PlatformerCamera.h"
@@ -48,6 +49,7 @@ private:
     void Initialize();
     void Shutdown();
     void PerformRespawn(gameplay::RespawnReason reason);
+    void PerformDeathRespawn();
     void RestartRun();
     void TryFinishPendingLevelTransition();
     void TryFinishPendingFreshRun();
@@ -86,6 +88,8 @@ private:
     gameplay::PauseMenuState pauseMenuState{};
     gameplay::PlayerHealthState playerHealth{};
     gameplay::HazardContactState hazardContact{};
+    gameplay::DamageVignetteState damageVignette{};
+    gameplay::PlayerDeathState playerDeath{};
     std::string currentRuntimeLevelId;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};
