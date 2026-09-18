@@ -6,6 +6,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace editor
 {
@@ -111,6 +112,7 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
 LifecycleEditResult RunLifecycleMutation(
     world::LevelDefinition& workingCopy,
     EditorSelection selection,
+    const std::vector<EditorSelection>& additionalSelections,
     LevelEditorRequest request,
     core::Vec3 placementAnchor,
     bool worldCenterPlacement,
@@ -150,9 +152,9 @@ LifecycleEditResult RunLifecycleMutation(
             ? AddStaticPropAt(workingCopy, placementAnchor, staticPropIdentity)
             : AddStaticProp(workingCopy, placementAnchor, staticPropIdentity);
     case LevelEditorRequest::DuplicateSelected:
-        return DuplicateSelected(workingCopy, selection);
+        return DuplicateSelectionSet(workingCopy, selection, additionalSelections);
     case LevelEditorRequest::DeleteSelected:
-        return DeleteSelected(workingCopy, selection);
+        return DeleteSelectionSet(workingCopy, selection, additionalSelections);
     default:
         break;
     }
@@ -162,8 +164,25 @@ LifecycleEditResult RunLifecycleMutation(
     return result;
 }
 
-void SetSuccessMessage(LevelEditorState& state, LevelEditorRequest request, EditorObjectKind kind)
+void SetSuccessMessage(
+    LevelEditorState& state,
+    LevelEditorRequest request,
+    EditorObjectKind kind,
+    bool multiSelected)
 {
+    if (multiSelected)
+    {
+        if (request == LevelEditorRequest::DuplicateSelected)
+        {
+            state.lastMessage = "Selection duplicated.";
+            return;
+        }
+        if (request == LevelEditorRequest::DeleteSelected)
+        {
+            state.lastMessage = "Selection deleted.";
+            return;
+        }
+    }
     const char* label = LifecycleCategoryLabel(kind);
     switch (request)
     {
@@ -250,7 +269,7 @@ bool CanIssueAuthoredLifecycleRequest(
     bool gizmoDragging,
     LevelEditorRequest request,
     std::string_view staticPropIdentity,
-    bool multiSelected)
+    const std::vector<EditorSelection>& additionalSelections)
 {
     switch (request)
     {
@@ -276,17 +295,11 @@ bool CanIssueAuthoredLifecycleRequest(
                    authoringAvailable, workingCopy, EditorObjectKind::StaticProp, gizmoDragging)
             && world::StaticPropIdentityIsValid(staticPropIdentity);
     case LevelEditorRequest::DuplicateSelected:
-        if (multiSelected)
-        {
-            return false;
-        }
-        return CanDuplicateSelected(authoringAvailable, workingCopy, selection, gizmoDragging);
+        return CanDuplicateSelected(
+            authoringAvailable, workingCopy, selection, additionalSelections, gizmoDragging);
     case LevelEditorRequest::DeleteSelected:
-        if (multiSelected)
-        {
-            return false;
-        }
-        return CanDeleteSelected(authoringAvailable, workingCopy, selection, gizmoDragging);
+        return CanDeleteSelected(
+            authoringAvailable, workingCopy, selection, additionalSelections, gizmoDragging);
     default:
         return false;
     }
@@ -359,6 +372,7 @@ bool HandleAuthoredLifecycleRequest(
         : staticPropIdentityOverride;
 
     const EditorSelection previousSelection = state.selection;
+    const std::vector<EditorSelection> previousAdditional = state.additionalSelections;
     const CategoryStructuralPending previousPending = state.structuralPending;
     const StructuralIndexMap previousMap = state.structuralMap;
     const bool multiSelected =
@@ -376,7 +390,7 @@ bool HandleAuthoredLifecycleRequest(
             state.gizmo.dragging,
             request,
             staticPropIdentity,
-            multiSelected))
+            state.additionalSelections))
     {
         ResetLevelActionStatuses(state);
         if (!authoringAvailable)
@@ -387,36 +401,40 @@ bool HandleAuthoredLifecycleRequest(
         {
             state.lastMessage = "Lifecycle blocked: finish the gizmo drag first.";
         }
-        else if (multiSelected && request == LevelEditorRequest::DuplicateSelected)
+        else if (request == LevelEditorRequest::DuplicateSelected)
         {
-            state.lastMessage = "Duplicate is not a group operation.";
+            const char* reason = DuplicateSelectedDisableReason(
+                authoringAvailable,
+                state.workingCopy,
+                previousSelection,
+                state.gizmo.dragging,
+                previousAdditional);
+            state.lastMessage = reason != nullptr
+                ? reason
+                : RejectionMessage(LifecycleEditStatus::InvalidSelection, previousSelection.kind);
         }
-        else if (multiSelected && request == LevelEditorRequest::DeleteSelected)
+        else if (request == LevelEditorRequest::DeleteSelected)
         {
-            state.lastMessage = "Delete is not a group operation.";
-        }
-        else if (
-            request == LevelEditorRequest::DeleteSelected
-            && previousSelection.kind == EditorObjectKind::ElevatedPlatform
-            && state.workingCopy.elevatedPlatforms.size()
-                <= static_cast<std::size_t>(world::kMinElevatedPlatformCount))
-        {
-            state.lastMessage = "At least one Platform is required.";
-        }
-        else if (
-            request == LevelEditorRequest::DeleteSelected
-            && previousSelection.kind == EditorObjectKind::ElevatedPlatform
-            && IsAuthoredPlatformReferenced(state.workingCopy, previousSelection.index))
-        {
-            state.lastMessage =
-                "Delete blocked: Platform is referenced by level support metadata.";
-        }
-        else if (
-            request == LevelEditorRequest::DuplicateSelected
-            && !SupportsLifecycle(previousSelection.kind))
-        {
-            state.lastMessage =
-                RejectionMessage(LifecycleEditStatus::UnsupportedType, previousSelection.kind);
+            const char* reason = DeleteSelectedDisableReason(
+                authoringAvailable,
+                state.workingCopy,
+                previousSelection,
+                state.gizmo.dragging,
+                previousAdditional);
+            if (reason != nullptr
+                && std::string_view(reason)
+                    == "Platform is referenced by checkpoint/goal support metadata.")
+            {
+                state.lastMessage =
+                    "Delete blocked: Platform is referenced by level support metadata.";
+            }
+            else
+            {
+                state.lastMessage = reason != nullptr
+                    ? reason
+                    : RejectionMessage(
+                          LifecycleEditStatus::InvalidSelection, previousSelection.kind);
+            }
         }
         else if (CategoryAtCountLimit(state.workingCopy, affectedKind)
             && (request == LevelEditorRequest::AddPlatform
@@ -428,8 +446,7 @@ bool HandleAuthoredLifecycleRequest(
                 || request == LevelEditorRequest::AddDoor
                 || request == LevelEditorRequest::AddItemPickup
                 || request == LevelEditorRequest::AddGoal
-                || request == LevelEditorRequest::AddStaticProp
-                || request == LevelEditorRequest::DuplicateSelected))
+                || request == LevelEditorRequest::AddStaticProp))
         {
             state.lastMessage = RejectionMessage(LifecycleEditStatus::AtLimit, affectedKind);
         }
@@ -451,6 +468,7 @@ bool HandleAuthoredLifecycleRequest(
     const LifecycleEditResult result = RunLifecycleMutation(
         state.workingCopy,
         previousSelection,
+        previousAdditional,
         request,
         placementAnchor,
         worldCenterPlacement,
@@ -458,6 +476,7 @@ bool HandleAuthoredLifecycleRequest(
     if (!result.succeeded)
     {
         state.selection = previousSelection;
+        state.additionalSelections = previousAdditional;
         state.structuralPending = previousPending;
         state.structuralMap = previousMap;
         ResetLevelActionStatuses(state);
@@ -467,16 +486,37 @@ bool HandleAuthoredLifecycleRequest(
     }
 
     state.selection = result.selection;
-    state.additionalSelections.clear();
-    MarkCategoryStructuralPending(state.structuralPending, affectedKind);
-    ApplyLifecycleToStructuralMap(
-        state.structuralMap,
-        affectedKind,
-        request == LevelEditorRequest::DeleteSelected,
-        previousSelection.index);
+    state.additionalSelections = result.additionalSelections;
+    SanitizeEditorSelectionSet(state.selection, state.additionalSelections);
+
+    if (request == LevelEditorRequest::DeleteSelected)
+    {
+        const std::vector<EditorSelection>& deleted =
+            result.appliedPlan.empty()
+                ? std::vector<EditorSelection>{previousSelection}
+                : result.appliedPlan;
+        for (const EditorSelection& item : deleted)
+        {
+            MarkCategoryStructuralPending(state.structuralPending, item.kind);
+            ApplyLifecycleToStructuralMap(state.structuralMap, item.kind, true, item.index);
+        }
+    }
+    else if (!result.appliedPlan.empty())
+    {
+        for (const EditorSelection& item : result.appliedPlan)
+        {
+            MarkCategoryStructuralPending(state.structuralPending, item.kind);
+        }
+    }
+    else
+    {
+        MarkCategoryStructuralPending(state.structuralPending, affectedKind);
+        ApplyLifecycleToStructuralMap(state.structuralMap, affectedKind, false, 0);
+    }
+
     ClearGizmoInteraction(state.gizmo);
     ResetLevelActionStatuses(state);
-    SetSuccessMessage(state, request, affectedKind);
+    SetSuccessMessage(state, request, affectedKind, multiSelected);
     RefreshLevelEditorDerivedFlags(state, activeLevel);
     return true;
 }

@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 78 — Multi-Selection & Group Translate**
+**Milestone 79 — Multi-Selection Lifecycle Operations**
 
-Canonical file: [`docs/milestones/MILESTONE_78.md`](milestones/MILESTONE_78.md)
+Canonical file: [`docs/milestones/MILESTONE_79.md`](milestones/MILESTONE_79.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -34,8 +34,9 @@ Milestone 74 is CLOSED.
 Milestone 75 is CLOSED.
 Milestone 76 is CLOSED.
 Milestone 77 is CLOSED.
-Milestone 78 is implemented, awaiting manual acceptance.
-Do not start Milestone 79.
+Milestone 78 is CLOSED.
+Milestone 79 is implemented, awaiting correction manual acceptance.
+Do not start Milestone 80.
 
 ## Cursor loading contract
 
@@ -149,7 +150,8 @@ Historical milestone files do not override current implemented behavior.
 | 75 | [Milestone 75 — UI Audio & Menu Feedback](milestones/MILESTONE_75.md) | complete |
 | 76 | [Milestone 76 — Transform Snapping & Authoring Productivity](milestones/MILESTONE_76.md) | complete |
 | 77 | [Milestone 77 — Viewport Grid & Spatial Authoring Guides](milestones/MILESTONE_77.md) | complete |
-| 78 | [Milestone 78 — Multi-Selection & Group Translate](milestones/MILESTONE_78.md) | implemented, awaiting manual acceptance |
+| 78 | [Milestone 78 — Multi-Selection & Group Translate](milestones/MILESTONE_78.md) | complete |
+| 79 | [Milestone 79 — Multi-Selection Lifecycle Operations](milestones/MILESTONE_79.md) | implemented, awaiting correction manual acceptance |
 
 ## Later milestones
 

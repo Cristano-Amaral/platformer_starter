@@ -652,16 +652,26 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         {
             world::ItemPickupSpec& pickup = level.itemPickups[state.selection.index];
             EditVec3("Position X Y Z", pickup.position);
-            char itemId[gameplay::kMaxItemIdLength + 1]{};
-            std::snprintf(
-                itemId, sizeof(itemId), "%s", pickup.itemId.c_str());
-            if (ImGui::InputText("Item ID", itemId, sizeof(itemId)))
+            ItemIdInspectorFieldState& itemIdField = state.itemIdInspector;
+            const bool itemIdWidgetWasActive =
+                itemIdField.editing && itemIdField.boundSelection == state.selection;
+            SyncItemIdInspectorField(
+                itemIdField, state.selection, pickup.itemId, itemIdWidgetWasActive);
+            ImGui::PushID(static_cast<int>(state.selection.index));
+            const bool itemIdEdited = ImGui::InputText(
+                "Item ID", itemIdField.buffer, sizeof(itemIdField.buffer));
+            const bool itemIdDeactivated = ImGui::IsItemDeactivatedAfterEdit();
+            const bool itemIdActive = ImGui::IsItemActive();
+            ImGui::PopID();
+            if (itemIdEdited)
             {
-                if (gameplay::IsValidItemId(itemId))
-                {
-                    pickup.itemId = itemId;
-                }
+                TryAcceptItemIdInspectorField(pickup.itemId, itemIdField);
             }
+            if (itemIdDeactivated || (itemIdWidgetWasActive && !itemIdActive))
+            {
+                CommitItemIdInspectorFieldOnFocusLoss(pickup.itemId, itemIdField);
+            }
+            itemIdField.editing = itemIdActive;
             if (ImGui::InputInt("Quantity", &pickup.quantity))
             {
                 if (pickup.quantity < 1)
@@ -2046,10 +2056,23 @@ LevelEditorRequest DrawEditorMenuBar(
                 gizmoDragging,
                 LevelEditorRequest::DuplicateSelected,
                 {},
-                EditorSelectionSetIsMulti(state.selection, state.additionalSelections)));
+                state.additionalSelections));
         if (ImGui::MenuItem("Duplicate Selected"))
         {
             request = LevelEditorRequest::DuplicateSelected;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            const char* reason = DuplicateSelectedDisableReason(
+                authoringAvailable,
+                state.workingCopy,
+                state.selection,
+                gizmoDragging,
+                state.additionalSelections);
+            if (reason != nullptr)
+            {
+                ImGui::SetTooltip("%s", reason);
+            }
         }
         ImGui::EndDisabled();
         ImGui::BeginDisabled(
@@ -2060,7 +2083,7 @@ LevelEditorRequest DrawEditorMenuBar(
                 gizmoDragging,
                 LevelEditorRequest::DeleteSelected,
                 {},
-                EditorSelectionSetIsMulti(state.selection, state.additionalSelections)));
+                state.additionalSelections));
         if (ImGui::MenuItem("Delete Selected", "Delete"))
         {
             request = LevelEditorRequest::DeleteSelected;
@@ -2072,7 +2095,7 @@ LevelEditorRequest DrawEditorMenuBar(
                 state.workingCopy,
                 state.selection,
                 gizmoDragging,
-                EditorSelectionSetIsMulti(state.selection, state.additionalSelections));
+                state.additionalSelections);
             if (reason != nullptr)
             {
                 ImGui::SetTooltip("%s", reason);

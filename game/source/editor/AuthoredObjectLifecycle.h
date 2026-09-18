@@ -163,6 +163,10 @@ struct LifecycleEditResult
     bool succeeded = false;
     LifecycleEditStatus status = LifecycleEditStatus::InvalidSelection;
     EditorSelection selection{};
+    std::vector<EditorSelection> additionalSelections{};
+    // Original members in application order. Duplicate keeps selection-set
+    // order (PRIMARY first). Delete uses descending indices per category.
+    std::vector<EditorSelection> appliedPlan{};
 };
 
 // Authored v1 support_index_* fields. Not gameplay runtime state.
@@ -329,6 +333,22 @@ LifecycleEditResult DeleteSelected(
     world::LevelDefinition& workingCopy,
     EditorSelection selection);
 
+// Descending indices within each category so later vector erases cannot
+// retarget a still-selected object. Unique members only. Not a GUID map.
+std::vector<EditorSelection> MakeDescendingCategoryDeletePlan(
+    const std::vector<EditorSelection>& members);
+
+// Selection-aware Duplicate/Delete. Empty additional is equivalent to the
+// single-object primitives. Failure leaves workingCopy unchanged.
+LifecycleEditResult DuplicateSelectionSet(
+    world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional);
+LifecycleEditResult DeleteSelectionSet(
+    world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional);
+
 // Phase B enable rules. Dirty is not a parameter and does not block.
 bool CanAddLifecycleObject(
     bool authoringAvailable,
@@ -340,11 +360,31 @@ bool CanDuplicateSelected(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging);
+bool CanDuplicateSelected(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional,
+    bool gizmoDragging);
 bool CanDeleteSelected(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging);
+bool CanDeleteSelected(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional,
+    bool gizmoDragging);
+
+// nullptr when Duplicate is enabled. Short reason for disabled menu.
+const char* DuplicateSelectedDisableReason(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    bool gizmoDragging,
+    const std::vector<EditorSelection>& additional = {});
 
 // nullptr when Delete is enabled. Short reason for disabled menu/key.
 const char* DeleteSelectedDisableReason(
@@ -352,7 +392,7 @@ const char* DeleteSelectedDisableReason(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging,
-    bool multiSelected = false);
+    const std::vector<EditorSelection>& additional = {});
 
 // Delete key uses the same enable rules as Edit > Delete Selected.
 bool ShouldEmitDeleteSelectedRequest(
@@ -362,5 +402,5 @@ bool ShouldEmitDeleteSelectedRequest(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging,
-    bool multiSelected = false);
+    const std::vector<EditorSelection>& additional = {});
 }

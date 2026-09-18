@@ -2513,8 +2513,7 @@ int Application::Run()
                     levelEditorState.workingCopy,
                     levelEditorState.selection,
                     levelEditorState.gizmo.dragging,
-                    editor::EditorSelectionSetIsMulti(
-                        levelEditorState.selection, levelEditorState.additionalSelections)))
+                    levelEditorState.additionalSelections))
             {
                 editorRequest = editor::LevelEditorRequest::DeleteSelected;
             }

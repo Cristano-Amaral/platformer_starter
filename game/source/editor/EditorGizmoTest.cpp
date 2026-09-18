@@ -2808,6 +2808,55 @@ int main()
         editor::EndGizmoDrag(state);
     }
 
+    // ---- M79 duplicated selection can Group Translate immediately ----
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{2.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{4.5f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 0;
+        working.goalPlatformIndex = 0;
+        const EditorSelection primary{EditorObjectKind::ElevatedPlatform, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::ElevatedPlatform, 1}};
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(duplicated.succeeded, "Duplicate Selected before Group Translate");
+        Expect(
+            editor::EditorSelectionSetSupportsGroupTranslate(
+                working, duplicated.selection, duplicated.additionalSelections),
+            "duplicated copies are immediately Group-Translate compatible");
+        const std::vector<EditorSelection> copies =
+            editor::EditorSelectionSetMembers(
+                duplicated.selection, duplicated.additionalSelections);
+        std::vector<core::Vec3> starts;
+        Expect(editor::CaptureGroupTranslateStarts(working, copies, starts),
+            "capture starts from duplicated copies");
+        const float relativeBefore = starts[1].x - starts[0].x;
+        Expect(NearlyEqual(relativeBefore, 2.5f, 0.0001f),
+            "duplicated copies keep composition spacing");
+        Expect(
+            editor::ApplyGroupTranslateFromPrimaryResult(
+                working,
+                copies,
+                starts,
+                {starts[0].x + 1.0f, starts[0].y, starts[0].z},
+                EditorAxis::X,
+                false,
+                0.25f),
+            "Group Translate moves the duplicated composition");
+        Expect(
+            NearlyEqual(
+                working.elevatedPlatforms[copies[1].index].center.x
+                    - working.elevatedPlatforms[copies[0].index].center.x,
+                relativeBefore,
+                0.0001f),
+            "Group Translate preserves duplicated relative spacing");
+        Expect(
+            NearlyEqual(working.elevatedPlatforms[0].center.x, 2.0f, 0.0001f)
+                && NearlyEqual(working.elevatedPlatforms[1].center.x, 4.5f, 0.0001f),
+            "originals are not translated with the copies");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d editor gizmo/layout test(s) failed.\n", gFailures);

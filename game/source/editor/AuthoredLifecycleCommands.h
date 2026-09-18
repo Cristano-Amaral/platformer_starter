@@ -9,6 +9,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace editor
 {
@@ -27,7 +28,7 @@ bool CanIssueAuthoredLifecycleRequest(
     bool gizmoDragging,
     LevelEditorRequest request,
     std::string_view staticPropIdentity = {},
-    bool multiSelected = false);
+    const std::vector<EditorSelection>& additionalSelections = {});
 
 // Right-hand menu-row copy for Edit > Add > Static Prop. Static Prop is the
 // only Add entry whose enablement comes from another window, so the row names

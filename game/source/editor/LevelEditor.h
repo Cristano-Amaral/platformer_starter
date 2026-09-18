@@ -25,6 +25,7 @@
 #include "editor/EditorPlacement.h"
 #include "editor/StaticPropPlacement.h"
 #include "editor/EditorWorkspace.h"
+#include "editor/ItemIdInspectorEdit.h"
 #include "editor/StaticModelFraming.h"
 
 #include <string>
@@ -163,6 +164,9 @@ struct LevelEditorState
     // M78 transient additional authored selections. Never persisted. Primary
     // remains Inspector/gizmo-pivot authority. Empty keeps pre-M78 behavior.
     std::vector<EditorSelection> additionalSelections{};
+    // Session-local Inspector Item ID edit buffer. Not authored LevelDefinition
+    // data and not persisted. Bound to the current PRIMARY Item Pickup.
+    ItemIdInspectorFieldState itemIdInspector{};
     // Catalog/asset selection. Not scene selection and not persisted.
     ContentBrowserState contentBrowser{};
     // Development authored-source Level list. Refresh is explicit, not per frame.

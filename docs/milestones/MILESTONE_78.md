@@ -1,6 +1,6 @@
 # Milestone 78 --- Multi-Selection & Group Translate
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/78-multi-selection-group-translate`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

@@ -104,6 +104,7 @@ add_executable(Platformer3D
     game/source/editor/EditorToolRunner.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
+    game/source/editor/ItemIdInspectorEdit.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
     game/source/editor/RuntimeLevelReload.cpp
@@ -1327,6 +1328,7 @@ add_executable(AuthoredObjectLifecycleTest
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
     game/source/editor/EditorGroupTranslate.h
+    game/source/editor/ItemIdInspectorEdit.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
@@ -1391,6 +1393,7 @@ add_executable(StaticPropPlacementTest
     game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
+    game/source/editor/ItemIdInspectorEdit.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
     game/source/editor/StaticPropPlacement.cpp
@@ -1525,16 +1528,27 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
     game/source/editor/EditorGroupTranslate.h
+    game/source/editor/ItemIdInspectorEdit.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
     game/source/editor/ContentBrowser.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
+    game/source/platform/FileReplace.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
 )
+if(WIN32)
+    target_sources(AuthoredLifecycleIntegrationTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(AuthoredLifecycleIntegrationTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
 target_include_directories(AuthoredLifecycleIntegrationTest PRIVATE game/source)
 if(MSVC)
     target_compile_options(AuthoredLifecycleIntegrationTest PRIVATE /W4 /permissive-)

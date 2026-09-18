@@ -1,7 +1,9 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
+#include "editor/ItemIdInspectorEdit.h"
 #include "gameplay/CollectibleRunState.h"
+#include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
@@ -10,6 +12,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -1530,6 +1533,391 @@ int main()
         editor::ClearEditorSelectionSet(primary, additional);
         Expect(primary.kind == editor::EditorObjectKind::None && additional.empty(),
             "clearing drops primary and secondary");
+    }
+
+    // ---- M79 Duplicate Selected / Delete Selected ----
+    {
+        const std::vector<EditorSelection> members{
+            {EditorObjectKind::ElevatedPlatform, 1},
+            {EditorObjectKind::ElevatedPlatform, 4},
+            {EditorObjectKind::ElevatedPlatform, 3},
+            {EditorObjectKind::Hazard, 0}};
+        const std::vector<EditorSelection> plan =
+            editor::MakeDescendingCategoryDeletePlan(members);
+        Expect(plan.size() == 4, "delete plan keeps every unique member");
+        Expect(plan[0].kind == EditorObjectKind::ElevatedPlatform && plan[0].index == 4
+                && plan[1].kind == EditorObjectKind::ElevatedPlatform && plan[1].index == 3
+                && plan[2].kind == EditorObjectKind::ElevatedPlatform && plan[2].index == 1,
+            "same-category delete plan is descending");
+        Expect(plan[3].kind == EditorObjectKind::Hazard && plan[3].index == 0,
+            "mixed-category delete plan stays deterministic");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        working.hazards.push_back({{20.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        const world::HazardSpec unselected = working.hazards[1];
+        const EditorSelection primary{EditorObjectKind::Hazard, 0};
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(working, primary, {});
+        Expect(duplicated.succeeded, "single DuplicateSelectionSet remains equivalent");
+        Expect(working.hazards.size() == 3, "single Duplicate still +1");
+        Expect(
+            working.hazards[2].center.x
+                == working.hazards[0].center.x + editor::kLifecycleDuplicateOffsetX,
+            "single Duplicate still uses +1 X authority");
+        Expect(duplicated.selection.kind == EditorObjectKind::Hazard
+                && duplicated.selection.index == 2
+                && duplicated.additionalSelections.empty(),
+            "single Duplicate still selects only the copy");
+        Expect(Vec3Near(working.hazards[1].center, unselected.center),
+            "unselected Hazard is not duplicated");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        working.hazards.push_back({{20.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        const EditorSelection primary{EditorObjectKind::Hazard, 0};
+        Expect(
+            editor::DeleteSelectionSet(working, primary, {}).succeeded,
+            "single DeleteSelectionSet remains equivalent");
+        Expect(working.hazards.size() == 1, "single Delete still removes one");
+        Expect(working.hazards[0].center.x == 20.0f, "unselected Hazard remains");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{2.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{4.5f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{8.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 2;
+        working.checkpoint2PlatformIndex = 2;
+        working.goalPlatformIndex = 2;
+        working.hazards.push_back({{1.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        working.collectibles.push_back({{0.0f, 2.0f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        const EditorSelection primary{EditorObjectKind::ElevatedPlatform, 0};
+        const std::vector<EditorSelection> additional{
+            {EditorObjectKind::ElevatedPlatform, 1},
+            {EditorObjectKind::Hazard, 0}};
+        const world::CollectibleSpec unselectedCollectible = working.collectibles[0];
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(duplicated.succeeded, "Duplicate Selected copies every selected object once");
+        Expect(working.elevatedPlatforms.size() == 5, "two selected Platforms duplicated");
+        Expect(working.hazards.size() == 2, "selected Hazard duplicated");
+        Expect(working.collectibles.size() == 1, "unselected Collectible is not duplicated");
+        Expect(Vec3Near(working.collectibles[0].center, unselectedCollectible.center),
+            "unselected Collectible identity unchanged");
+        Expect(
+            NearlyEqual(
+                working.elevatedPlatforms[3].center.x,
+                2.0f + editor::kLifecycleDuplicateOffsetX),
+            "existing +1 X duplicate offset remains");
+        Expect(
+            NearlyEqual(
+                working.elevatedPlatforms[4].center.x - working.elevatedPlatforms[3].center.x,
+                2.5f),
+            "duplicated composition keeps relative spacing");
+        Expect(
+            duplicated.selection.kind == EditorObjectKind::ElevatedPlatform
+                && duplicated.selection.index == 3,
+            "copy of original PRIMARY becomes new PRIMARY");
+        Expect(duplicated.additionalSelections.size() == 2, "other copies become secondary");
+        Expect(
+            duplicated.additionalSelections[0].kind == EditorObjectKind::ElevatedPlatform
+                && duplicated.additionalSelections[0].index == 4,
+            "Platform copy is a secondary selection");
+        Expect(
+            duplicated.additionalSelections[1].kind == EditorObjectKind::Hazard
+                && duplicated.additionalSelections[1].index == 1,
+            "Hazard copy is a secondary selection");
+        Expect(
+            duplicated.selection != EditorSelection{EditorObjectKind::ElevatedPlatform, 0}
+                && duplicated.selection != EditorSelection{EditorObjectKind::ElevatedPlatform, 1}
+                && duplicated.selection != EditorSelection{EditorObjectKind::Hazard, 0},
+            "originals are not selected after Duplicate Selected");
+        Expect(
+            duplicated.additionalSelections[0] != duplicated.selection
+                && duplicated.additionalSelections[1] != duplicated.selection
+                && duplicated.additionalSelections[0] != duplicated.additionalSelections[1],
+            "no duplicate selection entries remain");
+        Expect(
+            editor::IsValidSelection(working, duplicated.selection)
+                && editor::IsValidSelection(working, duplicated.additionalSelections[0])
+                && editor::IsValidSelection(working, duplicated.additionalSelections[1]),
+            "post-duplicate selection indices are in range");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const world::LevelDefinition before = working;
+        const EditorSelection primary{EditorObjectKind::Hazard, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::Spawn, 0}};
+        const editor::LifecycleEditResult refused =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(!refused.succeeded, "unsupported Duplicate member refuses the set");
+        Expect(refused.status == editor::LifecycleEditStatus::UnsupportedType,
+            "unsupported Duplicate reports UnsupportedType");
+        Expect(world::AuthoredLevelDataEqual(working, before),
+            "failed Duplicate Selected leaves workingCopy unchanged");
+        Expect(
+            editor::DuplicateSelectedDisableReason(true, working, primary, false, additional)
+                != nullptr,
+            "unsupported Duplicate Selected has compact feedback");
+        Expect(
+            !editor::CanDuplicateSelected(true, working, primary, additional, false),
+            "CanDuplicateSelected is false for unsupported members");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.resize(
+            static_cast<std::size_t>(world::kMaxElevatedPlatformCount) - 1);
+        for (world::Box& platform : working.elevatedPlatforms)
+        {
+            platform.size = {2.0f, 0.5f, 2.0f};
+        }
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 0;
+        working.goalPlatformIndex = 0;
+        const std::size_t beforeCount = working.elevatedPlatforms.size();
+        const EditorSelection primary{EditorObjectKind::ElevatedPlatform, 0};
+        const std::vector<EditorSelection> additional{
+            {EditorObjectKind::ElevatedPlatform, 1}};
+        const editor::LifecycleEditResult refused =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(!refused.succeeded, "capacity refuses partial Duplicate Selected");
+        Expect(working.elevatedPlatforms.size() == beforeCount,
+            "failed Duplicate Selected does not keep the first copy");
+        Expect(refused.status == editor::LifecycleEditStatus::AtLimit,
+            "capacity Duplicate Selected reports AtLimit");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{2.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{4.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{6.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.elevatedPlatforms.push_back({{8.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 2;
+        working.goalPlatformIndex = 2;
+        working.hazards.push_back({{11.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        const core::Vec3 survivorA = working.elevatedPlatforms[0].center;
+        const core::Vec3 survivorB = working.elevatedPlatforms[2].center;
+        const core::Vec3 unselectedHazard = working.hazards[0].center;
+        const EditorSelection primary{EditorObjectKind::ElevatedPlatform, 1};
+        const std::vector<EditorSelection> additional{
+            {EditorObjectKind::ElevatedPlatform, 4},
+            {EditorObjectKind::ElevatedPlatform, 3}};
+        const editor::LifecycleEditResult deleted =
+            editor::DeleteSelectionSet(working, primary, additional);
+        Expect(deleted.succeeded, "Delete Selected removes every selected object once");
+        Expect(working.elevatedPlatforms.size() == 2, "three selected Platforms deleted");
+        Expect(Vec3Near(working.elevatedPlatforms[0].center, survivorA),
+            "unselected Platform 0 remains");
+        Expect(Vec3Near(working.elevatedPlatforms[1].center, survivorB),
+            "unselected Platform 2 remains after index shift");
+        Expect(working.hazards.size() == 1 && Vec3Near(working.hazards[0].center, unselectedHazard),
+            "unselected Hazard is not deleted");
+        Expect(working.checkpoint2PlatformIndex == 1 && working.goalPlatformIndex == 1,
+            "support indices remap onto the surviving platform");
+        Expect(deleted.selection.kind == EditorObjectKind::None
+                && deleted.additionalSelections.empty(),
+            "successful Delete Selected clears selection");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 0;
+        working.goalPlatformIndex = 0;
+        working.hazards.push_back({{1.0f, 0.5f, 0.0f}, {1.4f, 1.0f, 2.0f}});
+        working.collectibles.push_back({{2.0f, 2.0f, 0.0f}, {1.0f, 1.2f, 1.0f}});
+        working.doors.push_back({{4.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        const EditorSelection primary{EditorObjectKind::Hazard, 0};
+        const std::vector<EditorSelection> additional{
+            {EditorObjectKind::Collectible, 0},
+            {EditorObjectKind::Door, 0}};
+        Expect(
+            editor::DeleteSelectionSet(working, primary, additional).succeeded,
+            "mixed-category Delete Selected is deterministic");
+        Expect(working.hazards.empty() && working.collectibles.empty() && working.doors.empty(),
+            "every selected mixed-category object is deleted");
+        Expect(working.elevatedPlatforms.size() == 1, "unselected Platform remains");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 0;
+        working.goalPlatformIndex = 0;
+        working.doors.push_back({{1.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.doors.push_back({{3.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.doors.push_back({{5.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.doors.push_back({{7.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.pressurePlates.push_back(
+            {{0.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 3});
+        const core::Vec3 survivingDoor = working.doors[3].center;
+        const EditorSelection primary{EditorObjectKind::Door, 1};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::Door, 0}};
+        Expect(
+            editor::DeleteSelectionSet(working, primary, additional).succeeded,
+            "deleting lower Door indices remaps surviving plate links");
+        Expect(working.doors.size() == 2, "two unselected Doors remain");
+        Expect(Vec3Near(working.doors[1].center, survivingDoor),
+            "old Door 3 survives at the remapped index");
+        Expect(working.pressurePlates[0].linkedDoorIndex == 1,
+            "Pressure Plate stays attached to the same surviving Door");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 0;
+        working.goalPlatformIndex = 0;
+        working.doors.push_back({{1.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.doors.push_back({{3.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.pressurePlates.push_back(
+            {{0.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 1});
+        working.pressurePlates.push_back(
+            {{2.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
+        const EditorSelection primary{EditorObjectKind::Door, 1};
+        Expect(
+            editor::DeleteSelectionSet(working, primary, {}).succeeded,
+            "deleting the referenced Door itself still clears the link");
+        Expect(working.pressurePlates[0].linkedDoorIndex == world::kNoLinkedDoor,
+            "single-delete semantics clear a deleted Door link");
+        Expect(working.pressurePlates[1].linkedDoorIndex == 0,
+            "unrelated Door link is unchanged");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.elevatedPlatforms.push_back({{0.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        working.checkpoint1PlatformIndex = 0;
+        working.checkpoint2PlatformIndex = 0;
+        working.goalPlatformIndex = 0;
+        working.doors.push_back({{1.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.doors.push_back({{3.0f, 1.5f, 0.0f}, world::kDefaultDoorSize, 3.0f, ""});
+        working.pressurePlates.push_back(
+            {{0.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 1});
+        working.pressurePlates.push_back(
+            {{2.0f, 0.1f, 0.0f}, world::kDefaultPressurePlateSize, 0});
+        const EditorSelection primary{EditorObjectKind::PressurePlate, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::Door, 1}};
+        Expect(
+            editor::DeleteSelectionSet(working, primary, additional).succeeded,
+            "deleting referrer and referenced Door together is safe");
+        Expect(working.pressurePlates.size() == 1, "unselected plate remains");
+        Expect(working.doors.size() == 1, "unselected Door remains");
+        Expect(working.pressurePlates[0].linkedDoorIndex == 0,
+            "surviving plate still points at the surviving Door");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const world::LevelDefinition before = working;
+        const EditorSelection primary{EditorObjectKind::Hazard, 0};
+        const std::vector<EditorSelection> additional{
+            {EditorObjectKind::ElevatedPlatform, 0}};
+        const editor::LifecycleEditResult refused =
+            editor::DeleteSelectionSet(working, primary, additional);
+        Expect(!refused.succeeded, "referenced Platform in the set refuses Delete Selected");
+        Expect(world::AuthoredLevelDataEqual(working, before),
+            "failed Delete Selected leaves workingCopy unchanged");
+        Expect(working.hazards.size() == before.hazards.size(),
+            "failed Delete Selected does not delete the supported subset");
+        Expect(
+            !editor::CanDeleteSelected(true, working, primary, additional, false),
+            "CanDeleteSelected is false when any member cannot be deleted");
+        Expect(
+            editor::DeleteSelectedDisableReason(true, working, primary, false, additional)
+                != nullptr,
+            "unsupported Delete Selected has compact feedback");
+        Expect(
+            !editor::ShouldEmitDeleteSelectedRequest(
+                true, false, true, working, primary, false, additional),
+            "Delete key does not emit for an unsupported set");
+        Expect(
+            editor::ShouldEmitDeleteSelectedRequest(
+                true,
+                false,
+                true,
+                working,
+                {EditorObjectKind::Hazard, 0},
+                false,
+                {{EditorObjectKind::Collectible, 0}}),
+            "Delete key emits for a fully supported multi-selection");
+    }
+
+    {
+        Expect(gameplay::IsValidItemId("key"), "default Add itemId key is valid");
+        Expect(gameplay::IsValidItemId("coin"), "canonical coin itemId is valid");
+        Expect(gameplay::IsValidItemId("gem"), "gem matches M54 itemId grammar");
+        Expect(!gameplay::IsValidItemId("Key"), "uppercase Key is rejected");
+        Expect(!gameplay::IsValidItemId(""), "empty itemId is rejected");
+
+        world::LevelDefinition working = MakeBaseLevel();
+        Expect(editor::AddItemPickup(working, kTestPlacementA).succeeded, "Add first Item Pickup");
+        Expect(editor::AddItemPickup(working, kTestPlacementB).succeeded, "Add second Item Pickup");
+        Expect(working.itemPickups.size() == 2, "two Item Pickups");
+        Expect(
+            working.itemPickups[0].itemId == world::kDefaultItemPickupId
+                && working.itemPickups[1].itemId == world::kDefaultItemPickupId,
+            "both new Item Pickups default to key");
+        const world::LevelDefinition baseline = working;
+
+        const EditorSelection primary{EditorObjectKind::ItemPickup, 1};
+        editor::ItemIdInspectorFieldState field{};
+        editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, false);
+        Expect(std::strcmp(field.buffer, "key") == 0, "inactive sync loads workingCopy key");
+
+        editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
+        editor::CopyItemIdInspectorBuffer(field.buffer, "co");
+        editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
+        Expect(std::strcmp(field.buffer, "co") == 0,
+            "active sync does not reload key over in-progress Item ID");
+        Expect(
+            editor::TryAcceptItemIdInspectorField(working.itemPickups[1].itemId, field)
+                == editor::ItemIdInspectorCommitResult::Accepted,
+            "valid prefix commits to PRIMARY workingCopy");
+        Expect(working.itemPickups[1].itemId == "co", "PRIMARY accepted co");
+        Expect(working.itemPickups[0].itemId == "key", "secondary Item Pickup stays key");
+
+        editor::CopyItemIdInspectorBuffer(field.buffer, "coin");
+        editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
+        Expect(std::strcmp(field.buffer, "coin") == 0, "later typing is kept while focused");
+        Expect(
+            editor::CommitItemIdInspectorFieldOnFocusLoss(working.itemPickups[1].itemId, field)
+                == editor::ItemIdInspectorCommitResult::Accepted,
+            "focus-loss commits coin");
+        Expect(working.itemPickups[1].itemId == "coin", "second Item Pickup retains coin");
+        Expect(working.itemPickups[0].itemId == "key", "first Item Pickup remains key");
+        Expect(!world::AuthoredLevelDataEqual(working, baseline), "Dirty/authored state sees Item ID");
+
+        const world::LevelDefinition applied = working;
+        Expect(applied.itemPickups[1].itemId == "coin", "Apply promotion keeps coin");
+        Expect(applied.itemPickups[0].itemId == "key", "Apply promotion keeps first key");
+
+        editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
+        editor::CopyItemIdInspectorBuffer(field.buffer, "Key");
+        Expect(
+            editor::TryAcceptItemIdInspectorField(working.itemPickups[1].itemId, field)
+                == editor::ItemIdInspectorCommitResult::Rejected,
+            "invalid live Item ID is not written");
+        Expect(working.itemPickups[1].itemId == "coin", "rejected live edit leaves coin");
+        Expect(
+            editor::CommitItemIdInspectorFieldOnFocusLoss(working.itemPickups[1].itemId, field)
+                == editor::ItemIdInspectorCommitResult::Rejected,
+            "invalid focus-loss restores last committed id");
+        Expect(std::strcmp(field.buffer, "coin") == 0, "invalid focus-loss restores buffer");
+        Expect(working.itemPickups[1].itemId == "coin", "invalid focus-loss leaves workingCopy");
+        Expect(working.itemPickups[0].itemId == "key", "invalid edit does not mutate the other pickup");
     }
 
     if (gFailures != 0)

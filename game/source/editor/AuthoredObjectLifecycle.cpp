@@ -1,11 +1,15 @@
 #include "editor/AuthoredObjectLifecycle.h"
 
+#include "editor/EditorSelectionSet.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/LevelFile.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace editor
 {
@@ -1148,6 +1152,145 @@ LifecycleEditResult DeleteSelected(
     return Ok(ClearSelection());
 }
 
+std::vector<EditorSelection> MakeDescendingCategoryDeletePlan(
+    const std::vector<EditorSelection>& members)
+{
+    std::vector<EditorSelection> plan;
+    for (const EditorSelection& member : members)
+    {
+        if (EditorSelectionIsNone(member) || ContainsEditorSelection(plan, member))
+        {
+            continue;
+        }
+        plan.push_back(member);
+    }
+    std::sort(
+        plan.begin(),
+        plan.end(),
+        [](EditorSelection a, EditorSelection b)
+        {
+            if (a.kind != b.kind)
+            {
+                return static_cast<int>(a.kind) < static_cast<int>(b.kind);
+            }
+            return a.index > b.index;
+        });
+    return plan;
+}
+
+LifecycleEditResult DuplicateSelectionSet(
+    world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional)
+{
+    const std::vector<EditorSelection> members =
+        EditorSelectionSetMembers(primary, additional);
+    if (members.empty())
+    {
+        return Fail(LifecycleEditStatus::InvalidSelection, primary);
+    }
+
+    for (const EditorSelection& member : members)
+    {
+        if (!SupportsLifecycle(member.kind))
+        {
+            return Fail(LifecycleEditStatus::UnsupportedType, primary);
+        }
+        if (!IsValidSelection(workingCopy, member))
+        {
+            return Fail(LifecycleEditStatus::InvalidSelection, primary);
+        }
+    }
+
+    if (additional.empty())
+    {
+        LifecycleEditResult result = DuplicateSelected(workingCopy, primary);
+        if (result.succeeded)
+        {
+            result.appliedPlan = members;
+        }
+        return result;
+    }
+
+    world::LevelDefinition trial = workingCopy;
+    EditorSelection newPrimary{};
+    std::vector<EditorSelection> newAdditional;
+    for (const EditorSelection& member : members)
+    {
+        const LifecycleEditResult duplicated = DuplicateSelected(trial, member);
+        if (!duplicated.succeeded)
+        {
+            return Fail(duplicated.status, primary);
+        }
+        if (member == primary)
+        {
+            newPrimary = duplicated.selection;
+        }
+        else
+        {
+            newAdditional.push_back(duplicated.selection);
+        }
+    }
+
+    workingCopy = std::move(trial);
+    LifecycleEditResult result = Ok(newPrimary);
+    result.additionalSelections = std::move(newAdditional);
+    result.appliedPlan = members;
+    SanitizeEditorSelectionSet(result.selection, result.additionalSelections);
+    return result;
+}
+
+LifecycleEditResult DeleteSelectionSet(
+    world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional)
+{
+    const std::vector<EditorSelection> members =
+        EditorSelectionSetMembers(primary, additional);
+    if (members.empty())
+    {
+        return Fail(LifecycleEditStatus::InvalidSelection, primary);
+    }
+
+    const std::vector<EditorSelection> plan = MakeDescendingCategoryDeletePlan(members);
+    for (const EditorSelection& member : plan)
+    {
+        if (!SupportsLifecycle(member.kind))
+        {
+            return Fail(LifecycleEditStatus::UnsupportedType, primary);
+        }
+        if (!IsValidSelection(workingCopy, member))
+        {
+            return Fail(LifecycleEditStatus::InvalidSelection, primary);
+        }
+    }
+
+    if (additional.empty())
+    {
+        LifecycleEditResult result = DeleteSelected(workingCopy, primary);
+        if (result.succeeded)
+        {
+            result.appliedPlan = plan;
+        }
+        return result;
+    }
+
+    world::LevelDefinition trial = workingCopy;
+    for (const EditorSelection& member : plan)
+    {
+        const LifecycleEditResult deleted = DeleteSelected(trial, member);
+        if (!deleted.succeeded)
+        {
+            return Fail(deleted.status, primary);
+        }
+    }
+
+    workingCopy = std::move(trial);
+    LifecycleEditResult result = Ok(ClearSelection());
+    result.appliedPlan = plan;
+    return result;
+}
+
 bool CanAddLifecycleObject(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
@@ -1167,6 +1310,25 @@ bool CanDuplicateSelected(
     return authoringAvailable && !gizmoDragging && SupportsLifecycle(selection.kind)
         && IsValidSelection(workingCopy, selection)
         && !CategoryAtCountLimit(workingCopy, selection.kind);
+}
+
+bool CanDuplicateSelected(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional,
+    bool gizmoDragging)
+{
+    if (additional.empty())
+    {
+        return CanDuplicateSelected(authoringAvailable, workingCopy, primary, gizmoDragging);
+    }
+    if (!authoringAvailable || gizmoDragging)
+    {
+        return false;
+    }
+    world::LevelDefinition trial = workingCopy;
+    return DuplicateSelectionSet(trial, primary, additional).succeeded;
 }
 
 bool CanDeleteSelected(
@@ -1195,18 +1357,33 @@ bool CanDeleteSelected(
     return true;
 }
 
-const char* DeleteSelectedDisableReason(
+bool CanDeleteSelected(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional,
+    bool gizmoDragging)
+{
+    if (additional.empty())
+    {
+        return CanDeleteSelected(authoringAvailable, workingCopy, primary, gizmoDragging);
+    }
+    if (!authoringAvailable || gizmoDragging)
+    {
+        return false;
+    }
+    world::LevelDefinition trial = workingCopy;
+    return DeleteSelectionSet(trial, primary, additional).succeeded;
+}
+
+const char* DuplicateSelectedDisableReason(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging,
-    bool multiSelected)
+    const std::vector<EditorSelection>& additional)
 {
-    if (multiSelected)
-    {
-        return "Delete is not a group operation.";
-    }
-    if (CanDeleteSelected(authoringAvailable, workingCopy, selection, gizmoDragging))
+    if (CanDuplicateSelected(authoringAvailable, workingCopy, selection, additional, gizmoDragging))
     {
         return nullptr;
     }
@@ -1218,20 +1395,79 @@ const char* DeleteSelectedDisableReason(
     {
         return "Lifecycle blocked: finish the gizmo drag first.";
     }
-    if (selection.kind == EditorObjectKind::ElevatedPlatform
-        && IsValidSelection(workingCopy, selection))
+    const std::vector<EditorSelection> members =
+        EditorSelectionSetMembers(selection, additional);
+    const bool multiSelected = EditorSelectionSetIsMulti(selection, additional);
+    for (const EditorSelection& member : members)
     {
-        if (workingCopy.elevatedPlatforms.size()
-            <= static_cast<std::size_t>(world::kMinElevatedPlatformCount))
+        if (!SupportsLifecycle(member.kind) || !IsValidSelection(workingCopy, member))
         {
-            return "At least one Platform is required.";
-        }
-        if (IsAuthoredPlatformReferenced(workingCopy, selection.index))
-        {
-            return "Platform is referenced by checkpoint/goal support metadata.";
+            return multiSelected
+                ? "Duplicate blocked: selection contains an unsupported object."
+                : "Duplicate requires a supported selection.";
         }
     }
-    if (!SupportsLifecycle(selection.kind) || !IsValidSelection(workingCopy, selection))
+    if (members.empty())
+    {
+        return "Duplicate requires a supported selection.";
+    }
+    return CategoryCapacityReason(selection.kind);
+}
+
+const char* DeleteSelectedDisableReason(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    bool gizmoDragging,
+    const std::vector<EditorSelection>& additional)
+{
+    if (CanDeleteSelected(authoringAvailable, workingCopy, selection, additional, gizmoDragging))
+    {
+        return nullptr;
+    }
+    if (!authoringAvailable)
+    {
+        return "Lifecycle editing is available in Development only.";
+    }
+    if (gizmoDragging)
+    {
+        return "Lifecycle blocked: finish the gizmo drag first.";
+    }
+
+    const std::vector<EditorSelection> members =
+        EditorSelectionSetMembers(selection, additional);
+    const bool multiSelected = EditorSelectionSetIsMulti(selection, additional);
+    std::size_t selectedPlatforms = 0;
+    bool referencedPlatform = false;
+    for (const EditorSelection& member : members)
+    {
+        if (!SupportsLifecycle(member.kind) || !IsValidSelection(workingCopy, member))
+        {
+            return multiSelected
+                ? "Delete blocked: selection contains an unsupported object."
+                : "Delete requires a supported selection.";
+        }
+        if (member.kind == EditorObjectKind::ElevatedPlatform)
+        {
+            ++selectedPlatforms;
+            if (IsAuthoredPlatformReferenced(workingCopy, member.index))
+            {
+                referencedPlatform = true;
+            }
+        }
+    }
+    if (selectedPlatforms > 0
+        && workingCopy.elevatedPlatforms.size() < selectedPlatforms
+            + static_cast<std::size_t>(world::kMinElevatedPlatformCount))
+    {
+        return "At least one Platform is required.";
+    }
+    if (referencedPlatform)
+    {
+        return "Platform is referenced by checkpoint/goal support metadata.";
+    }
+    if (members.empty() || !SupportsLifecycle(selection.kind)
+        || !IsValidSelection(workingCopy, selection))
     {
         return "Delete requires a supported selection.";
     }
@@ -1245,12 +1481,13 @@ bool ShouldEmitDeleteSelectedRequest(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     bool gizmoDragging,
-    bool multiSelected)
+    const std::vector<EditorSelection>& additional)
 {
-    if (!deletePressed || imguiWantsKeyboard || multiSelected)
+    if (!deletePressed || imguiWantsKeyboard)
     {
         return false;
     }
-    return CanDeleteSelected(authoringAvailable, workingCopy, selection, gizmoDragging);
+    return CanDeleteSelected(
+        authoringAvailable, workingCopy, selection, additional, gizmoDragging);
 }
 }

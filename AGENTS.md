@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 78 — Multi-Selection & Group Translate.
+Milestone 79 — Multi-Selection Lifecycle Operations.
 
-Canonical file: [`docs/milestones/MILESTONE_78.md`](docs/milestones/MILESTONE_78.md)
+Canonical file: [`docs/milestones/MILESTONE_79.md`](docs/milestones/MILESTONE_79.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is implemented, awaiting manual acceptance. Do not start Milestone 79.
+Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is implemented, awaiting correction manual acceptance. Do not start Milestone 80.
 
 ## Source of truth
 1. Current repository code.

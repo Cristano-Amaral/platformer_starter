@@ -6,10 +6,15 @@
 #include "editor/EditorPlacement.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
+#include "editor/ItemIdInspectorEdit.h"
 #include "editor/StaticPropTransform.h"
 #include "gameplay/CollectibleRunState.h"
+#include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/LevelDefinition.h"
+#include "world/LevelFile.h"
+#include "world/LevelWriter.h"
+#include "world/ItemPickup.h"
 
 #include <cstdio>
 #include <cstring>
@@ -46,6 +51,23 @@ world::LevelDefinition MakeActiveLevel()
     level.collectibles.push_back({{5.0f, 2.5f, 0.0f}, {1.0f, 1.2f, 1.0f}});
     level.camera = {{2.0f, 3.5f, 12.0f}, 40.0f};
     return level;
+}
+
+void MakeWritableEditorFixture(world::LevelDefinition& level)
+{
+    level.slopes[0] = {{21.70f, 1.6732f, 0.0f}, {4.0f, 0.4f, 2.0f}, 30.0f};
+    level.slopes[1] = {{25.60f, 0.966f, 0.0f}, {4.0f, 0.4f, 2.0f}, 60.0f};
+    level.movingPlatform.size = {4.0f, 0.4f, 3.0f};
+    level.movingPlatform.centerY = 1.3f;
+    level.movingPlatform.centerZ = 0.0f;
+    level.movingPlatform.pathMinX = -8.0f;
+    level.movingPlatform.pathMaxX = 8.0f;
+    level.movingPlatform.speed = 2.0f;
+    level.movingPlatform.startX = 0.0f;
+    if (level.levelGoals.empty())
+    {
+        level.levelGoals.push_back({{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}});
+    }
 }
 
 void SeedEditor(editor::LevelEditorState& state, const world::LevelDefinition& active)
@@ -1850,15 +1872,89 @@ int main()
         state.selection = {EditorObjectKind::Hazard, 0};
         state.additionalSelections.push_back({EditorObjectKind::Collectible, 0});
         Expect(
-            !editor::CanIssueAuthoredLifecycleRequest(
+            editor::CanIssueAuthoredLifecycleRequest(
                 true,
                 state.workingCopy,
                 state.selection,
                 false,
                 LevelEditorRequest::DeleteSelected,
                 {},
-                true),
-            "Delete is not a group operation");
+                state.additionalSelections),
+            "Delete Selected is enabled for a supported multi-selection");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                state.workingCopy,
+                state.selection,
+                false,
+                LevelEditorRequest::DuplicateSelected,
+                {},
+                state.additionalSelections),
+            "Duplicate Selected is enabled for a supported multi-selection");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DuplicateSelected, true),
+            "multi Duplicate Selected is handled");
+        Expect(state.workingCopy.hazards.size() == active.hazards.size() + 1,
+            "Duplicate Selected copies the selected Hazard");
+        Expect(state.workingCopy.collectibles.size() == active.collectibles.size() + 1,
+            "Duplicate Selected copies the selected Collectible");
+        Expect(state.selection.kind == EditorObjectKind::Hazard
+                && state.selection.index == active.hazards.size(),
+            "copied PRIMARY stays PRIMARY");
+        Expect(state.additionalSelections.size() == 1
+                && state.additionalSelections[0].kind == EditorObjectKind::Collectible
+                && state.additionalSelections[0].index == active.collectibles.size(),
+            "other copies become secondary selections");
+        Expect(state.modified, "successful Duplicate Selected sets Modified");
+        Expect(!state.dirty, "Duplicate Selected does not Apply or Save");
+        Expect(state.lastMessage == "Selection duplicated.", "multi Duplicate status");
+        Expect(
+            HierarchyKindCount(state.workingCopy, EditorObjectKind::Hazard)
+                == state.workingCopy.hazards.size(),
+            "Hierarchy lists duplicated Hazards from workingCopy");
+
+        editor::LevelEditorState deleteState{};
+        SeedEditor(deleteState, active);
+        deleteState.selection = {EditorObjectKind::Hazard, 0};
+        deleteState.additionalSelections.push_back({EditorObjectKind::Collectible, 0});
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                deleteState, active, LevelEditorRequest::DeleteSelected, true),
+            "multi Delete Selected is handled");
+        Expect(deleteState.workingCopy.hazards.empty(), "Delete Selected removes the Hazard");
+        Expect(deleteState.workingCopy.collectibles.empty(),
+            "Delete Selected removes the Collectible");
+        Expect(deleteState.workingCopy.elevatedPlatforms.size() == active.elevatedPlatforms.size(),
+            "unselected Platforms remain");
+        Expect(deleteState.selection.kind == EditorObjectKind::None
+                && deleteState.additionalSelections.empty(),
+            "successful Delete Selected clears selection");
+        Expect(deleteState.modified, "successful Delete Selected sets Modified");
+        Expect(!deleteState.dirty, "Delete Selected does not Apply or Save");
+        Expect(deleteState.lastMessage == "Selection deleted.", "multi Delete status");
+        Expect(
+            editor::MappedWorkingIndex(deleteState.structuralMap, EditorObjectKind::Hazard, 0)
+                == editor::kNoStructuralIndex,
+            "deleted Hazard is pending-deleted in the structural map");
+        Expect(
+            editor::MappedWorkingIndex(
+                deleteState.structuralMap, EditorObjectKind::Collectible, 0)
+                == editor::kNoStructuralIndex,
+            "deleted Collectible is pending-deleted in the structural map");
+    }
+
+    {
+        const world::LevelDefinition active = MakeActiveLevel();
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.selection = {EditorObjectKind::Hazard, 0};
+        state.additionalSelections.push_back({EditorObjectKind::Spawn, 0});
+        const world::LevelDefinition before = state.workingCopy;
+        const EditorSelection primaryBefore = state.selection;
+        const std::vector<EditorSelection> additionalBefore = state.additionalSelections;
+        const bool dirtyBefore = state.dirty;
+        const bool modifiedBefore = state.modified;
         Expect(
             !editor::CanIssueAuthoredLifecycleRequest(
                 true,
@@ -1867,28 +1963,32 @@ int main()
                 false,
                 LevelEditorRequest::DuplicateSelected,
                 {},
-                true),
-            "Duplicate is not a group operation");
-        Expect(
-            editor::HandleAuthoredLifecycleRequest(
-                state, active, LevelEditorRequest::DeleteSelected, true),
-            "multi Delete request is still handled");
-        Expect(state.workingCopy.hazards.size() == active.hazards.size(),
-            "multi Delete does not delete the primary");
-        Expect(state.workingCopy.collectibles.size() == active.collectibles.size(),
-            "multi Delete does not become group Delete");
-        Expect(state.selection.kind == EditorObjectKind::Hazard, "refused Delete keeps primary");
-        Expect(state.additionalSelections.size() == 1, "refused Delete keeps additional");
-        Expect(std::string(state.lastMessage).find("group") != std::string::npos,
-            "refused group Delete explains itself");
-
+                state.additionalSelections),
+            "unsupported Duplicate member disables the command");
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 state, active, LevelEditorRequest::DuplicateSelected, true),
-            "multi Duplicate request is still handled");
-        Expect(state.workingCopy.hazards.size() == active.hazards.size(),
-            "multi Duplicate does not duplicate the primary");
-        Expect(state.additionalSelections.size() == 1, "refused Duplicate keeps additional");
+            "unsupported Duplicate Selected is still handled");
+        Expect(world::AuthoredLevelDataEqual(state.workingCopy, before),
+            "refused Duplicate Selected leaves workingCopy unchanged");
+        Expect(state.selection == primaryBefore, "refused Duplicate keeps PRIMARY");
+        Expect(state.additionalSelections == additionalBefore,
+            "refused Duplicate keeps secondary selections");
+        Expect(state.dirty == dirtyBefore && state.modified == modifiedBefore,
+            "refused Duplicate leaves Dirty/Modified unchanged");
+        Expect(std::string(state.lastMessage).find("unsupported") != std::string::npos,
+            "refused Duplicate Selected explains itself");
+
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DeleteSelected, true),
+            "unsupported Delete Selected is still handled");
+        Expect(world::AuthoredLevelDataEqual(state.workingCopy, before),
+            "refused Delete Selected leaves workingCopy unchanged");
+        Expect(state.selection == primaryBefore && state.additionalSelections == additionalBefore,
+            "refused Delete Selected keeps selection");
+        Expect(state.dirty == dirtyBefore && state.modified == modifiedBefore,
+            "refused Delete Selected leaves Dirty/Modified unchanged");
     }
 
     {
@@ -1903,6 +2003,90 @@ int main()
             "Add while multi-selected remains allowed");
         Expect(state.additionalSelections.empty(), "Add replaces multi-selection with the new object");
         Expect(state.selection.kind == EditorObjectKind::Collectible, "Add selects the new object");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+
+        const core::Vec3 cameraAnchor{12.0f, 5.0f, -6.0f};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddItemPickup, true, cameraAnchor),
+            "Add first Item Pickup for Item ID Inspector regression");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddItemPickup, true, cameraAnchor),
+            "Add second Item Pickup for Item ID Inspector regression");
+        Expect(state.workingCopy.itemPickups.size() == 2, "workingCopy has two Item Pickups");
+        Expect(
+            state.workingCopy.itemPickups[0].itemId == world::kDefaultItemPickupId
+                && state.workingCopy.itemPickups[1].itemId == world::kDefaultItemPickupId,
+            "both added Item Pickups start as key");
+
+        state.selection = {EditorObjectKind::ItemPickup, 1};
+        state.additionalSelections = {{EditorObjectKind::ItemPickup, 0}};
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "two pending Adds are Modified");
+
+        editor::ItemIdInspectorFieldState& field = state.itemIdInspector;
+        editor::SyncItemIdInspectorField(
+            field, state.selection, state.workingCopy.itemPickups[1].itemId, false);
+        editor::SyncItemIdInspectorField(
+            field, state.selection, state.workingCopy.itemPickups[1].itemId, true);
+        editor::CopyItemIdInspectorBuffer(field.buffer, "coin");
+        editor::SyncItemIdInspectorField(
+            field, state.selection, state.workingCopy.itemPickups[1].itemId, true);
+        Expect(std::strcmp(field.buffer, "coin") == 0,
+            "PRIMARY Item ID buffer survives frames while focused");
+        Expect(
+            editor::CommitItemIdInspectorFieldOnFocusLoss(
+                state.workingCopy.itemPickups[state.selection.index].itemId, field)
+                == editor::ItemIdInspectorCommitResult::Accepted,
+            "Inspector focus-loss commits PRIMARY Item ID");
+        field.editing = false;
+        Expect(state.workingCopy.itemPickups[1].itemId == "coin", "PRIMARY keeps coin");
+        Expect(state.workingCopy.itemPickups[0].itemId == "key", "secondary Item Pickup is not bulk-edited");
+        Expect(state.selection.index == 1, "PRIMARY selection remains valid");
+        Expect(
+            state.additionalSelections.size() == 1 && state.additionalSelections[0].index == 0,
+            "secondary selection remains valid");
+
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "Item ID change stays Modified versus active");
+        Expect(!world::AuthoredLevelDataEqual(state.workingCopy, state.savedSourceBaseline),
+            "Dirty/authored baseline sees the Item ID change");
+
+        Expect(
+            world::LevelDefinitionHasRequiredAuthoredContent(state.workingCopy),
+            "Apply validation accepts the edited workingCopy");
+        const world::LevelDefinition applied = state.workingCopy;
+        Expect(applied.itemPickups[1].itemId == "coin" && applied.itemPickups[0].itemId == "key",
+            "Apply promotion preserves both Item IDs");
+        SeedEditor(state, applied);
+        Expect(!state.modified, "after Apply, workingCopy matches active");
+        Expect(state.workingCopy.itemPickups[1].itemId == "coin", "applied workingCopy keeps coin");
+
+        const std::string serialized = world::SerializeLevelText(applied);
+        Expect(!serialized.empty(), "Save serialization accepts the edited level");
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(serialized);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload parse succeeds");
+        Expect(
+            reloaded.level.itemPickups.size() == 2
+                && reloaded.level.itemPickups[0].itemId == "key"
+                && reloaded.level.itemPickups[1].itemId == "coin",
+            "Save/reload preserves PRIMARY coin and first key");
+
+        editor::CopyItemIdInspectorBuffer(field.buffer, "Key");
+        Expect(
+            editor::CommitItemIdInspectorFieldOnFocusLoss(
+                state.workingCopy.itemPickups[1].itemId, field)
+                == editor::ItemIdInspectorCommitResult::Rejected,
+            "invalid Inspector Item ID is still rejected");
+        Expect(state.workingCopy.itemPickups[1].itemId == "coin", "invalid ID does not revert coin");
+        Expect(std::strcmp(field.buffer, "coin") == 0, "invalid ID restores the committed buffer");
     }
 
     if (gFailures != 0)
