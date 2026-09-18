@@ -7,6 +7,7 @@
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
+#include "input/InputState.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/ItemPickupRuntime.h"
@@ -839,6 +840,12 @@ int main()
     Expect(pause.active, "Pause is active");
     Expect(pause.selected == gameplay::PauseMenuItem::Resume, "RESUME is the default selection");
     Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, true, false, pause, pauseFlow)
+            == gameplay::PauseMenuInputAction::ActivateResume,
+        "Enter on selected RESUME is ActivateResume, distinct from Esc Resume");
+    Expect(pause.active, "Resolve does not itself resume Pause");
+    Expect(
         gameplay::PauseBlocksGameplay(false, true),
         "entering Pause blocks simulation on that frame");
     Expect(
@@ -1116,6 +1123,67 @@ int main()
         gameplay::PauseCanBeEntered(
             gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, false),
         "Pause returns after death respawn completes");
+
+    {
+        gameplay::MainMenuState audioMenu{};
+        gameplay::TopLevelFlow audioFlow = gameplay::TopLevelFlow::MainMenu;
+        gameplay::GameplaySfxRequestState audioSfx{};
+        const gameplay::MainMenuItem before = audioMenu.selected;
+        gameplay::ResolveMainMenuInput(true, false, true, false, audioMenu, audioFlow);
+        if (before != audioMenu.selected)
+        {
+            gameplay::RecordGameplaySfx(audioSfx, gameplay::UiNavigateSfx());
+        }
+        Expect(audioSfx.uiNavigateCount == 1, "M75 Main Menu genuine navigate records one request");
+        Expect(
+            gameplay::ResolveMainMenuInput(true, false, false, true, audioMenu, audioFlow)
+                == gameplay::MainMenuInputAction::Quit,
+            "M75 QUIT remains the accepted selected action");
+        gameplay::RecordGameplaySfx(audioSfx, gameplay::UiConfirmSfx());
+        Expect(audioSfx.uiConfirmCount == 1, "M75 QUIT confirm records one request");
+
+        gameplay::PauseMenuState audioPause{};
+        gameplay::GameplaySfxRequestState pauseAudio{};
+        Expect(
+            gameplay::ResolvePauseInput(
+                false, true, false, false, false, true, audioPause, gameplay::TopLevelFlow::Gameplay)
+                == gameplay::PauseMenuInputAction::EnterPause,
+            "M75 PauseOpen still uses EnterPause");
+        gameplay::EnterPause(audioPause);
+        gameplay::RecordGameplaySfx(pauseAudio, gameplay::PauseOpenSfx());
+        Expect(pauseAudio.pauseOpenCount == 1, "M75 PauseOpen records one request");
+        Expect(
+            gameplay::ResolvePauseInput(
+                true, false, false, false, true, false, audioPause, gameplay::TopLevelFlow::Gameplay)
+                == gameplay::PauseMenuInputAction::ActivateResume,
+            "M75 RESUME Enter remains ActivateResume");
+        gameplay::ResumePause(audioPause);
+        gameplay::RecordGameplaySfx(pauseAudio, gameplay::PauseActivatedResumeSfx());
+        Expect(
+            pauseAudio.uiConfirmCount == 1 && pauseAudio.pauseCloseCount == 1,
+            "M75 RESUME records Confirm+Close once");
+
+        gameplay::Inventory audioInventory;
+        gameplay::InventoryUiState audioUi{};
+        gameplay::GameplaySfxRequestState inventoryAudio{};
+        input::InputState toggle{};
+        toggle.toggleInventoryPressed = true;
+        Expect(
+            gameplay::HandleInventoryUiInput(audioUi, audioInventory, toggle)
+                == gameplay::InventoryUiInputAction::Open,
+            "M75 Inventory Open is the HandleInventoryUiInput action");
+        gameplay::RecordGameplaySfx(inventoryAudio, gameplay::InventoryOpenSfx());
+        Expect(inventoryAudio.inventoryOpenCount == 1, "M75 InventoryOpen records one request");
+        Expect(
+            gameplay::HandleInventoryUiInput(audioUi, audioInventory, toggle)
+                == gameplay::InventoryUiInputAction::Close,
+            "M75 Inventory Close is the HandleInventoryUiInput action");
+        gameplay::RecordGameplaySfx(inventoryAudio, gameplay::InventoryCloseSfx());
+        Expect(inventoryAudio.inventoryCloseCount == 1, "M75 InventoryClose records one request");
+        Expect(
+            world::AuthoredLevelDataEqual(pauseAuthored, level01.level),
+            "M75 UI audio does not mutate authored Level data");
+    }
 
     std::filesystem::remove_all(scratch, cleanupError);
 

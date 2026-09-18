@@ -1,6 +1,6 @@
 # Milestone 74 --- Gameplay / Level Polish Pass
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/74-gameplay-level-polish-pass`\
 **Cursor:** Grok 4.6 High --- Fast OFF
 

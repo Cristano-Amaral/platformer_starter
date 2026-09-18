@@ -208,6 +208,12 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "sounds/door_unlock.wav",
                 "sounds/level_goal_complete.wav",
                 "sounds/collectible_collect.wav",
+                "sounds/ui_navigate.wav",
+                "sounds/ui_confirm.wav",
+                "sounds/pause_open.wav",
+                "sounds/pause_close.wav",
+                "sounds/inventory_open.wav",
+                "sounds/inventory_close.wav",
             ]
             repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
             for relative in required:
@@ -246,6 +252,12 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "sounds/door_unlock.wav",
                 "sounds/level_goal_complete.wav",
                 "sounds/collectible_collect.wav",
+                "sounds/ui_navigate.wav",
+                "sounds/ui_confirm.wav",
+                "sounds/pause_open.wav",
+                "sounds/pause_close.wav",
+                "sounds/inventory_open.wav",
+                "sounds/inventory_close.wav",
             ]
             repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
             for relative in required:
@@ -290,6 +302,12 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             self.assertTrue((dest / "sounds" / "door_unlock.wav").is_file())
             self.assertTrue((dest / "sounds" / "level_goal_complete.wav").is_file())
             self.assertTrue((dest / "sounds" / "collectible_collect.wav").is_file())
+            self.assertTrue((dest / "sounds" / "ui_navigate.wav").is_file())
+            self.assertTrue((dest / "sounds" / "ui_confirm.wav").is_file())
+            self.assertTrue((dest / "sounds" / "pause_open.wav").is_file())
+            self.assertTrue((dest / "sounds" / "pause_close.wav").is_file())
+            self.assertTrue((dest / "sounds" / "inventory_open.wav").is_file())
+            self.assertTrue((dest / "sounds" / "inventory_close.wav").is_file())
 
 
 if __name__ == "__main__":

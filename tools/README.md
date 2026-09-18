@@ -35,7 +35,10 @@ The cooker copies known authored files from `game/assets/source/` to
 `sounds/player_footstep.wav`, `sounds/player_jump.wav`, `sounds/player_land.wav`,
 `sounds/checkpoint_activate.wav`, `sounds/pressure_plate_activate.wav`,
 `sounds/pressure_plate_deactivate.wav`, `sounds/door_unlock.wav`,
-`sounds/level_goal_complete.wav`, `sounds/collectible_collect.wav`) plus extra valid
+`sounds/level_goal_complete.wav`, `sounds/collectible_collect.wav`,
+`sounds/ui_navigate.wav`, `sounds/ui_confirm.wav`, `sounds/pause_open.wav`,
+`sounds/pause_close.wav`, `sounds/inventory_open.wav`,
+`sounds/inventory_close.wav`) plus extra valid
 `source/models/*.glb` files discovered for Milestone 47 import and extra valid
 `source/levels/*.level` files discovered for Milestone 64.1 New Level. It does not
 glob every PNG under `source/textures/`. It does not glob sounds. Skips a
@@ -101,7 +104,9 @@ door-unlock, level-goal, and collectible cues are synthesized by
 `player_respawn.wav`, `player_footstep.wav`, `player_jump.wav`,
 `player_land.wav`, `checkpoint_activate.wav`, `pressure_plate_activate.wav`,
 `pressure_plate_deactivate.wav`, `door_unlock.wav`,
-`level_goal_complete.wav`, and `collectible_collect.wav`. Cook/stage those files;
+`level_goal_complete.wav`, `collectible_collect.wav`, `ui_navigate.wav`,
+`ui_confirm.wav`, `pause_open.wav`, `pause_close.wav`, `inventory_open.wav`,
+and `inventory_close.wav`. Cook/stage those files;
 the runtime never reads the
 generators or `source/`.
 

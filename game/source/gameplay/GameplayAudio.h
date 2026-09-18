@@ -1,11 +1,12 @@
 #pragma once
 
-// Milestone 71/72/73/74: semantic gameplay SFX request recording, the lethal-hit
+// Milestone 71/72/73/74/75: semantic gameplay SFX request recording, the lethal-hit
 // cue precedence rule, player movement-audio presentation tracking,
-// world-interaction edge observation, and Collectible collection. Presentation
-// only. Not a generic event bus, audio engine, mixer, ResourceManager,
-// locomotion state machine, Trigger/Receiver framework, or gameplay authority.
-// Application plays through platform::GameplayAudio.
+// world-interaction edge observation, Collectible collection, and UI/menu
+// feedback. Presentation only. Not a generic event bus, audio engine, mixer,
+// ResourceManager, locomotion state machine, Trigger/Receiver framework, UI
+// framework, or gameplay authority. Application plays through
+// platform::GameplayAudio.
 
 #include <cstdint>
 #include <span>
@@ -32,6 +33,12 @@ struct GameplaySfxEmit
     int plateDeactivateCount = 0;
     bool doorUnlock = false;
     bool levelGoalComplete = false;
+    bool uiNavigate = false;
+    bool uiConfirm = false;
+    bool pauseOpen = false;
+    bool pauseClose = false;
+    bool inventoryOpen = false;
+    bool inventoryClose = false;
 };
 
 struct GameplaySfxRequestState
@@ -49,6 +56,12 @@ struct GameplaySfxRequestState
     int plateDeactivateCount = 0;
     int doorUnlockCount = 0;
     int levelGoalCompleteCount = 0;
+    int uiNavigateCount = 0;
+    int uiConfirmCount = 0;
+    int pauseOpenCount = 0;
+    int pauseCloseCount = 0;
+    int inventoryOpenCount = 0;
+    int inventoryCloseCount = 0;
 };
 
 // Runtime presentation only. Remembers cadence and grounded observation
@@ -139,6 +152,30 @@ inline void RecordGameplaySfx(GameplaySfxRequestState& state, GameplaySfxEmit em
     {
         ++state.levelGoalCompleteCount;
     }
+    if (emit.uiNavigate)
+    {
+        ++state.uiNavigateCount;
+    }
+    if (emit.uiConfirm)
+    {
+        ++state.uiConfirmCount;
+    }
+    if (emit.pauseOpen)
+    {
+        ++state.pauseOpenCount;
+    }
+    if (emit.pauseClose)
+    {
+        ++state.pauseCloseCount;
+    }
+    if (emit.inventoryOpen)
+    {
+        ++state.inventoryOpenCount;
+    }
+    if (emit.inventoryClose)
+    {
+        ++state.inventoryCloseCount;
+    }
 }
 
 inline void ReanchorPlayerMovementSfx(PlayerMovementSfxState& state, bool grounded)
@@ -227,6 +264,58 @@ inline GameplaySfxEmit LevelGoalCompleteSfx()
 {
     GameplaySfxEmit emit{};
     emit.levelGoalComplete = true;
+    return emit;
+}
+
+inline GameplaySfxEmit UiNavigateSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.uiNavigate = true;
+    return emit;
+}
+
+inline GameplaySfxEmit UiConfirmSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.uiConfirm = true;
+    return emit;
+}
+
+inline GameplaySfxEmit PauseOpenSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.pauseOpen = true;
+    return emit;
+}
+
+// Esc direct resume: PauseClose only.
+inline GameplaySfxEmit PauseEscResumeSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.pauseClose = true;
+    return emit;
+}
+
+// Enter on selected RESUME: both semantic actions occurred.
+inline GameplaySfxEmit PauseActivatedResumeSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.uiConfirm = true;
+    emit.pauseClose = true;
+    return emit;
+}
+
+inline GameplaySfxEmit InventoryOpenSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.inventoryOpen = true;
+    return emit;
+}
+
+inline GameplaySfxEmit InventoryCloseSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.inventoryClose = true;
     return emit;
 }
 

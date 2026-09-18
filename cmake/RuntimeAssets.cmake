@@ -28,4 +28,10 @@ set(PLATFORMER_RUNTIME_ASSETS
     sounds/door_unlock.wav
     sounds/level_goal_complete.wav
     sounds/collectible_collect.wav
+    sounds/ui_navigate.wav
+    sounds/ui_confirm.wav
+    sounds/pause_open.wav
+    sounds/pause_close.wav
+    sounds/inventory_open.wav
+    sounds/inventory_close.wav
 )

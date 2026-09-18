@@ -949,6 +949,7 @@ int Application::Run()
 
         if (mainMenuAvailableAtFrameStart && !editorActive)
         {
+            const gameplay::MainMenuItem selectedBefore = mainMenuState.selected;
             const gameplay::MainMenuInputAction menuAction = gameplay::ResolveMainMenuInput(
                 mainMenuAvailableAtFrameStart,
                 inputState.inventoryPreviousPressed,
@@ -956,13 +957,19 @@ int Application::Run()
                 inputState.restartPressed,
                 mainMenuState,
                 topLevelFlow);
+            if (selectedBefore != mainMenuState.selected)
+            {
+                EmitGameplaySfx(gameplay::UiNavigateSfx());
+            }
             if (menuAction == gameplay::MainMenuInputAction::Play)
             {
                 gameplay::RequestPlayFromMainMenu(mainMenuState, topLevelFlow);
+                EmitGameplaySfx(gameplay::UiConfirmSfx());
             }
             else if (menuAction == gameplay::MainMenuInputAction::Quit)
             {
                 gameplay::RequestQuitFromMainMenu(mainMenuState, topLevelFlow);
+                EmitGameplaySfx(gameplay::UiConfirmSfx());
             }
         }
         if (mainMenuState.quitRequested)
@@ -978,7 +985,16 @@ int Application::Run()
                 pauseMenuState.active,
                 deathWasActiveAtFrameStart))
         {
-            gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
+            const gameplay::InventoryUiInputAction inventoryAction =
+                gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
+            if (inventoryAction == gameplay::InventoryUiInputAction::Open)
+            {
+                EmitGameplaySfx(gameplay::InventoryOpenSfx());
+            }
+            else if (inventoryAction == gameplay::InventoryUiInputAction::Close)
+            {
+                EmitGameplaySfx(gameplay::InventoryCloseSfx());
+            }
         }
         const bool inventoryBlocksGameplay =
             gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
@@ -994,6 +1010,7 @@ int Application::Run()
                 levelCompletionState.completed,
                 pauseWasActiveAtFrameStart,
                 deathWasActiveAtFrameStart);
+            const gameplay::PauseMenuItem pauseSelectedBefore = pauseMenuState.selected;
             const gameplay::PauseMenuInputAction pauseAction = gameplay::ResolvePauseInput(
                 pauseWasActiveAtFrameStart,
                 pauseCanBeEntered,
@@ -1003,16 +1020,38 @@ int Application::Run()
                 inputState.cancelPressed,
                 pauseMenuState,
                 topLevelFlow);
+            if (pauseSelectedBefore != pauseMenuState.selected)
+            {
+                EmitGameplaySfx(gameplay::UiNavigateSfx());
+            }
             if (pauseAction == gameplay::PauseMenuInputAction::EnterPause)
             {
+                const bool wasActive = pauseMenuState.active;
                 gameplay::EnterPause(pauseMenuState);
+                if (!wasActive && pauseMenuState.active)
+                {
+                    EmitGameplaySfx(gameplay::PauseOpenSfx());
+                }
             }
-            else if (pauseAction == gameplay::PauseMenuInputAction::Resume)
+            else if (gameplay::PauseActionResumesGameplay(pauseAction))
             {
+                const bool wasActive = pauseMenuState.active;
                 gameplay::ResumePause(pauseMenuState);
+                if (wasActive && !pauseMenuState.active)
+                {
+                    if (pauseAction == gameplay::PauseMenuInputAction::ActivateResume)
+                    {
+                        EmitGameplaySfx(gameplay::PauseActivatedResumeSfx());
+                    }
+                    else
+                    {
+                        EmitGameplaySfx(gameplay::PauseEscResumeSfx());
+                    }
+                }
             }
             else if (pauseAction == gameplay::PauseMenuInputAction::ReturnToMainMenu)
             {
+                EmitGameplaySfx(gameplay::UiConfirmSfx());
                 ReturnToMainMenuFromResults();
             }
         }
@@ -3593,6 +3632,30 @@ void Application::EmitGameplaySfx(gameplay::GameplaySfxEmit emit)
     if (emit.levelGoalComplete)
     {
         gameplayAudio.PlayLevelGoalComplete();
+    }
+    if (emit.uiNavigate)
+    {
+        gameplayAudio.PlayUiNavigate();
+    }
+    if (emit.uiConfirm)
+    {
+        gameplayAudio.PlayUiConfirm();
+    }
+    if (emit.pauseOpen)
+    {
+        gameplayAudio.PlayPauseOpen();
+    }
+    if (emit.pauseClose)
+    {
+        gameplayAudio.PlayPauseClose();
+    }
+    if (emit.inventoryOpen)
+    {
+        gameplayAudio.PlayInventoryOpen();
+    }
+    if (emit.inventoryClose)
+    {
+        gameplayAudio.PlayInventoryClose();
     }
 }
 

@@ -67,8 +67,10 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        gameplay::HandleInventoryUiInput(ui, inventory, PressToggle());
-        Expect(ui.open, "2. semantic toggle opens Inventory");
+        Expect(
+            gameplay::HandleInventoryUiInput(ui, inventory, PressToggle())
+                == gameplay::InventoryUiInputAction::Open,
+            "2. semantic toggle opens Inventory");
         Expect(ui.selectedItemId.empty(), "6. empty Inventory has no selection");
         Expect(gameplay::InventoryUiPausesSimulation(ui), "19. open Inventory pauses simulation");
         Expect(gameplay::InventoryUiBlocksGameplay(false, true), "open frame blocks gameplay");
@@ -76,15 +78,21 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        gameplay::HandleInventoryUiInput(ui, inventory, PressToggle());
-        Expect(!ui.open, "3. semantic toggle closes Inventory");
+        Expect(
+            gameplay::HandleInventoryUiInput(ui, inventory, PressToggle())
+                == gameplay::InventoryUiInputAction::Close,
+            "3. semantic toggle closes Inventory");
     }
 
     {
-        gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressToggle());
-        Expect(ui.open, "5. empty Inventory opens safely");
-        gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressCancel());
-        Expect(!ui.open, "4. Esc closes Inventory");
+        Expect(
+            gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressToggle())
+                == gameplay::InventoryUiInputAction::Open,
+            "5. empty Inventory opens safely");
+        Expect(
+            gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressCancel())
+                == gameplay::InventoryUiInputAction::Close,
+            "4. Esc closes Inventory");
         Expect(
             gameplay::InventoryUiBlocksGameplay(true, ui.open),
             "Esc close frame still blocks gameplay so Pause cannot share that edge");
@@ -195,7 +203,10 @@ int main()
         closeAndInteract.jumpPressed = true;
         closeAndInteract.moveX = 1.0f;
         const bool wasOpen = panel.open;
-        gameplay::HandleInventoryUiInput(panel, inventory, closeAndInteract);
+        Expect(
+            gameplay::HandleInventoryUiInput(panel, inventory, closeAndInteract)
+                == gameplay::InventoryUiInputAction::Close,
+            "closing Tab is Inventory Close, not a raw-key cue");
         Expect(!panel.open, "24. closing resumes (UI closed)");
         Expect(gameplay::InventoryUiBlocksGameplay(wasOpen, panel.open),
             "25. closing frame still blocks gameplay so E is not synthesized");

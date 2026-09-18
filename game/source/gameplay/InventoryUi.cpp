@@ -76,7 +76,7 @@ void NavigateInventorySelection(InventoryUiState& ui, const Inventory& inventory
     ui.selectedItemId = entries[static_cast<std::size_t>(index)].itemId;
 }
 
-void HandleInventoryUiInput(
+InventoryUiInputAction HandleInventoryUiInput(
     InventoryUiState& ui,
     const Inventory& inventory,
     const input::InputState& input)
@@ -87,7 +87,7 @@ void HandleInventoryUiInput(
         if (input.cancelPressed || input.toggleInventoryPressed)
         {
             CloseInventoryUi(ui);
-            return;
+            return InventoryUiInputAction::Close;
         }
         if (input.inventoryPreviousPressed)
         {
@@ -97,13 +97,15 @@ void HandleInventoryUiInput(
         {
             NavigateInventorySelection(ui, inventory, 1);
         }
-        return;
+        return InventoryUiInputAction::None;
     }
 
     if (input.toggleInventoryPressed)
     {
         OpenInventoryUi(ui, inventory);
+        return InventoryUiInputAction::Open;
     }
+    return InventoryUiInputAction::None;
 }
 
 void ApplyInventoryUiLifecycle(

@@ -31,6 +31,12 @@ PLATE_DEACTIVATE_ID = "sounds/pressure_plate_deactivate.wav"
 DOOR_UNLOCK_ID = "sounds/door_unlock.wav"
 GOAL_COMPLETE_ID = "sounds/level_goal_complete.wav"
 COLLECTIBLE_ID = "sounds/collectible_collect.wav"
+UI_NAVIGATE_ID = "sounds/ui_navigate.wav"
+UI_CONFIRM_ID = "sounds/ui_confirm.wav"
+PAUSE_OPEN_ID = "sounds/pause_open.wav"
+PAUSE_CLOSE_ID = "sounds/pause_close.wav"
+INVENTORY_OPEN_ID = "sounds/inventory_open.wav"
+INVENTORY_CLOSE_ID = "sounds/inventory_close.wav"
 ALL_SOUND_IDS = (
     PICKUP_ID,
     DAMAGE_ID,
@@ -45,6 +51,12 @@ ALL_SOUND_IDS = (
     DOOR_UNLOCK_ID,
     GOAL_COMPLETE_ID,
     COLLECTIBLE_ID,
+    UI_NAVIGATE_ID,
+    UI_CONFIRM_ID,
+    PAUSE_OPEN_ID,
+    PAUSE_CLOSE_ID,
+    INVENTORY_OPEN_ID,
+    INVENTORY_CLOSE_ID,
 )
 SOURCE_SOUNDS = cooker.source_root(cooker.repo_root()) / "sounds"
 RUNTIME_ASSETS = REPO_ROOT / "cmake" / "RuntimeAssets.cmake"
@@ -86,6 +98,12 @@ class ItemPickupCollectSoundTests(unittest.TestCase):
             DOOR_UNLOCK_ID: sfxgen.cue_wav_bytes(sfxgen.DOOR_UNLOCK_NAME),
             GOAL_COMPLETE_ID: sfxgen.cue_wav_bytes(sfxgen.GOAL_COMPLETE_NAME),
             COLLECTIBLE_ID: sfxgen.cue_wav_bytes(sfxgen.COLLECTIBLE_NAME),
+            UI_NAVIGATE_ID: sfxgen.cue_wav_bytes(sfxgen.UI_NAVIGATE_NAME),
+            UI_CONFIRM_ID: sfxgen.cue_wav_bytes(sfxgen.UI_CONFIRM_NAME),
+            PAUSE_OPEN_ID: sfxgen.cue_wav_bytes(sfxgen.PAUSE_OPEN_NAME),
+            PAUSE_CLOSE_ID: sfxgen.cue_wav_bytes(sfxgen.PAUSE_CLOSE_NAME),
+            INVENTORY_OPEN_ID: sfxgen.cue_wav_bytes(sfxgen.INVENTORY_OPEN_NAME),
+            INVENTORY_CLOSE_ID: sfxgen.cue_wav_bytes(sfxgen.INVENTORY_CLOSE_NAME),
         }
         for logical_id, payload in expected.items():
             source = cooker.source_root(cooker.repo_root()) / logical_id

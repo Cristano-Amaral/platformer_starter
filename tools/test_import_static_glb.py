@@ -133,6 +133,12 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("sounds/door_unlock.wav", ids)
         self.assertIn("sounds/level_goal_complete.wav", ids)
         self.assertIn("sounds/collectible_collect.wav", ids)
+        self.assertIn("sounds/ui_navigate.wav", ids)
+        self.assertIn("sounds/ui_confirm.wav", ids)
+        self.assertIn("sounds/pause_open.wav", ids)
+        self.assertIn("sounds/pause_close.wav", ids)
+        self.assertIn("sounds/inventory_open.wav", ids)
+        self.assertIn("sounds/inventory_close.wav", ids)
 
 
 class CookStageImportedGlbTests(unittest.TestCase):

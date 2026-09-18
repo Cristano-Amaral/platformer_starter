@@ -37,7 +37,15 @@ void RepairInventorySelection(InventoryUiState& ui, const Inventory& inventory);
 void OpenInventoryUi(InventoryUiState& ui, const Inventory& inventory);
 void CloseInventoryUi(InventoryUiState& ui);
 void NavigateInventorySelection(InventoryUiState& ui, const Inventory& inventory, int step);
-void HandleInventoryUiInput(
+
+enum class InventoryUiInputAction
+{
+    None,
+    Open,
+    Close,
+};
+
+InventoryUiInputAction HandleInventoryUiInput(
     InventoryUiState& ui,
     const Inventory& inventory,
     const input::InputState& input);

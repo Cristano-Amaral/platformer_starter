@@ -172,6 +172,12 @@ int main()
     sound.PlayPressurePlateDeactivate();
     sound.PlayDoorUnlock();
     sound.PlayLevelGoalComplete();
+    sound.PlayUiNavigate();
+    sound.PlayUiConfirm();
+    sound.PlayPauseOpen();
+    sound.PlayPauseClose();
+    sound.PlayInventoryOpen();
+    sound.PlayInventoryClose();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload after staged Load is safe");
     sound.LoadCueFromPath(platform::GameplaySfxCue::Pickup, std::filesystem::path{});
@@ -224,6 +230,14 @@ int main()
             && !sound.IsCueLoaded(platform::GameplaySfxCue::Collectible),
         "22. missing Collectible cue leaves other loaded sounds and is a no-op");
     sound.PlayCollectible();
+    sound.LoadCueFromPath(
+        platform::GameplaySfxCue::UiNavigate,
+        std::filesystem::temp_directory_path() / "platformer_missing_ui_navigate.wav");
+    Expect(
+        sound.IsCueLoaded(platform::GameplaySfxCue::Pickup)
+            && !sound.IsCueLoaded(platform::GameplaySfxCue::UiNavigate),
+        "23. missing individual M75 UI cue leaves other loaded sounds and is a no-op");
+    sound.PlayUiNavigate();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload clears the cached sound");
     std::filesystem::remove(valid);

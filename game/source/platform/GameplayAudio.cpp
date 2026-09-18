@@ -66,6 +66,18 @@ std::string_view CueLogicalId(GameplaySfxCue cue)
         return kDoorUnlockSoundLogicalId;
     case GameplaySfxCue::LevelGoalComplete:
         return kLevelGoalCompleteSoundLogicalId;
+    case GameplaySfxCue::UiNavigate:
+        return kUiNavigateSoundLogicalId;
+    case GameplaySfxCue::UiConfirm:
+        return kUiConfirmSoundLogicalId;
+    case GameplaySfxCue::PauseOpen:
+        return kPauseOpenSoundLogicalId;
+    case GameplaySfxCue::PauseClose:
+        return kPauseCloseSoundLogicalId;
+    case GameplaySfxCue::InventoryOpen:
+        return kInventoryOpenSoundLogicalId;
+    case GameplaySfxCue::InventoryClose:
+        return kInventoryCloseSoundLogicalId;
     }
     return {};
 }
@@ -84,6 +96,12 @@ constexpr std::array<GameplaySfxCue, kGameplaySfxCueCount> kAllCues = {
     GameplaySfxCue::PressurePlateDeactivate,
     GameplaySfxCue::DoorUnlock,
     GameplaySfxCue::LevelGoalComplete,
+    GameplaySfxCue::UiNavigate,
+    GameplaySfxCue::UiConfirm,
+    GameplaySfxCue::PauseOpen,
+    GameplaySfxCue::PauseClose,
+    GameplaySfxCue::InventoryOpen,
+    GameplaySfxCue::InventoryClose,
 };
 }
 
@@ -279,6 +297,36 @@ void GameplayAudio::PlayDoorUnlock() const
 void GameplayAudio::PlayLevelGoalComplete() const
 {
     PlayCue(GameplaySfxCue::LevelGoalComplete);
+}
+
+void GameplayAudio::PlayUiNavigate() const
+{
+    PlayCue(GameplaySfxCue::UiNavigate);
+}
+
+void GameplayAudio::PlayUiConfirm() const
+{
+    PlayCue(GameplaySfxCue::UiConfirm);
+}
+
+void GameplayAudio::PlayPauseOpen() const
+{
+    PlayCue(GameplaySfxCue::PauseOpen);
+}
+
+void GameplayAudio::PlayPauseClose() const
+{
+    PlayCue(GameplaySfxCue::PauseClose);
+}
+
+void GameplayAudio::PlayInventoryOpen() const
+{
+    PlayCue(GameplaySfxCue::InventoryOpen);
+}
+
+void GameplayAudio::PlayInventoryClose() const
+{
+    PlayCue(GameplaySfxCue::InventoryClose);
 }
 
 bool GameplayAudio::IsCueLoaded(GameplaySfxCue cue) const

@@ -175,6 +175,42 @@ KNOWN_ASSETS = (
         "cooked": "sounds/collectible_collect.wav",
         "kind": KIND_COPY,
     },
+    {
+        "id": "sounds/ui_navigate.wav",
+        "source": "sounds/ui_navigate.wav",
+        "cooked": "sounds/ui_navigate.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/ui_confirm.wav",
+        "source": "sounds/ui_confirm.wav",
+        "cooked": "sounds/ui_confirm.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/pause_open.wav",
+        "source": "sounds/pause_open.wav",
+        "cooked": "sounds/pause_open.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/pause_close.wav",
+        "source": "sounds/pause_close.wav",
+        "cooked": "sounds/pause_close.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/inventory_open.wav",
+        "source": "sounds/inventory_open.wav",
+        "cooked": "sounds/inventory_open.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "sounds/inventory_close.wav",
+        "source": "sounds/inventory_close.wav",
+        "cooked": "sounds/inventory_close.wav",
+        "kind": KIND_COPY,
+    },
 )
 
 

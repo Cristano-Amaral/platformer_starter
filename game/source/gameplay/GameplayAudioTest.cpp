@@ -1,5 +1,5 @@
-// Milestone 71/72: semantic gameplay SFX requests, lethal-hit precedence,
-// movement cadence, missing-cue safety, and authored/Dirty isolation.
+// Milestone 71/72/73/74/75: semantic gameplay SFX requests, lethal-hit precedence,
+// movement cadence, missing-cue safety, UI/menu feedback, and authored/Dirty isolation.
 // No window, raylib, or Jolt.
 
 #include "gameplay/GameplayAudio.h"
@@ -7,12 +7,14 @@
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/LevelTransition.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/RespawnState.h"
+#include "input/InputState.h"
 #include "platform/GameplayAudio.h"
 #include "world/Door.h"
 #include "world/HazardWorld.h"
@@ -127,8 +129,8 @@ int main()
     Expect(
         platform::kGameplaySfxVolume == 1.0f, "fixed gameplay SFX volume is 1.0");
     Expect(
-        platform::kGameplaySfxCueCount == 13,
-        "fixed cue set includes M71-M73 plus Collectible");
+        platform::kGameplaySfxCueCount == 19,
+        "fixed cue set includes M71-M74 plus six M75 UI cues");
 
     {
         world::ItemPickupSpec pickup = MakePickup({1.55f, 1.0f, 0.0f});
@@ -880,6 +882,291 @@ int main()
             && workingCopy[0].center.x == authoredBefore.center.x
             && doors[0].requiredItemId == "key",
         "23. M73 audio never mutates authored data, workingCopy, or Dirty");
+
+    gameplay::TopLevelFlow menuFlow = gameplay::TopLevelFlow::MainMenu;
+    gameplay::MainMenuState menu{};
+    gameplay::GameplaySfxRequestState menuSfx{};
+    const gameplay::MainMenuItem menuBeforeDown = menu.selected;
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, true, false, menu, menuFlow)
+            == gameplay::MainMenuInputAction::None,
+        "Main Menu Down navigates without activating");
+    Expect(menu.selected == gameplay::MainMenuItem::Quit, "Down selects QUIT");
+    if (menuBeforeDown != menu.selected)
+    {
+        gameplay::RecordGameplaySfx(menuSfx, gameplay::UiNavigateSfx());
+    }
+    Expect(menuSfx.uiNavigateCount == 1, "1. genuine Main Menu selection change emits one UiNavigate");
+    Expect(
+        menuSfx.uiConfirmCount == 0 && menuSfx.pauseOpenCount == 0,
+        "Navigate does not emit Confirm or Pause cues");
+
+    const gameplay::MainMenuItem menuBeforeBoth = menu.selected;
+    Expect(
+        gameplay::ResolveMainMenuInput(true, true, true, false, menu, menuFlow)
+            == gameplay::MainMenuInputAction::None,
+        "Up+Down does not activate");
+    if (menuBeforeBoth != menu.selected)
+    {
+        gameplay::RecordGameplaySfx(menuSfx, gameplay::UiNavigateSfx());
+    }
+    Expect(menu.selected == gameplay::MainMenuItem::Quit, "Up+Down leaves QUIT selected");
+    Expect(menuSfx.uiNavigateCount == 1, "2. input that does not change selection emits no UiNavigate");
+
+    const gameplay::MainMenuItem menuBeforePlay = menu.selected;
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, true, true, menu, menuFlow)
+            == gameplay::MainMenuInputAction::Quit,
+        "Enter activates the captured QUIT item without also moving");
+    if (menuBeforePlay != menu.selected)
+    {
+        gameplay::RecordGameplaySfx(menuSfx, gameplay::UiNavigateSfx());
+    }
+    Expect(menuSfx.uiNavigateCount == 1, "activate does not emit a false Navigate");
+    gameplay::RequestQuitFromMainMenu(menu, menuFlow);
+    gameplay::RecordGameplaySfx(menuSfx, gameplay::UiConfirmSfx());
+    Expect(menu.quitRequested, "QUIT remains the existing close request");
+    Expect(menuSfx.uiConfirmCount == 1, "QUIT activation emits exactly one UiConfirm");
+
+    gameplay::ResetMainMenuState(menu);
+    gameplay::GameplaySfxRequestState playSfx{};
+    Expect(
+        gameplay::ResolveMainMenuInput(true, false, false, true, menu, menuFlow)
+            == gameplay::MainMenuInputAction::Play,
+        "Enter activates PLAY");
+    gameplay::RequestPlayFromMainMenu(menu, menuFlow);
+    gameplay::RecordGameplaySfx(playSfx, gameplay::UiConfirmSfx());
+    Expect(gameplay::PlayIsInFlight(menu), "3. PLAY confirm preserves fresh-run pending");
+    Expect(playSfx.uiConfirmCount == 1, "PLAY activation emits exactly one UiConfirm");
+    Expect(playSfx.uiNavigateCount == 0, "PLAY activation does not emit Navigate");
+    gameplay::RequestPlayFromMainMenu(menu, menuFlow);
+    Expect(playSfx.uiConfirmCount == 1, "in-flight PLAY does not emit a second Confirm");
+    gameplay::PauseMenuState playPause{};
+    gameplay::EnterGameplayFromSuccessfulPlay(menuFlow, menu, playPause);
+    Expect(menuFlow == gameplay::TopLevelFlow::Gameplay, "deferred PLAY still enters Gameplay");
+    Expect(playSfx.pauseOpenCount == 0 && playSfx.pauseCloseCount == 0,
+        "PLAY deferred transition synthesizes no Pause cues");
+
+    gameplay::PauseMenuState pause{};
+    gameplay::GameplaySfxRequestState uiPauseSfx{};
+    Expect(
+        gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false),
+        "Gameplay can enter Pause");
+    Expect(
+        gameplay::ResolvePauseInput(
+            false, true, false, false, false, true, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::EnterPause,
+        "Gameplay Esc is the EnterPause action");
+    const bool pauseWasActive = pause.active;
+    gameplay::EnterPause(pause);
+    if (!pauseWasActive && pause.active)
+    {
+        gameplay::RecordGameplaySfx(uiPauseSfx, gameplay::PauseOpenSfx());
+    }
+    Expect(uiPauseSfx.pauseOpenCount == 1, "5. successful Gameplay -> Pause emits one PauseOpen");
+    Expect(uiPauseSfx.pauseCloseCount == 0, "entering Pause does not emit PauseClose");
+
+    const gameplay::PauseMenuItem pauseBeforeDown = pause.selected;
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, true, false, false, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::None,
+        "Pause Down navigates without activating");
+    if (pauseBeforeDown != pause.selected)
+    {
+        gameplay::RecordGameplaySfx(uiPauseSfx, gameplay::UiNavigateSfx());
+    }
+    Expect(pause.selected == gameplay::PauseMenuItem::MainMenu, "Down selects MAIN MENU");
+    Expect(uiPauseSfx.uiNavigateCount == 1, "4. genuine Pause selection change emits one UiNavigate");
+
+    const gameplay::PauseMenuItem pauseBeforeBoth = pause.selected;
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, true, true, false, false, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::None,
+        "Pause Up+Down does not activate");
+    if (pauseBeforeBoth != pause.selected)
+    {
+        gameplay::RecordGameplaySfx(uiPauseSfx, gameplay::UiNavigateSfx());
+    }
+    Expect(uiPauseSfx.uiNavigateCount == 1, "Pause input that does not change selection is silent");
+
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, true, false, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::ReturnToMainMenu,
+        "Enter on MAIN MENU is the accepted selected action");
+    gameplay::RecordGameplaySfx(uiPauseSfx, gameplay::UiConfirmSfx());
+    gameplay::MainMenuState pauseMenu{};
+    gameplay::RunCompleteState pauseResults{};
+    gameplay::TopLevelFlow pauseFlow = gameplay::TopLevelFlow::Gameplay;
+    gameplay::EnterMainMenu(pauseFlow, pauseMenu, pauseResults, pause);
+    Expect(pauseFlow == gameplay::TopLevelFlow::MainMenu, "Pause MAIN MENU still enters Main Menu");
+    Expect(!pause.active, "Pause is cleared by EnterMainMenu reconstruction");
+    Expect(
+        uiPauseSfx.uiConfirmCount == 1 && uiPauseSfx.pauseCloseCount == 0,
+        "9. Pause MAIN MENU emits Confirm and does not synthesize PauseClose");
+
+    gameplay::EnterPause(pause);
+    gameplay::GameplaySfxRequestState escResumeSfx{};
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, false, true, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::Resume,
+        "Esc while paused is Resume, not ActivateResume");
+    const bool escWasActive = pause.active;
+    gameplay::ResumePause(pause);
+    if (escWasActive && !pause.active)
+    {
+        gameplay::RecordGameplaySfx(escResumeSfx, gameplay::PauseEscResumeSfx());
+    }
+    Expect(
+        escResumeSfx.pauseCloseCount == 1 && escResumeSfx.uiConfirmCount == 0,
+        "7. Pause Esc -> Gameplay emits PauseClose only");
+
+    gameplay::EnterPause(pause);
+    Expect(pause.selected == gameplay::PauseMenuItem::Resume, "RESUME is the default Pause selection");
+    gameplay::GameplaySfxRequestState enterResumeSfx{};
+    Expect(
+        gameplay::ResolvePauseInput(
+            true, false, false, false, true, false, pause, gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::ActivateResume,
+        "Enter on RESUME is ActivateResume");
+    const bool enterWasActive = pause.active;
+    gameplay::ResumePause(pause);
+    if (enterWasActive && !pause.active)
+    {
+        gameplay::RecordGameplaySfx(enterResumeSfx, gameplay::PauseActivatedResumeSfx());
+    }
+    Expect(
+        enterResumeSfx.uiConfirmCount == 1 && enterResumeSfx.pauseCloseCount == 1,
+        "8. Pause RESUME activation emits UiConfirm plus PauseClose exactly once");
+    Expect(enterResumeSfx.pauseOpenCount == 0, "RESUME does not emit PauseOpen");
+
+    gameplay::PauseMenuState blockedPause{};
+    gameplay::GameplaySfxRequestState blockedPauseSfx{};
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, true, false, false, false),
+        "Inventory blocks Pause entry");
+    Expect(
+        gameplay::ResolvePauseInput(
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            blockedPause,
+            gameplay::TopLevelFlow::Gameplay)
+            == gameplay::PauseMenuInputAction::None,
+        "blocked Esc is not EnterPause");
+    Expect(!blockedPause.active, "blocked Pause entry leaves Pause inactive");
+    Expect(blockedPauseSfx.pauseOpenCount == 0, "6. blocked Pause entry emits no PauseOpen");
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true, false),
+        "destination LEVEL COMPLETE blocks Pause");
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, true, true, false),
+        "Run Complete blocks Pause");
+    Expect(
+        !gameplay::PauseCanBeEntered(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, false, false, true),
+        "death blocks Pause");
+    Expect(
+        gameplay::FlowAfterEditorToggle(gameplay::TopLevelFlow::Gameplay)
+            == gameplay::TopLevelFlow::Gameplay,
+        "F2 keeps Gameplay flow");
+    Expect(blockedPauseSfx.pauseOpenCount == 0 && blockedPauseSfx.pauseCloseCount == 0,
+        "F2/lifecycle blockers synthesize no Pause UI cues");
+
+    gameplay::Inventory inventory;
+    gameplay::InventoryUiState inventoryUi{};
+    gameplay::GameplaySfxRequestState inventorySfx{};
+    input::InputState toggle{};
+    toggle.toggleInventoryPressed = true;
+    Expect(
+        gameplay::HandleInventoryUiInput(inventoryUi, inventory, toggle)
+            == gameplay::InventoryUiInputAction::Open,
+        "available Tab is the Inventory Open action");
+    gameplay::RecordGameplaySfx(inventorySfx, gameplay::InventoryOpenSfx());
+    Expect(inventoryUi.open, "Inventory is open");
+    Expect(inventorySfx.inventoryOpenCount == 1, "10. closed -> open emits one InventoryOpen");
+    Expect(
+        gameplay::HandleInventoryUiInput(inventoryUi, inventory, toggle)
+            == gameplay::InventoryUiInputAction::Close,
+        "available Tab while open is the Inventory Close action");
+    gameplay::RecordGameplaySfx(inventorySfx, gameplay::InventoryCloseSfx());
+    Expect(!inventoryUi.open, "Inventory is closed");
+    Expect(inventorySfx.inventoryCloseCount == 1, "11. open -> closed emits one InventoryClose");
+
+    input::InputState cancel{};
+    cancel.cancelPressed = true;
+    Expect(
+        gameplay::HandleInventoryUiInput(inventoryUi, inventory, cancel)
+            == gameplay::InventoryUiInputAction::None,
+        "Esc while Inventory is closed is not an Inventory action");
+    Expect(inventorySfx.inventoryOpenCount == 1 && inventorySfx.inventoryCloseCount == 1,
+        "closed Esc synthesizes no Inventory cue");
+
+    Expect(
+        !gameplay::InventoryUiIsAvailable(
+            gameplay::TopLevelFlow::Gameplay, false, false, true),
+        "Pause consumes Tab before Inventory");
+    Expect(
+        !gameplay::InventoryUiIsAvailable(
+            gameplay::TopLevelFlow::Gameplay, false, true, false),
+        "Run Complete consumes Tab");
+    Expect(
+        !gameplay::InventoryUiIsAvailable(
+            gameplay::TopLevelFlow::Gameplay, false, false, false, true),
+        "death consumes Tab");
+    Expect(inventorySfx.inventoryOpenCount == 1 && inventorySfx.inventoryCloseCount == 1,
+        "12. blocked/consumed Tab/Esc paths synthesize no Inventory cues");
+
+    gameplay::OpenInventoryUi(inventoryUi, inventory);
+    gameplay::GameplaySfxRequestState lifecycleUiSfx{};
+    gameplay::CloseInventoryUi(inventoryUi);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::RestartRun, inventory);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::LevelTransition, inventory);
+    gameplay::ApplyInventoryUiLifecycle(
+        inventoryUi, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel, inventory);
+    Expect(
+        lifecycleUiSfx.inventoryOpenCount == 0 && lifecycleUiSfx.inventoryCloseCount == 0
+            && lifecycleUiSfx.uiNavigateCount == 0 && lifecycleUiSfx.uiConfirmCount == 0
+            && lifecycleUiSfx.pauseOpenCount == 0 && lifecycleUiSfx.pauseCloseCount == 0,
+        "13. F2/lifecycle/reconstruction CloseInventoryUi synthesizes no M75 UI cues");
+
+    Expect(
+        playSfx.pickupCount == 0 && uiPauseSfx.collectibleCount == 0 && inventorySfx.damageCount == 0
+            && menuSfx.footstepCount == 0 && enterResumeSfx.jumpCount == 0
+            && escResumeSfx.landingCount == 0 && uiPauseSfx.checkpointActivateCount == 0
+            && uiPauseSfx.doorUnlockCount == 0 && uiPauseSfx.levelGoalCompleteCount == 0,
+        "14. M75 UI cues remain distinct from M71-M74 gameplay cues");
+
+    gameplay::GameplaySfxRequestState missingUiSfx{};
+    gameplay::RecordGameplaySfx(missingUiSfx, gameplay::UiNavigateSfx());
+    gameplay::RecordGameplaySfx(missingUiSfx, gameplay::UiConfirmSfx());
+    gameplay::RecordGameplaySfx(missingUiSfx, gameplay::PauseOpenSfx());
+    gameplay::RecordGameplaySfx(missingUiSfx, gameplay::PauseEscResumeSfx());
+    gameplay::RecordGameplaySfx(missingUiSfx, gameplay::InventoryOpenSfx());
+    gameplay::RecordGameplaySfx(missingUiSfx, gameplay::InventoryCloseSfx());
+    Expect(
+        missingUiSfx.uiNavigateCount == 1 && missingUiSfx.uiConfirmCount == 1
+            && missingUiSfx.pauseOpenCount == 1 && missingUiSfx.pauseCloseCount == 1
+            && missingUiSfx.inventoryOpenCount == 1 && missingUiSfx.inventoryCloseCount == 1,
+        "16. unavailable playback still records the semantic M75 request");
+    Expect(
+        authoredHazards[0].center.x == authoredBefore.center.x && !dirty
+            && workingCopy[0].center.x == authoredBefore.center.x,
+        "18. M75 UI audio never mutates authored data, workingCopy, or Dirty");
 
     if (gFailures != 0)
     {

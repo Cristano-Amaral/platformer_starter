@@ -69,6 +69,7 @@ enum class PauseMenuInputAction
     None,
     EnterPause,
     Resume,
+    ActivateResume,
     ReturnToMainMenu,
 };
 
@@ -320,6 +321,12 @@ inline void ResumePause(PauseMenuState& state)
     state.selected = PauseMenuItem::Resume;
 }
 
+inline bool PauseActionResumesGameplay(PauseMenuInputAction action)
+{
+    return action == PauseMenuInputAction::Resume
+        || action == PauseMenuInputAction::ActivateResume;
+}
+
 inline void NavigatePauseMenu(PauseMenuState& state, int step)
 {
     if (step == 0 || !state.active)
@@ -393,8 +400,10 @@ inline MainMenuInputAction ResolveMainMenuInput(
 // Pause uses the same Up/Down/Enter edges as Main Menu. The Esc edge that
 // enters Pause cannot Resume in the same Resolve because Resume requires
 // Pause already active at frame start. Esc while paused is always Resume,
-// even if MAIN MENU is selected. Editor/Inventory/completion callers must
-// not invoke this when a higher-priority overlay owns Esc.
+// even if MAIN MENU is selected. Enter on selected RESUME is ActivateResume
+// so Confirm+Close can be distinguished from Esc Close-only. Editor/Inventory/
+// completion callers must not invoke this when a higher-priority overlay owns
+// Esc.
 inline PauseMenuInputAction ResolvePauseInput(
     bool pauseWasActiveAtFrameStart,
     bool pauseCanBeEntered,
@@ -428,7 +437,7 @@ inline PauseMenuInputAction ResolvePauseInput(
     if (activatePressed)
     {
         return state.selected == PauseMenuItem::Resume
-            ? PauseMenuInputAction::Resume
+            ? PauseMenuInputAction::ActivateResume
             : PauseMenuInputAction::ReturnToMainMenu;
     }
     if (previousPressed && !nextPressed)

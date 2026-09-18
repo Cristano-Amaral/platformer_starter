@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate project-owned Milestone 71/72/73/74 gameplay SFX WAVs.
+"""Generate project-owned Milestone 71/72/73/74/75 gameplay SFX WAVs.
 
 Damage, death, respawn, footstep, jump, landing, checkpoint, pressure-plate,
-door-unlock, level-goal, and collectible cues are short synthesized PCM WAVs.
+door-unlock, level-goal, collectible, and UI/menu cues are short synthesized
+PCM WAVs.
 They are not third-party audio. The existing Milestone 61 pickup chime is owned
 by generate_item_pickup_collect_wav.py and is not rewritten here.
 
@@ -24,6 +25,12 @@ Writes:
     game/assets/source/sounds/door_unlock.wav
     game/assets/source/sounds/level_goal_complete.wav
     game/assets/source/sounds/collectible_collect.wav
+    game/assets/source/sounds/ui_navigate.wav
+    game/assets/source/sounds/ui_confirm.wav
+    game/assets/source/sounds/pause_open.wav
+    game/assets/source/sounds/pause_close.wav
+    game/assets/source/sounds/inventory_open.wav
+    game/assets/source/sounds/inventory_close.wav
 
 Cook/stage those source files afterwards; the game never reads this generator
 or source/.
@@ -279,6 +286,103 @@ def collectible_collect_samples() -> list[float]:
     return samples
 
 
+def ui_navigate_samples() -> list[float]:
+    # Lighter than Confirm: a short quiet tick, not a gameplay pickup/jump.
+    duration = 0.045
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        envelope = math.exp(-time_seconds * 55.0)
+        body = math.sin(2.0 * math.pi * 1480.0 * time_seconds)
+        click = 0.22 * math.sin(2.0 * math.pi * 2960.0 * time_seconds)
+        samples.append(0.16 * envelope * (body + click))
+    return samples
+
+
+def ui_confirm_samples() -> list[float]:
+    # Clearer accepted-action blip than Navigate; not the M61 pickup chime.
+    duration = 0.11
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        if time_seconds < 0.045:
+            envelope = math.exp(-time_seconds * 20.0)
+            frequency = 698.46
+        else:
+            envelope = math.exp(-(time_seconds - 0.045) * 16.0)
+            frequency = 932.33
+        body = math.sin(2.0 * math.pi * frequency * time_seconds)
+        overtone = 0.22 * math.sin(2.0 * math.pi * frequency * 2.0 * time_seconds)
+        samples.append(0.30 * envelope * (body + overtone))
+    return samples
+
+
+def pause_open_samples() -> list[float]:
+    # Related to Pause Close: rising muted panel, lower than Jump.
+    duration = 0.13
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        t = time_seconds / duration
+        frequency = 190.0 + (310.0 - 190.0) * t
+        envelope = math.exp(-time_seconds * 14.0) * (1.0 - 0.12 * t)
+        body = math.sin(2.0 * math.pi * frequency * time_seconds)
+        wood = 0.18 * math.sin(2.0 * math.pi * frequency * 2.4 * time_seconds)
+        samples.append(0.26 * envelope * (body + wood))
+    return samples
+
+
+def pause_close_samples() -> list[float]:
+    # Same family as Pause Open, falling so Open/Close stay distinguishable.
+    duration = 0.13
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        t = time_seconds / duration
+        frequency = 310.0 + (190.0 - 310.0) * t
+        envelope = math.exp(-time_seconds * 14.0) * (1.0 - 0.12 * t)
+        body = math.sin(2.0 * math.pi * frequency * time_seconds)
+        wood = 0.18 * math.sin(2.0 * math.pi * frequency * 2.4 * time_seconds)
+        samples.append(0.26 * envelope * (body + wood))
+    return samples
+
+
+def inventory_open_samples() -> list[float]:
+    # Related to Inventory Close: softer rising panel, not Pause/Confirm.
+    duration = 0.11
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        t = time_seconds / duration
+        frequency = 520.0 + (740.0 - 520.0) * t
+        envelope = math.exp(-time_seconds * 16.0) * (1.0 - 0.1 * t)
+        body = math.sin(2.0 * math.pi * frequency * time_seconds)
+        air = 0.16 * math.sin(2.0 * math.pi * frequency * 1.5 * time_seconds)
+        samples.append(0.22 * envelope * (body + air))
+    return samples
+
+
+def inventory_close_samples() -> list[float]:
+    # Same family as Inventory Open, falling so Open/Close stay distinguishable.
+    duration = 0.11
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        t = time_seconds / duration
+        frequency = 740.0 + (520.0 - 740.0) * t
+        envelope = math.exp(-time_seconds * 16.0) * (1.0 - 0.1 * t)
+        body = math.sin(2.0 * math.pi * frequency * time_seconds)
+        air = 0.16 * math.sin(2.0 * math.pi * frequency * 1.5 * time_seconds)
+        samples.append(0.22 * envelope * (body + air))
+    return samples
+
+
 DAMAGE_NAME = "player_damage.wav"
 DEATH_NAME = "player_death.wav"
 RESPAWN_NAME = "player_respawn.wav"
@@ -291,6 +395,12 @@ PLATE_DEACTIVATE_NAME = "pressure_plate_deactivate.wav"
 DOOR_UNLOCK_NAME = "door_unlock.wav"
 GOAL_COMPLETE_NAME = "level_goal_complete.wav"
 COLLECTIBLE_NAME = "collectible_collect.wav"
+UI_NAVIGATE_NAME = "ui_navigate.wav"
+UI_CONFIRM_NAME = "ui_confirm.wav"
+PAUSE_OPEN_NAME = "pause_open.wav"
+PAUSE_CLOSE_NAME = "pause_close.wav"
+INVENTORY_OPEN_NAME = "inventory_open.wav"
+INVENTORY_CLOSE_NAME = "inventory_close.wav"
 
 CUES = (
     (DAMAGE_NAME, damage_samples),
@@ -305,6 +415,12 @@ CUES = (
     (DOOR_UNLOCK_NAME, door_unlock_samples),
     (GOAL_COMPLETE_NAME, level_goal_complete_samples),
     (COLLECTIBLE_NAME, collectible_collect_samples),
+    (UI_NAVIGATE_NAME, ui_navigate_samples),
+    (UI_CONFIRM_NAME, ui_confirm_samples),
+    (PAUSE_OPEN_NAME, pause_open_samples),
+    (PAUSE_CLOSE_NAME, pause_close_samples),
+    (INVENTORY_OPEN_NAME, inventory_open_samples),
+    (INVENTORY_CLOSE_NAME, inventory_close_samples),
 )
 
 
