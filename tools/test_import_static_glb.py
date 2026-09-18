@@ -132,6 +132,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("sounds/pressure_plate_deactivate.wav", ids)
         self.assertIn("sounds/door_unlock.wav", ids)
         self.assertIn("sounds/level_goal_complete.wav", ids)
+        self.assertIn("sounds/collectible_collect.wav", ids)
 
 
 class CookStageImportedGlbTests(unittest.TestCase):

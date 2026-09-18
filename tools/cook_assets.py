@@ -169,6 +169,12 @@ KNOWN_ASSETS = (
         "cooked": "sounds/level_goal_complete.wav",
         "kind": KIND_COPY,
     },
+    {
+        "id": "sounds/collectible_collect.wav",
+        "source": "sounds/collectible_collect.wav",
+        "cooked": "sounds/collectible_collect.wav",
+        "kind": KIND_COPY,
+    },
 )
 
 

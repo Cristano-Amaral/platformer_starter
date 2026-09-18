@@ -1,10 +1,10 @@
 #pragma once
 
-// Milestone 71/72/73: semantic gameplay SFX request recording, the lethal-hit
-// cue precedence rule, player movement-audio presentation tracking, and
-// world-interaction edge observation. Presentation only. Not a generic event
-// bus, audio engine, mixer, ResourceManager, locomotion state machine,
-// Trigger/Receiver framework, or gameplay authority.
+// Milestone 71/72/73/74: semantic gameplay SFX request recording, the lethal-hit
+// cue precedence rule, player movement-audio presentation tracking,
+// world-interaction edge observation, and Collectible collection. Presentation
+// only. Not a generic event bus, audio engine, mixer, ResourceManager,
+// locomotion state machine, Trigger/Receiver framework, or gameplay authority.
 // Application plays through platform::GameplayAudio.
 
 #include <cstdint>
@@ -20,6 +20,7 @@ inline constexpr float kLandingMinAirborneSeconds = 0.12f;
 struct GameplaySfxEmit
 {
     bool pickup = false;
+    bool collectible = false;
     bool damage = false;
     bool death = false;
     bool respawn = false;
@@ -36,6 +37,7 @@ struct GameplaySfxEmit
 struct GameplaySfxRequestState
 {
     int pickupCount = 0;
+    int collectibleCount = 0;
     int damageCount = 0;
     int deathCount = 0;
     int respawnCount = 0;
@@ -94,6 +96,10 @@ inline void RecordGameplaySfx(GameplaySfxRequestState& state, GameplaySfxEmit em
     if (emit.pickup)
     {
         ++state.pickupCount;
+    }
+    if (emit.collectible)
+    {
+        ++state.collectibleCount;
     }
     if (emit.damage)
     {
@@ -193,6 +199,13 @@ inline GameplaySfxEmit PickupCollectionSfx()
 {
     GameplaySfxEmit emit{};
     emit.pickup = true;
+    return emit;
+}
+
+inline GameplaySfxEmit CollectibleCollectionSfx()
+{
+    GameplaySfxEmit emit{};
+    emit.collectible = true;
     return emit;
 }
 

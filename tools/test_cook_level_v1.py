@@ -290,6 +290,7 @@ class ExtraLevelDiscoveryTests(unittest.TestCase):
             self.assertTrue((dest / "sounds" / "pressure_plate_deactivate.wav").is_file())
             self.assertTrue((dest / "sounds" / "door_unlock.wav").is_file())
             self.assertTrue((dest / "sounds" / "level_goal_complete.wav").is_file())
+            self.assertTrue((dest / "sounds" / "collectible_collect.wav").is_file())
 
     def test_unmanifested_cooked_level_is_removed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

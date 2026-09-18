@@ -4,11 +4,11 @@ spawn 0 0.8 0
 kill_plane -8
 ground 0 -0.25 0 56 0.5 8
 platform 5 0.75 0 4 0.5 3
-platform -4.5 2.25 0 3 0.5 2.5
+platform -4.5 0.75 0 3 0.5 2.5
 platform 16.5 0.75 0 4 0.5 3
-platform -10 2 0 3 0.5 2.5
+platform -10 1.5 0 3 0.5 2.5
 platform -15.5 1.75 0 4 0.5 3
-platform -21 2.75 0 3 0.5 2.5
+platform -21 2.25 0 4 0.5 2.5
 support_index_cp1 2
 support_index_cp2 4
 support_index_goal 5
@@ -20,7 +20,7 @@ checkpoint -15.5 2.8 0 2.4 1.6 2 -15.5 2.8 0
 hazard 11.5 0.5 0 1.4 1 2
 hazard -18.5 0.5 0 1.2 1 2
 collectible 5 2.5 0 1 1.2 1
-collectible -4.5 4 0 1 1.2 1
-collectible -10 3.75 0 1 1.2 1
-level_goal -21.012127 3.8 -0.17569447 2 1.6 1.8 level_02
+collectible -4.5 2.5 0 1 1.2 1
+collectible -10 3.3 0 1 1.2 1
+level_goal -21 3.3 0 2 1.6 1.8 level_02
 camera 2 3.5 12 40

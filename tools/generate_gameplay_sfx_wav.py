@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate project-owned Milestone 71/72/73 gameplay SFX WAVs.
+"""Generate project-owned Milestone 71/72/73/74 gameplay SFX WAVs.
 
 Damage, death, respawn, footstep, jump, landing, checkpoint, pressure-plate,
-door-unlock, and level-goal cues are short synthesized PCM WAVs. They are not
-third-party audio. The existing Milestone 61 pickup chime is owned by
-generate_item_pickup_collect_wav.py and is not rewritten here.
+door-unlock, level-goal, and collectible cues are short synthesized PCM WAVs.
+They are not third-party audio. The existing Milestone 61 pickup chime is owned
+by generate_item_pickup_collect_wav.py and is not rewritten here.
 
 Re-run from the repository root:
 
@@ -23,6 +23,7 @@ Writes:
     game/assets/source/sounds/pressure_plate_deactivate.wav
     game/assets/source/sounds/door_unlock.wav
     game/assets/source/sounds/level_goal_complete.wav
+    game/assets/source/sounds/collectible_collect.wav
 
 Cook/stage those source files afterwards; the game never reads this generator
 or source/.
@@ -258,6 +259,26 @@ def level_goal_complete_samples() -> list[float]:
     return samples
 
 
+def collectible_collect_samples() -> list[float]:
+    # Short high coin sparkle. Higher and briefer than the M61 pickup chime
+    # (880/1320) and not the M73 checkpoint arpeggio.
+    duration = 0.12
+    count = int(SAMPLE_RATE * duration)
+    samples = []
+    for index in range(count):
+        time_seconds = index / SAMPLE_RATE
+        if time_seconds < 0.045:
+            envelope = math.exp(-time_seconds * 22.0)
+            frequency = 1567.98
+        else:
+            envelope = math.exp(-(time_seconds - 0.045) * 18.0)
+            frequency = 2093.00
+        sparkle = math.sin(2.0 * math.pi * frequency * time_seconds)
+        overtone = 0.28 * math.sin(2.0 * math.pi * frequency * 2.0 * time_seconds)
+        samples.append(0.30 * envelope * (sparkle + overtone))
+    return samples
+
+
 DAMAGE_NAME = "player_damage.wav"
 DEATH_NAME = "player_death.wav"
 RESPAWN_NAME = "player_respawn.wav"
@@ -269,6 +290,7 @@ PLATE_ACTIVATE_NAME = "pressure_plate_activate.wav"
 PLATE_DEACTIVATE_NAME = "pressure_plate_deactivate.wav"
 DOOR_UNLOCK_NAME = "door_unlock.wav"
 GOAL_COMPLETE_NAME = "level_goal_complete.wav"
+COLLECTIBLE_NAME = "collectible_collect.wav"
 
 CUES = (
     (DAMAGE_NAME, damage_samples),
@@ -282,6 +304,7 @@ CUES = (
     (PLATE_DEACTIVATE_NAME, pressure_plate_deactivate_samples),
     (DOOR_UNLOCK_NAME, door_unlock_samples),
     (GOAL_COMPLETE_NAME, level_goal_complete_samples),
+    (COLLECTIBLE_NAME, collectible_collect_samples),
 )
 
 

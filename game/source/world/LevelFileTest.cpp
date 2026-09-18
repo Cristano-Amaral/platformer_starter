@@ -41,6 +41,12 @@ bool BoxEqual(const world::Box& a, const world::Box& b)
     return Vec3Equal(a.center, b.center) && Vec3Equal(a.size, b.size);
 }
 
+core::Vec3 StandingPlayerVisualCenterOnGround(const world::Box& ground, core::Vec3 lane)
+{
+    const float groundTopY = ground.center.y + ground.size.y * 0.5f;
+    return {lane.x, groundTopY + world::kPlayerVisualSize.y * 0.5f, lane.z};
+}
+
 bool CanonicalLevel01Values(const world::LevelDefinition& level)
 {
     return level.id == world::kLevel01Id
@@ -52,11 +58,11 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && level.elevatedPlatforms.size()
             == static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount)
         && Vec3Equal(level.elevatedPlatforms[0].center, {5.0f, 0.75f, 0.0f})
-        && Vec3Equal(level.elevatedPlatforms[1].center, {-4.5f, 2.25f, 0.0f})
+        && Vec3Equal(level.elevatedPlatforms[1].center, {-4.5f, 0.75f, 0.0f})
         && Vec3Equal(level.elevatedPlatforms[2].center, {16.5f, 0.75f, 0.0f})
-        && Vec3Equal(level.elevatedPlatforms[3].center, {-10.0f, 2.0f, 0.0f})
+        && Vec3Equal(level.elevatedPlatforms[3].center, {-10.0f, 1.5f, 0.0f})
         && Vec3Equal(level.elevatedPlatforms[4].center, {-15.5f, 1.75f, 0.0f})
-        && Vec3Equal(level.elevatedPlatforms[5].center, {-21.0f, 2.75f, 0.0f})
+        && Vec3Equal(level.elevatedPlatforms[5].center, {-21.0f, 2.25f, 0.0f})
         && Vec3Equal(level.slopes[0].center, {21.70f, 1.6732f, 0.0f})
         && level.slopes[0].rotationZDegrees == 30.0f
         && Vec3Equal(level.slopes[1].center, {25.60f, 0.9660f, 0.0f})
@@ -69,9 +75,10 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && Vec3Equal(level.hazards[1].center, {-18.5f, 0.5f, 0.0f})
         && level.collectibles.size() == static_cast<std::size_t>(world::kLevel01CollectibleCount)
         && Vec3Equal(level.collectibles[0].center, {5.0f, 2.5f, 0.0f})
-        && Vec3Equal(level.collectibles[1].center, {-4.5f, 4.0f, 0.0f})
-        && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.75f, 0.0f})
+        && Vec3Equal(level.collectibles[1].center, {-4.5f, 2.5f, 0.0f})
+        && Vec3Equal(level.collectibles[2].center, {-10.0f, 3.3f, 0.0f})
         && level.levelGoals.size() == static_cast<std::size_t>(world::kLevel01LevelGoalCount)
+        && Vec3Equal(level.levelGoals[0].center, {-21.0f, 3.3f, 0.0f})
         && Vec3Equal(level.levelGoals[0].size, {2.0f, 1.6f, 1.8f})
         && level.levelGoals[0].nextLevelId == world::kLevel02Id
         && level.dynamicBoxes.empty()
@@ -295,6 +302,39 @@ int main()
     Expect(loadedLevel02.level.levelGoals.size() == 1, "canonical level_02 has one Level Goal");
     Expect(loadedLevel02.level.levelGoals[0].nextLevelId.empty(),
         "canonical level_02 Goal is terminal");
+    Expect(loadedLevel02.level.checkpoints.size() == 1, "level_02 has one Checkpoint");
+    Expect(loadedLevel02.level.hazards.size() == 1, "level_02 has one Hazard");
+    Expect(
+        Vec3Equal(loadedLevel02.level.hazards[0].center, {7.5f, 1.0f, 0.0f}),
+        "level_02 Hazard sits on the floor at the M74 horizontal lane");
+    Expect(
+        Vec3Equal(loadedLevel02.level.hazards[0].size, {1.2f, 1.0f, 2.0f}),
+        "level_02 Hazard size is unchanged");
+    {
+        const core::Vec3 standingOnFloor = StandingPlayerVisualCenterOnGround(
+            loadedLevel02.level.ground,
+            loadedLevel02.level.hazards[0].center);
+        Expect(
+            world::FindHazardIndexContaining(standingOnFloor, loadedLevel02.level.hazards) == 0,
+            "canonical level_02 Hazard contains a standing player on the traversable floor");
+
+        const std::array<world::HazardSpec, 1> belowFloorHazard{{
+            {{7.5f, 0.7f, 0.0f}, {1.2f, 1.0f, 2.0f}},
+        }};
+        Expect(
+            world::FindHazardIndexContaining(standingOnFloor, belowFloorHazard)
+                == world::kNoHazardIndex,
+            "the original below-floor Hazard misses a standing player on the floor");
+    }
+    Expect(loadedLevel02.level.collectibles.size() == 1, "level_02 has one Collectible");
+    Expect(loadedLevel02.level.itemPickups.size() == 1, "level_02 has one Key Item Pickup");
+    Expect(loadedLevel02.level.itemPickups[0].itemId == "key", "level_02 pickup is key");
+    Expect(loadedLevel02.level.dynamicBoxes.size() == 1, "level_02 has one Dynamic Box");
+    Expect(loadedLevel02.level.pressurePlates.size() == 1, "level_02 has one Pressure Plate");
+    Expect(loadedLevel02.level.pressurePlates[0].visibleInGameplay, "level_02 plate is visible");
+    Expect(loadedLevel02.level.doors.size() == 2, "level_02 has key Door and plate Door");
+    Expect(loadedLevel02.level.doors[0].requiredItemId == "key", "level_02 first Door requires key");
+    Expect(loadedLevel02.level.doors[1].requiredItemId.empty(), "level_02 second Door is plate-driven");
     Expect(world::IsWritableLevelDefinition(loadedLevel02.level), "level_02 is writable");
 
     const world::ParseLevelFileResult missing = world::LoadLevelFile(

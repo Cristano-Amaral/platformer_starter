@@ -88,8 +88,12 @@ int main()
     const world::ParseLevelFileResult level02 = world::LoadLevelFile(PLATFORMER_LEVEL02_SOURCE_PATH);
     Expect(level02.status == world::LoadLevelFileStatus::Loaded, "canonical level_02 loads");
     Expect(level02.level.id == world::kLevel02Id, "canonical level_02 id");
-    Expect(level02.level.elevatedPlatforms.size() == 2, "level_02 has two platforms");
+    Expect(level02.level.elevatedPlatforms.size() == 3, "level_02 has three platforms");
     Expect(level02.level.collectibles.size() == 1, "level_02 has one collectible");
+    Expect(level02.level.itemPickups.size() == 1, "level_02 has one Key Item Pickup");
+    Expect(level02.level.doors.size() == 2, "level_02 has key Door and plate Door");
+    Expect(level02.level.dynamicBoxes.size() == 1, "level_02 has one Dynamic Box");
+    Expect(level02.level.pressurePlates.size() == 1, "level_02 has one Pressure Plate");
     Expect(level02.level.levelGoals.size() == 1, "canonical level_02 has one Level Goal");
     Expect(level02.level.levelGoals[0].nextLevelId.empty(),
         "canonical level_02 Goal is terminal");

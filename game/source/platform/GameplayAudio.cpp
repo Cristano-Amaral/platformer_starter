@@ -42,6 +42,8 @@ std::string_view CueLogicalId(GameplaySfxCue cue)
     {
     case GameplaySfxCue::Pickup:
         return kItemPickupCollectionSoundLogicalId;
+    case GameplaySfxCue::Collectible:
+        return kCollectibleCollectSoundLogicalId;
     case GameplaySfxCue::Damage:
         return kPlayerDamageSoundLogicalId;
     case GameplaySfxCue::Death:
@@ -70,6 +72,7 @@ std::string_view CueLogicalId(GameplaySfxCue cue)
 
 constexpr std::array<GameplaySfxCue, kGameplaySfxCueCount> kAllCues = {
     GameplaySfxCue::Pickup,
+    GameplaySfxCue::Collectible,
     GameplaySfxCue::Damage,
     GameplaySfxCue::Death,
     GameplaySfxCue::Respawn,
@@ -216,6 +219,11 @@ void GameplayAudio::PlayCue(GameplaySfxCue cue) const
 void GameplayAudio::PlayPickup() const
 {
     PlayCue(GameplaySfxCue::Pickup);
+}
+
+void GameplayAudio::PlayCollectible() const
+{
+    PlayCue(GameplaySfxCue::Collectible);
 }
 
 void GameplayAudio::PlayDamage() const

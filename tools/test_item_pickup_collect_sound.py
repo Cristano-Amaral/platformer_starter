@@ -30,6 +30,7 @@ PLATE_ACTIVATE_ID = "sounds/pressure_plate_activate.wav"
 PLATE_DEACTIVATE_ID = "sounds/pressure_plate_deactivate.wav"
 DOOR_UNLOCK_ID = "sounds/door_unlock.wav"
 GOAL_COMPLETE_ID = "sounds/level_goal_complete.wav"
+COLLECTIBLE_ID = "sounds/collectible_collect.wav"
 ALL_SOUND_IDS = (
     PICKUP_ID,
     DAMAGE_ID,
@@ -43,6 +44,7 @@ ALL_SOUND_IDS = (
     PLATE_DEACTIVATE_ID,
     DOOR_UNLOCK_ID,
     GOAL_COMPLETE_ID,
+    COLLECTIBLE_ID,
 )
 SOURCE_SOUNDS = cooker.source_root(cooker.repo_root()) / "sounds"
 RUNTIME_ASSETS = REPO_ROOT / "cmake" / "RuntimeAssets.cmake"
@@ -83,6 +85,7 @@ class ItemPickupCollectSoundTests(unittest.TestCase):
             PLATE_DEACTIVATE_ID: sfxgen.cue_wav_bytes(sfxgen.PLATE_DEACTIVATE_NAME),
             DOOR_UNLOCK_ID: sfxgen.cue_wav_bytes(sfxgen.DOOR_UNLOCK_NAME),
             GOAL_COMPLETE_ID: sfxgen.cue_wav_bytes(sfxgen.GOAL_COMPLETE_NAME),
+            COLLECTIBLE_ID: sfxgen.cue_wav_bytes(sfxgen.COLLECTIBLE_NAME),
         }
         for logical_id, payload in expected.items():
             source = cooker.source_root(cooker.repo_root()) / logical_id

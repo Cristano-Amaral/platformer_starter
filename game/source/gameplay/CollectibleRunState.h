@@ -56,4 +56,21 @@ inline int FindAvailableCollectibleIndexContaining(
     }
     return world::kNoCollectibleIndex;
 }
+
+// Marks the collectible collected only when FindAvailable succeeds. This is
+// the genuine collection edge Application already used inline. Presentation
+// must observe this result, not proximity or HUD count.
+inline int TryCollectCollectible(
+    CollectibleRunState& state,
+    std::span<const world::CollectibleSpec> collectibles,
+    core::Vec3 visualCenter)
+{
+    const int index = FindAvailableCollectibleIndexContaining(visualCenter, state, collectibles);
+    if (index == world::kNoCollectibleIndex)
+    {
+        return world::kNoCollectibleIndex;
+    }
+    state.collected[static_cast<std::size_t>(index)] = 1;
+    return index;
+}
 }

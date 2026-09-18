@@ -1,6 +1,6 @@
 # Milestone 73 --- World Interaction Audio Feedback
 
-**Status:** Implemented, awaiting manual acceptance.\
+**Status:** CLOSED\
 **Branch:** `milestone/73-world-interaction-audio-feedback`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

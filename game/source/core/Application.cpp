@@ -1110,16 +1110,14 @@ int Application::Run()
 
                 if (!(restartAvailableAtFrameStart && inputState.restartPressed))
                 {
-                    const int collectibleIndex =
-                        gameplay::FindAvailableCollectibleIndexContaining(
-                            player.Position(),
-                            collectibleRunState,
-                            levelDefinition.collectibles);
+                    const int collectibleIndex = gameplay::TryCollectCollectible(
+                        collectibleRunState,
+                        levelDefinition.collectibles,
+                        player.Position());
                     if (collectibleIndex != world::kNoCollectibleIndex)
                     {
-                        collectibleRunState.collected[static_cast<std::size_t>(collectibleIndex)] =
-                            true;
                         collectedThisFrameIndex = collectibleIndex;
+                        EmitGameplaySfx(gameplay::CollectibleCollectionSfx());
                     }
                 }
             }
@@ -3547,6 +3545,10 @@ void Application::EmitGameplaySfx(gameplay::GameplaySfxEmit emit)
     if (emit.pickup)
     {
         gameplayAudio.PlayPickup();
+    }
+    if (emit.collectible)
+    {
+        gameplayAudio.PlayCollectible();
     }
     if (emit.damage)
     {

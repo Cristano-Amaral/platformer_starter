@@ -4,6 +4,7 @@
 
 #include "gameplay/GameplayAudio.h"
 #include "gameplay/GameFlowState.h"
+#include "gameplay/CollectibleRunState.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/ItemPickupRuntime.h"
@@ -60,6 +61,20 @@ void MaybeRequestPickupSfx(
     gameplay::RecordGameplaySfx(sfx, gameplay::PickupCollectionSfx());
 }
 
+void MaybeRequestCollectibleSfx(
+    gameplay::CollectibleRunState& runState,
+    gameplay::GameplaySfxRequestState& sfx,
+    std::span<const world::CollectibleSpec> collectibles,
+    core::Vec3 visualCenter)
+{
+    if (gameplay::TryCollectCollectible(runState, collectibles, visualCenter)
+        == world::kNoCollectibleIndex)
+    {
+        return;
+    }
+    gameplay::RecordGameplaySfx(sfx, gameplay::CollectibleCollectionSfx());
+}
+
 gameplay::PlayerMovementSfxInput MakeMovementInput(
     bool allowed,
     bool grounded,
@@ -112,8 +127,8 @@ int main()
     Expect(
         platform::kGameplaySfxVolume == 1.0f, "fixed gameplay SFX volume is 1.0");
     Expect(
-        platform::kGameplaySfxCueCount == 12,
-        "fixed cue set includes M71/M72 plus checkpoint/plate/door/goal");
+        platform::kGameplaySfxCueCount == 13,
+        "fixed cue set includes M71-M73 plus Collectible");
 
     {
         world::ItemPickupSpec pickup = MakePickup({1.55f, 1.0f, 0.0f});
@@ -124,9 +139,10 @@ int main()
         MaybeRequestPickupSfx(inventory, run, sfx, pickups, 0);
         Expect(sfx.pickupCount == 1, "1. successful pickup emits exactly one pickup-audio request");
         Expect(
-            sfx.damageCount == 0 && sfx.deathCount == 0 && sfx.respawnCount == 0
-                && sfx.footstepCount == 0 && sfx.jumpCount == 0 && sfx.landingCount == 0,
-            "successful pickup does not emit survival or movement cues");
+            sfx.collectibleCount == 0 && sfx.damageCount == 0 && sfx.deathCount == 0
+                && sfx.respawnCount == 0 && sfx.footstepCount == 0 && sfx.jumpCount == 0
+                && sfx.landingCount == 0,
+            "successful pickup does not emit Collectible or survival/movement cues");
         Expect(inventory.GetQuantity("key") == 1, "pickup collection still mutates Inventory");
         Expect(run.collected[0] == 1, "pickup collection still marks collected");
     }
@@ -144,6 +160,96 @@ int main()
         Expect(
             inventory.GetQuantity("key") == gameplay::kMaxItemQuantity,
             "failed pickup does not change Inventory");
+    }
+
+    {
+        world::CollectibleSpec collectible{};
+        collectible.center = {2.0f, 1.0f, 0.0f};
+        collectible.size = {1.0f, 1.2f, 1.0f};
+        std::vector<world::CollectibleSpec> collectibles{collectible};
+        gameplay::CollectibleRunState run =
+            gameplay::MakeClearedCollectibleRunState(collectibles.size());
+        gameplay::GameplaySfxRequestState sfx{};
+        MaybeRequestCollectibleSfx(run, sfx, collectibles, collectible.center);
+        Expect(
+            sfx.collectibleCount == 1,
+            "1. successful Collectible collection emits exactly one Collectible SFX request");
+        Expect(
+            sfx.pickupCount == 0 && sfx.checkpointActivateCount == 0 && sfx.doorUnlockCount == 0,
+            "Collectible SFX is distinct from Item Pickup and M73 cues");
+        Expect(run.collected[0] == 1, "successful collection still marks the Collectible collected");
+        Expect(gameplay::CollectedCount(run) == 1, "Collectible count/progression remains 1");
+        MaybeRequestCollectibleSfx(run, sfx, collectibles, collectible.center);
+        Expect(
+            sfx.collectibleCount == 1,
+            "2. continued overlap after collection emits no repeated Collectible request");
+        MaybeRequestCollectibleSfx(
+            run, sfx, collectibles, {collectible.center.x + 4.0f, collectible.center.y, 0.0f});
+        Expect(
+            sfx.collectibleCount == 1,
+            "3. proximity without collection emits no Collectible request");
+    }
+
+    {
+        world::CollectibleSpec collectible{};
+        collectible.center = {2.0f, 1.0f, 0.0f};
+        collectible.size = {1.0f, 1.2f, 1.0f};
+        std::vector<world::CollectibleSpec> collectibles{collectible};
+        gameplay::CollectibleRunState already =
+            gameplay::MakeClearedCollectibleRunState(collectibles.size());
+        already.collected[0] = 1;
+        gameplay::GameplaySfxRequestState sfx{};
+        MaybeRequestCollectibleSfx(already, sfx, collectibles, collectible.center);
+        Expect(sfx.collectibleCount == 0, "already-collected Collectible emits no SFX");
+        Expect(already.collected[0] == 1, "already-collected flag is preserved");
+    }
+
+    {
+        world::CollectibleSpec collectible{};
+        collectible.center = {2.0f, 1.0f, 0.0f};
+        collectible.size = {1.0f, 1.2f, 1.0f};
+        std::vector<world::CollectibleSpec> collectibles{collectible};
+        const char* lifecycleNames[] = {
+            "initialization",
+            "Restart reconstruction",
+            "Apply/Reload",
+            "Open/Switch",
+            "physics rebuild",
+            "Checkpoint respawn",
+            "Health-death respawn",
+            "Fall/Manual respawn",
+            "Level transition load",
+        };
+        gameplay::GameplaySfxRequestState lifecycleSfx{};
+        for (const char* name : lifecycleNames)
+        {
+            gameplay::CollectibleRunState reconstructed =
+                gameplay::MakeClearedCollectibleRunState(collectibles.size());
+            Expect(
+                reconstructed.collected.size() == 1 && reconstructed.collected[0] == 0,
+                "lifecycle reconstruction clears Collectible flags without collecting");
+            Expect(
+                lifecycleSfx.collectibleCount == 0 && lifecycleSfx.pickupCount == 0,
+                "4. reconstruction/lifecycle does not synthesize Collectible audio");
+            (void)name;
+        }
+        gameplay::CollectibleRunState paused =
+            gameplay::MakeClearedCollectibleRunState(collectibles.size());
+        paused.collected[0] = 1;
+        gameplay::GameplaySfxRequestState blockedSfx{};
+        MaybeRequestCollectibleSfx(paused, blockedSfx, collectibles, collectible.center);
+        Expect(
+            blockedSfx.collectibleCount == 0,
+            "Pause/Inventory/F2 do not catch up Collectible audio");
+        world::CollectibleSpec authoredBefore = collectible;
+        bool dirty = false;
+        gameplay::CollectibleRunState working =
+            gameplay::MakeClearedCollectibleRunState(collectibles.size());
+        MaybeRequestCollectibleSfx(working, blockedSfx, collectibles, collectible.center);
+        Expect(
+            collectible.center.x == authoredBefore.center.x && !dirty
+                && collectibles[0].center.x == authoredBefore.center.x,
+            "Collectible audio never mutates authored data, workingCopy, or Dirty");
     }
 
     gameplay::PlayerHealthState health{};
@@ -740,7 +846,8 @@ int main()
             rebuiltWorldSfx.plateActivateCount == 0 && rebuiltWorldSfx.plateDeactivateCount == 0
                 && rebuiltWorldSfx.checkpointActivateCount == 0
                 && rebuiltWorldSfx.doorUnlockCount == 0
-                && rebuiltWorldSfx.levelGoalCompleteCount == 0,
+                && rebuiltWorldSfx.levelGoalCompleteCount == 0
+                && rebuiltWorldSfx.collectibleCount == 0,
             "17. reconstruction/lifecycle does not synthesize world-interaction SFX");
         (void)name;
     }

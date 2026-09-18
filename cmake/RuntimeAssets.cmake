@@ -27,4 +27,5 @@ set(PLATFORMER_RUNTIME_ASSETS
     sounds/pressure_plate_deactivate.wav
     sounds/door_unlock.wav
     sounds/level_goal_complete.wav
+    sounds/collectible_collect.wav
 )

@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 73 — World Interaction Audio Feedback.
+Milestone 74 — Gameplay / Level Polish Pass.
 
-Canonical file: [`docs/milestones/MILESTONE_73.md`](docs/milestones/MILESTONE_73.md)
+Canonical file: [`docs/milestones/MILESTONE_74.md`](docs/milestones/MILESTONE_74.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 72 is CLOSED. Milestone 73 is implemented, awaiting manual acceptance. Do not start Milestone 74.
+Milestone 72 is CLOSED. Milestone 73 is CLOSED. Milestone 74 is implemented, awaiting manual acceptance. Do not start Milestone 75.
 
 ## Source of truth
 1. Current repository code.

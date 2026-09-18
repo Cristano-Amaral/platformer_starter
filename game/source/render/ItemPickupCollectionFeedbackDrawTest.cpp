@@ -160,6 +160,7 @@ int main()
         firstLoadAttempts == 1 && sound.LoadAttemptCount() == 1,
         "14. second Load does not reload fixed gameplay sounds");
     sound.PlayPickup();
+    sound.PlayCollectible();
     sound.PlayDamage();
     sound.PlayDeath();
     sound.PlayRespawn();
@@ -215,6 +216,14 @@ int main()
             && !sound.IsCueLoaded(platform::GameplaySfxCue::CheckpointActivate),
         "21. missing individual M73 cue leaves other loaded sounds and is a no-op");
     sound.PlayCheckpointActivate();
+    sound.LoadCueFromPath(
+        platform::GameplaySfxCue::Collectible,
+        std::filesystem::temp_directory_path() / "platformer_missing_collectible.wav");
+    Expect(
+        sound.IsCueLoaded(platform::GameplaySfxCue::Pickup)
+            && !sound.IsCueLoaded(platform::GameplaySfxCue::Collectible),
+        "22. missing Collectible cue leaves other loaded sounds and is a no-op");
+    sound.PlayCollectible();
     sound.Unload();
     Expect(!sound.IsCueLoaded(platform::GameplaySfxCue::Pickup), "unload clears the cached sound");
     std::filesystem::remove(valid);
