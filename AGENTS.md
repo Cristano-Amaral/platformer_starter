@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 83 — 3D Player Character Foundation.
+Milestone 84 — Materials & Textures Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_83.md`](docs/milestones/MILESTONE_83.md)
+Canonical file: [`docs/milestones/MILESTONE_84.md`](docs/milestones/MILESTONE_84.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is CLOSED. Milestone 81 is CLOSED. Milestone 82 is CLOSED. Milestone 83 is implemented, awaiting manual acceptance. Do not start Milestone 84.
+Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is CLOSED. Milestone 81 is CLOSED. Milestone 82 is CLOSED. Milestone 83 is CLOSED. Milestone 84 is implemented, awaiting manual acceptance. Do not start Milestone 85.
 
 ## Source of truth
 1. Current repository code.

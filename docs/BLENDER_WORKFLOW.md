@@ -197,6 +197,8 @@ embedded in the GLB**. The game must not load a sidecar PNG for that model.
 - Cooker consumes **only** the GLB for this model.
 - Runtime consumes **only** the staged GLB via
   `RuntimeAssetPath("models/test_textured.glb")` → `LoadModel`.
+- Milestone 84 presents that embedded Base Color Texture through the engine-owned
+  material boundary. External image URIs remain unsupported.
 - No runtime path lookup for `textures/test_textured_basecolor.png`.
 - Blender remains authoring-only. CMake and the cooker do not invoke Blender.
 

@@ -48,6 +48,8 @@ add_executable(Platformer3D
     game/source/editor/AuthoredLevelCatalog.h
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/assets/ModelMaterialPresentation.h
     game/source/assets/StaticGlbImport.cpp
     game/source/assets/StaticGlbImport.h
     game/source/assets/StaticModelCatalog.cpp
@@ -168,6 +170,8 @@ add_executable(Platformer3D
     game/source/render/StaticModelThumbnail.h
     game/source/render/StaticModelPreview.cpp
     game/source/render/StaticModelPreview.h
+    game/source/render/LoadedModelMaterials.cpp
+    game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
     game/source/render/ItemPickupTargetHighlight.h
@@ -342,8 +346,38 @@ endif()
 file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/models/test_static.glb"
     PLATFORMER_TEST_STATIC_GLB)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/test_authored.glb"
+    PLATFORMER_TEST_AUTHORED_GLB)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/test_textured.glb"
+    PLATFORMER_TEST_TEXTURED_GLB)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/player.glb"
+    PLATFORMER_PLAYER_GLB)
 target_compile_definitions(StaticGlbImportTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+)
+
+# Milestone 84: imported Base Color / Base Color Texture presentation. CPU only.
+add_executable(ModelMaterialPresentationTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/assets/ModelMaterialPresentation.h
+    game/source/assets/ModelMaterialPresentationTest.cpp
+)
+target_include_directories(ModelMaterialPresentationTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ModelMaterialPresentationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ModelMaterialPresentationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(ModelMaterialPresentationTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+    "PLATFORMER_TEST_AUTHORED_GLB=\"${PLATFORMER_TEST_AUTHORED_GLB}\""
+    "PLATFORMER_TEST_TEXTURED_GLB=\"${PLATFORMER_TEST_TEXTURED_GLB}\""
+    "PLATFORMER_PLAYER_GLB=\"${PLATFORMER_PLAYER_GLB}\""
 )
 
 # Milestone 48: Content Browser query/filter/delete authority. Not ImGui.
@@ -1095,11 +1129,15 @@ target_compile_definitions(AuthoredLevelCatalogTest PRIVATE
 add_executable(LevelGoalVisualizationTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/assets/ModelMaterialPresentation.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/render/LevelGoalVisualization.cpp
     game/source/render/LevelGoalVisualization.h
     game/source/render/LevelGoalVisualizationTest.cpp
+    game/source/render/LoadedModelMaterials.cpp
+    game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
     game/source/world/LevelDefinition.cpp
@@ -1841,8 +1879,12 @@ endif()
 add_executable(SelectedModelHighlightStateTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/assets/ModelMaterialPresentation.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
+    game/source/render/LoadedModelMaterials.cpp
+    game/source/render/LoadedModelMaterials.h
     game/source/render/SelectedModelHighlightStateTest.cpp
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
@@ -1871,6 +1913,8 @@ endif()
 add_executable(ItemPickupCollectionFeedbackDrawTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/assets/ModelMaterialPresentation.h
     game/source/platform/GameplayAudio.cpp
     game/source/platform/GameplayAudio.h
     game/source/platform/RuntimePaths.cpp
@@ -1878,6 +1922,8 @@ add_executable(ItemPickupCollectionFeedbackDrawTest
     game/source/render/ItemPickupCollectionFeedbackDraw.cpp
     game/source/render/ItemPickupCollectionFeedbackDraw.h
     game/source/render/ItemPickupCollectionFeedbackDrawTest.cpp
+    game/source/render/LoadedModelMaterials.cpp
+    game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
     game/source/world/LevelDefinition.cpp
@@ -1900,6 +1946,46 @@ endif()
 if(WIN32)
     target_link_libraries(ItemPickupCollectionFeedbackDrawTest PRIVATE ole32 shell32 uuid)
 endif()
+
+# Milestone 84: model/material/texture ownership, reload, highlight restore.
+# Hidden window. Stages copies next to the test executable.
+add_executable(LoadedModelMaterialsTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/assets/ModelMaterialPresentation.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/LoadedModelMaterials.cpp
+    game/source/render/LoadedModelMaterials.h
+    game/source/render/LoadedModelMaterialsTest.cpp
+    game/source/render/StaticModelScene.cpp
+    game/source/render/StaticModelScene.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(LoadedModelMaterialsTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(LoadedModelMaterialsTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(LoadedModelMaterialsTest PRIVATE game/source)
+target_link_libraries(LoadedModelMaterialsTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(LoadedModelMaterialsTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LoadedModelMaterialsTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(LoadedModelMaterialsTest PRIVATE ole32 shell32 uuid)
+endif()
+target_compile_definitions(LoadedModelMaterialsTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+    "PLATFORMER_TEST_TEXTURED_GLB=\"${PLATFORMER_TEST_TEXTURED_GLB}\""
+    "PLATFORMER_PLAYER_GLB=\"${PLATFORMER_PLAYER_GLB}\""
+)
 
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or
 # HostProcess. Shares enable helpers with EditorWorkspaceTest.

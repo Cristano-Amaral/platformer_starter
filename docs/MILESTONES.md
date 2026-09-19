@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 83 — 3D Player Character Foundation**
+**Milestone 84 — Materials & Textures Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_83.md`](milestones/MILESTONE_83.md)
+Canonical file: [`docs/milestones/MILESTONE_84.md`](milestones/MILESTONE_84.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -39,8 +39,9 @@ Milestone 79 is CLOSED.
 Milestone 80 is CLOSED.
 Milestone 81 is CLOSED.
 Milestone 82 is CLOSED.
-Milestone 83 is implemented, awaiting manual acceptance.
-Do not start Milestone 84.
+Milestone 83 is CLOSED.
+Milestone 84 is implemented, awaiting manual acceptance.
+Do not start Milestone 85.
 
 ## Cursor loading contract
 
@@ -159,7 +160,8 @@ Historical milestone files do not override current implemented behavior.
 | 80 | [Milestone 80 — Multi-Selection Group Rotate](milestones/MILESTONE_80.md) | complete |
 | 81 | [Milestone 81 — Authoring Groups Foundation](milestones/MILESTONE_81.md) | complete |
 | 82 | [Milestone 82 — Hierarchy & Group Workflow Polish](milestones/MILESTONE_82.md) | complete |
-| 83 | [Milestone 83 — 3D Player Character Foundation](milestones/MILESTONE_83.md) | implemented, awaiting manual acceptance |
+| 83 | [Milestone 83 — 3D Player Character Foundation](milestones/MILESTONE_83.md) | complete |
+| 84 | [Milestone 84 — Materials & Textures Foundation](milestones/MILESTONE_84.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

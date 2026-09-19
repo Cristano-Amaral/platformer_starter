@@ -2,6 +2,7 @@
 
 #include "assets/StaticGlb.h"
 #include "platform/RuntimePaths.h"
+#include "render/LoadedModelMaterials.h"
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -230,6 +231,7 @@ void StaticModelSceneStore::Sync(
             entry.failed = true;
             continue;
         }
+        PrepareLoadedModelMaterials(model);
         const BoundingBox modelBounds = GetModelBoundingBox(model);
         entry.localMin = {modelBounds.min.x, modelBounds.min.y, modelBounds.min.z};
         entry.localMax = {modelBounds.max.x, modelBounds.max.y, modelBounds.max.z};
@@ -429,7 +431,7 @@ void StaticModelSceneStore::DrawPropTinted(
     const Color tint{red, green, blue, alpha};
     if (entry != nullptr && entry->hasModel)
     {
-        DrawModel(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, tint);
+        DrawModelPreservingMaterials(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, tint);
     }
     else
     {
@@ -452,8 +454,8 @@ void StaticModelSceneStore::DrawProp(const world::StaticPropSpec& spec) const
 
 void StaticModelSceneStore::DrawPlacementPreview(const world::StaticPropSpec& spec) const
 {
-    // Editor-only ghost tint. Must not LoadModel, mutate the shared Model, or
-    // change rlgl clip planes (M49 Gameplay contract).
+    // Editor-only ghost tint. Must not LoadModel, permanently mutate the
+    // shared Model materials, or change rlgl clip planes (M49 Gameplay contract).
     DrawPropTinted(spec, 96, 220, 236, 160);
 }
 

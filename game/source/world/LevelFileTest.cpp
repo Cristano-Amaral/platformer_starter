@@ -1877,6 +1877,13 @@ int main()
                 "missing identity rejected");
             Expect(
                 world::ParseLevelText(
+                    canonical
+                    + "static_prop 0 1 0 0 0 0 1 1 1 models/test_static.glb material 1 0 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "M84: no Level material override syntax");
+            Expect(
+                world::ParseLevelText(
                     canonical + "static_prop nan 1 0 0 0 0 1 1 1 models/test_static.glb\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,

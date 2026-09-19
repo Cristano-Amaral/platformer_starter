@@ -1,6 +1,7 @@
 #include "render/StaticModelPreview.h"
 
 #include "assets/StaticGlb.h"
+#include "render/LoadedModelMaterials.h"
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -129,6 +130,7 @@ bool StaticModelPreviewRenderer::LoadModelFromSource(const std::filesystem::path
         ::UnloadModel(model);
         return false;
     }
+    PrepareLoadedModelMaterials(model);
 
     ReleaseLoadedModel();
     gpu->model = model;
@@ -214,7 +216,7 @@ bool StaticModelPreviewRenderer::Render(
     ClearBackground(kPreviewBackground);
     rlSetClipPlanes(static_cast<double>(frame.nearPlane), static_cast<double>(frame.farPlane));
     BeginMode3D(camera);
-    DrawModel(gpu->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    DrawModelPreservingMaterials(gpu->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     EndMode3D();
     EndTextureMode();
     rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);

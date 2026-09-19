@@ -52,7 +52,14 @@ Milestone 18 textured model:
 - cooked/staged: `<cooked or exe>/assets/models/test_textured.glb` only
 - cooker kind: `copy` (opaque GLB; embedded images are not resized in Milestone 19)
 - visual-only; model collision is not supported
+- Milestone 84 reference textured GLB: labeled A1/A2/B1/B2 UV checker, project-owned, embedded Base Color Texture
 - see `docs/BLENDER_WORKFLOW.md`
+
+Milestone 84 material presentation:
+- engine-owned imported Base Color + Base Color Texture only
+- supported GLB texture mode is **embedded**; external image URIs remain rejected
+- runtime `LoadModel` owns materials/textures; `UnloadModel` is the single unload
+- no authored `.material` files and no Level material override syntax
 
 Milestone 31/64 level files:
 - logical ids: `levels/level_01.level`, `levels/level_02.level`

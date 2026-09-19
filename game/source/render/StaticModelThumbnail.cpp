@@ -1,6 +1,7 @@
 #include "render/StaticModelThumbnail.h"
 
 #include "assets/StaticGlb.h"
+#include "render/LoadedModelMaterials.h"
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -132,12 +133,13 @@ bool StaticModelThumbnailStore::Generate(
         return false;
     }
 
-    const Model model = LoadModel(sourcePath.string().c_str());
+    Model model = LoadModel(sourcePath.string().c_str());
     if (!ModelHasRenderableMesh(model))
     {
         UnloadModel(model);
         return false;
     }
+    PrepareLoadedModelMaterials(model);
 
     const BoundingBox box = GetModelBoundingBox(model);
     const editor::ThumbnailCameraFrame frame =
@@ -163,7 +165,7 @@ bool StaticModelThumbnailStore::Generate(
     ClearBackground(kThumbnailBackground);
     rlSetClipPlanes(static_cast<double>(frame.nearPlane), static_cast<double>(frame.farPlane));
     BeginMode3D(camera);
-    DrawModel(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    DrawModelPreservingMaterials(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     EndMode3D();
     EndTextureMode();
     rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);

@@ -16,6 +16,7 @@
 #include "render/ItemPickupTargetHighlight.h"
 #include "render/ItemPickupCollectionFeedbackDraw.h"
 #include "render/LevelGoalVisualization.h"
+#include "render/LoadedModelMaterials.h"
 #include "render/StaticModelScene.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
@@ -199,7 +200,7 @@ void DrawPlayerPresentationModel(
     rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
     rlRotatef(visual.yawDegrees, 0.0f, 1.0f, 0.0f);
     rlScalef(visual.scale.x, visual.scale.y, visual.scale.z);
-    DrawModel(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    DrawModelPreservingMaterials(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     rlPopMatrix();
     RestoreGreyboxImmediateState();
 }
@@ -1697,6 +1698,7 @@ void Renderer::LoadRuntimeAssets()
         LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
         return;
     }
+    PrepareLoadedModelMaterials(model);
     playerModelGpu->model = model;
     playerModelGpu->loaded = true;
     playerModelGpu->failed = false;

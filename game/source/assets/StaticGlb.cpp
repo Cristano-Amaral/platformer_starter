@@ -1,6 +1,8 @@
 #include "assets/StaticGlb.h"
+#include "assets/ModelMaterialPresentation.h"
 
 #include <cctype>
+#include <charconv>
 #include <fstream>
 #include <string>
 #include <system_error>
@@ -765,5 +767,328 @@ StaticGlbValidation ValidateStaticGlbFile(const std::filesystem::path& path)
         return Fail(StaticGlbStatus::InvalidContainer, "input file could not be read");
     }
     return ValidateStaticGlbBytes(bytes);
+}
+
+namespace
+{
+bool ParseJsonFloat(std::string_view text, float& value)
+{
+    std::size_t index = 0;
+    SkipWs(text, index);
+    if (index >= text.size())
+    {
+        return false;
+    }
+    const char* begin = text.data() + index;
+    const char* end = text.data() + text.size();
+    const std::from_chars_result parsed = std::from_chars(begin, end, value);
+    return parsed.ec == std::errc{} && parsed.ptr != begin;
+}
+
+bool ParseJsonInt(std::string_view text, int& value)
+{
+    std::size_t index = 0;
+    SkipWs(text, index);
+    if (index >= text.size())
+    {
+        return false;
+    }
+    const char* begin = text.data() + index;
+    const char* end = text.data() + text.size();
+    const std::from_chars_result parsed = std::from_chars(begin, end, value);
+    return parsed.ec == std::errc{} && parsed.ptr != begin;
+}
+
+bool CollectJsonArrayItems(std::string_view array, std::vector<std::string_view>& items)
+{
+    items.clear();
+    return ForEachArrayObject(array, [&](std::string_view item) {
+        items.push_back(item);
+        return true;
+    });
+}
+
+bool ParseBaseColorFactor(std::string_view array, float out[4])
+{
+    out[0] = kDefaultBaseColorR;
+    out[1] = kDefaultBaseColorG;
+    out[2] = kDefaultBaseColorB;
+    out[3] = kDefaultBaseColorA;
+    std::vector<std::string_view> items;
+    if (!CollectJsonArrayItems(array, items) || items.size() < 3 || items.size() > 4)
+    {
+        return false;
+    }
+    for (std::size_t i = 0; i < items.size(); ++i)
+    {
+        if (!ParseJsonFloat(items[i], out[i]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+struct GlbImageInfo
+{
+    bool embedded = false;
+    bool external = false;
+};
+
+struct GlbTextureInfo
+{
+    int source = -1;
+};
+
+bool ClassifyGlbImage(std::string_view item, GlbImageInfo& info)
+{
+    info = {};
+    if (item.empty() || item.front() != '{')
+    {
+        return false;
+    }
+    JsonSlice uri{};
+    if (FindObjectMember(item, "uri", uri))
+    {
+        std::string uriText;
+        if (!DecodeJsonString(uri.text, uriText))
+        {
+            return false;
+        }
+        if (uriText.starts_with("data:"))
+        {
+            info.embedded = true;
+            return true;
+        }
+        info.external = true;
+        return true;
+    }
+    JsonSlice bufferView{};
+    if (FindObjectMember(item, "bufferView", bufferView))
+    {
+        info.embedded = true;
+        return true;
+    }
+    return true;
+}
+
+bool ParseGlbTexture(std::string_view item, GlbTextureInfo& info)
+{
+    info = {};
+    if (item.empty() || item.front() != '{')
+    {
+        return false;
+    }
+    JsonSlice source{};
+    if (!FindObjectMember(item, "source", source) || !ParseJsonInt(source.text, info.source))
+    {
+        info.source = -1;
+    }
+    return true;
+}
+
+bool TryGetGlbJsonChunk(std::span<const std::uint8_t> data, std::string_view& json)
+{
+    if (data.size() < kGlbHeaderSize)
+    {
+        return false;
+    }
+    std::size_t offset = kGlbHeaderSize;
+    while (offset < data.size())
+    {
+        if (offset + kGlbChunkHeaderSize > data.size())
+        {
+            return false;
+        }
+        const std::uint32_t chunkLength = ReadU32(data, offset);
+        const std::uint32_t chunkType = ReadU32(data, offset + 4);
+        offset += kGlbChunkHeaderSize;
+        if (offset + chunkLength > data.size())
+        {
+            return false;
+        }
+        if (chunkType == kJsonChunkType)
+        {
+            json = std::string_view(
+                reinterpret_cast<const char*>(data.data() + offset), chunkLength);
+            while (!json.empty() && (json.back() == ' ' || json.back() == '\0'))
+            {
+                json.remove_suffix(1);
+            }
+            return !json.empty() && json.front() == '{';
+        }
+        offset += chunkLength;
+    }
+    return false;
+}
+
+ModelMaterialPresentation ExtractOneMaterial(
+    std::string_view material,
+    const std::vector<GlbTextureInfo>& textures,
+    const std::vector<GlbImageInfo>& images)
+{
+    ModelMaterialPresentation presentation{};
+    if (material.empty() || material.front() != '{')
+    {
+        return ResolveMaterialFallback(presentation);
+    }
+
+    JsonSlice pbr{};
+    if (!FindObjectMember(material, "pbrMetallicRoughness", pbr) || pbr.text.empty()
+        || pbr.text.front() != '{')
+    {
+        return ResolveMaterialFallback(presentation);
+    }
+
+    JsonSlice factor{};
+    if (FindObjectMember(pbr.text, "baseColorFactor", factor))
+    {
+        float channels[4] = {
+            kDefaultBaseColorR, kDefaultBaseColorG, kDefaultBaseColorB, kDefaultBaseColorA};
+        if (ParseBaseColorFactor(factor.text, channels))
+        {
+            presentation.baseColorR = channels[0];
+            presentation.baseColorG = channels[1];
+            presentation.baseColorB = channels[2];
+            presentation.baseColorA = channels[3];
+        }
+        else
+        {
+            presentation.baseColorA = 0.0f;
+        }
+    }
+
+    JsonSlice texture{};
+    if (FindObjectMember(pbr.text, "baseColorTexture", texture) && !texture.text.empty()
+        && texture.text.front() == '{')
+    {
+        presentation.hasBaseColorTexture = true;
+        bool embedded = false;
+        bool external = false;
+        JsonSlice indexSlice{};
+        int textureIndex = -1;
+        if (FindObjectMember(texture.text, "index", indexSlice)
+            && ParseJsonInt(indexSlice.text, textureIndex) && textureIndex >= 0
+            && static_cast<std::size_t>(textureIndex) < textures.size())
+        {
+            const int source = textures[static_cast<std::size_t>(textureIndex)].source;
+            if (source >= 0 && static_cast<std::size_t>(source) < images.size())
+            {
+                embedded = images[static_cast<std::size_t>(source)].embedded;
+                external = images[static_cast<std::size_t>(source)].external;
+            }
+        }
+        presentation.textureDependency =
+            ResolveBaseColorTextureDependency(true, embedded, external);
+    }
+
+    return ResolveMaterialFallback(presentation);
+}
+}
+
+bool TryExtractGlbMaterialPresentations(
+    std::span<const std::uint8_t> data,
+    std::vector<ModelMaterialPresentation>& out,
+    std::string* error)
+{
+    out.clear();
+    const StaticGlbValidation validation = ValidateStaticGlbBytes(data);
+    if (validation.status != StaticGlbStatus::Ok)
+    {
+        if (error != nullptr)
+        {
+            *error = validation.message;
+        }
+        return false;
+    }
+
+    std::string_view json;
+    if (!TryGetGlbJsonChunk(data, json))
+    {
+        if (error != nullptr)
+        {
+            *error = "GLB JSON chunk could not be read";
+        }
+        return false;
+    }
+
+    std::vector<GlbImageInfo> images;
+    JsonSlice imagesJson{};
+    if (FindObjectMember(json, "images", imagesJson))
+    {
+        std::vector<std::string_view> imageItems;
+        if (!CollectJsonArrayItems(imagesJson.text, imageItems))
+        {
+            if (error != nullptr)
+            {
+                *error = "GLB images array is malformed";
+            }
+            return false;
+        }
+        images.reserve(imageItems.size());
+        for (std::string_view item : imageItems)
+        {
+            GlbImageInfo info{};
+            if (!ClassifyGlbImage(item, info))
+            {
+                if (error != nullptr)
+                {
+                    *error = "GLB image entry is malformed";
+                }
+                return false;
+            }
+            images.push_back(info);
+        }
+    }
+
+    std::vector<GlbTextureInfo> textures;
+    JsonSlice texturesJson{};
+    if (FindObjectMember(json, "textures", texturesJson))
+    {
+        std::vector<std::string_view> textureItems;
+        if (!CollectJsonArrayItems(texturesJson.text, textureItems))
+        {
+            if (error != nullptr)
+            {
+                *error = "GLB textures array is malformed";
+            }
+            return false;
+        }
+        textures.reserve(textureItems.size());
+        for (std::string_view item : textureItems)
+        {
+            GlbTextureInfo info{};
+            if (!ParseGlbTexture(item, info))
+            {
+                if (error != nullptr)
+                {
+                    *error = "GLB texture entry is malformed";
+                }
+                return false;
+            }
+            textures.push_back(info);
+        }
+    }
+
+    JsonSlice materialsJson{};
+    if (!FindObjectMember(json, "materials", materialsJson))
+    {
+        return true;
+    }
+    std::vector<std::string_view> materialItems;
+    if (!CollectJsonArrayItems(materialsJson.text, materialItems))
+    {
+        if (error != nullptr)
+        {
+            *error = "GLB materials array is malformed";
+        }
+        return false;
+    }
+    out.reserve(materialItems.size());
+    for (std::string_view item : materialItems)
+    {
+        out.push_back(ExtractOneMaterial(item, textures, images));
+    }
+    return true;
 }
 }

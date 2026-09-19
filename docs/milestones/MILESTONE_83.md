@@ -1,6 +1,6 @@
 # Milestone 83 --- 3D Player Character Foundation
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/83-3d-player-character-foundation`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

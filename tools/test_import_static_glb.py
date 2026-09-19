@@ -86,6 +86,79 @@ class StaticGlbValidationTests(unittest.TestCase):
         with self.assertRaises(cooker.CookError):
             cooker.validate_static_glb(payload)
 
+    def test_external_image_uri_fails(self) -> None:
+        payload = pack_glb(
+            '{"asset":{"version":"2.0"},"meshes":[{}],'
+            '"buffers":[{"byteLength":4}],'
+            '"images":[{"uri":"sidecar.png"}]}'
+        )
+        with self.assertRaises(cooker.CookError) as raised:
+            cooker.validate_static_glb(payload)
+        self.assertIn("embedded", str(raised.exception))
+
+
+def glb_json(data: bytes) -> dict:
+    offset = 12
+    while offset + 8 <= len(data):
+        chunk_length, chunk_type = struct.unpack_from("<II", data, offset)
+        offset += 8
+        payload = data[offset : offset + chunk_length]
+        offset += chunk_length
+        if chunk_type == 0x4E4F534A:
+            return json.loads(payload.decode("utf-8").rstrip(" \0"))
+    raise AssertionError("GLB JSON chunk missing")
+
+
+class EmbeddedGlbTextureTests(unittest.TestCase):
+    def test_test_textured_embeds_base_color_image(self) -> None:
+        path = cooker.source_root(cooker.repo_root()) / "models" / "test_textured.glb"
+        gltf = glb_json(path.read_bytes())
+        images = gltf.get("images") or []
+        self.assertTrue(images)
+        for image in images:
+            self.assertIsInstance(image, dict)
+            uri = image.get("uri")
+            if uri:
+                self.assertTrue(str(uri).startswith("data:"))
+            else:
+                self.assertIn("bufferView", image)
+        materials = gltf.get("materials") or []
+        self.assertEqual(len(materials), 1)
+        texture = materials[0]["pbrMetallicRoughness"]["baseColorTexture"]
+        self.assertEqual(texture["index"], 0)
+        cooker.validate_static_glb(path.read_bytes())
+
+    def test_player_and_untextured_models_have_no_images(self) -> None:
+        models = cooker.source_root(cooker.repo_root()) / "models"
+        for name in ("player.glb", "test_static.glb", "test_authored.glb"):
+            gltf = glb_json((models / name).read_bytes())
+            self.assertFalse(gltf.get("images"))
+            cooker.validate_static_glb((models / name).read_bytes())
+
+    def test_textured_glb_cooks_and_stages_self_contained(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            source_path = cooker.source_root(root) / "models" / "test_textured.glb"
+            source_bytes = source_path.read_bytes()
+            self.assertEqual(cooker.cook(root), 0)
+            cooked_path = cooker.cooked_root(root) / "models" / "test_textured.glb"
+            self.assertEqual(cooked_path.read_bytes(), source_bytes)
+            dest = root / "staged" / "assets"
+            stage = run_stage(cooker.cooked_root(root), dest, asset_list=None)
+            self.assertEqual(stage.returncode, 0, stage.stderr + stage.stdout)
+            staged_path = dest / "models" / "test_textured.glb"
+            self.assertTrue(staged_path.is_file())
+            self.assertEqual(staged_path.read_bytes(), source_bytes)
+            self.assertFalse((dest / "textures" / "test_textured_basecolor.png").exists())
+            staged_json = glb_json(staged_path.read_bytes())
+            for image in staged_json.get("images") or []:
+                uri = image.get("uri")
+                if uri:
+                    self.assertTrue(str(uri).startswith("data:"))
+                else:
+                    self.assertIn("bufferView", image)
+
 
 class CatalogDiscoveryTests(unittest.TestCase):
     def test_empty_models_dir_is_valid(self) -> None:

@@ -47,7 +47,7 @@ public:
     void DrawProp(const world::StaticPropSpec& spec) const;
     void DrawPlacementPreview(const world::StaticPropSpec& spec) const;
     // Editor-only second pass of the same cached model. Does not LoadModel,
-    // mutate materials, or add a persistent scene object.
+    // permanently mutate imported materials, or add a persistent scene object.
     void DrawSelectionHighlight(const world::StaticPropSpec& spec) const;
     // Gameplay/Release Item Pickup target tint. Same cached model as DrawProp.
     // Depth-respecting extra pass only; no editor x-ray and no LoadModel.
