@@ -1375,6 +1375,7 @@ add_executable(AuthoringGroupsTest
     game/source/editor/AuthoringGroupsTest.cpp
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
+    game/source/editor/EditorHierarchy.h
     game/source/editor/EditorSnap.cpp
     game/source/editor/EditorSnap.h
     game/source/editor/EditorMath.h

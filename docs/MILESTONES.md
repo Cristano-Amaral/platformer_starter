@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 81 — Authoring Groups Foundation**
+**Milestone 82 — Hierarchy & Group Workflow Polish**
 
-Canonical file: [`docs/milestones/MILESTONE_81.md`](milestones/MILESTONE_81.md)
+Canonical file: [`docs/milestones/MILESTONE_82.md`](milestones/MILESTONE_82.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -37,8 +37,9 @@ Milestone 77 is CLOSED.
 Milestone 78 is CLOSED.
 Milestone 79 is CLOSED.
 Milestone 80 is CLOSED.
-Milestone 81 is implemented, awaiting manual acceptance.
-Do not start Milestone 82.
+Milestone 81 is CLOSED.
+Milestone 82 is implemented, awaiting manual acceptance.
+Do not start Milestone 83.
 
 ## Cursor loading contract
 
@@ -155,7 +156,8 @@ Historical milestone files do not override current implemented behavior.
 | 78 | [Milestone 78 — Multi-Selection & Group Translate](milestones/MILESTONE_78.md) | complete |
 | 79 | [Milestone 79 — Multi-Selection Lifecycle Operations](milestones/MILESTONE_79.md) | complete |
 | 80 | [Milestone 80 — Multi-Selection Group Rotate](milestones/MILESTONE_80.md) | complete |
-| 81 | [Milestone 81 — Authoring Groups Foundation](milestones/MILESTONE_81.md) | implemented, awaiting manual acceptance |
+| 81 | [Milestone 81 — Authoring Groups Foundation](milestones/MILESTONE_81.md) | complete |
+| 82 | [Milestone 82 — Hierarchy & Group Workflow Polish](milestones/MILESTONE_82.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

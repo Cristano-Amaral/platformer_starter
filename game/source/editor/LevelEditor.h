@@ -25,6 +25,7 @@
 #include "editor/ContentBrowser.h"
 #include "editor/EditorPlacement.h"
 #include "editor/StaticPropPlacement.h"
+#include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemIdInspectorEdit.h"
 #include "editor/StaticModelFraming.h"
@@ -173,6 +174,9 @@ struct LevelEditorState
     // Session-local Authoring Group rename buffer. Bound to the currently
     // matched complete group, not persisted.
     AuthoringGroupRenameFieldState authoringGroupRename{};
+    // Transient Hierarchy expand/collapse and reveal. Not authored, not Dirty,
+    // not serialized into LevelDefinition.
+    HierarchyExpansionState hierarchyExpansion{};
     // Catalog/asset selection. Not scene selection and not persisted.
     ContentBrowserState contentBrowser{};
     // Development authored-source Level list. Refresh is explicit, not per frame.

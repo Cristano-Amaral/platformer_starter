@@ -3,6 +3,7 @@
 #include "editor/AuthoringGroups.h"
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorGizmo.h"
+#include "editor/EditorHierarchy.h"
 #include "editor/EditorSelectionSet.h"
 
 #include <string>
@@ -364,6 +365,31 @@ const char* AddStaticPropDisableReason(
     return RejectionMessage(LifecycleEditStatus::InvalidAssetReference, EditorObjectKind::StaticProp);
 }
 
+namespace
+{
+void RefreshHierarchyPresentation(LevelEditorState& state, bool revealSelectedGroup)
+{
+    ReconcileHierarchyExpansion(state.hierarchyExpansion, state.workingCopy);
+    if (FindExactAuthoringGroup(
+            state.workingCopy, state.selection, state.additionalSelections)
+        == kNoAuthoringGroupIndex)
+    {
+        state.hierarchyExpansion.renameFromHierarchy = false;
+        state.hierarchyExpansion.renameFocusPending = false;
+    }
+    if (!revealSelectedGroup)
+    {
+        return;
+    }
+    const std::size_t groupIndex = FindExactAuthoringGroup(
+        state.workingCopy, state.selection, state.additionalSelections);
+    if (groupIndex != kNoAuthoringGroupIndex)
+    {
+        RevealHierarchyGroup(state.hierarchyExpansion, groupIndex, state.workingCopy);
+    }
+}
+}
+
 bool HandleAuthoredLifecycleRequest(
     LevelEditorState& state,
     const world::LevelDefinition& activeLevel,
@@ -535,6 +561,7 @@ bool HandleAuthoredLifecycleRequest(
         state.lastMessage = request == LevelEditorRequest::GroupSelected
             ? "Authoring Group created."
             : "Authoring Group removed.";
+        RefreshHierarchyPresentation(state, request == LevelEditorRequest::GroupSelected);
         RefreshLevelEditorDerivedFlags(state, activeLevel);
         return true;
     }
@@ -592,6 +619,9 @@ bool HandleAuthoredLifecycleRequest(
     ClearGizmoInteraction(state.gizmo);
     ResetLevelActionStatuses(state);
     SetSuccessMessage(state, request, affectedKind, multiSelected);
+    RefreshHierarchyPresentation(
+        state,
+        request == LevelEditorRequest::DuplicateSelected);
     RefreshLevelEditorDerivedFlags(state, activeLevel);
     return true;
 }

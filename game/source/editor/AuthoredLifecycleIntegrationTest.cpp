@@ -2234,6 +2234,52 @@ int main()
         playRoundtrip.additionalSelections = groupAdditional;
         Expect(playRoundtrip.workingCopy.authoringGroups[0].members.size() == 2,
             "38. no stale group membership after re-seed from active");
+
+        const std::vector<editor::HierarchyRow> groupedRows =
+            editor::BuildHierarchyRows(playRoundtrip.workingCopy);
+        Expect(editor::FindHierarchyGroupRow(groupedRows, 0) != nullptr,
+            "24. Apply/F2 hierarchy still presents the group");
+        Expect(!editor::HierarchyHasDuplicateTopLevelObject(
+                   groupedRows, {EditorObjectKind::StaticProp, 0}),
+            "24. grouped member is not a duplicate top-level row after Apply");
+        editor::HierarchyExpansionState expansion{};
+        editor::RevealHierarchyGroup(expansion, 0, playRoundtrip.workingCopy);
+        editor::SetHierarchyGroupExpanded(expansion, playRoundtrip.workingCopy.authoringGroups[0].name, false);
+        const world::LevelDefinition beforeCollapse = playRoundtrip.workingCopy;
+        editor::ReconcileHierarchyExpansion(expansion, playRoundtrip.workingCopy);
+        Expect(world::AuthoredLevelDataEqual(playRoundtrip.workingCopy, beforeCollapse),
+            "28. expansion reconcile does not mutate workingCopy");
+        Expect(!playRoundtrip.modified, "28. expand/collapse does not mark Dirty");
+
+        editor::LevelEditorState reloadState{};
+        SeedEditor(reloadState, applied);
+        reloadState.selection = {EditorObjectKind::StaticProp, 0};
+        reloadState.additionalSelections = {{EditorObjectKind::StaticProp, 1}};
+        reloadState.hierarchyExpansion.collapsedGroupNames.push_back("missing_group");
+        editor::ReconcileHierarchyExpansion(reloadState.hierarchyExpansion, reloadState.workingCopy);
+        Expect(reloadState.hierarchyExpansion.collapsedGroupNames.empty(),
+            "25. Reload/Revert drops stale hierarchy expansion");
+        Expect(editor::FindExactAuthoringGroup(
+                   reloadState.workingCopy, reloadState.selection, reloadState.additionalSelections)
+                == 0,
+            "25. Reload keeps a reconstructable group selection");
+
+        editor::LevelEditorState switched{};
+        SeedEditor(switched, MakeActiveLevel());
+        switched.hierarchyExpansion.collapsedGroupNames.push_back("Group_01");
+        switched.hierarchyExpansion.renameFromHierarchy = true;
+        editor::ReconcileHierarchyExpansion(switched.hierarchyExpansion, switched.workingCopy);
+        Expect(switched.workingCopy.authoringGroups.empty(), "26. Open/Switch/New has no groups");
+        Expect(switched.hierarchyExpansion.collapsedGroupNames.empty(),
+            "26. Open/Switch/New drops stale group expansion");
+        Expect(editor::BuildHierarchyRows(switched.workingCopy).size()
+                == editor::BuildHierarchyEntries(switched.workingCopy).size(),
+            "26. group-less Hierarchy rows match the ungrouped inventory");
+        switched.selection = {EditorObjectKind::Hazard, 0};
+        switched.additionalSelections.clear();
+        Expect(switched.selection.kind == EditorObjectKind::Hazard
+                && switched.additionalSelections.empty(),
+            "27. F2/Open roundtrip has no stale group selection");
     }
 
     if (gFailures != 0)

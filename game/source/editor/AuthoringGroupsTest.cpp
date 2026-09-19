@@ -2,6 +2,7 @@
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
+#include "editor/EditorHierarchy.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
 #include "editor/ItemIdInspectorEdit.h"
@@ -555,6 +556,339 @@ int main()
         Expect(working.authoringGroups[1].members[0].index == 3
                 && working.authoringGroups[1].members[1].index == 4,
             "escaped-bug: copied group remaps after earlier delete");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::StaticProp, 1}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        const world::LevelDefinition beforeClick = working;
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(editor::FindHierarchyGroupRow(rows, 0) != nullptr, "1. group row exists");
+        Expect(editor::FindHierarchyMemberRow(rows, primary) != nullptr,
+            "6. grouped member is identifiable");
+        Expect(editor::FindHierarchyMemberRow(rows, additional[0]) != nullptr,
+            "6. second grouped member is identifiable");
+        Expect(!editor::HierarchyHasDuplicateTopLevelObject(rows, primary)
+                && !editor::HierarchyHasDuplicateTopLevelObject(rows, additional[0]),
+            "7. grouped members are not duplicate top-level objects");
+        Expect(editor::FindHierarchyUngroupedRow(rows, primary) == nullptr,
+            "7. grouped PRIMARY is omitted from ungrouped list");
+        Expect(editor::FindHierarchyUngroupedRow(rows, {EditorObjectKind::StaticProp, 2}) != nullptr,
+            "ungrouped Static Prop remains a top-level object");
+
+        std::size_t groupCount = 0;
+        std::size_t memberCount = 0;
+        std::size_t firstMemberIndex = 99;
+        std::size_t secondMemberIndex = 99;
+        for (std::size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex)
+        {
+            if (rows[rowIndex].kind == editor::HierarchyRowKind::Group)
+            {
+                ++groupCount;
+                Expect(rows[rowIndex].groupIndex == 0, "8. group display order is authored order");
+            }
+            if (rows[rowIndex].kind == editor::HierarchyRowKind::GroupMember)
+            {
+                if (memberCount == 0)
+                {
+                    firstMemberIndex = rowIndex;
+                    Expect(rows[rowIndex].selection == primary, "9. members[0] is first member row");
+                }
+                if (memberCount == 1)
+                {
+                    secondMemberIndex = rowIndex;
+                    Expect(rows[rowIndex].selection == additional[0],
+                        "9. remaining members follow persistent order");
+                }
+                ++memberCount;
+            }
+        }
+        Expect(groupCount == 1 && memberCount == 2, "8. one group and two member rows");
+        Expect(firstMemberIndex + 1 == secondMemberIndex, "9. member rows are consecutive");
+
+        EditorSelection selectedPrimary{};
+        std::vector<EditorSelection> selectedAdditional;
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working, *editor::FindHierarchyGroupRow(rows, 0), selectedPrimary, selectedAdditional, false),
+            "1. group row click reconstructs selection");
+        Expect(selectedPrimary == primary && selectedAdditional == additional,
+            "1. group row reconstructs M81 PRIMARY + secondaries");
+        Expect(selectedPrimary.index == 0, "10. members[0] remains PRIMARY");
+        Expect(editor::HierarchyGroupRowIsSelected(working, 0, selectedPrimary, selectedAdditional),
+            "group row selected visual matches complete group");
+        Expect(world::AuthoredLevelDataEqual(working, beforeClick),
+            "group row click does not mutate authored data");
+
+        EditorSelection memberPrimary = selectedPrimary;
+        std::vector<EditorSelection> memberAdditional = selectedAdditional;
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working,
+                *editor::FindHierarchyMemberRow(rows, additional[0]),
+                memberPrimary,
+                memberAdditional,
+                false),
+            "2. member row click selects that object");
+        Expect(memberPrimary == additional[0] && memberAdditional.empty(),
+            "2. member row selects only that authored object");
+        Expect(working.authoringGroups[0].members.size() == 2
+                && working.authoringGroups[0].members[0].index == 0
+                && working.authoringGroups[0].members[1].index == 1,
+            "3. member selection does not alter membership");
+        Expect(world::AuthoredLevelDataEqual(working, beforeClick),
+            "4. member selection does not mark Dirty");
+
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working,
+                *editor::FindHierarchyGroupRow(rows, 0),
+                memberPrimary,
+                memberAdditional,
+                false),
+            "5. clicking group after member restores full group");
+        Expect(memberPrimary == primary && memberAdditional == additional,
+            "5. restored selection is the complete group");
+
+        EditorSelection ctrlPrimary = primary;
+        std::vector<EditorSelection> ctrlAdditional;
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working,
+                *editor::FindHierarchyMemberRow(rows, additional[0]),
+                ctrlPrimary,
+                ctrlAdditional,
+                true),
+            "Ctrl member row uses M78 toggle");
+        Expect(ctrlPrimary == additional[0] && ctrlAdditional.size() == 1
+                && ctrlAdditional[0] == primary,
+            "Ctrl-clicking a grouped member toggles like a normal object row");
+
+        EditorSelection groupCtrlPrimary = additional[0];
+        std::vector<EditorSelection> groupCtrlAdditional;
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working,
+                *editor::FindHierarchyGroupRow(rows, 0),
+                groupCtrlPrimary,
+                groupCtrlAdditional,
+                true),
+            "Ctrl on a group row still selects the complete group");
+        Expect(groupCtrlPrimary == primary && groupCtrlAdditional == additional,
+            "group-row Ctrl does not add a second group selection");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::StaticProp, 1}};
+        const editor::AuthoringGroupEditResult created =
+            editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        Expect(created.succeeded, "11. Group Selected succeeds");
+        editor::HierarchyExpansionState expansion{};
+        editor::RevealHierarchyGroup(expansion, created.groupIndex, working);
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(editor::FindHierarchyGroupRow(rows, created.groupIndex) != nullptr,
+            "11. Group Selected produces an immediately representable group");
+        Expect(editor::HierarchyGroupIsExpanded(expansion, working.authoringGroups[0].name),
+            "11. new group is revealed/expanded");
+        Expect(!editor::HierarchyHasDuplicateTopLevelObject(rows, primary),
+            "11. grouped member is not duplicated after Group Selected");
+        Expect(created.selection == primary && created.additionalSelections == additional,
+            "11. complete composition remains selected");
+
+        const world::LevelDefinition beforeExpand = working;
+        editor::SetHierarchyGroupExpanded(expansion, working.authoringGroups[0].name, false);
+        Expect(!editor::HierarchyGroupIsExpanded(expansion, working.authoringGroups[0].name),
+            "collapse hides only member rows");
+        Expect(world::AuthoredLevelDataEqual(working, beforeExpand),
+            "28. expand/collapse does not mutate LevelDefinition");
+        Expect(working.authoringGroups.size() == 1 && working.staticProps.size() == 4,
+            "28. collapse does not hide/delete world objects");
+        editor::SetHierarchyGroupExpanded(expansion, working.authoringGroups[0].name, true);
+        Expect(world::AuthoredLevelDataEqual(working, beforeExpand),
+            "28. expanding again still does not mark Dirty");
+
+        const world::LevelDefinition beforeRename = working;
+        EditorSelection renamePrimary = created.selection;
+        std::vector<EditorSelection> renameAdditional = created.additionalSelections;
+        const editor::AuthoringGroupEditResult renamed =
+            editor::RenameAuthoringGroup(working, 0, "Door_Puzzle");
+        Expect(renamed.succeeded, "12. valid rename succeeds");
+        Expect(renamed.selection == renamePrimary && renamed.additionalSelections == renameAdditional,
+            "12. Rename preserves group selection");
+        Expect(working.authoringGroups[0].name == "Door_Puzzle", "12. rename changes group metadata");
+        Expect(working.staticProps[0].modelIdentity == beforeRename.staticProps[0].modelIdentity
+                && Vec3Equal(working.staticProps[0].position, beforeRename.staticProps[0].position)
+                && Vec3Equal(working.staticProps[1].position, beforeRename.staticProps[1].position),
+            "12. member objects remain untouched");
+
+        const world::LevelDefinition afterValidRename = working;
+        Expect(!editor::RenameAuthoringGroup(working, 0, "").succeeded, "13. invalid rename refused");
+        Expect(working.authoringGroups[0].name == "Door_Puzzle"
+                && world::AuthoredLevelDataEqual(working, afterValidRename),
+            "13. invalid rename does not mutate data");
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 2},
+            {{EditorObjectKind::StaticProp, 3}});
+        const world::LevelDefinition afterSecondGroup = working;
+        Expect(!editor::RenameAuthoringGroup(working, 1, "Door_Puzzle").succeeded,
+            "14. duplicate-name rename refused");
+        Expect(world::AuthoredLevelDataEqual(working, afterSecondGroup),
+            "14. duplicate-name rename does not mutate data");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::StaticProp, 1}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        editor::HierarchyExpansionState expansion{};
+        expansion.collapsedGroupNames.push_back("Group_01");
+        expansion.renameFromHierarchy = true;
+        const world::StaticPropSpec prop0 = working.staticProps[0];
+        const world::StaticPropSpec prop1 = working.staticProps[1];
+        const editor::AuthoringGroupEditResult ungrouped = editor::UngroupAuthoringGroup(working, 0);
+        Expect(ungrouped.succeeded, "15. Ungroup succeeds");
+        editor::ReconcileHierarchyExpansion(expansion, working);
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(editor::FindHierarchyGroupRow(rows, 0) == nullptr, "15. Ungroup removes group presentation");
+        Expect(expansion.collapsedGroupNames.empty(), "15. stale group expansion is dropped");
+        Expect(editor::FindHierarchyUngroupedRow(rows, primary) != nullptr
+                && editor::FindHierarchyUngroupedRow(rows, additional[0]) != nullptr,
+            "16. former members become ungrouped objects");
+        Expect(working.staticProps.size() == 4
+                && working.staticProps[0].position.x == prop0.position.x
+                && working.staticProps[1].position.x == prop1.position.x,
+            "16. Ungroup preserves every member object");
+        Expect(ungrouped.selection == primary && ungrouped.additionalSelections == additional,
+            "17. Ungroup preserves the M78 multi-selection");
+        Expect(ungrouped.selection.index == 0, "17. PRIMARY remains deterministic");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::StaticProp, 1}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        const std::size_t originalCount = working.staticProps.size();
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(duplicated.succeeded, "18. complete-group Duplicate succeeds");
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(working.authoringGroups.size() == 2, "18. copied group exists");
+        Expect(editor::FindHierarchyGroupRow(rows, 1) != nullptr,
+            "18. copied group is presented");
+        Expect(duplicated.selection.kind == EditorObjectKind::StaticProp
+                && duplicated.selection.index == originalCount,
+            "19. copied composition PRIMARY is the copied members[0]");
+        Expect(editor::FindExactAuthoringGroup(
+                   working, duplicated.selection, duplicated.additionalSelections)
+                == 1,
+            "19. copied group selection corresponds to copied composition");
+        Expect(editor::FindHierarchyMemberRow(rows, duplicated.selection) != nullptr
+                && editor::FindHierarchyMemberRow(rows, duplicated.additionalSelections[0]) != nullptr,
+            "18. copied members are represented under the copied group");
+        Expect(!editor::HierarchyHasDuplicateTopLevelObject(rows, duplicated.selection),
+            "18. copied member is not also a top-level duplicate");
+        Expect(working.authoringGroups[0].name == "Group_01"
+                && working.authoringGroups[0].members[0].index == 0,
+            "18. original group remains intact");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 0},
+            {{EditorObjectKind::StaticProp, 1}});
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 2},
+            {{EditorObjectKind::StaticProp, 3}});
+        editor::HierarchyExpansionState expansion{};
+        expansion.collapsedGroupNames.push_back("Group_01");
+        Expect(
+            editor::DeleteSelectionSet(
+                working,
+                {EditorObjectKind::StaticProp, 0},
+                {{EditorObjectKind::StaticProp, 1}})
+                .succeeded,
+            "20. complete-group Delete Selected succeeds");
+        editor::ReconcileHierarchyExpansion(expansion, working);
+        const std::vector<editor::HierarchyRow> afterDelete = editor::BuildHierarchyRows(working);
+        Expect(working.authoringGroups.size() == 1, "20. unrelated group remains");
+        Expect(working.staticProps.size() == 2, "20. deleted members are removed from the Level");
+        Expect(working.authoringGroups[0].members.size() == 2
+                && working.authoringGroups[0].members[0].index == 0
+                && working.authoringGroups[0].members[1].index == 1,
+            "20. surviving group remaps onto remaining objects");
+        Expect(editor::FindHierarchyGroupRow(afterDelete, 0) != nullptr,
+            "20. surviving group is still presented");
+        Expect(editor::FindHierarchyMemberRow(afterDelete, {EditorObjectKind::StaticProp, 0}) != nullptr
+                && editor::FindHierarchyMemberRow(afterDelete, {EditorObjectKind::StaticProp, 1}) != nullptr,
+            "20. remapped surviving members remain presented");
+        Expect(!editor::HierarchyHasDuplicateTopLevelObject(
+                   afterDelete, {EditorObjectKind::StaticProp, 0}),
+            "20. surviving members are not duplicated as top-level objects");
+        Expect(expansion.collapsedGroupNames.empty(),
+            "20. stale expansion for the deleted group is dropped");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.staticProps.push_back(MakeProp({9.0f, 1.0f, 0.0f}));
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 0},
+            std::vector<EditorSelection>{
+                {EditorObjectKind::StaticProp, 1}, {EditorObjectKind::StaticProp, 2}});
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::StaticProp, 1}).succeeded,
+            "21. individual member delete succeeds");
+        const std::vector<editor::HierarchyRow> afterMemberDelete = editor::BuildHierarchyRows(working);
+        Expect(working.authoringGroups.size() == 1, "21. group survives with 2+ members");
+        Expect(working.authoringGroups[0].members.size() == 2, "21. membership updates");
+        Expect(editor::FindHierarchyMemberRow(
+                   afterMemberDelete,
+                   {EditorObjectKind::StaticProp, working.authoringGroups[0].members[0].index})
+                != nullptr,
+            "21. surviving member rows remain");
+        Expect(
+            editor::FindHierarchyMemberRow(afterMemberDelete, {EditorObjectKind::StaticProp, 2}) != nullptr
+                || editor::FindHierarchyMemberRow(afterMemberDelete, {EditorObjectKind::StaticProp, 1})
+                    != nullptr,
+            "23. same-category remap still displays the surviving member");
+
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::StaticProp, 0}).succeeded,
+            "22. deleting down to one member auto-dissolves");
+        editor::HierarchyExpansionState expansion{};
+        expansion.collapsedGroupNames.push_back("Group_01");
+        editor::ReconcileHierarchyExpansion(expansion, working);
+        const std::vector<editor::HierarchyRow> afterDissolve = editor::BuildHierarchyRows(working);
+        Expect(working.authoringGroups.empty(), "22. auto-dissolve removes group metadata");
+        Expect(editor::FindHierarchyGroupRow(afterDissolve, 0) == nullptr,
+            "22. auto-dissolve removes stale group UI");
+        Expect(expansion.collapsedGroupNames.empty(), "22. dissolved group expansion is dropped");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 1},
+            {{EditorObjectKind::StaticProp, 3}});
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::StaticProp, 0}).succeeded,
+            "23. deleting an earlier same-category object remaps");
+        const std::vector<editor::HierarchyRow> remapped = editor::BuildHierarchyRows(working);
+        Expect(working.authoringGroups[0].members[0].index == 0
+                && working.authoringGroups[0].members[1].index == 2,
+            "23. membership indices remap");
+        Expect(editor::FindHierarchyMemberRow(remapped, {EditorObjectKind::StaticProp, 0}) != nullptr
+                && editor::FindHierarchyMemberRow(remapped, {EditorObjectKind::StaticProp, 2}) != nullptr,
+            "23. remapped members remain identifiable");
     }
 
     if (gFailures != 0)

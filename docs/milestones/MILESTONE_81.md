@@ -1,6 +1,6 @@
 # Milestone 81 --- Authoring Groups Foundation
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/81-authoring-groups-foundation`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 
