@@ -1,6 +1,6 @@
 # Milestone 82 --- Hierarchy & Group Workflow Polish
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/82-hierarchy-group-workflow-polish`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

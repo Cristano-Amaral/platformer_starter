@@ -79,6 +79,9 @@ camera <ox> <oy> <oz> <fovY>
 After a successful M64 transition the active identity is the destination
 (`level_02`). The parser and writer accept any valid identifier. Destination
 tokens on `level_goal` reuse the same identity grammar; they are not paths.
+The player is not an authored Level object. There is no `player_model`
+record, player mesh property, or per-Level presentation block. Milestone 83
+loads staged `models/player.glb` as a runtime presentation follower.
 
 ### Required repeated records
 

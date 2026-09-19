@@ -10,6 +10,7 @@
 
 set(PLATFORMER_RUNTIME_ASSETS
     textures/test_checker.png
+    models/player.glb
     models/test_static.glb
     models/test_authored.glb
     models/test_textured.glb

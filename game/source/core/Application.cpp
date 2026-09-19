@@ -2,6 +2,7 @@
 
 #include "core/RunTimeFormat.h"
 #include "gameplay/PlatformerCamera.h"
+#include "gameplay/PlayerPresentation.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
@@ -1091,6 +1092,15 @@ int Application::Run()
             physicsWorld.UpdateMovingPlatform(deltaSeconds);
             const gameplay::PlayerUpdateResult playerUpdate =
                 player.Update(inputState, deltaSeconds, physicsWorld);
+            float acceptedMoveX = 0.0f;
+            float acceptedMoveZ = 0.0f;
+            gameplay::AcceptedPlayerHorizontalMovement(
+                player.HorizontalVelocity(),
+                player.VerticalVelocity(),
+                acceptedMoveX,
+                acceptedMoveZ);
+            playerPresentation.facingYawDegrees = gameplay::UpdatePlayerFacingYaw(
+                playerPresentation.facingYawDegrees, acceptedMoveX, acceptedMoveZ);
 
             hazardContactThisFrame =
                 world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
@@ -1964,6 +1974,7 @@ int Application::Run()
 #endif
         renderer.DrawWorld(
             player,
+            playerPresentation,
             cameraView,
             levelDefinition,
             dynamicDraw,
@@ -2651,6 +2662,7 @@ void Application::Initialize()
     }
 
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
     ReanchorPlayerMovementSfx();
     SynchronizePressurePlateSfx();
     camera.Initialize(player.Position());
@@ -2720,6 +2732,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     physicsWorld.ResetCharacter(respawnState.respawnPosition, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
     ReanchorPlayerMovementSfx();
     SynchronizePressurePlateSfx();
     camera.SnapToTarget(player.Position());
@@ -2752,6 +2765,7 @@ void Application::RestartRun()
     physicsWorld.ResetCharacter(levelDefinition.initialSpawnVisualCenter, {});
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
     ReanchorPlayerMovementSfx();
     SynchronizePressurePlateSfx();
 
@@ -3397,6 +3411,7 @@ void Application::ResetGameplayAfterCommittedLevel()
 {
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
     ReanchorPlayerMovementSfx();
     SynchronizePressurePlateSfx();
     respawnState = gameplay::RespawnState{};
@@ -3539,6 +3554,7 @@ void Application::ResetGameplayAfterLevelTransition()
 {
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
     ReanchorPlayerMovementSfx();
     SynchronizePressurePlateSfx();
     respawnState = gameplay::RespawnState{};
@@ -3691,6 +3707,7 @@ void Application::ResetGameplayAfterPlayAgain()
 {
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
+    gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
     ReanchorPlayerMovementSfx();
     SynchronizePressurePlateSfx();
     respawnState = gameplay::RespawnState{};

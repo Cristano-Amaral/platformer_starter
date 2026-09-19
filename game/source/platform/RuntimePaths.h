@@ -6,6 +6,7 @@
 namespace platform
 {
 inline constexpr std::string_view kTestCheckerLogicalId = "textures/test_checker.png";
+inline constexpr std::string_view kPlayerModelLogicalId = "models/player.glb";
 inline constexpr std::string_view kTestStaticModelLogicalId = "models/test_static.glb";
 inline constexpr std::string_view kTestAuthoredModelLogicalId = "models/test_authored.glb";
 inline constexpr std::string_view kTestTexturedModelLogicalId = "models/test_textured.glb";

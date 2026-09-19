@@ -181,6 +181,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
         inventory = (REPO_ROOT / "cmake" / "RuntimeAssets.cmake").read_text(encoding="utf-8")
         self.assertIn("levels/level_01.level", inventory)
         self.assertIn("levels/level_02.level", inventory)
+        self.assertIn("models/player.glb", inventory)
         self.assertNotIn("levels/level_03.level", inventory)
 
     def test_extra_cooked_level_is_staged_without_required_inventory_edit(self) -> None:
@@ -190,6 +191,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             dest = root / "dest"
             required = [
                 "textures/test_checker.png",
+                "models/player.glb",
                 "models/test_static.glb",
                 "models/test_authored.glb",
                 "models/test_textured.glb",
@@ -226,6 +228,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
             self.assertTrue((dest / "levels" / "level_03.level").is_file())
             self.assertTrue((dest / "levels" / "level_01.level").is_file())
+            self.assertTrue((dest / "models" / "player.glb").is_file())
 
     def test_stale_staged_level_is_removed_without_touching_other_categories(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -234,6 +237,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             dest = root / "dest"
             required = [
                 "textures/test_checker.png",
+                "models/player.glb",
                 "models/test_static.glb",
                 "models/test_authored.glb",
                 "models/test_textured.glb",
@@ -289,6 +293,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             self.assertTrue(unrelated_orphan.is_file())
             self.assertTrue(unrelated_note.is_file())
             self.assertTrue((dest / "textures" / "test_checker.png").is_file())
+            self.assertTrue((dest / "models" / "player.glb").is_file())
             self.assertTrue((dest / "sounds" / "item_pickup_collect.wav").is_file())
             self.assertTrue((dest / "sounds" / "player_damage.wav").is_file())
             self.assertTrue((dest / "sounds" / "player_death.wav").is_file())

@@ -5,12 +5,14 @@
 #include "editor/EditorViewportGrid.h"
 #include "gameplay/GameFlowState.h"
 #include "gameplay/Player.h"
+#include "gameplay/PlayerPresentation.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "platform/RuntimePaths.h"
+#include "assets/StaticGlb.h"
 #include "render/ItemPickupTargetHighlight.h"
 #include "render/ItemPickupCollectionFeedbackDraw.h"
 #include "render/LevelGoalVisualization.h"
@@ -34,7 +36,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -155,6 +159,49 @@ void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
     const Vector3 position = ToRaylib(center);
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
+}
+
+bool PlayerModelHasRenderableMesh(const Model& model)
+{
+    if (model.meshCount <= 0 || model.meshes == nullptr)
+    {
+        return false;
+    }
+    for (int i = 0; i < model.meshCount; ++i)
+    {
+        if (model.meshes[i].vertexCount > 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void LogPlayerModelLoadFailureOnce(bool& logged)
+{
+    if (logged)
+    {
+        return;
+    }
+    logged = true;
+    std::fprintf(
+        stderr,
+        "PlayerPresentation: missing or invalid staged model: %s\n",
+        gameplay::kPlayerModelLogicalId);
+}
+
+void DrawPlayerPresentationModel(
+    const Model& model,
+    const gameplay::PlayerVisualTransform& visual)
+{
+    rlDrawRenderBatchActive();
+    rlPushMatrix();
+    rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
+    rlRotatef(visual.yawDegrees, 0.0f, 1.0f, 0.0f);
+    rlScalef(visual.scale.x, visual.scale.y, visual.scale.z);
+    DrawModel(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    rlPopMatrix();
+    RestoreGreyboxImmediateState();
 }
 
 void DrawEditorViewportGrid(const DebugWorldOverlay& overlay)
@@ -1568,17 +1615,24 @@ void DrawPauseMenuOverlay(bool resumeSelected)
 
 }
 
+struct Renderer::PlayerModelGpuState
+{
+    Model model{};
+    gameplay::PlayerPresentationModelLifetime lifetime{};
+    bool loaded = false;
+    bool failed = false;
+    bool missingLogged = false;
+};
+
 Renderer::Renderer()
     : staticPropModels(std::make_unique<StaticModelSceneStore>())
+    , playerModelGpu(std::make_unique<PlayerModelGpuState>())
 {
 }
 
 Renderer::~Renderer()
 {
-    if (staticPropModels)
-    {
-        staticPropModels->Shutdown();
-    }
+    UnloadRuntimeAssets();
 }
 
 void Renderer::SyncStaticPropModels(
@@ -1604,14 +1658,82 @@ const StaticModelSceneStore* Renderer::StaticPropModels() const
 
 void Renderer::LoadRuntimeAssets()
 {
+    if (playerModelGpu == nullptr)
+    {
+        playerModelGpu = std::make_unique<PlayerModelGpuState>();
+    }
+    if (!gameplay::PlayerPresentationShouldAttemptModelLoad(playerModelGpu->lifetime))
+    {
+        return;
+    }
+    gameplay::NotePlayerPresentationLoadAttempt(playerModelGpu->lifetime);
+
+    const std::filesystem::path path = platform::RuntimeAssetPath(gameplay::kPlayerModelLogicalId);
+    if (path.empty() || !path.is_absolute())
+    {
+        playerModelGpu->failed = true;
+        LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
+        return;
+    }
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(path, error))
+    {
+        playerModelGpu->failed = true;
+        LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
+        return;
+    }
+    const assets::StaticGlbValidation validation = assets::ValidateStaticGlbFile(path);
+    if (validation.status != assets::StaticGlbStatus::Ok)
+    {
+        playerModelGpu->failed = true;
+        LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
+        return;
+    }
+    Model model = LoadModel(path.string().c_str());
+    if (!PlayerModelHasRenderableMesh(model))
+    {
+        UnloadModel(model);
+        playerModelGpu->failed = true;
+        LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
+        return;
+    }
+    playerModelGpu->model = model;
+    playerModelGpu->loaded = true;
+    playerModelGpu->failed = false;
 }
 
 void Renderer::UnloadRuntimeAssets()
 {
+    if (playerModelGpu != nullptr)
+    {
+        if (playerModelGpu->loaded)
+        {
+            UnloadModel(playerModelGpu->model);
+            playerModelGpu->model = {};
+            playerModelGpu->loaded = false;
+        }
+        playerModelGpu->failed = false;
+        playerModelGpu->missingLogged = false;
+        gameplay::ClearPlayerPresentationModelLifetime(playerModelGpu->lifetime);
+    }
     if (staticPropModels)
     {
         staticPropModels->Shutdown();
     }
+}
+
+bool Renderer::IsPlayerModelLoaded() const
+{
+    return playerModelGpu != nullptr && playerModelGpu->loaded;
+}
+
+std::size_t Renderer::PlayerModelLoadCount() const
+{
+    if (playerModelGpu == nullptr)
+    {
+        return 0;
+    }
+    return playerModelGpu->lifetime.loadCount;
 }
 
 bool Renderer::IsTestTextureLoaded() const
@@ -1696,8 +1818,9 @@ void Renderer::BeginFrame()
 }
 
 void Renderer::DrawWorld(
-    const gameplay::Player& player,
-    const CameraView& cameraView,
+        const gameplay::Player& player,
+        const gameplay::PlayerPresentationState& playerPresentation,
+        const CameraView& cameraView,
     const world::LevelDefinition& level,
     const std::vector<DynamicBoxDrawState>& dynamicBoxes,
     const std::vector<PressurePlateDrawState>& pressurePlates,
@@ -1959,7 +2082,19 @@ void Renderer::DrawWorld(
         // CollectibleRunState. Pending-delete collectibles use the faded
         // overlay instead of this runtime cube or the collected gold wire.
     }
-    DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
+    const bool playerModelLoaded = IsPlayerModelLoaded();
+    if (gameplay::ShouldDrawPlayerPresentationModel(playerModelLoaded) && playerModelGpu != nullptr)
+    {
+        const gameplay::PlayerVisualTransform visual = gameplay::BuildPlayerVisualTransform(
+            player.Position(),
+            gameplay::kDefaultPlayerPresentationConfig,
+            playerPresentation.facingYawDegrees);
+        DrawPlayerPresentationModel(playerModelGpu->model, visual);
+    }
+    else if (gameplay::ShouldDrawPlayerGameplayPrimitive(playerModelLoaded))
+    {
+        DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
+    }
     const std::size_t checkpointCount =
         level.checkpoints.size() < checkpointVisuals.size() ? level.checkpoints.size()
                                                             : checkpointVisuals.size();

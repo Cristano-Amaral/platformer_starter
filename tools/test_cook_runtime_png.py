@@ -108,6 +108,7 @@ class RuntimePngCookTests(unittest.TestCase):
     def test_copy_glbs_are_not_runtime_png(self) -> None:
         kinds = {asset["id"]: asset["kind"] for asset in cooker.KNOWN_ASSETS}
         self.assertEqual(kinds["models/test_static.glb"], cooker.KIND_COPY)
+        self.assertEqual(kinds["models/player.glb"], cooker.KIND_COPY)
         self.assertEqual(kinds["models/test_authored.glb"], cooker.KIND_COPY)
         self.assertEqual(kinds["models/test_textured.glb"], cooker.KIND_COPY)
         self.assertEqual(kinds["textures/test_checker.png"], cooker.KIND_RUNTIME_PNG)

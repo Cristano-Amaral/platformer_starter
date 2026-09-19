@@ -116,6 +116,7 @@ add_executable(Platformer3D
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
     game/source/gameplay/Player.h
+    game/source/gameplay/PlayerPresentation.h
     game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
@@ -265,6 +266,7 @@ set_target_properties(Platformer3D PROPERTIES
 
 # Cooker owns source -> cooked. Staging copies cooked files next to the exe:
 #   <exe dir>/assets/textures/test_checker.png
+#   <exe dir>/assets/models/player.glb
 #   <exe dir>/assets/models/test_static.glb
 #   <exe dir>/assets/models/test_authored.glb
 #   <exe dir>/assets/models/test_textured.glb
@@ -920,6 +922,29 @@ if(MSVC)
     target_compile_options(PlayerHealthTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(PlayerHealthTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 83: player presentation facing/visual-transform/lifecycle. No window,
+# raylib, or Jolt.
+add_executable(PlayerPresentationTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/ItemPickupRuntime.cpp
+    game/source/gameplay/ItemPickupRuntime.h
+    game/source/gameplay/PlayerPresentation.h
+    game/source/gameplay/PlayerPresentationTest.cpp
+    game/source/world/ItemPickup.h
+    game/source/world/RespawnWorld.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+target_include_directories(PlayerPresentationTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(PlayerPresentationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(PlayerPresentationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 63: Level Goal overlap, one-shot completion, reset. No window, raylib, or Jolt.

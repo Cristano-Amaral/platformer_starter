@@ -4,12 +4,14 @@
 #include "gameplay/Inventory.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
+#include "gameplay/PlayerPresentation.h"
 #include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/RespawnWorld.h"
 
 #include <cstdint>
+#include <cstddef>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -288,9 +290,13 @@ public:
     int TexturedModelMaterialCount() const;
     bool TexturedModelHasAlbedoTexture() const;
 
+    bool IsPlayerModelLoaded() const;
+    std::size_t PlayerModelLoadCount() const;
+
     void BeginFrame();
     void DrawWorld(
         const gameplay::Player& player,
+        const gameplay::PlayerPresentationState& playerPresentation,
         const CameraView& cameraView,
         const world::LevelDefinition& level,
         const std::vector<DynamicBoxDrawState>& dynamicBoxes,
@@ -334,6 +340,8 @@ public:
     void EndFrame();
 
 private:
+    struct PlayerModelGpuState;
     std::unique_ptr<StaticModelSceneStore> staticPropModels;
+    std::unique_ptr<PlayerModelGpuState> playerModelGpu;
 };
 }

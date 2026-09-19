@@ -15,6 +15,7 @@
 #include "gameplay/LevelTransition.h"
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
+#include "gameplay/PlayerPresentation.h"
 #include "gameplay/RespawnState.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -86,6 +87,7 @@ private:
     gameplay::PlayerMovementSfxState playerMovementSfx{};
     gameplay::PressurePlateSfxState pressurePlateSfx{};
     gameplay::Player player{{}, world::kPlayerVisualSize};
+    gameplay::PlayerPresentationState playerPresentation{};
     gameplay::PlatformerCamera camera;
     gameplay::RespawnState respawnState;
     gameplay::LevelCompletionState levelCompletionState;

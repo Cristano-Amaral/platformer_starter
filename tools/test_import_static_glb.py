@@ -62,7 +62,7 @@ def copy_known_sources(dest_root: Path) -> None:
 class StaticGlbValidationTests(unittest.TestCase):
     def test_canonical_models_validate(self) -> None:
         models = cooker.source_root(cooker.repo_root()) / "models"
-        for name in ("test_static.glb", "test_authored.glb", "test_textured.glb"):
+        for name in ("player.glb", "test_static.glb", "test_authored.glb", "test_textured.glb"):
             cooker.validate_static_glb((models / name).read_bytes())
 
     def test_invalid_magic_fails(self) -> None:
@@ -117,6 +117,8 @@ class CatalogDiscoveryTests(unittest.TestCase):
         ids = [item["id"] for item in collected]
         self.assertEqual(ids, sorted(ids))
         self.assertEqual(ids.count("models/test_static.glb"), 1)
+        self.assertEqual(ids.count("models/player.glb"), 1)
+        self.assertIn("models/player.glb", ids)
         self.assertIn("textures/test_checker.png", ids)
         self.assertIn("levels/level_01.level", ids)
         self.assertIn("levels/level_02.level", ids)

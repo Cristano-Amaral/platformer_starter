@@ -197,6 +197,7 @@ class ExtraLevelDiscoveryTests(unittest.TestCase):
         ids = [item["id"] for item in collected]
         self.assertEqual(ids.count("levels/level_01.level"), 1)
         self.assertEqual(ids.count("levels/level_02.level"), 1)
+        self.assertEqual(ids.count("models/player.glb"), 1)
 
     def test_created_level_cooks_and_stages_without_hardcoded_enumeration(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

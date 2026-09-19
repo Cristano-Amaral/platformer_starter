@@ -277,6 +277,10 @@ int main()
     Expect(parsed.formatVersion == world::kLevelFileVersion, "canonical format version 1");
     Expect(parsed.level.id == "level_01", "canonical id");
     Expect(CanonicalLevel01Values(parsed.level), "canonical Level 01 authored values");
+    Expect(canonical.find("player_model") == std::string::npos, "canonical text has no player_model");
+    Expect(
+        canonical.find("models/player.glb") == std::string::npos,
+        "canonical Level 01 has no player model identity");
 
     {
         std::string mutating = canonical;
@@ -386,6 +390,7 @@ int main()
         "invalid FOV",
         ReplaceFirstLineStartingWith(canonical, "camera ", "camera 2 3.5 12 0"));
     ExpectInvalid("trailing malformed", canonical + "not_a_record 1\n");
+    ExpectInvalid("player_model is not Level Format syntax", canonical + "player_model models/player.glb\n");
     ExpectInvalid(
         "support index out of range",
         ReplaceFirstLineStartingWith(canonical, "support_index_goal ", "support_index_goal 6"));
@@ -437,6 +442,10 @@ int main()
     const std::string written = world::SerializeLevelText(parsed.level);
     Expect(!written.empty(), "serialize canonical level");
     Expect(written.starts_with("PLATFORMER_LEVEL 1\n"), "writer emits exact v1 header");
+    Expect(written.find("player_model") == std::string::npos, "writer does not emit player_model");
+    Expect(
+        written.find("models/player.glb") == std::string::npos,
+        "writer does not emit player model identity");
     Expect(!written.empty() && written.back() == '\n', "writer terminates last record");
     Expect(written.find('\r') == std::string::npos, "writer emits LF only");
     Expect(written == world::SerializeLevelText(parsed.level), "writer output is deterministic");

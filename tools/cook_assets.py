@@ -62,6 +62,12 @@ PNG_IHDR_MIN_BYTES = 33
 # Cooker test fixtures under tools/fixtures/ are not runtime assets.
 KNOWN_ASSETS = (
     {
+        "id": "models/player.glb",
+        "source": "models/player.glb",
+        "cooked": "models/player.glb",
+        "kind": KIND_COPY,
+    },
+    {
         "id": "models/test_authored.glb",
         "source": "models/test_authored.glb",
         "cooked": "models/test_authored.glb",

@@ -29,7 +29,7 @@ No Blender.
 
 The cooker copies known authored files from `game/assets/source/` to
 `game/assets/cooked/` by explicit identity (`textures/test_checker.png`,
-`models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
+`models/player.glb`, `models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
 `levels/level_01.level`, `levels/level_02.level`, `sounds/item_pickup_collect.wav`,
 `sounds/player_damage.wav`, `sounds/player_death.wav`, `sounds/player_respawn.wav`,
 `sounds/player_footstep.wav`, `sounds/player_jump.wav`, `sounds/player_land.wav`,
@@ -109,6 +109,11 @@ door-unlock, level-goal, and collectible cues are synthesized by
 and `inventory_close.wav`. Cook/stage those files;
 the runtime never reads the
 generators or `source/`.
+
+The Milestone 83 player placeholder is original in-repo static geometry
+written by `python tools/generate_player_glb.py` to
+`game/assets/source/models/player.glb`. It is not a marketplace character
+and is not skinned or animated.
 
 See `docs/BLENDER_WORKFLOW.md` for authoring vs runtime texture roles.
 
