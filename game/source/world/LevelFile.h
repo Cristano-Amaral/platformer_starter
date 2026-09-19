@@ -34,7 +34,8 @@ inline int CountLevelV1RecordLines(const LevelDefinition& level)
         + static_cast<int>(level.pressurePlates.size())
         + static_cast<int>(level.doors.size())
         + static_cast<int>(level.itemPickups.size())
-        + static_cast<int>(level.staticProps.size());
+        + static_cast<int>(level.staticProps.size())
+        + static_cast<int>(level.authoringGroups.size());
 }
 
 enum class LoadLevelFileStatus

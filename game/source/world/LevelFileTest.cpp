@@ -122,7 +122,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 21> allowed{
+    static constexpr std::array<std::string_view, 22> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -143,6 +143,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "door",
         "item_pickup",
         "static_prop",
+        "authoring_group",
         "camera"};
 
     std::size_t cursor = 0;
@@ -464,6 +465,7 @@ int main()
     Expect(CountRecords(written, "door") == 0, "writer door count");
     Expect(CountRecords(written, "item_pickup") == 0, "writer item_pickup count");
     Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
+    Expect(CountRecords(written, "authoring_group") == 0, "writer authoring_group count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(CountRecords(written, "inventory") == 0, "writer emits no inventory records");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
@@ -1914,6 +1916,46 @@ int main()
             Expect(
                 saved.find("15") != std::string::npos && saved.find("0.5") != std::string::npos,
                 "Save writes rotation and scale");
+        }
+
+        {
+            world::LevelDefinition grouped = parsed.level;
+            world::StaticPropSpec propA{};
+            propA.modelIdentity = "models/test_static.glb";
+            propA.position = {1.0f, 1.0f, 0.0f};
+            propA.scale = {1.0f, 1.0f, 1.0f};
+            world::StaticPropSpec propB = propA;
+            propB.position.x = 3.0f;
+            grouped.staticProps.push_back(propA);
+            grouped.staticProps.push_back(propB);
+            world::AuthoringGroup group{};
+            group.name = "Group_01";
+            group.members.push_back({world::AuthoringGroupMemberKind::StaticProp, 0});
+            group.members.push_back({world::AuthoringGroupMemberKind::StaticProp, 1});
+            grouped.authoringGroups.push_back(group);
+            const std::string groupedText = world::SerializeLevelText(grouped);
+            Expect(CountRecords(groupedText, "authoring_group") == 1, "writer one authoring_group");
+            Expect(OnlyAuthoredKeywords(groupedText), "authoring_group is an authored keyword");
+            const world::ParseLevelFileResult groupedParsed = world::ParseLevelText(groupedText);
+            Expect(groupedParsed.status == world::LoadLevelFileStatus::Loaded,
+                "authoring_group round trip loads");
+            Expect(world::AuthoredLevelDataEqual(grouped, groupedParsed.level),
+                "authoring_group round trip equality");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "authoring_group Group_01 static_prop 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "one-member authoring_group rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "static_prop 1 1 0 0 0 0 1 1 1 models/test_static.glb\n"
+                      "static_prop 2 1 0 0 0 0 1 1 1 models/test_static.glb\n"
+                      "authoring_group Group_01 static_prop 0 static_prop 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "duplicate membership in one group rejected");
         }
 
         std::error_code cleanupError;

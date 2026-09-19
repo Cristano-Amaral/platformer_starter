@@ -312,6 +312,21 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out += '\n';
     }
 
+    for (const AuthoringGroup& group : level.authoringGroups)
+    {
+        out.append(kAuthoringGroupRecordKeyword);
+        out += ' ';
+        out.append(group.name);
+        for (const AuthoringGroupMember& member : group.members)
+        {
+            out += ' ';
+            out.append(AuthoringGroupMemberKindKeyword(member.kind));
+            out += ' ';
+            AppendInt(out, static_cast<int>(member.index));
+        }
+        out += '\n';
+    }
+
     out += "camera ";
     AppendVec3(out, level.camera.offset);
     out += ' ';

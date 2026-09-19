@@ -1,5 +1,6 @@
 #include "editor/AuthoredLifecycleCommands.h"
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/AuthoringGroups.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorPicking.h"
@@ -104,6 +105,10 @@ int main()
 
     Expect(editor::IsAuthoredLifecycleRequest(LevelEditorRequest::AddPlatform), "add platform is lifecycle");
     Expect(editor::IsAuthoredLifecycleRequest(LevelEditorRequest::DeleteSelected), "delete is lifecycle");
+    Expect(editor::IsAuthoredLifecycleRequest(LevelEditorRequest::GroupSelected),
+        "Group Selected is lifecycle-adjacent");
+    Expect(editor::IsAuthoredLifecycleRequest(LevelEditorRequest::UngroupSelected),
+        "Ungroup is lifecycle-adjacent");
     Expect(!editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ApplyPreview), "Apply is not lifecycle");
     Expect(!editor::IsAuthoredLifecycleRequest(LevelEditorRequest::SaveLevelSource), "Save is not lifecycle");
     Expect(
@@ -2165,6 +2170,70 @@ int main()
                 && reloaded.level.staticProps[1].rotationDegrees.y == 46.0f
                 && reloaded.level.staticProps[1].position.z == applied.staticProps[1].position.z,
             "Save/reload preserves Group Rotate positions and orientations");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        world::StaticPropSpec propA{};
+        propA.modelIdentity = "models/test_static.glb";
+        propA.position = {0.0f, 1.0f, 0.0f};
+        propA.scale = {1.0f, 1.0f, 1.0f};
+        world::StaticPropSpec propB = propA;
+        propB.position.x = 2.0f;
+        active.staticProps.push_back(propA);
+        active.staticProps.push_back(propB);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.selection = {EditorObjectKind::StaticProp, 0};
+        state.additionalSelections = {{EditorObjectKind::StaticProp, 1}};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::GroupSelected, true),
+            "35. Group Selected request is handled");
+        Expect(state.workingCopy.authoringGroups.size() == 1, "35. workingCopy has the group");
+        Expect(state.modified, "35. Group Selected sets Modified");
+        Expect(!state.dirty, "35. Group Selected does not Apply or Save");
+        Expect(state.lastMessage == "Authoring Group created.", "35. compact Group Selected feedback");
+
+        const world::LevelDefinition applied = state.workingCopy;
+        Expect(world::LevelDefinitionHasRequiredAuthoredContent(applied),
+            "35. Apply validation accepts grouped workingCopy");
+        SeedEditor(state, applied);
+        Expect(!state.modified, "35. after Apply, workingCopy matches active");
+        Expect(state.workingCopy.authoringGroups.size() == 1, "35. Apply promotes group metadata");
+
+        editor::LevelEditorState revertState{};
+        SeedEditor(revertState, applied);
+        revertState.workingCopy.authoringGroups.clear();
+        editor::RefreshLevelEditorDerivedFlags(revertState, applied);
+        Expect(revertState.modified, "36. clearing groups marks Modified");
+        revertState.workingCopy = applied;
+        editor::RefreshLevelEditorDerivedFlags(revertState, applied);
+        Expect(!revertState.modified, "36. Revert restores group metadata");
+
+        editor::LevelEditorState opened{};
+        SeedEditor(opened, MakeActiveLevel());
+        Expect(opened.workingCopy.authoringGroups.empty(),
+            "37. Open/Switch/New of a group-less Level has no groups");
+        Expect(opened.selection.kind == EditorObjectKind::None
+                && opened.additionalSelections.empty(),
+            "37. Open reconstructs selection without stale group members");
+
+        editor::LevelEditorState playRoundtrip{};
+        SeedEditor(playRoundtrip, applied);
+        playRoundtrip.selection = {EditorObjectKind::Hazard, 0};
+        playRoundtrip.additionalSelections.clear();
+        EditorSelection groupPrimary{};
+        std::vector<EditorSelection> groupAdditional;
+        Expect(
+            editor::TrySelectAuthoringGroup(
+                playRoundtrip.workingCopy, 0, groupPrimary, groupAdditional),
+            "38. F2/Play authored groups remain selectable");
+        playRoundtrip.selection = groupPrimary;
+        playRoundtrip.additionalSelections = groupAdditional;
+        Expect(playRoundtrip.workingCopy.authoringGroups[0].members.size() == 2,
+            "38. no stale group membership after re-seed from active");
     }
 
     if (gFailures != 0)

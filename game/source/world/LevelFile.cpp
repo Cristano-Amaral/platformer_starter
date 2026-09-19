@@ -214,6 +214,7 @@ struct ParseState
     std::vector<DoorSpec> doors;
     std::vector<ItemPickupSpec> itemPickups;
     std::vector<StaticPropSpec> staticProps;
+    std::vector<AuthoringGroup> authoringGroups;
 };
 
 bool RequireTokenCount(
@@ -779,6 +780,60 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.staticProps.push_back(prop);
             continue;
         }
+        if (keyword == kAuthoringGroupRecordKeyword)
+        {
+            // authoring_group <name> <kind> <index> <kind> <index> ...
+            if (tokens.size() < 6 || ((tokens.size() - 2) % 2) != 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid authoring_group");
+            }
+            AuthoringGroup group{};
+            group.name = std::string(tokens[1]);
+            if (!IsValidAuthoringGroupName(group.name))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid authoring_group name");
+            }
+            for (const AuthoringGroup& existing : state.authoringGroups)
+            {
+                if (existing.name == group.name)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid,
+                        lineNumber,
+                        "duplicate authoring_group name");
+                }
+            }
+            for (std::size_t tokenIndex = 2; tokenIndex + 1 < tokens.size(); tokenIndex += 2)
+            {
+                AuthoringGroupMember member{};
+                if (!TryParseAuthoringGroupMemberKind(tokens[tokenIndex], member.kind))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid,
+                        lineNumber,
+                        "invalid authoring_group member kind");
+                }
+                int parsedIndex = 0;
+                if (!ParseIntToken(tokens[tokenIndex + 1], parsedIndex) || parsedIndex < 0)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid,
+                        lineNumber,
+                        "invalid authoring_group member index");
+                }
+                member.index = static_cast<std::size_t>(parsedIndex);
+                group.members.push_back(member);
+            }
+            if (group.members.size() < 2)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid authoring_group");
+            }
+            state.authoringGroups.push_back(std::move(group));
+            continue;
+        }
         if (keyword == "camera")
         {
             if (!RequireSingleton(state.seenCamera, failure, lineNumber, "duplicate camera")
@@ -826,6 +881,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.doors = std::move(state.doors);
     loaded.level.itemPickups = std::move(state.itemPickups);
     loaded.level.staticProps = std::move(state.staticProps);
+    loaded.level.authoringGroups = std::move(state.authoringGroups);
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(loaded.level.elevatedPlatforms.size()),

@@ -4,6 +4,7 @@
 // Runtime gameplay state stays outside this struct.
 
 #include "core/Vec3.h"
+#include "world/AuthoringGroup.h"
 #include "world/CollectibleWorld.h"
 #include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
@@ -76,10 +77,25 @@ struct LevelDefinition
     std::vector<DoorSpec> doors{};
     std::vector<ItemPickupSpec> itemPickups{};
     std::vector<StaticPropSpec> staticProps{};
+    // Persistent Authoring Groups. Organizational authored metadata, not
+    // gameplay. Membership is typed {kind,index} and remapped by lifecycle.
+    std::vector<AuthoringGroup> authoringGroups{};
     LevelCameraSpec camera{};
 };
 
 bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level);
+
+bool AuthoringGroupMemberIsValid(
+    const LevelDefinition& level,
+    AuthoringGroupMember member);
+bool AuthoringGroupsAreValid(const LevelDefinition& level);
+
+// Same-category index shift: drop {kind,deletedIndex}, remap R > D to R-1,
+// dissolve groups with fewer than 2 surviving members. Not a generic graph.
+void RemapAuthoringGroupsAfterDelete(
+    LevelDefinition& level,
+    AuthoringGroupMemberKind kind,
+    std::size_t deletedIndex);
 
 // Exact field-by-field comparison of authored data. Every field is listed
 // explicitly so a new v1 record cannot silently escape writer round-trip proof

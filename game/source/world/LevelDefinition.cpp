@@ -159,8 +159,131 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    if (!AuthoringGroupsAreValid(level))
+    {
+        return false;
+    }
 
     return true;
+}
+
+bool AuthoringGroupMemberIsValid(const LevelDefinition& level, AuthoringGroupMember member)
+{
+    switch (member.kind)
+    {
+    case AuthoringGroupMemberKind::Spawn:
+    case AuthoringGroupMemberKind::Camera:
+    case AuthoringGroupMemberKind::Ground:
+    case AuthoringGroupMemberKind::MovingPlatform:
+        return member.index == 0;
+    case AuthoringGroupMemberKind::ElevatedPlatform:
+        return member.index < level.elevatedPlatforms.size();
+    case AuthoringGroupMemberKind::Slope:
+        return member.index < level.slopes.size();
+    case AuthoringGroupMemberKind::Checkpoint:
+        return member.index < level.checkpoints.size();
+    case AuthoringGroupMemberKind::Hazard:
+        return member.index < level.hazards.size();
+    case AuthoringGroupMemberKind::Collectible:
+        return member.index < level.collectibles.size();
+    case AuthoringGroupMemberKind::Goal:
+        return member.index < level.levelGoals.size();
+    case AuthoringGroupMemberKind::DynamicBox:
+        return member.index < level.dynamicBoxes.size();
+    case AuthoringGroupMemberKind::PressurePlate:
+        return member.index < level.pressurePlates.size();
+    case AuthoringGroupMemberKind::Door:
+        return member.index < level.doors.size();
+    case AuthoringGroupMemberKind::ItemPickup:
+        return member.index < level.itemPickups.size();
+    case AuthoringGroupMemberKind::StaticProp:
+        return member.index < level.staticProps.size();
+    }
+    return false;
+}
+
+bool AuthoringGroupsAreValid(const LevelDefinition& level)
+{
+    std::vector<AuthoringGroupMember> claimed;
+    for (std::size_t groupIndex = 0; groupIndex < level.authoringGroups.size(); ++groupIndex)
+    {
+        const AuthoringGroup& group = level.authoringGroups[groupIndex];
+        if (!IsValidAuthoringGroupName(group.name) || group.members.size() < 2)
+        {
+            return false;
+        }
+        for (std::size_t earlier = 0; earlier < groupIndex; ++earlier)
+        {
+            if (level.authoringGroups[earlier].name == group.name)
+            {
+                return false;
+            }
+        }
+
+        std::vector<AuthoringGroupMember> uniqueMembers;
+        for (const AuthoringGroupMember& member : group.members)
+        {
+            if (!AuthoringGroupMemberIsValid(level, member))
+            {
+                return false;
+            }
+            for (const AuthoringGroupMember& seen : uniqueMembers)
+            {
+                if (seen == member)
+                {
+                    return false;
+                }
+            }
+            for (const AuthoringGroupMember& owned : claimed)
+            {
+                if (owned == member)
+                {
+                    return false;
+                }
+            }
+            uniqueMembers.push_back(member);
+            claimed.push_back(member);
+        }
+    }
+    return true;
+}
+
+void RemapAuthoringGroupsAfterDelete(
+    LevelDefinition& level,
+    AuthoringGroupMemberKind kind,
+    std::size_t deletedIndex)
+{
+    std::vector<AuthoringGroup> surviving;
+    surviving.reserve(level.authoringGroups.size());
+    for (AuthoringGroup& group : level.authoringGroups)
+    {
+        std::vector<AuthoringGroupMember> nextMembers;
+        nextMembers.reserve(group.members.size());
+        for (AuthoringGroupMember member : group.members)
+        {
+            if (member.kind != kind)
+            {
+                nextMembers.push_back(member);
+                continue;
+            }
+            if (member.index == deletedIndex)
+            {
+                continue;
+            }
+            if (member.index > deletedIndex)
+            {
+                --member.index;
+            }
+            nextMembers.push_back(member);
+        }
+        if (nextMembers.size() < 2)
+        {
+            continue;
+        }
+        group.members = std::move(nextMembers);
+        surviving.push_back(std::move(group));
+    }
+    level.authoringGroups = std::move(surviving);
 }
 
 bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
@@ -183,7 +306,8 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.pressurePlates.size() != b.pressurePlates.size()
         || a.doors.size() != b.doors.size()
         || a.itemPickups.size() != b.itemPickups.size()
-        || a.staticProps.size() != b.staticProps.size())
+        || a.staticProps.size() != b.staticProps.size()
+        || a.authoringGroups.size() != b.authoringGroups.size())
     {
         return false;
     }
@@ -307,6 +431,23 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || !Vec3Equal(a.staticProps[index].scale, b.staticProps[index].scale))
         {
             return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.authoringGroups.size(); ++index)
+    {
+        if (a.authoringGroups[index].name != b.authoringGroups[index].name
+            || a.authoringGroups[index].members.size() != b.authoringGroups[index].members.size())
+        {
+            return false;
+        }
+        for (std::size_t memberIndex = 0; memberIndex < a.authoringGroups[index].members.size();
+             ++memberIndex)
+        {
+            if (a.authoringGroups[index].members[memberIndex]
+                != b.authoringGroups[index].members[memberIndex])
+            {
+                return false;
+            }
         }
     }
 

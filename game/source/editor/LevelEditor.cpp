@@ -306,6 +306,84 @@ void DrawHierarchy(LevelEditorState& state, const LevelEditorViewContext& view)
     }
     RecoverEditorWindowIfNeeded(kHierarchyWindowName, view);
 
+    if (!state.workingCopy.authoringGroups.empty())
+    {
+        const bool groupsVisible =
+            ImGui::TreeNodeEx("Authoring Groups", ImGuiTreeNodeFlags_DefaultOpen);
+        if (groupsVisible)
+        {
+            const std::size_t matchedGroup = FindExactAuthoringGroup(
+                state.workingCopy, state.selection, state.additionalSelections);
+            for (std::size_t groupIndex = 0;
+                 groupIndex < state.workingCopy.authoringGroups.size();
+                 ++groupIndex)
+            {
+                const world::AuthoringGroup& group = state.workingCopy.authoringGroups[groupIndex];
+                ImGui::PushID(static_cast<int>(groupIndex));
+                const bool groupSelected = matchedGroup == groupIndex;
+                const bool groupOpen = ImGui::TreeNodeEx(
+                    group.name.c_str(),
+                    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow
+                        | ImGuiTreeNodeFlags_SpanAvailWidth
+                        | (groupSelected ? ImGuiTreeNodeFlags_Selected : 0));
+                if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()
+                    && !state.gizmo.dragging)
+                {
+                    EditorSelection groupPrimary{};
+                    std::vector<EditorSelection> groupAdditional;
+                    if (TrySelectAuthoringGroup(
+                            state.workingCopy, groupIndex, groupPrimary, groupAdditional))
+                    {
+                        state.selection = groupPrimary;
+                        state.additionalSelections = std::move(groupAdditional);
+                    }
+                }
+                if (groupOpen)
+                {
+                    for (std::size_t memberIndex = 0; memberIndex < group.members.size();
+                         ++memberIndex)
+                    {
+                        const EditorSelection memberSelection =
+                            EditorSelectionFromAuthoringGroupMember(group.members[memberIndex]);
+                        char label[64];
+                        FormatSelectionDisplayName(memberSelection, label, sizeof(label));
+                        const bool isPrimary = state.selection == memberSelection;
+                        const bool isSecondary =
+                            ContainsEditorSelection(state.additionalSelections, memberSelection);
+                        if (isSecondary && !isPrimary)
+                        {
+                            ImGui::PushStyleColor(
+                                ImGuiCol_Header, ImVec4(0.85f, 0.52f, 0.18f, 0.70f));
+                            ImGui::PushStyleColor(
+                                ImGuiCol_HeaderHovered, ImVec4(0.90f, 0.58f, 0.22f, 0.85f));
+                            ImGui::PushStyleColor(
+                                ImGuiCol_HeaderActive, ImVec4(0.92f, 0.62f, 0.24f, 0.90f));
+                        }
+                        ImGui::PushID(static_cast<int>(memberIndex));
+                        if (ImGui::Selectable(label, isPrimary || isSecondary)
+                            && !state.gizmo.dragging)
+                        {
+                            ApplyEditorSelectionClick(
+                                state.selection,
+                                state.additionalSelections,
+                                memberSelection,
+                                ImGui::GetIO().KeyCtrl);
+                        }
+                        ImGui::PopID();
+                        if (isSecondary && !isPrimary)
+                        {
+                            ImGui::PopStyleColor(3);
+                        }
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+    }
+
     const std::vector<HierarchyEntry> entries = BuildHierarchyEntries(state.workingCopy);
     const char* openGroup = nullptr;
     bool groupVisible = true;
@@ -387,6 +465,64 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         ImGui::Text("Multi-selection: %zu objects (primary listed)",
             EditorSelectionSetMembers(state.selection, state.additionalSelections).size());
         ImGui::TextUnformatted("Inspector edits the primary selection only.");
+    }
+    const std::size_t selectedGroupIndex = FindExactAuthoringGroup(
+        state.workingCopy, state.selection, state.additionalSelections);
+    if (selectedGroupIndex != kNoAuthoringGroupIndex)
+    {
+        world::AuthoringGroup& selectedGroup =
+            state.workingCopy.authoringGroups[selectedGroupIndex];
+        ImGui::Separator();
+        ImGui::TextUnformatted("Authoring Group");
+        AuthoringGroupRenameFieldState& renameField = state.authoringGroupRename;
+        const bool renameWasActive =
+            renameField.editing && renameField.boundGroupIndex == selectedGroupIndex;
+        SyncAuthoringGroupRenameField(
+            renameField, selectedGroupIndex, selectedGroup.name, renameWasActive);
+        const bool renamed = ImGui::InputText(
+            "Group Name",
+            renameField.buffer,
+            kAuthoringGroupRenameBufferSize);
+        const bool renameDeactivated = ImGui::IsItemDeactivatedAfterEdit();
+        const bool renameActive = ImGui::IsItemActive();
+        if (renamed)
+        {
+            const AuthoringGroupEditResult renamedResult = RenameAuthoringGroup(
+                state.workingCopy, selectedGroupIndex, renameField.buffer);
+            if (!renamedResult.succeeded)
+            {
+                SyncAuthoringGroupRenameField(
+                    renameField, selectedGroupIndex, selectedGroup.name, false);
+            }
+        }
+        if (renameDeactivated || (renameWasActive && !renameActive))
+        {
+            const AuthoringGroupEditResult renamedResult = RenameAuthoringGroup(
+                state.workingCopy, selectedGroupIndex, renameField.buffer);
+            if (!renamedResult.succeeded)
+            {
+                SyncAuthoringGroupRenameField(
+                    renameField, selectedGroupIndex, selectedGroup.name, false);
+            }
+        }
+        renameField.editing = renameActive;
+        if (ImGui::Button("Ungroup"))
+        {
+            const AuthoringGroupEditResult ungrouped =
+                UngroupAuthoringGroup(state.workingCopy, selectedGroupIndex);
+            if (ungrouped.succeeded)
+            {
+                state.selection = ungrouped.selection;
+                state.additionalSelections = ungrouped.additionalSelections;
+                state.lastMessage = "Authoring Group removed.";
+            }
+        }
+        ImGui::Separator();
+    }
+    else
+    {
+        SyncAuthoringGroupRenameField(
+            state.authoringGroupRename, kNoAuthoringGroupIndex, {}, false);
     }
     ImGui::Text("Editor nav speed: %.1f (session only)", state.editorCamera.movementSpeed);
     ImGui::Separator();
@@ -2108,6 +2244,68 @@ LevelEditorRequest DrawEditorMenuBar(
                 state.selection,
                 gizmoDragging,
                 state.additionalSelections);
+            if (reason != nullptr)
+            {
+                ImGui::SetTooltip("%s", reason);
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(
+            !CanIssueAuthoredLifecycleRequest(
+                authoringAvailable,
+                state.workingCopy,
+                state.selection,
+                gizmoDragging,
+                LevelEditorRequest::GroupSelected,
+                {},
+                state.additionalSelections));
+        if (ImGui::MenuItem("Group Selected"))
+        {
+            request = LevelEditorRequest::GroupSelected;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            const char* reason = CreateAuthoringGroupDisableReason(
+                state.workingCopy, state.selection, state.additionalSelections);
+            if (!authoringAvailable)
+            {
+                reason = "Lifecycle editing is available in Development only.";
+            }
+            else if (gizmoDragging)
+            {
+                reason = "Lifecycle blocked: finish the gizmo drag first.";
+            }
+            if (reason != nullptr)
+            {
+                ImGui::SetTooltip("%s", reason);
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(
+            !CanIssueAuthoredLifecycleRequest(
+                authoringAvailable,
+                state.workingCopy,
+                state.selection,
+                gizmoDragging,
+                LevelEditorRequest::UngroupSelected,
+                {},
+                state.additionalSelections));
+        if (ImGui::MenuItem("Ungroup"))
+        {
+            request = LevelEditorRequest::UngroupSelected;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            const char* reason = UngroupAuthoringGroupDisableReason(
+                state.workingCopy, state.selection, state.additionalSelections);
+            if (!authoringAvailable)
+            {
+                reason = "Lifecycle editing is available in Development only.";
+            }
+            else if (gizmoDragging)
+            {
+                reason = "Lifecycle blocked: finish the gizmo drag first.";
+            }
             if (reason != nullptr)
             {
                 ImGui::SetTooltip("%s", reason);

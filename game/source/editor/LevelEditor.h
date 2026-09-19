@@ -14,6 +14,7 @@
 
 #include "core/Vec3.h"
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/AuthoringGroups.h"
 #include "editor/EditorBuildPreference.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
@@ -104,6 +105,8 @@ enum class LevelEditorRequest
     AddStaticProp,
     DuplicateSelected,
     DeleteSelected,
+    GroupSelected,
+    UngroupSelected,
 };
 
 // Toolbar Level actions are the canonical request enum — not a second command.
@@ -167,6 +170,9 @@ struct LevelEditorState
     // Session-local Inspector Item ID edit buffer. Not authored LevelDefinition
     // data and not persisted. Bound to the current PRIMARY Item Pickup.
     ItemIdInspectorFieldState itemIdInspector{};
+    // Session-local Authoring Group rename buffer. Bound to the currently
+    // matched complete group, not persisted.
+    AuthoringGroupRenameFieldState authoringGroupRename{};
     // Catalog/asset selection. Not scene selection and not persisted.
     ContentBrowserState contentBrowser{};
     // Development authored-source Level list. Refresh is explicit, not per frame.

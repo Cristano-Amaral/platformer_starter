@@ -58,6 +58,8 @@ add_executable(Platformer3D
     game/source/editor/AuthoredLifecycleCommands.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/CookStageReloadWorkflow.cpp
     game/source/editor/CookStageReloadWorkflow.h
     game/source/editor/EditorCamera.cpp
@@ -489,6 +491,8 @@ add_executable(LevelFileTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -608,6 +612,8 @@ add_executable(PhysicsRebuildTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -1146,6 +1152,8 @@ add_executable(EditorPickingTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorCamera.cpp
     game/source/editor/EditorCamera.h
     game/source/editor/EditorHierarchy.h
@@ -1188,6 +1196,8 @@ add_executable(EditorGizmoTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
@@ -1236,6 +1246,8 @@ add_executable(EditorViewportGridTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
@@ -1331,6 +1343,8 @@ add_executable(AuthoredObjectLifecycleTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/AuthoredObjectLifecycleTest.cpp
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
@@ -1350,12 +1364,61 @@ else()
     target_compile_options(AuthoredObjectLifecycleTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 81: persistent Authoring Group semantics. No ImGui.
+add_executable(AuthoringGroupsTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/editor/AuthoredObjectLifecycle.cpp
+    game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
+    game/source/editor/AuthoringGroupsTest.cpp
+    game/source/editor/EditorGizmo.cpp
+    game/source/editor/EditorGizmo.h
+    game/source/editor/EditorSnap.cpp
+    game/source/editor/EditorSnap.h
+    game/source/editor/EditorMath.h
+    game/source/editor/EditorPicking.cpp
+    game/source/editor/EditorPicking.h
+    game/source/editor/EditorWorkspace.cpp
+    game/source/editor/EditorWorkspace.h
+    game/source/editor/EditorSelection.cpp
+    game/source/editor/EditorSelection.h
+    game/source/editor/EditorSelectionSet.h
+    game/source/editor/EditorGroupTranslate.h
+    game/source/editor/EditorGroupRotate.h
+    game/source/editor/ItemIdInspectorEdit.h
+    game/source/platform/FileReplace.h
+    game/source/render/CameraView.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/LevelWriter.cpp
+    game/source/world/LevelWriter.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(AuthoringGroupsTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(AuthoringGroupsTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(AuthoringGroupsTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(AuthoringGroupsTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(AuthoringGroupsTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # Milestone 42: Object Palette placement mode and candidate resolution. No ImGui.
 add_executable(EditorPlacementTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPlacement.cpp
@@ -1388,6 +1451,8 @@ add_executable(StaticPropPlacementTest
     game/source/editor/AuthoredLifecycleCommands.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp
@@ -1431,6 +1496,8 @@ add_executable(EditorQuickToolbarTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorBuildPreference.cpp
     game/source/editor/EditorBuildPreference.h
     game/source/editor/EditorCamera.cpp
@@ -1490,6 +1557,8 @@ add_executable(CanonicalSceneCleanupTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/CanonicalSceneCleanupTest.cpp
     game/source/editor/EditorHierarchy.h
     game/source/editor/EditorPicking.cpp
@@ -1525,6 +1594,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/AuthoredLifecycleCommands.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/AuthoredLifecycleIntegrationTest.cpp
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
@@ -1578,6 +1649,8 @@ add_executable(StaticPropRenderTransformTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorMath.h
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
@@ -1609,6 +1682,8 @@ add_executable(StaticPropLifecycleTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -1677,6 +1752,8 @@ add_executable(ModelSelectionPreviewTest
     game/source/assets/StaticGlb.h
     game/source/editor/AuthoredObjectLifecycle.cpp
     game/source/editor/AuthoredObjectLifecycle.h
+    game/source/editor/AuthoringGroups.cpp
+    game/source/editor/AuthoringGroups.h
     game/source/editor/EditorGizmo.cpp
     game/source/editor/EditorGizmo.h
     game/source/editor/EditorSnap.cpp

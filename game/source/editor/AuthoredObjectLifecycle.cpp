@@ -1,5 +1,6 @@
 #include "editor/AuthoredObjectLifecycle.h"
 
+#include "editor/AuthoringGroups.h"
 #include "editor/EditorSelectionSet.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/LevelFile.h"
@@ -1149,6 +1150,12 @@ LifecycleEditResult DeleteSelected(
         return Fail(LifecycleEditStatus::UnsupportedType, selection);
     }
 
+    world::AuthoringGroupMemberKind groupKind{};
+    if (TryAuthoringGroupMemberKindFromSelection(selection.kind, groupKind))
+    {
+        world::RemapAuthoringGroupsAfterDelete(workingCopy, groupKind, selection.index);
+    }
+
     return Ok(ClearSelection());
 }
 
@@ -1202,6 +1209,19 @@ LifecycleEditResult DuplicateSelectionSet(
         }
     }
 
+    if (!SelectionAllowsAuthoringGroupDuplicate(workingCopy, primary, additional))
+    {
+        return Fail(LifecycleEditStatus::InvalidGroupOperation, primary);
+    }
+
+    const std::size_t completeGroupIndex =
+        FindExactAuthoringGroup(workingCopy, primary, additional);
+    std::string copiedGroupSourceName;
+    if (completeGroupIndex != kNoAuthoringGroupIndex)
+    {
+        copiedGroupSourceName = workingCopy.authoringGroups[completeGroupIndex].name;
+    }
+
     if (additional.empty())
     {
         LifecycleEditResult result = DuplicateSelected(workingCopy, primary);
@@ -1230,6 +1250,13 @@ LifecycleEditResult DuplicateSelectionSet(
         {
             newAdditional.push_back(duplicated.selection);
         }
+    }
+
+    if (!copiedGroupSourceName.empty()
+        && !TryCreateCopiedAuthoringGroup(
+            trial, copiedGroupSourceName, newPrimary, newAdditional))
+    {
+        return Fail(LifecycleEditStatus::InvalidGroupOperation, primary);
     }
 
     workingCopy = std::move(trial);
@@ -1410,6 +1437,10 @@ const char* DuplicateSelectedDisableReason(
     if (members.empty())
     {
         return "Duplicate requires a supported selection.";
+    }
+    if (!SelectionAllowsAuthoringGroupDuplicate(workingCopy, selection, additional))
+    {
+        return AuthoringGroupDuplicateDisableReason(workingCopy, selection, additional);
     }
     return CategoryCapacityReason(selection.kind);
 }

@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 80 — Multi-Selection Group Rotate.
+Milestone 81 — Authoring Groups Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_80.md`](docs/milestones/MILESTONE_80.md)
+Canonical file: [`docs/milestones/MILESTONE_81.md`](docs/milestones/MILESTONE_81.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is implemented, awaiting manual acceptance. Do not start Milestone 81.
+Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is CLOSED. Milestone 81 is implemented, awaiting manual acceptance. Do not start Milestone 82.
 
 ## Source of truth
 1. Current repository code.

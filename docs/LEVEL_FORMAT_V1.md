@@ -55,9 +55,10 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`) is the array order in `LevelDefinition`. Singleton records must
+`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`, `authoring_group`) is the array order in `LevelDefinition`. Singleton records must
 appear exactly once. Unknown keywords and trailing unrecognized content are
-`Invalid`.
+`Invalid`. Optional `authoring_group` records persist Development Authoring
+Groups; they are authored organizational metadata, not gameplay objects.
 
 ### Required singletons
 
@@ -95,6 +96,7 @@ pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [highlight <intensity>] [gold <amount>] [idle <0|1> <bobAmplitude> <bobSpeed> <spinSpeedDegrees>] [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
+authoring_group <name> <kind> <index> <kind> <index> ...
 ```
 
 `support_index_*` are 0-based indices into the `platform` array (M30
@@ -242,6 +244,27 @@ the GLB to exist on disk. Missing staged runtime files draw a fallback cube.
 Zero, one, or many `static_prop` records are valid. Canonical Level 01 has
 **zero** Static Props.
 
+`authoring_group` is optional authored organizational metadata for the
+Development editor. It is **not** a gameplay entity, Prefab, transform parent,
+or GUID. Zero, one, or many records are valid. Omitted records (legacy files)
+mean an empty `LevelDefinition.authoringGroups` collection. Gameplay, physics,
+and Release ignore the collection.
+
+```
+authoring_group <name> <kind> <index> <kind> <index> ...
+```
+
+`name` uses the same identifier grammar as `id`: `[A-Za-z_][A-Za-z0-9_]*`.
+Names are unique within a Level. Default created names are `Group_01`,
+`Group_02`, … Copied groups use `<name>_Copy`, then `<name>_Copy_2`.
+Each group has at least two members. `<kind>` is a v1 object keyword
+(`platform`, `static_prop`, `item_pickup`, …). `<index>` is a 0-based
+unsigned index into that authored collection. The first member is the
+preferred PRIMARY when the editor reconstructs an M78 multi-selection.
+One authored object may belong to at most one group. Overlapping membership,
+a one-member group, an unknown kind, or an out-of-range index is `Invalid`.
+The writer emits groups after `static_prop` and before `camera`.
+
 Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
 ## Not in the file
@@ -261,7 +284,7 @@ CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
 Camera follow policy: dead zone X/Y, follow sharpness.
 
 `LevelFileTest` asserts this by whitelist: every keyword the writer emits must
-be one of the 21 v1 keywords, so no runtime state can appear in output.
+be one of the 22 v1 keywords, so no runtime state can appear in output.
 
 ## Cooker
 
@@ -333,6 +356,7 @@ pressure_plate      variable, pressurePlates index order
 door                variable, doors index order
 item_pickup         variable, itemPickups index order
 static_prop         variable, staticProps index order
+authoring_group     variable, authoringGroups index order
 camera
 ```
 

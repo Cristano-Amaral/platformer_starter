@@ -1,6 +1,6 @@
 # Milestone 80 --- Multi-Selection Group Rotate
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/80-multi-selection-group-rotate`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

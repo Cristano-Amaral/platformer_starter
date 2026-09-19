@@ -1,5 +1,6 @@
 #include "editor/AuthoredLifecycleCommands.h"
 
+#include "editor/AuthoringGroups.h"
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorSelectionSet.h"
@@ -103,6 +104,8 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
         return "At least one Platform is required.";
     case LifecycleEditStatus::InvalidAssetReference:
         return "Add Static Prop requires a valid Content Browser static model selection.";
+    case LifecycleEditStatus::InvalidGroupOperation:
+        return "Duplicate blocked: select the complete Authoring Group.";
     case LifecycleEditStatus::Success:
         break;
     }
@@ -227,6 +230,8 @@ bool IsAuthoredLifecycleRequest(LevelEditorRequest request)
     case LevelEditorRequest::AddStaticProp:
     case LevelEditorRequest::DuplicateSelected:
     case LevelEditorRequest::DeleteSelected:
+    case LevelEditorRequest::GroupSelected:
+    case LevelEditorRequest::UngroupSelected:
         return true;
     default:
         return false;
@@ -300,6 +305,12 @@ bool CanIssueAuthoredLifecycleRequest(
     case LevelEditorRequest::DeleteSelected:
         return CanDeleteSelected(
             authoringAvailable, workingCopy, selection, additionalSelections, gizmoDragging);
+    case LevelEditorRequest::GroupSelected:
+        return authoringAvailable && !gizmoDragging
+            && CanCreateAuthoringGroup(workingCopy, selection, additionalSelections);
+    case LevelEditorRequest::UngroupSelected:
+        return authoringAvailable && !gizmoDragging
+            && CanUngroupAuthoringGroup(workingCopy, selection, additionalSelections);
     default:
         return false;
     }
@@ -413,6 +424,22 @@ bool HandleAuthoredLifecycleRequest(
                 ? reason
                 : RejectionMessage(LifecycleEditStatus::InvalidSelection, previousSelection.kind);
         }
+        else if (request == LevelEditorRequest::GroupSelected)
+        {
+            const char* reason = CreateAuthoringGroupDisableReason(
+                state.workingCopy, previousSelection, previousAdditional);
+            state.lastMessage = reason != nullptr
+                ? reason
+                : "Group Selected requires two or more ungrouped authored objects.";
+        }
+        else if (request == LevelEditorRequest::UngroupSelected)
+        {
+            const char* reason = UngroupAuthoringGroupDisableReason(
+                state.workingCopy, previousSelection, previousAdditional);
+            state.lastMessage = reason != nullptr
+                ? reason
+                : "Ungroup requires a selected Authoring Group.";
+        }
         else if (request == LevelEditorRequest::DeleteSelected)
         {
             const char* reason = DeleteSelectedDisableReason(
@@ -460,6 +487,54 @@ bool HandleAuthoredLifecycleRequest(
             state.lastMessage =
                 RejectionMessage(LifecycleEditStatus::InvalidSelection, previousSelection.kind);
         }
+        RefreshLevelEditorDerivedFlags(state, activeLevel);
+        return true;
+    }
+
+    if (request == LevelEditorRequest::GroupSelected
+        || request == LevelEditorRequest::UngroupSelected)
+    {
+        AuthoringGroupEditResult groupResult{};
+        if (request == LevelEditorRequest::GroupSelected)
+        {
+            groupResult = CreateAuthoringGroupFromSelection(
+                state.workingCopy, previousSelection, previousAdditional);
+        }
+        else
+        {
+            const std::size_t groupIndex = FindExactAuthoringGroup(
+                state.workingCopy, previousSelection, previousAdditional);
+            groupResult = UngroupAuthoringGroup(state.workingCopy, groupIndex);
+        }
+        if (!groupResult.succeeded)
+        {
+            state.selection = previousSelection;
+            state.additionalSelections = previousAdditional;
+            ResetLevelActionStatuses(state);
+            if (request == LevelEditorRequest::GroupSelected)
+            {
+                const char* reason = CreateAuthoringGroupDisableReason(
+                    state.workingCopy, previousSelection, previousAdditional);
+                state.lastMessage = reason != nullptr
+                    ? reason
+                    : "Group Selected requires two or more ungrouped authored objects.";
+            }
+            else
+            {
+                state.lastMessage = "Ungroup requires a selected Authoring Group.";
+            }
+            RefreshLevelEditorDerivedFlags(state, activeLevel);
+            return true;
+        }
+
+        state.selection = groupResult.selection;
+        state.additionalSelections = groupResult.additionalSelections;
+        SanitizeEditorSelectionSet(state.selection, state.additionalSelections);
+        ClearGizmoInteraction(state.gizmo);
+        ResetLevelActionStatuses(state);
+        state.lastMessage = request == LevelEditorRequest::GroupSelected
+            ? "Authoring Group created."
+            : "Authoring Group removed.";
         RefreshLevelEditorDerivedFlags(state, activeLevel);
         return true;
     }
