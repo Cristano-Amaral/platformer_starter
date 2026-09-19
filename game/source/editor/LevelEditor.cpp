@@ -15,6 +15,7 @@
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 #include "editor/ContentBrowser.h"
 #include "editor/ContentBrowserView.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
 #include "editor/EditorPlacement.h"
@@ -37,6 +38,7 @@
 #include "world/LevelIdentity.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -183,6 +185,24 @@ const char* BoolText(bool value)
 void EditVec3(const char* label, core::Vec3& value)
 {
     ImGui::InputFloat3(label, &value.x, kFloatFormat);
+}
+
+void ClampColor01(core::Vec3& color)
+{
+    auto clampChannel = [](float channel) {
+        if (!std::isfinite(channel) || channel < 0.0f)
+        {
+            return 0.0f;
+        }
+        if (channel > 1.0f)
+        {
+            return 1.0f;
+        }
+        return channel;
+    };
+    color.x = clampChannel(color.x);
+    color.y = clampChannel(color.y);
+    color.z = clampChannel(color.z);
 }
 
 void PersistEditorSnapPreferences(const EditorSnapPreferences& snap)
@@ -756,6 +776,60 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         EditVec3("Offset X Y Z", level.camera.offset);
         ImGui::InputFloat("FOV Y", &level.camera.fieldOfViewY, 0.0f, 0.0f, kFloatFormat);
         break;
+    case EditorObjectKind::Environment:
+        ImGui::TextWrapped(
+            "Level Environment (ambient). Changes preview live in the editor "
+            "viewport. Apply promotes them; Save persists them.");
+        ImGui::ColorEdit3("Ambient Color", &level.environment.ambientColor.x);
+        ClampColor01(level.environment.ambientColor);
+        ImGui::SliderFloat(
+            "Ambient Intensity",
+            &level.environment.ambientIntensity,
+            0.0f,
+            world::kMaxAuthoredAmbientIntensity,
+            "%.3f");
+        if (level.environment.ambientIntensity < 0.0f)
+        {
+            level.environment.ambientIntensity = 0.0f;
+        }
+        if (level.environment.ambientIntensity > world::kMaxAuthoredAmbientIntensity)
+        {
+            level.environment.ambientIntensity = world::kMaxAuthoredAmbientIntensity;
+        }
+        break;
+    case EditorObjectKind::DirectionalLight:
+    {
+        ImGui::TextWrapped(
+            "Primary Directional Light. Direction is the ray-travel vector "
+            "(from the sun toward surfaces). The viewport sun is an authoring "
+            "anchor only and does not position the light.");
+        ImGui::Checkbox("Enabled", &level.environment.directionalEnabled);
+        ImGui::Checkbox("Shadows Enabled", &level.environment.directionalShadowsEnabled);
+        core::Vec3 direction = level.environment.directionalRayDirection;
+        EditVec3("Direction X Y Z", direction);
+        if (!TryCommitAuthoredDirectionalRay(
+                direction, level.environment.directionalRayDirection))
+        {
+            // Keep the previous canonical direction. Zero/NaN edits are rejected.
+        }
+        ImGui::ColorEdit3("Color", &level.environment.directionalColor.x);
+        ClampColor01(level.environment.directionalColor);
+        ImGui::SliderFloat(
+            "Intensity",
+            &level.environment.directionalIntensity,
+            0.0f,
+            world::kMaxAuthoredDirectionalIntensity,
+            "%.3f");
+        if (level.environment.directionalIntensity < 0.0f)
+        {
+            level.environment.directionalIntensity = 0.0f;
+        }
+        if (level.environment.directionalIntensity > world::kMaxAuthoredDirectionalIntensity)
+        {
+            level.environment.directionalIntensity = world::kMaxAuthoredDirectionalIntensity;
+        }
+        break;
+    }
     case EditorObjectKind::Ground:
         EditVec3("Center X Y Z", level.ground.center);
         EditVec3("Size X Y Z", level.ground.size);

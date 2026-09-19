@@ -192,6 +192,20 @@ bool ParseVec3(
         && ParseFloatToken(tokens[offset + 2], value.z);
 }
 
+bool ParseColor01(
+    const std::vector<std::string_view>& tokens,
+    std::size_t offset,
+    core::Vec3& color)
+{
+    return ParseVec3(tokens, offset, color) && LevelEnvironmentColorIsValid(color);
+}
+
+bool ParseBoundedIntensity(std::string_view token, float maxIntensity, float& intensity)
+{
+    return ParseFloatToken(token, intensity)
+        && LevelEnvironmentIntensityIsValid(intensity, maxIntensity);
+}
+
 struct ParseState
 {
     bool seenId = false;
@@ -203,6 +217,8 @@ struct ParseState
     bool seenSupportGoal = false;
     bool seenMovingPlatform = false;
     bool seenCamera = false;
+    bool seenEnvironment = false;
+    bool seenDirectionalLight = false;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
     std::vector<CheckpointSpec> checkpoints;
@@ -848,6 +864,54 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             }
             continue;
         }
+        if (keyword == "environment")
+        {
+            if (!RequireSingleton(
+                    state.seenEnvironment, failure, lineNumber, "duplicate environment")
+                || !RequireTokenCount(tokens, 5, failure, lineNumber))
+            {
+                return failure;
+            }
+            if (!ParseColor01(tokens, 1, loaded.level.environment.ambientColor)
+                || !ParseBoundedIntensity(
+                    tokens[4],
+                    kMaxAuthoredAmbientIntensity,
+                    loaded.level.environment.ambientIntensity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid environment");
+            }
+            continue;
+        }
+        if (keyword == "directional_light")
+        {
+            if (!RequireSingleton(
+                    state.seenDirectionalLight,
+                    failure,
+                    lineNumber,
+                    "duplicate directional_light")
+                || !RequireTokenCount(tokens, 10, failure, lineNumber))
+            {
+                return failure;
+            }
+            core::Vec3 ray{};
+            if (!ParseBool01Token(tokens[1], loaded.level.environment.directionalEnabled)
+                || !ParseVec3(tokens, 2, ray)
+                || !LevelDirectionalRayIsValid(ray)
+                || !ParseColor01(tokens, 5, loaded.level.environment.directionalColor)
+                || !ParseBoundedIntensity(
+                    tokens[8],
+                    kMaxAuthoredDirectionalIntensity,
+                    loaded.level.environment.directionalIntensity)
+                || !ParseBool01Token(
+                    tokens[9], loaded.level.environment.directionalShadowsEnabled))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid directional_light");
+            }
+            loaded.level.environment.directionalRayDirection = CanonicalLevelDirectionalRay(ray);
+            continue;
+        }
 
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "unrecognized record");
     }
@@ -882,6 +946,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.itemPickups = std::move(state.itemPickups);
     loaded.level.staticProps = std::move(state.staticProps);
     loaded.level.authoringGroups = std::move(state.authoringGroups);
+    CanonicalizeLevelEnvironment(loaded.level.environment);
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(loaded.level.elevatedPlatforms.size()),

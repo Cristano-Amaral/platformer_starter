@@ -144,7 +144,7 @@ int main()
     const std::vector<editor::HierarchyEntry> hierarchy =
         editor::BuildHierarchyEntries(MakeStubLevel());
     const std::size_t expectedHierarchy =
-        5 + static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount)
+        7 + static_cast<std::size_t>(world::kLevel01ElevatedPlatformCount)
         + static_cast<std::size_t>(world::kLevel01SlopeCount)
         + static_cast<std::size_t>(world::kLevel01CheckpointCount)
         + static_cast<std::size_t>(world::kLevel01HazardCount)
@@ -163,11 +163,20 @@ int main()
     Expect(
         hierarchy.back().selection.kind == editor::EditorObjectKind::Goal,
         "hierarchy ends with Level Goal");
-    Expect(
+        Expect(
         hierarchy[0].selection.kind == editor::EditorObjectKind::Spawn,
         "hierarchy starts with Player Spawn");
     Expect(
-        hierarchy[3].selection
+        hierarchy[1].selection.kind == editor::EditorObjectKind::Camera,
+        "hierarchy lists Camera");
+    Expect(
+        hierarchy[2].selection.kind == editor::EditorObjectKind::Environment,
+        "hierarchy lists Environment");
+    Expect(
+        hierarchy[3].selection.kind == editor::EditorObjectKind::DirectionalLight,
+        "hierarchy lists Directional Light");
+    Expect(
+        hierarchy[5].selection
             == editor::EditorSelection{editor::EditorObjectKind::ElevatedPlatform, 0},
         "hierarchy includes Platform 0");
 
@@ -491,6 +500,8 @@ int main()
         bool sawDynamicBox = false;
         bool sawPressurePlate = false;
         bool sawDoor = false;
+        bool sawEnvironment = false;
+        bool sawDirectionalLight = false;
         for (const editor::PickingProxy& proxy : set.proxies)
         {
             sawCamera = sawCamera || proxy.selection.kind == editor::EditorObjectKind::Camera;
@@ -500,16 +511,22 @@ int main()
             sawPressurePlate =
                 sawPressurePlate || proxy.selection.kind == editor::EditorObjectKind::PressurePlate;
             sawDoor = sawDoor || proxy.selection.kind == editor::EditorObjectKind::Door;
+            sawEnvironment =
+                sawEnvironment || proxy.selection.kind == editor::EditorObjectKind::Environment;
+            sawDirectionalLight = sawDirectionalLight
+                || proxy.selection.kind == editor::EditorObjectKind::DirectionalLight;
         }
         Expect(!sawCamera, "authored camera has no world picking proxy");
         Expect(sawSpawn, "player spawn has a world picking proxy");
+        Expect(!sawEnvironment, "Environment has no world picking proxy");
+        Expect(sawDirectionalLight, "Directional Light has an authoring picking proxy");
         Expect(!sawPlayerKind, "runtime Player is not a selectable authored object");
         Expect(!sawDynamicBox, "empty Dynamic Boxes collection has no world picking proxy");
         Expect(!sawPressurePlate, "empty Pressure Plates collection has no world picking proxy");
         Expect(!sawDoor, "empty Doors collection has no world picking proxy");
         Expect(
-            set.proxies.size() == 19,
-            "19 world proxies: hierarchy minus Camera");
+            set.proxies.size() == 20,
+            "20 world proxies: hierarchy minus Camera and Environment");
     }
 
     // ---- screen-to-world ray through editor camera view ----
@@ -1360,6 +1377,29 @@ int main()
         Expect(viewportPrimary == hierarchyPrimary, "viewport and Hierarchy primary stay synchronized");
         Expect(viewportAdditional == hierarchyAdditional,
             "viewport and Hierarchy additional stay synchronized");
+    }
+
+    {
+        editor::EditorSelection primary{};
+        std::vector<editor::EditorSelection> additional;
+        const editor::EditorSelection environment{editor::EditorObjectKind::Environment, 0};
+        const editor::EditorSelection directional{editor::EditorObjectKind::DirectionalLight, 0};
+        const editor::EditorSelection platform{editor::EditorObjectKind::ElevatedPlatform, 0};
+        editor::ApplyEditorSelectionClick(primary, additional, environment, false);
+        Expect(primary == environment && additional.empty(), "Environment selection is exclusive");
+        editor::ApplyEditorSelectionClick(primary, additional, platform, true);
+        Expect(primary == platform && additional.empty(),
+            "Ctrl-clicking a normal object replaces lighting singleton selection");
+        editor::ApplyEditorSelectionClick(primary, additional, directional, true);
+        Expect(primary == directional && additional.empty(),
+            "Ctrl-clicking Directional Light does not mix into a groupable set");
+        editor::ApplyEditorSelectionClick(primary, additional, environment, false);
+        Expect(editor::IsEditableSelection(environment), "Environment is Inspector-editable");
+        Expect(editor::IsEditableSelection(directional), "Directional Light is Inspector-editable");
+        Expect(editor::IsValidSelection(MakeStubLevel(), environment), "Environment is always valid");
+        Expect(
+            editor::IsValidSelection(MakeStubLevel(), directional),
+            "Directional Light is always valid");
     }
 
     // ---- M78 visual highlight requests distinguish primary vs secondary ----

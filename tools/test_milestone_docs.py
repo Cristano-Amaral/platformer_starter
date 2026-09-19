@@ -12,7 +12,7 @@ REPO_ROOT = TOOLS_DIR.parent
 INDEX = REPO_ROOT / "docs" / "MILESTONES.md"
 MILESTONES_DIR = REPO_ROOT / "docs" / "milestones"
 
-DECIMAL_MILESTONES = ("48.1", "48.2", "57.1", "58.1", "58.2", "58.3", "58.4", "64.1")
+DECIMAL_MILESTONES = ("48.1", "48.2", "57.1", "58.1", "58.2", "58.3", "58.4", "64.1", "85.1")
 INTEGER_MILESTONES = tuple(range(0, 86))
 HEADING = re.compile(r"^(#{1,2}) Milestone (\d+(?:\.\d+)?)(.*)$", re.M)
 MD_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")

@@ -55,8 +55,8 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`, `authoring_group`) is the array order in `LevelDefinition`. Singleton records must
-appear exactly once. Unknown keywords and trailing unrecognized content are
+`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`, `authoring_group`) is the array order in `LevelDefinition`. Required singleton records must
+appear exactly once. Optional singleton records (`environment`, `directional_light`) may be omitted and must not be duplicated. Unknown keywords and trailing unrecognized content are
 `Invalid`. Optional `authoring_group` records persist Development Authoring
 Groups; they are authored organizational metadata, not gameplay objects.
 
@@ -82,6 +82,36 @@ tokens on `level_goal` reuse the same identity grammar; they are not paths.
 The player is not an authored Level object. There is no `player_model`
 record, player mesh property, or per-Level presentation block. Milestone 83
 loads staged `models/player.glb` as a runtime presentation follower.
+
+### Optional lighting singletons (Milestone 85.1)
+
+```
+environment <r> <g> <b> <intensity>
+directional_light <enabled> <dx> <dy> <dz> <r> <g> <b> <intensity> <shadowsEnabled>
+```
+
+These author the single M85 lighting environment. They are not a light list,
+Component, Scene node, or gameplay activation target. There is no
+`ambient_light`, `shadow_settings`, `linkedLightIndex`, Point Light, or Spot
+Light record.
+
+Omitted records resolve to M85-compatible defaults: ambient color `{1,1,1}`
+intensity `0.34`; directional enabled `1`, ray `normalize(-0.42,-1,-0.38)`,
+color `{1,0.96,0.88}`, intensity `0.88`, shadows enabled `1`. Canonical
+`level_01` / `level_02` stay valid without these lines.
+
+`enabled` and `shadowsEnabled` are exact `0`/`1` bools (same grammar as
+Pressure Plate flags). Colors are finite in `[0,1]`. Intensities are finite
+and non-negative (`ambient <= 2`, directional `<= 4`). Direction is the
+**ray-travel** vector (from the sun toward surfaces), finite and non-zero;
+the active representation is normalized. Duplicate records are `Invalid`.
+
+`Enabled = 0` disables directional illumination and directional shadows;
+ambient remains. `Shadows Enabled = 0` with `Enabled = 1` keeps directional
+lighting without the shadow pass. Intensity `0` is not a substitute for
+`enabled`. Gameplay light links/events are out of scope.
+
+The writer always emits both records after `camera`.
 
 ### Required repeated records
 
@@ -361,6 +391,8 @@ item_pickup         variable, itemPickups index order
 static_prop         variable, staticProps index order
 authoring_group     variable, authoringGroups index order
 camera
+environment
+directional_light
 ```
 
 One record per line, single-space separated, `\n` line endings, trailing

@@ -247,11 +247,11 @@ World Rendering
    └─ directional shadows
 ```
 
-**Ownership.** `render::LightingEnvironment` is the project-level CPU configuration (`MakeDefaultLightingEnvironment`). `render::WorldLightingResources` is owned by `Renderer` and holds the lit shader, depth shader, shadow FBO, unit-cube mesh, and cached uniform locations. A future Environment / Lighting Editor can replace the default environment without adding Level records or Hierarchy lights.
+**Ownership.** `world::LevelEnvironment` is the singleton Level-authored configuration. `render::MakeLightingEnvironmentFromAuthored` maps it into M85 `LightingEnvironment`. `render::WorldLightingResources` remains owned by `Renderer`. Existing Levels without `environment` / `directional_light` records resolve to the M85 defaults. A future Environment / Lighting Editor or gameplay override can replace the authored-to-effective mapping without rewriting GPU ownership.
 
 **Direction convention.** Stored directional `rayDirection` is the direction **light rays travel** through the world (from the sun toward surfaces). World-up is +Y. Zero/non-finite directions fall back to `{0, -1, 0}`. Shader NdotL and the shadow camera use that convention consistently (`toLight = -rayDirection`; light camera looks along the ray).
 
-**Defaults.** Ambient white at intensity `0.34`. Directional warm `{1, 0.96, 0.88}` at intensity `0.88`, default ray `normalize(-0.42, -1, -0.38)`. Single 2048² shadow map, orthographic coverage `72` world units centered at `{0, 4, 0}`, near `1`, far `120`, constant/slope bias `0.0025`, 3×3 PCF.
+**Defaults.** Ambient white at intensity `0.34`. Directional warm `{1, 0.96, 0.88}` at intensity `0.88`, default ray `normalize(-0.42, -1, -0.38)`, directional enabled, shadows enabled. Single 2048² shadow map, orthographic coverage `72` world units centered at `{0, 4, 0}`, near `1`, far `120`, constant/slope bias `0.0025`, 3×3 PCF.
 
 **Shaders.** Staged runtime assets only: `shaders/world_lit.vs/.fs` and `shaders/shadow_depth.vs/.fs`. Loaded through `platform::RuntimeAssetPath`. Missing/invalid files disable lighting for the process (log once) and keep the previous unlit DrawCube/DrawModel path. No source-directory fallback. No ShaderManager.
 
@@ -261,7 +261,34 @@ World Rendering
 
 **Lifecycle.** Load with `Renderer::LoadRuntimeAssets`; unload with `UnloadRuntimeAssets` (idempotent). Shadow map is independent of window size, so resize/F2 viewport changes do not recreate it. Restart, level transition, Play Again, and Main Menu → Play reuse the same GPU objects.
 
-**Out of scope.** Point/Spot lights, per-Level lighting, Cascaded Shadow Maps, GI, SSAO, HDR/bloom, IBL/skybox, full PBR, player animation, Character Definition, ECS, scene graph, M86.
+**Out of scope.** Point/Spot lights, Cascaded Shadow Maps, GI, SSAO, HDR/bloom, IBL/skybox, full PBR, player animation, Character Definition, ECS, scene graph, M86.
+
+## Environment & Directional Light Authoring (Milestone 85.1)
+
+M85.1 authors the single M85 lighting environment as Level data plus Development Editor authoring. It is not a generic lighting system, not a light list, and not a gameplay event/link framework.
+
+```
+Level
+└─ Environment
+   ├─ Ambient Color / Intensity
+   └─ Directional Light
+      ├─ Enabled (authored)
+      ├─ Direction (ray travel)
+      ├─ Color / Intensity
+      └─ Shadows Enabled
+```
+
+**Authority.** Inspector and the direction gizmo edit `workingCopy.environment`. Semantic edits set Dirty via `AuthoredLevelDataEqual`. Apply promotes to `active`; Save writes `environment` and `directional_light` records. The Development viewport previews `workingCopy` lighting without promoting other authored geometry.
+
+**Hierarchy / selection.** Singleton rows `Environment` and `Directional Light` sit after Camera. They cannot Duplicate, Delete, or Group. Ctrl-selection involving them replaces rather than mixing into a groupable multi-selection. Environment has no world pick proxy. Directional Light has an editor-only sun/arrow at a fixed authoring anchor `{0, 8, 0}` — not a lighting position.
+
+**Gizmo.** Rotate edits `directionalRayDirection` around world axes using the existing signed-angle Rotate interaction. Translate/Resize/Scale do not change lighting. Numeric Inspector direction and the gizmo share the same canonical vector.
+
+**Enabled.** `authoredEnabled` is persisted now. Effective enabled currently equals authored enabled (future gameplay override seam; no Pressure Plate/Door/Trigger light links in M85.1). Disabled directional keeps ambient and skips the shadow pass. Shadows-off keeps directional illumination and skips the shadow pass so a stale map cannot darken the scene.
+
+**Lifecycle.** Level transition, Restart, Play Again, Main Menu → Play, and reload adopt the destination/current Level environment. M85 GPU shadow resources are not recreated per edit. Thumbnails and Preview stay isolated. Release has no sun visualization.
+
+**Out of scope.** Point/Spot lights, multiple Directional Lights, gameplay activation/links, day/night, skybox/fog/HDR, CSM, PBR expansion, Environment asset files, Undo/Redo, M86.
 
 Development `Assets > Import Static GLB` copies a compatible self-contained static `.glb` into `game/assets/source/models/<filename>.glb`. Canonical identity is the project-relative path `models/<filename>.glb`. The original external absolute path is import input only. Collision never overwrites. Import does not cook, stage, or mutate `workingCopy` / `active` / `savedSourceBaseline`. A derived `assets::StaticModelCatalog` discovers valid `source/models/*.glb` files (non-recursive, sorted by identity). It is not persisted and is not a level/scene object list. After import, the existing Cook Assets then Stage Runtime Assets path processes extra cooked `models/*.glb` files. Staging's required inventory remains `cmake/RuntimeAssets.cmake`; extra cooked models are discovered at staging time. Extra cooked `levels/*.level` files are discovered the same way so a Level created in the Development Levels UI can enter Cook & Stage without a per-level CMake edit.
 

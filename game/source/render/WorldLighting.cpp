@@ -136,6 +136,8 @@ struct WorldLightingResources::GpuState
     int locLightRayDirection = -1;
     int locLightColor = -1;
     int locLightIntensity = -1;
+    int locLightEnabled = -1;
+    int locShadowsEnabled = -1;
     int locLightVP = -1;
     int locShadowMap = -1;
     int locShadowBias = -1;
@@ -217,6 +219,8 @@ void WorldLightingResources::Unload()
     gpu->locLightRayDirection = -1;
     gpu->locLightColor = -1;
     gpu->locLightIntensity = -1;
+    gpu->locLightEnabled = -1;
+    gpu->locShadowsEnabled = -1;
     gpu->locLightVP = -1;
     gpu->locShadowMap = -1;
     gpu->locShadowBias = -1;
@@ -330,6 +334,8 @@ void WorldLightingResources::Load()
     gpu->locLightRayDirection = GetShaderLocation(gpu->lit, "lightRayDirection");
     gpu->locLightColor = GetShaderLocation(gpu->lit, "lightColor");
     gpu->locLightIntensity = GetShaderLocation(gpu->lit, "lightIntensity");
+    gpu->locLightEnabled = GetShaderLocation(gpu->lit, "lightEnabled");
+    gpu->locShadowsEnabled = GetShaderLocation(gpu->lit, "shadowsEnabled");
     gpu->locLightVP = GetShaderLocation(gpu->lit, "lightVP");
     gpu->locShadowMap = GetShaderLocation(gpu->lit, "shadowMap");
     gpu->locShadowBias = GetShaderLocation(gpu->lit, "shadowBias");
@@ -368,7 +374,7 @@ void WorldLightingResources::Load()
 
 void WorldLightingResources::BeginShadowPass(const LightingEnvironment& environment)
 {
-    if (!IsReady() || gpu->shadowPassActive)
+    if (!IsReady() || gpu->shadowPassActive || !DirectionalShadowsAreActive(environment))
     {
         return;
     }
@@ -470,6 +476,16 @@ void WorldLightingResources::BindLitPass(const LightingEnvironment& environment)
             gpu->locLightIntensity,
             &validated.directional.intensity,
             SHADER_UNIFORM_FLOAT);
+    }
+    const float lightEnabled = EffectiveDirectionalEnabled(validated) ? 1.0f : 0.0f;
+    const float shadowsEnabled = DirectionalShadowsAreActive(validated) ? 1.0f : 0.0f;
+    if (gpu->locLightEnabled >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locLightEnabled, &lightEnabled, SHADER_UNIFORM_FLOAT);
+    }
+    if (gpu->locShadowsEnabled >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locShadowsEnabled, &shadowsEnabled, SHADER_UNIFORM_FLOAT);
     }
     if (gpu->locLightVP >= 0)
     {

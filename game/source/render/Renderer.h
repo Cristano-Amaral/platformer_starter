@@ -129,6 +129,16 @@ struct DebugWorldOverlay
     bool drawRotateGizmo = false;
     int gizmoHoveredSign = 1;
     int gizmoActiveSign = 1;
+    // M85.1 live editor preview of workingCopy lighting. Does not promote
+    // unrelated authored geometry. Gameplay/Release leave this false.
+    bool usePreviewLighting = false;
+    world::LevelEnvironment previewLighting{};
+    // Development-only Directional Light authoring visualization. Anchor is
+    // not a lighting position/range.
+    bool drawDirectionalLightAuthoring = false;
+    core::Vec3 directionalLightAnchor{0.0f, 8.0f, 0.0f};
+    core::Vec3 directionalLightRay{0.0f, -1.0f, 0.0f};
+    bool directionalLightSelected = false;
     // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
     // authored, not a Jolt body, and never a Gameplay/Release world grid.
     int editorViewportGridLineCount = 0;

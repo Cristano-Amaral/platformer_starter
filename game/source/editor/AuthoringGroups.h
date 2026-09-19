@@ -94,6 +94,8 @@ inline bool TryAuthoringGroupMemberKindFromSelection(
     case EditorObjectKind::StaticProp:
         outKind = world::AuthoringGroupMemberKind::StaticProp;
         return true;
+    case EditorObjectKind::Environment:
+    case EditorObjectKind::DirectionalLight:
     case EditorObjectKind::None:
         break;
     }

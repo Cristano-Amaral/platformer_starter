@@ -133,6 +133,30 @@ int main()
 
     {
         world::LevelDefinition working = MakeLevelWithProps();
+        Expect(
+            !editor::CanCreateAuthoringGroup(
+                working,
+                {EditorObjectKind::Environment, 0},
+                {{EditorObjectKind::StaticProp, 0}}),
+            "Environment cannot join an Authoring Group");
+        Expect(
+            !editor::CanCreateAuthoringGroup(
+                working,
+                {EditorObjectKind::DirectionalLight, 0},
+                {{EditorObjectKind::StaticProp, 0}}),
+            "Directional Light cannot join an Authoring Group");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::Environment, 0}, false),
+            "Environment cannot Duplicate");
+        Expect(
+            !editor::CanDeleteSelected(
+                true, working, {EditorObjectKind::DirectionalLight, 0}, false),
+            "Directional Light cannot Delete");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
         editor::CreateAuthoringGroupFromSelection(
             working,
             {EditorObjectKind::StaticProp, 0},

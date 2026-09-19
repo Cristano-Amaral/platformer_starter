@@ -28,6 +28,8 @@ enum class EditorObjectKind
     PressurePlate,
     Door,
     ItemPickup,
+    Environment,
+    DirectionalLight,
 };
 
 struct EditorSelection

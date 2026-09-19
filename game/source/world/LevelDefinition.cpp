@@ -49,6 +49,10 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     {
         return false;
     }
+    if (!LevelEnvironmentIsValid(level.environment))
+    {
+        return false;
+    }
     if (!std::isfinite(level.movingPlatform.pathMinX) || !std::isfinite(level.movingPlatform.pathMaxX)
         || !std::isfinite(level.movingPlatform.speed) || !std::isfinite(level.movingPlatform.centerY)
         || !std::isfinite(level.movingPlatform.centerZ) || !std::isfinite(level.movingPlatform.startX)
@@ -459,6 +463,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         && a.movingPlatform.speed == b.movingPlatform.speed
         && a.movingPlatform.startX == b.movingPlatform.startX
         && Vec3Equal(a.camera.offset, b.camera.offset)
-        && a.camera.fieldOfViewY == b.camera.fieldOfViewY;
+        && a.camera.fieldOfViewY == b.camera.fieldOfViewY
+        && LevelEnvironmentEqual(a.environment, b.environment);
 }
 }

@@ -40,6 +40,10 @@ const char* EditorObjectKindName(EditorObjectKind kind)
         return "Door";
     case EditorObjectKind::ItemPickup:
         return "ItemPickup";
+    case EditorObjectKind::Environment:
+        return "Environment";
+    case EditorObjectKind::DirectionalLight:
+        return "DirectionalLight";
     }
     return "None";
 }
@@ -104,6 +108,12 @@ void FormatSelectionDisplayName(
     case EditorObjectKind::ItemPickup:
         std::snprintf(buffer, bufferSize, "Item Pickup %zu", selection.index);
         return;
+    case EditorObjectKind::Environment:
+        std::snprintf(buffer, bufferSize, "Environment");
+        return;
+    case EditorObjectKind::DirectionalLight:
+        std::snprintf(buffer, bufferSize, "Directional Light");
+        return;
     }
     std::snprintf(buffer, bufferSize, "(none)");
 }
@@ -122,6 +132,8 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
     case EditorObjectKind::None:
     case EditorObjectKind::Spawn:
     case EditorObjectKind::Camera:
+    case EditorObjectKind::Environment:
+    case EditorObjectKind::DirectionalLight:
     case EditorObjectKind::Ground:
     case EditorObjectKind::MovingPlatform:
         return selection.index == 0;
@@ -168,6 +180,9 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
     case EditorObjectKind::ItemPickup:
+        return true;
+    case EditorObjectKind::Environment:
+    case EditorObjectKind::DirectionalLight:
         return true;
     default:
         return false;

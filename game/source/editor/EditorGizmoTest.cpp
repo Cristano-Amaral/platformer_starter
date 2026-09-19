@@ -1,5 +1,6 @@
 #include "editor/EditorGizmo.h"
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
@@ -105,6 +106,15 @@ int main()
                 == nullptr,
             "out-of-range platform has no gizmo origin");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Camera, 0}), "camera has no gizmo");
+        Expect(
+            !editor::IsGizmoSelection({EditorObjectKind::Environment, 0}),
+            "Environment has no Translate gizmo");
+        Expect(
+            !editor::IsGizmoSelection({EditorObjectKind::DirectionalLight, 0}),
+            "Directional Light Translate does not change lighting");
+        Expect(
+            editor::IsRotateSelection({EditorObjectKind::DirectionalLight, 0}),
+            "Directional Light uses the Rotate gizmo");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Slope, 0}), "slope has no gizmo");
         Expect(
             !editor::IsGizmoSelection({EditorObjectKind::MovingPlatform, 0}),
@@ -136,6 +146,30 @@ int main()
         Expect(
             editor::GetEditablePosition(level, {EditorObjectKind::Camera, 0}) == nullptr,
             "camera has no world position pointer");
+        Expect(
+            editor::GetEditablePosition(level, {EditorObjectKind::Environment, 0}) == nullptr,
+            "Environment has no world position");
+        Expect(
+            editor::GetEditablePosition(level, {EditorObjectKind::DirectionalLight, 0}) == nullptr,
+            "Directional Light has no lighting position");
+        core::Vec3 lightCenter{};
+        core::Vec3 lightSize{};
+        Expect(
+            editor::GetGizmoPreviewBox(
+                level, {EditorObjectKind::DirectionalLight, 0}, lightCenter, lightSize)
+                && NearlyEqual(lightCenter.y, editor::kDirectionalLightAuthoringAnchor.y),
+            "Directional Light rotate origin is the authoring anchor");
+        const core::Vec3 startRay = level.environment.directionalRayDirection;
+        const core::Vec3 rotated = editor::RotateAuthoredDirectionalRay(
+            startRay, {0.0f, 1.0f, 0.0f}, 25.0f);
+        Expect(NearlyEqual(std::sqrt(rotated.x * rotated.x + rotated.y * rotated.y + rotated.z * rotated.z), 1.0f),
+            "gizmo rotation stays normalized");
+        Expect(
+            !NearlyEqual(rotated.x, startRay.x) || !NearlyEqual(rotated.z, startRay.z),
+            "gizmo rotation changes direction");
+        Expect(editor::GetEditableRotation(level, {EditorObjectKind::DirectionalLight, 0})
+                == nullptr,
+            "Directional Light does not store a gameplay Euler transform");
         Expect(
             editor::GetEditablePosition(level, {EditorObjectKind::Slope, 0}) == nullptr,
             "slope has no mutable gizmo position");

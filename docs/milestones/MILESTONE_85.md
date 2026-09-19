@@ -1,6 +1,6 @@
 # Milestone 85 --- Lighting & Shadows Foundation
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/85-lighting-shadows-foundation`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

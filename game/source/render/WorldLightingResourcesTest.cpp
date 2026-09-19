@@ -150,6 +150,19 @@ int main()
     EndDrawing();
     Expect(lighting.ShaderLoadCount() == shaderLoads, "drawing does not create shaders");
     Expect(lighting.ShadowMapCreateCount() == shadowCreates, "drawing does not create shadow maps");
+
+    render::LightingEnvironment noShadows = environment;
+    noShadows.directional.shadowsEnabled = false;
+    lighting.BindLitPass(noShadows);
+    lighting.UnbindLitPass();
+    render::LightingEnvironment disabled = environment;
+    disabled.directional.authoredEnabled = false;
+    lighting.BindLitPass(disabled);
+    lighting.UnbindLitPass();
+    Expect(lighting.ShaderLoadCount() == shaderLoads, "enabled edits do not recreate shaders");
+    Expect(
+        lighting.ShadowMapCreateCount() == shadowCreates,
+        "enabled edits do not recreate shadow maps");
     Expect(
         !render::ShouldCastDirectionalShadow(render::ShadowParticipant::Thumbnail)
             && !render::ShouldCastDirectionalShadow(render::ShadowParticipant::Preview),

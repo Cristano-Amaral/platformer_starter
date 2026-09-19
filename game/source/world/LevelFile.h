@@ -21,8 +21,10 @@ inline constexpr std::uintmax_t kMaxLevelFileBytes = 65536;
 inline constexpr std::size_t kMaxLevelLineLength = 512;
 inline constexpr std::size_t kMaxLevelLines = 256;
 // header + id + spawn + kill_plane + ground + 3 support indices + 2 slopes +
-// moving_platform + camera. Repeatable records are counted separately.
-inline constexpr int kLevelV1FixedRecordLineCount = 12;
+// moving_platform + camera + environment + directional_light. Repeatable
+// records are counted separately. Environment records are optional on parse
+// (old Levels) and always emitted by the writer.
+inline constexpr int kLevelV1FixedRecordLineCount = 14;
 
 inline int CountLevelV1RecordLines(const LevelDefinition& level)
 {

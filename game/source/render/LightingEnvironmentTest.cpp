@@ -137,6 +137,46 @@ int main()
     Expect(!render::ShouldReceiveDirectionalShadow(render::ShadowParticipant::EditorGrid),
         "grid does not receive");
 
+    Expect(defaults.directional.authoredEnabled, "default directional is authored enabled");
+    Expect(defaults.directional.shadowsEnabled, "default shadows are enabled");
+    Expect(render::EffectiveDirectionalEnabled(defaults), "effective enabled follows authored");
+    Expect(render::DirectionalShadowsAreActive(defaults), "shadows active by default");
+
+    const world::LevelEnvironment authored = world::MakeDefaultLevelEnvironment();
+    const render::LightingEnvironment fromLevel =
+        render::MakeLightingEnvironmentFromAuthored(authored);
+    Expect(VecNear(fromLevel.ambient.color, authored.ambientColor), "authored ambient color maps");
+    Expect(NearlyEqual(fromLevel.ambient.intensity, authored.ambientIntensity),
+        "authored ambient intensity maps");
+    Expect(fromLevel.directional.authoredEnabled == authored.directionalEnabled,
+        "authored enabled maps");
+    Expect(fromLevel.directional.shadowsEnabled == authored.directionalShadowsEnabled,
+        "authored shadows map");
+
+    world::LevelEnvironment disabled = authored;
+    disabled.directionalEnabled = false;
+    disabled.directionalShadowsEnabled = true;
+    const render::LightingEnvironment disabledLight =
+        render::MakeLightingEnvironmentFromAuthored(disabled);
+    Expect(!render::EffectiveDirectionalEnabled(disabledLight),
+        "authored disabled is effective disabled");
+    Expect(!render::DirectionalShadowsAreActive(disabledLight),
+        "disabled light also disables shadows");
+    Expect(NearlyEqual(disabledLight.ambient.intensity, authored.ambientIntensity),
+        "disabled directional keeps ambient");
+
+    world::LevelEnvironment noShadows = authored;
+    noShadows.directionalShadowsEnabled = false;
+    const render::LightingEnvironment litNoShadow =
+        render::MakeLightingEnvironmentFromAuthored(noShadows);
+    Expect(render::EffectiveDirectionalEnabled(litNoShadow), "shadows-off keeps directional");
+    Expect(!render::DirectionalShadowsAreActive(litNoShadow), "shadows-off disables shadow pass");
+
+    const core::Vec3 rotated = render::RotateDirectionalRay(
+        {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 90.0f);
+    Expect(NearlyEqual(Length(rotated), 1.0f), "rotated ray stays normalized");
+    Expect(NearlyEqual(rotated.y, 0.0f, 0.05f), "90 deg around X moves off -Y");
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d LightingEnvironmentTest failure(s)\n", gFailures);

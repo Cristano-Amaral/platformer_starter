@@ -15,6 +15,30 @@ inline bool EditorSelectionIsNone(EditorSelection selection)
     return selection.kind == EditorObjectKind::None;
 }
 
+inline bool IsLightingAuthoringSelection(EditorSelection selection)
+{
+    return selection.kind == EditorObjectKind::Environment
+        || selection.kind == EditorObjectKind::DirectionalLight;
+}
+
+inline bool EditorSelectionSetContainsLightingAuthoring(
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional)
+{
+    if (IsLightingAuthoringSelection(primary))
+    {
+        return true;
+    }
+    for (const EditorSelection& entry : additional)
+    {
+        if (IsLightingAuthoringSelection(entry))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 inline bool EditorSelectionSetIsMulti(
     EditorSelection primary,
     const std::vector<EditorSelection>& additional)
@@ -195,6 +219,18 @@ inline void ApplyEditorSelectionClick(
     EditorSelection clicked,
     bool additive)
 {
+    if (IsLightingAuthoringSelection(clicked)
+        || EditorSelectionSetContainsLightingAuthoring(primary, additional))
+    {
+        if (additive && primary == clicked && additional.empty()
+            && IsLightingAuthoringSelection(clicked))
+        {
+            ClearEditorSelectionSet(primary, additional);
+            return;
+        }
+        ReplaceEditorSelection(primary, additional, clicked);
+        return;
+    }
     if (!additive)
     {
         ReplaceEditorSelection(primary, additional, clicked);

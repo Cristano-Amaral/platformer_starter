@@ -9,6 +9,7 @@
 #include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
+#include "world/LevelEnvironment.h"
 #include "world/LevelGoal.h"
 #include "world/LevelIdentity.h"
 #include "world/MovingPlatform.h"
@@ -81,6 +82,8 @@ struct LevelDefinition
     // gameplay. Membership is typed {kind,index} and remapped by lifecycle.
     std::vector<AuthoringGroup> authoringGroups{};
     LevelCameraSpec camera{};
+    // Singleton authored lighting. Missing Level records resolve to M85 defaults.
+    LevelEnvironment environment = MakeDefaultLevelEnvironment();
 };
 
 bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level);

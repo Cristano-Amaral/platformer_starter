@@ -1188,6 +1188,35 @@ void DrawRotateGizmo(const DebugWorldOverlay& overlay)
     rlEnableDepthTest();
 }
 
+void DrawDirectionalLightAuthoring(const DebugWorldOverlay& overlay)
+{
+    if (!overlay.drawDirectionalLightAuthoring)
+    {
+        return;
+    }
+
+    const Vector3 origin = ToRaylib(overlay.directionalLightAnchor);
+    const core::Vec3 ray = overlay.directionalLightRay;
+    const float rayLength = 3.4f;
+    const Vector3 tip{
+        origin.x + ray.x * rayLength,
+        origin.y + ray.y * rayLength,
+        origin.z + ray.z * rayLength};
+    const Color sunFill = overlay.directionalLightSelected
+        ? Color{255, 214, 92, 255}
+        : Color{255, 186, 64, 220};
+    const Color sunWire = overlay.directionalLightSelected
+        ? Color{255, 240, 170, 255}
+        : Color{255, 210, 110, 255};
+    const Color rayColor = overlay.directionalLightSelected
+        ? Color{255, 230, 140, 255}
+        : Color{255, 196, 96, 255};
+    DrawSphere(origin, overlay.directionalLightSelected ? 0.28f : 0.24f, sunFill);
+    DrawSphereWires(origin, overlay.directionalLightSelected ? 0.28f : 0.24f, 8, 8, sunWire);
+    DrawLine3D(origin, tip, rayColor);
+    DrawSphere(tip, 0.09f, rayColor);
+}
+
 void DrawWorldOverlay(const DebugWorldOverlay& overlay)
 {
     if (overlay.drawSpawnMarker
@@ -1536,6 +1565,7 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
                 kCheckpointRespawnConnector);
         }
     }
+    DrawDirectionalLightAuthoring(overlay);
     DrawTranslationGizmo(overlay);
     DrawResizeGizmo(overlay);
     DrawRotateGizmo(overlay);
@@ -2245,9 +2275,11 @@ void Renderer::DrawWorld(
         }
     };
 
-    const LightingEnvironment lightingEnv = MakeDefaultLightingEnvironment();
+    const LightingEnvironment lightingEnv = MakeLightingEnvironmentFromAuthored(
+        overlay.usePreviewLighting ? overlay.previewLighting : level.environment);
     const bool lightingReady = worldLighting != nullptr && worldLighting->IsReady();
-    if (lightingReady)
+    const bool shadowsActive = lightingReady && DirectionalShadowsAreActive(lightingEnv);
+    if (shadowsActive)
     {
         gWorldLighting = worldLighting.get();
         gWorldSolidMode = WorldSolidMode::Solid;

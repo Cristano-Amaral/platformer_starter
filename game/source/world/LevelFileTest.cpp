@@ -87,7 +87,9 @@ bool CanonicalLevel01Values(const world::LevelDefinition& level)
         && level.itemPickups.empty()
         && level.staticProps.empty()
         && Vec3Equal(level.camera.offset, {2.0f, 3.5f, 12.0f})
-        && level.camera.fieldOfViewY == 40.0f;
+        && level.camera.fieldOfViewY == 40.0f
+        && world::LevelEnvironmentEqual(
+            level.environment, world::MakeDefaultLevelEnvironment());
 }
 
 std::string_view FirstToken(std::string_view line)
@@ -122,7 +124,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 22> allowed{
+    static constexpr std::array<std::string_view, 24> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -144,7 +146,9 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "item_pickup",
         "static_prop",
         "authoring_group",
-        "camera"};
+        "camera",
+        "environment",
+        "directional_light"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -476,6 +480,8 @@ int main()
     Expect(CountRecords(written, "static_prop") == 0, "writer static_prop count");
     Expect(CountRecords(written, "authoring_group") == 0, "writer authoring_group count");
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
+    Expect(CountRecords(written, "environment") == 1, "writer environment count");
+    Expect(CountRecords(written, "directional_light") == 1, "writer directional_light count");
     Expect(CountRecords(written, "inventory") == 0, "writer emits no inventory records");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
 
@@ -1848,24 +1854,123 @@ int main()
                     && world::ParseLevelText(canonical).level.staticProps.empty(),
                 "old levels with zero static_prop remain valid");
 
-            const world::ParseLevelFileResult ambientLight =
-                world::ParseLevelText(canonical + "ambient_light 1 1 1 0.3\n");
+            const world::ParseLevelFileResult missingEnvironment = world::ParseLevelText(canonical);
             Expect(
-                ambientLight.status == world::LoadLevelFileStatus::Invalid,
-                "M85: ambient_light is not Level syntax");
+                missingEnvironment.status == world::LoadLevelFileStatus::Loaded,
+                "old Level without Environment syntax remains valid");
             Expect(
-                ambientLight.error.find("unrecognized") != std::string::npos,
-                "M85: ambient_light is an unrecognized record");
+                world::LevelEnvironmentEqual(
+                    missingEnvironment.level.environment, world::MakeDefaultLevelEnvironment()),
+                "missing Environment resolves to M85 defaults");
+            Expect(
+                missingEnvironment.level.environment.directionalEnabled,
+                "default directional enabled");
+            Expect(
+                missingEnvironment.level.environment.directionalShadowsEnabled,
+                "default shadows enabled");
+
+            world::LevelDefinition authoredLighting = missingEnvironment.level;
+            authoredLighting.environment.ambientIntensity = 0.5f;
+            authoredLighting.environment.directionalEnabled = false;
+            authoredLighting.environment.directionalShadowsEnabled = false;
+            authoredLighting.environment.directionalRayDirection =
+                world::CanonicalLevelDirectionalRay({0.0f, -1.0f, 0.2f});
+            authoredLighting.environment.directionalColor = {0.8f, 0.7f, 0.6f};
+            authoredLighting.environment.directionalIntensity = 0.4f;
+            authoredLighting.environment.ambientColor = {0.9f, 0.95f, 1.0f};
+            const std::string lightingText = world::SerializeLevelText(authoredLighting);
+            Expect(CountRecords(lightingText, "environment") == 1, "serialize environment");
+            Expect(CountRecords(lightingText, "directional_light") == 1, "serialize directional");
+            const world::ParseLevelFileResult lightingRoundTrip =
+                world::ParseLevelText(lightingText);
+            Expect(
+                lightingRoundTrip.status == world::LoadLevelFileStatus::Loaded
+                    && world::AuthoredLevelDataEqual(authoredLighting, lightingRoundTrip.level),
+                "Environment/Directional Light roundtrip");
+            Expect(
+                lightingRoundTrip.level.environment.directionalEnabled == false,
+                "enabled false roundtrips");
+            Expect(
+                lightingRoundTrip.level.environment.directionalShadowsEnabled == false,
+                "shadows false roundtrips");
+
+            Expect(
+                world::ParseLevelText(canonical + "environment 1 1 1 0.34\n").status
+                    == world::LoadLevelFileStatus::Loaded,
+                "explicit default environment is valid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "environment 1 1 1 0.34\nenvironment 1 1 1 0.2\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "duplicate environment is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "directional_light 1 0 -1 0 1 0.96 0.88 0.88 1\n"
+                      "directional_light 1 0 -1 0 1 0.96 0.88 0.88 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "duplicate directional_light is invalid");
+            Expect(
+                world::ParseLevelText(canonical + "environment 2 0 0 0.34\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "ambient color above 1 is invalid");
+            Expect(
+                world::ParseLevelText(canonical + "environment 1 1 1 -0.1\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative ambient intensity is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "directional_light 1 0 -1 0 2 0 0 0.88 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "directional color above 1 is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "directional_light 1 0 -1 0 1 0.96 0.88 -1 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative directional intensity is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "directional_light 1 0 0 0 1 0.96 0.88 0.88 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero directional ray is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "directional_light true 0 -1 0 1 0.96 0.88 0.88 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "malformed bool is invalid");
+            Expect(
+                world::ParseLevelText(canonical + "linkedLightIndex 0\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "gameplay light-link syntax is absent");
+            Expect(
+                world::ParseLevelText(canonical + "ambient_light 1 1 1 0.3\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "ambient_light remains unrecognized");
             const world::ParseLevelFileResult directionalLight =
                 world::ParseLevelText(canonical + "directional_light 0 -1 0 1 1 1 1\n");
             Expect(
                 directionalLight.status == world::LoadLevelFileStatus::Invalid,
-                "M85: directional_light is not Level syntax");
+                "short directional_light record is invalid");
             const world::ParseLevelFileResult shadowSettings =
                 world::ParseLevelText(canonical + "shadow_settings 2048 0.002 72\n");
             Expect(
                 shadowSettings.status == world::LoadLevelFileStatus::Invalid,
-                "M85: shadow_settings is not Level syntax");
+                "shadow_settings is not Level syntax");
+
+            world::LevelDefinition dirtyProbe = missingEnvironment.level;
+            Expect(
+                world::AuthoredLevelDataEqual(dirtyProbe, missingEnvironment.level),
+                "no-op Environment compare is equal");
+            dirtyProbe.environment.ambientIntensity = 0.41f;
+            Expect(
+                !world::AuthoredLevelDataEqual(dirtyProbe, missingEnvironment.level),
+                "ambient intensity edit is a semantic authored change");
             Expect(
                 world::ParseLevelText(
                     canonical + "static_prop 0 1 0 0 0 0 1 1 1 models/missing_not_on_disk.glb\n")

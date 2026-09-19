@@ -16,6 +16,8 @@ uniform float ambientIntensity;
 uniform vec3 lightRayDirection;
 uniform vec3 lightColor;
 uniform float lightIntensity;
+uniform float lightEnabled;
+uniform float shadowsEnabled;
 uniform mat4 lightVP;
 uniform float shadowBias;
 uniform int shadowMapResolution;
@@ -59,9 +61,10 @@ void main()
     vec3 normal = normalize(fragNormal);
     vec3 toLight = normalize(-lightRayDirection);
     float nDotL = max(dot(normal, toLight), 0.0);
-    float visibility = ShadowVisibility(fragPosition, nDotL);
+    float visibility = (shadowsEnabled > 0.5) ? ShadowVisibility(fragPosition, nDotL) : 1.0;
+    float directionalScale = (lightEnabled > 0.5) ? 1.0 : 0.0;
 
     vec3 ambient = albedo.rgb * ambientColor * ambientIntensity;
-    vec3 directional = albedo.rgb * lightColor * lightIntensity * nDotL * visibility;
+    vec3 directional = albedo.rgb * lightColor * lightIntensity * nDotL * visibility * directionalScale;
     finalColor = vec4(ambient + directional, albedo.a);
 }

@@ -1,6 +1,7 @@
 #include "editor/EditorGizmo.h"
 
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 #include "editor/EditorMath.h"
@@ -333,7 +334,8 @@ bool IsScaleSelection(EditorSelection selection)
 bool IsRotateSelection(EditorSelection selection)
 {
     return selection.kind == EditorObjectKind::StaticProp
-        || selection.kind == EditorObjectKind::ItemPickup;
+        || selection.kind == EditorObjectKind::ItemPickup
+        || selection.kind == EditorObjectKind::DirectionalLight;
 }
 
 core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection selection)
@@ -790,6 +792,14 @@ bool GetGizmoPreviewBox(
                 kStaticPropDefaultLocalMax,
                 center,
                 size);
+            return true;
+        }
+        break;
+    case EditorObjectKind::DirectionalLight:
+        if (selection.index == 0)
+        {
+            center = kDirectionalLightAuthoringAnchor;
+            size = kDirectionalLightAuthoringPickSize;
             return true;
         }
         break;
@@ -1764,6 +1774,11 @@ bool TryScaleGizmoOrigin(
         origin = world::ItemPickupVisualPosition(workingCopy.itemPickups[selection.index]);
         return true;
     }
+    if (selection.kind == EditorObjectKind::DirectionalLight && selection.index == 0)
+    {
+        origin = kDirectionalLightAuthoringAnchor;
+        return true;
+    }
     const core::Vec3* position = GetEditablePosition(workingCopy, selection);
     if (position == nullptr)
     {
@@ -1977,8 +1992,12 @@ GizmoDrawRequest MakeRotateGizmoDrawRequest(
 {
     GizmoDrawRequest request{};
     core::Vec3 origin{};
-    if (!TryScaleGizmoOrigin(workingCopy, selection, origin) || !IsRotateSelection(selection)
-        || GetEditableRotation(workingCopy, selection) == nullptr)
+    if (!TryScaleGizmoOrigin(workingCopy, selection, origin) || !IsRotateSelection(selection))
+    {
+        return request;
+    }
+    if (selection.kind != EditorObjectKind::DirectionalLight
+        && GetEditableRotation(workingCopy, selection) == nullptr)
     {
         return request;
     }
@@ -2180,6 +2199,35 @@ bool UpdateRotateInteraction(
         }
         else
         {
+            if (state.dragTarget.kind == EditorObjectKind::DirectionalLight)
+            {
+                const core::Vec3 intendedRotation = GizmoRotateDegrees(state, mouseRay);
+                float delta = 0.0f;
+                switch (state.active)
+                {
+                case EditorAxis::X:
+                    delta = intendedRotation.x - state.dragStartRotation.x;
+                    break;
+                case EditorAxis::Y:
+                    delta = intendedRotation.y - state.dragStartRotation.y;
+                    break;
+                case EditorAxis::Z:
+                    delta = intendedRotation.z - state.dragStartRotation.z;
+                    break;
+                case EditorAxis::None:
+                    break;
+                }
+                if (snapActive && increment > 0.0f && std::isfinite(increment))
+                {
+                    delta = std::round(delta / increment) * increment;
+                }
+                workingCopy.environment.directionalRayDirection = RotateAuthoredDirectionalRay(
+                    world::CanonicalLevelDirectionalRay(state.dragStartRotation),
+                    EditorAxisDirection(state.active),
+                    delta);
+                state.hovered = state.active;
+                return true;
+            }
             core::Vec3* rotation = GetEditableRotation(workingCopy, state.dragTarget);
             if (rotation == nullptr)
             {
@@ -2214,7 +2262,12 @@ bool UpdateRotateInteraction(
 
     const core::Vec3* rotation = GetEditableRotation(workingCopy, currentSelection);
     core::Vec3 origin{};
-    if (!TryScaleGizmoOrigin(workingCopy, currentSelection, origin) || rotation == nullptr)
+    if (!TryScaleGizmoOrigin(workingCopy, currentSelection, origin))
+    {
+        state.hovered = EditorAxis::None;
+        return false;
+    }
+    if (currentSelection.kind != EditorObjectKind::DirectionalLight && rotation == nullptr)
     {
         state.hovered = EditorAxis::None;
         return false;
@@ -2228,8 +2281,11 @@ bool UpdateRotateInteraction(
         return false;
     }
 
+    const core::Vec3 startRotation = currentSelection.kind == EditorObjectKind::DirectionalLight
+        ? workingCopy.environment.directionalRayDirection
+        : *rotation;
     if (!BeginRotateDrag(
-            state, currentSelection, state.hovered, origin, *rotation, mouseRay))
+            state, currentSelection, state.hovered, origin, startRotation, mouseRay))
     {
         // Ring was hit but the plane could not start a drag. Consume the click
         // so the object behind the gizmo is not selected.

@@ -333,6 +333,24 @@ std::string SerializeLevelText(const LevelDefinition& level)
     AppendFloat(out, level.camera.fieldOfViewY);
     out += '\n';
 
+    out += "environment ";
+    AppendVec3(out, level.environment.ambientColor);
+    out += ' ';
+    AppendFloat(out, level.environment.ambientIntensity);
+    out += '\n';
+
+    out += "directional_light ";
+    AppendInt(out, level.environment.directionalEnabled ? 1 : 0);
+    out += ' ';
+    AppendVec3(out, level.environment.directionalRayDirection);
+    out += ' ';
+    AppendVec3(out, level.environment.directionalColor);
+    out += ' ';
+    AppendFloat(out, level.environment.directionalIntensity);
+    out += ' ';
+    AppendInt(out, level.environment.directionalShadowsEnabled ? 1 : 0);
+    out += '\n';
+
     return out;
 }
 

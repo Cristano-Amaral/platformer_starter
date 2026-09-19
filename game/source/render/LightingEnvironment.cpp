@@ -116,6 +116,26 @@ core::Vec3 DirectionalLightTowardSurface(core::Vec3 rayDirection)
     return {-ray.x, -ray.y, -ray.z};
 }
 
+core::Vec3 RotateDirectionalRay(core::Vec3 rayDirection, core::Vec3 axis, float degrees)
+{
+    const core::Vec3 ray = NormalizeDirectionalLight(rayDirection);
+    if (!Finite(degrees))
+    {
+        return ray;
+    }
+    const core::Vec3 unitAxis = NormalizeVec(axis, {0.0f, 1.0f, 0.0f});
+    const float radians = degrees * (3.14159265f / 180.0f);
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    const core::Vec3 axisCrossRay = Cross(unitAxis, ray);
+    const float axisDotRay = unitAxis.x * ray.x + unitAxis.y * ray.y + unitAxis.z * ray.z;
+    const core::Vec3 rotated{
+        ray.x * cosine + axisCrossRay.x * sine + unitAxis.x * axisDotRay * (1.0f - cosine),
+        ray.y * cosine + axisCrossRay.y * sine + unitAxis.y * axisDotRay * (1.0f - cosine),
+        ray.z * cosine + axisCrossRay.z * sine + unitAxis.z * axisDotRay * (1.0f - cosine)};
+    return NormalizeDirectionalLight(rotated);
+}
+
 int NormalizedShadowMapResolution(int resolution)
 {
     int value = resolution;
@@ -175,6 +195,29 @@ LightingEnvironment ValidateLightingEnvironment(LightingEnvironment environment)
         environment.shadows.focus = defaults.shadows.focus;
     }
     return environment;
+}
+
+LightingEnvironment MakeLightingEnvironmentFromAuthored(const world::LevelEnvironment& authored)
+{
+    LightingEnvironment environment = MakeDefaultLightingEnvironment();
+    environment.ambient.color = authored.ambientColor;
+    environment.ambient.intensity = authored.ambientIntensity;
+    environment.directional.authoredEnabled = authored.directionalEnabled;
+    environment.directional.rayDirection = authored.directionalRayDirection;
+    environment.directional.color = authored.directionalColor;
+    environment.directional.intensity = authored.directionalIntensity;
+    environment.directional.shadowsEnabled = authored.directionalShadowsEnabled;
+    return ValidateLightingEnvironment(environment);
+}
+
+bool EffectiveDirectionalEnabled(const LightingEnvironment& environment)
+{
+    return environment.directional.authoredEnabled;
+}
+
+bool DirectionalShadowsAreActive(const LightingEnvironment& environment)
+{
+    return EffectiveDirectionalEnabled(environment) && environment.directional.shadowsEnabled;
 }
 
 DirectionalLightView BuildDirectionalLightView(

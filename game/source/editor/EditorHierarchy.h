@@ -32,6 +32,8 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
     std::vector<HierarchyEntry> entries;
     entries.push_back({{EditorObjectKind::Spawn, 0}, ""});
     entries.push_back({{EditorObjectKind::Camera, 0}, ""});
+    entries.push_back({{EditorObjectKind::Environment, 0}, ""});
+    entries.push_back({{EditorObjectKind::DirectionalLight, 0}, ""});
     entries.push_back({{EditorObjectKind::Ground, 0}, ""});
     for (std::size_t index = 0; index < level.elevatedPlatforms.size(); ++index)
     {

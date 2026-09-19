@@ -1,6 +1,7 @@
 #include "editor/EditorPicking.h"
 
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/StaticPropTransform.h"
@@ -202,6 +203,13 @@ EditorPickingSet BuildPickingSet(
         0,
         appliedLevel.initialSpawnVisualCenter,
         world::kPlayerVisualSize,
+        0.0f);
+    AddProxy(
+        set,
+        EditorObjectKind::DirectionalLight,
+        0,
+        kDirectionalLightAuthoringAnchor,
+        kDirectionalLightAuthoringPickSize,
         0.0f);
     AddProxy(
         set,

@@ -78,6 +78,10 @@ int main()
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Spawn), "spawn unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Ground), "ground unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Camera), "camera unsupported");
+    Expect(!editor::SupportsLifecycle(EditorObjectKind::Environment), "Environment cannot Duplicate/Delete");
+    Expect(
+        !editor::SupportsLifecycle(EditorObjectKind::DirectionalLight),
+        "Directional Light cannot Duplicate/Delete");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::Slope), "slope unsupported");
     Expect(!editor::SupportsLifecycle(EditorObjectKind::MovingPlatform), "moving unsupported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic box supported");

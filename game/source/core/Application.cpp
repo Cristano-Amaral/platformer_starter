@@ -61,6 +61,7 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/StaticModelThumbnailCache.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorInput.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorNudge.h"
 #include "editor/EditorOrientation.h"
@@ -1827,6 +1828,15 @@ int Application::Run()
                     checkpointOverlay.respawnPosition.z - checkpointOverlay.triggerCenter.z;
                 overlay.drawCheckpointRespawnConnector = (dx * dx + dy * dy + dz * dz) > 1.0e-6f;
             }
+
+            overlay.usePreviewLighting = true;
+            overlay.previewLighting = levelEditorState.workingCopy.environment;
+            overlay.drawDirectionalLightAuthoring = true;
+            overlay.directionalLightAnchor = editor::DirectionalLightAuthoringAnchor();
+            overlay.directionalLightRay = world::CanonicalLevelDirectionalRay(
+                levelEditorState.workingCopy.environment.directionalRayDirection);
+            overlay.directionalLightSelected =
+                levelEditorState.selection.kind == editor::EditorObjectKind::DirectionalLight;
 
             editor::GizmoDrawRequest gizmo{};
             const bool multiSelected = editor::EditorSelectionSetIsMulti(

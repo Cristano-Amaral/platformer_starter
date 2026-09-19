@@ -1,11 +1,11 @@
 #pragma once
 
 // Milestone 85: engine-owned world lighting configuration. Presentation only.
-// Not a scene-light list, ECS component, Level record, or Lighting Editor.
-// A future Environment / Lighting Editor can replace MakeDefaultLightingEnvironment
-// without adding Level syntax or Hierarchy light objects.
+// Milestone 85.1 supplies Level-authored environment data into this boundary.
+// Not a scene-light list, ECS component, or Lighting Editor panel.
 
 #include "core/Vec3.h"
+#include "world/LevelEnvironment.h"
 
 namespace render
 {
@@ -23,6 +23,9 @@ struct DirectionalLight
     core::Vec3 rayDirection{-0.42f, -1.0f, -0.38f};
     core::Vec3 color{1.0f, 0.96f, 0.88f};
     float intensity = 0.88f;
+    // Authored enabled. Effective enabled currently equals this value.
+    bool authoredEnabled = true;
+    bool shadowsEnabled = true;
 };
 
 struct DirectionalShadowConfig
@@ -96,8 +99,12 @@ inline constexpr int kMaxShadowMapResolution = 4096;
 
 LightingEnvironment MakeDefaultLightingEnvironment();
 LightingEnvironment ValidateLightingEnvironment(LightingEnvironment environment);
+LightingEnvironment MakeLightingEnvironmentFromAuthored(const world::LevelEnvironment& authored);
+bool EffectiveDirectionalEnabled(const LightingEnvironment& environment);
+bool DirectionalShadowsAreActive(const LightingEnvironment& environment);
 core::Vec3 NormalizeDirectionalLight(core::Vec3 rayDirection);
 core::Vec3 DirectionalLightTowardSurface(core::Vec3 rayDirection);
+core::Vec3 RotateDirectionalRay(core::Vec3 rayDirection, core::Vec3 axis, float degrees);
 DirectionalLightView BuildDirectionalLightView(
     const DirectionalLight& light,
     const DirectionalShadowConfig& shadows);
