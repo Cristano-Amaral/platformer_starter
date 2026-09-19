@@ -60,9 +60,11 @@ struct GizmoInteractionState
     core::Vec3 dragStartRadial{};
     int dragHandleSign = 1;
     int hoveredSign = 1;
-    // M78 Group Translate. Parallel to dragMembers; empty for single-object.
+    // M78 Group Translate / M80 Group Rotate. Parallel to dragMembers;
+    // empty for single-object.
     std::vector<EditorSelection> dragMembers{};
     std::vector<core::Vec3> dragMemberStartPositions{};
+    std::vector<core::Vec3> dragMemberStartRotations{};
 };
 
 struct GizmoDrawRequest
@@ -501,7 +503,8 @@ bool UpdateRotateInteraction(
     bool selectHeld,
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences = nullptr,
-    bool invertModifier = false);
+    bool invertModifier = false,
+    const std::vector<EditorSelection>* additionalSelections = nullptr);
 
 // Live per-frame interaction. Uses the tested pick/drag helpers. Returns true
 // when this frame's LMB must not also world-pick (active drag, drag start, or

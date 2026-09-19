@@ -1,6 +1,6 @@
 # Milestone 79 --- Multi-Selection Lifecycle Operations
 
-**Status:** implemented, awaiting correction manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/79-multi-selection-lifecycle-operations`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

@@ -1,6 +1,7 @@
 #include "editor/EditorGizmo.h"
 
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorSelectionSet.h"
@@ -1524,6 +1525,7 @@ void EndGizmoDrag(GizmoInteractionState& state)
     state.dragHandleSign = 1;
     state.dragMembers.clear();
     state.dragMemberStartPositions.clear();
+    state.dragMemberStartRotations.clear();
 }
 
 GizmoDrawRequest MakeResizeGizmoDrawRequest(
@@ -2115,8 +2117,14 @@ bool UpdateRotateInteraction(
     bool selectHeld,
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences,
-    bool invertModifier)
+    bool invertModifier,
+    const std::vector<EditorSelection>* additionalSelections)
 {
+    const std::vector<EditorSelection> emptyAdditional;
+    const std::vector<EditorSelection>& additional =
+        additionalSelections != nullptr ? *additionalSelections : emptyAdditional;
+    const bool multiSelected = EditorSelectionSetIsMulti(currentSelection, additional);
+
     if (state.dragging)
     {
         if (selectReleased || !selectHeld)
@@ -2131,10 +2139,20 @@ bool UpdateRotateInteraction(
             return true;
         }
 
-        core::Vec3* rotation = GetEditableRotation(workingCopy, state.dragTarget);
-        if (rotation == nullptr)
+        const bool groupDrag = state.dragMembers.size() > 1;
+        if (groupDrag)
         {
-            ClearGizmoInteraction(state);
+            const std::vector<EditorSelection> currentMembers =
+                EditorSelectionSetMembers(currentSelection, additional);
+            if (currentMembers != state.dragMembers)
+            {
+                EndGizmoDrag(state);
+                return true;
+            }
+        }
+        else if (multiSelected)
+        {
+            EndGizmoDrag(state);
             return true;
         }
 
@@ -2143,8 +2161,34 @@ bool UpdateRotateInteraction(
         const float increment = snapActive
             ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Rotate)
             : 0.0f;
-        *rotation = ApplyAuthoredTransformSnap(
-            intended, EditorTransformMode::Rotate, state.active, snapActive, increment);
+        if (groupDrag)
+        {
+            if (!ApplyGroupRotateFromPrimaryResult(
+                    workingCopy,
+                    state.dragMembers,
+                    state.dragMemberStartPositions,
+                    state.dragMemberStartRotations,
+                    state.dragStartPosition,
+                    intended,
+                    state.active,
+                    snapActive,
+                    increment))
+            {
+                ClearGizmoInteraction(state);
+                return true;
+            }
+        }
+        else
+        {
+            core::Vec3* rotation = GetEditableRotation(workingCopy, state.dragTarget);
+            if (rotation == nullptr)
+            {
+                ClearGizmoInteraction(state);
+                return true;
+            }
+            *rotation = ApplyAuthoredTransformSnap(
+                intended, EditorTransformMode::Rotate, state.active, snapActive, increment);
+        }
         state.hovered = state.active;
         return true;
     }
@@ -2156,6 +2200,13 @@ bool UpdateRotateInteraction(
     }
 
     if (!IsRotateSelection(currentSelection))
+    {
+        state.hovered = EditorAxis::None;
+        return false;
+    }
+
+    if (multiSelected
+        && !EditorSelectionSetSupportsGroupRotate(workingCopy, currentSelection, additional))
     {
         state.hovered = EditorAxis::None;
         return false;
@@ -2183,6 +2234,20 @@ bool UpdateRotateInteraction(
         // Ring was hit but the plane could not start a drag. Consume the click
         // so the object behind the gizmo is not selected.
         return true;
+    }
+
+    if (multiSelected)
+    {
+        state.dragMembers = EditorSelectionSetMembers(currentSelection, additional);
+        if (!CaptureGroupRotateStarts(
+                workingCopy,
+                state.dragMembers,
+                state.dragMemberStartPositions,
+                state.dragMemberStartRotations))
+        {
+            ClearGizmoInteraction(state);
+            return true;
+        }
     }
     return true;
 }

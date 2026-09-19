@@ -6,6 +6,7 @@
 #include "editor/EditorPlacement.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
+#include "editor/EditorGroupRotate.h"
 #include "editor/ItemIdInspectorEdit.h"
 #include "editor/StaticPropTransform.h"
 #include "gameplay/CollectibleRunState.h"
@@ -2087,6 +2088,83 @@ int main()
             "invalid Inspector Item ID is still rejected");
         Expect(state.workingCopy.itemPickups[1].itemId == "coin", "invalid ID does not revert coin");
         Expect(std::strcmp(field.buffer, "coin") == 0, "invalid ID restores the committed buffer");
+    }
+
+    // ---- M80 Group Rotate Apply/Save preserves authored results ----
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        world::StaticPropSpec primary{};
+        primary.modelIdentity = "models/test_static.glb";
+        primary.position = {0.0f, 1.0f, 0.0f};
+        primary.rotationDegrees = {0.0f, 7.0f, 0.0f};
+        primary.scale = {1.0f, 1.0f, 1.0f};
+        active.staticProps.push_back(primary);
+        world::StaticPropSpec secondary{};
+        secondary.modelIdentity = "models/test_static.glb";
+        secondary.position = {2.0f, 1.0f, 0.0f};
+        secondary.rotationDegrees = {0.0f, 31.0f, 0.0f};
+        secondary.scale = {1.0f, 1.0f, 1.0f};
+        active.staticProps.push_back(secondary);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.selection = {EditorObjectKind::StaticProp, 0};
+        state.additionalSelections = {{EditorObjectKind::StaticProp, 1}};
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(!state.modified, "seeded Group Rotate fixture is not Modified");
+
+        const std::vector<editor::EditorSelection> members =
+            editor::EditorSelectionSetMembers(state.selection, state.additionalSelections);
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(
+            editor::CaptureGroupRotateStarts(
+                state.workingCopy, members, startPositions, startRotations),
+            "capture Group Rotate starts for Apply/Save");
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(state.workingCopy, state.selection, pivot),
+            "Apply/Save PRIMARY pivot");
+        Expect(
+            editor::ApplySharedGroupRotation(
+                state.workingCopy,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                editor::EditorAxis::Y,
+                15.0f),
+            "Group Rotate edits workingCopy only");
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "Group Rotate marks Modified");
+        Expect(!world::AuthoredLevelDataEqual(state.workingCopy, state.savedSourceBaseline),
+            "Dirty/authored baseline sees Group Rotate");
+        Expect(state.selection.index == 0, "PRIMARY remains PRIMARY after Group Rotate");
+        Expect(
+            state.additionalSelections.size() == 1 && state.additionalSelections[0].index == 1,
+            "secondary selection remains intact after Group Rotate");
+
+        Expect(
+            world::LevelDefinitionHasRequiredAuthoredContent(state.workingCopy),
+            "Apply validation accepts Group Rotate workingCopy");
+        const world::LevelDefinition applied = state.workingCopy;
+        Expect(applied.staticProps[0].rotationDegrees.y == 22.0f
+                && applied.staticProps[1].rotationDegrees.y == 46.0f,
+            "Apply promotion keeps the shared orientation delta");
+        Expect(applied.staticProps[0].position.x == 0.0f && applied.staticProps[0].position.z == 0.0f,
+            "Apply keeps PRIMARY position fixed");
+        SeedEditor(state, applied);
+        Expect(!state.modified, "after Apply, workingCopy matches active");
+
+        const std::string serialized = world::SerializeLevelText(applied);
+        Expect(!serialized.empty(), "Save serialization accepts Group Rotate results");
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(serialized);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload parse succeeds");
+        Expect(
+            reloaded.level.staticProps.size() == 2
+                && reloaded.level.staticProps[0].rotationDegrees.y == 22.0f
+                && reloaded.level.staticProps[1].rotationDegrees.y == 46.0f
+                && reloaded.level.staticProps[1].position.z == applied.staticProps[1].position.z,
+            "Save/reload preserves Group Rotate positions and orientations");
     }
 
     if (gFailures != 0)

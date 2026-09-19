@@ -65,6 +65,7 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/EditorOrientation.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorPlacement.h"
+#include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 #include "editor/EditorSelectionSet.h"
 #include "editor/SelectedModelHighlight.h"
@@ -1826,6 +1827,12 @@ int Application::Run()
                     levelEditorState.workingCopy,
                     levelEditorState.selection,
                     levelEditorState.additionalSelections);
+            const bool groupRotateOk =
+                !multiSelected
+                || editor::EditorSelectionSetSupportsGroupRotate(
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection,
+                    levelEditorState.additionalSelections);
             if (multiSelected
                 && !editor::EditorGroupAllowsTransformMode(levelEditorState.transformMode, true))
             {
@@ -1852,6 +1859,12 @@ int Application::Run()
                     levelEditorState.workingCopy,
                     cameraView,
                     levelEditorState.gizmo);
+            }
+            else if (
+                levelEditorState.transformMode == editor::EditorTransformMode::Rotate
+                && !groupRotateOk)
+            {
+                gizmo = {};
             }
             else if (levelEditorState.transformMode == editor::EditorTransformMode::Rotate)
             {
@@ -2284,7 +2297,8 @@ int Application::Run()
                     editorInput.selectHeld,
                     editorInput.selectReleased,
                     &levelEditorState.snap,
-                    editorInput.ctrlHeld);
+                    editorInput.ctrlHeld,
+                    &levelEditorState.additionalSelections);
             }
             else
             {

@@ -66,7 +66,7 @@ inline bool EditorGroupAllowsTransformMode(EditorTransformMode mode, bool multiS
     {
         return true;
     }
-    return mode == EditorTransformMode::Translate;
+    return mode == EditorTransformMode::Translate || mode == EditorTransformMode::Rotate;
 }
 
 inline const char* MultiSelectionTransformDisableReason(EditorTransformMode mode)
@@ -77,9 +77,8 @@ inline const char* MultiSelectionTransformDisableReason(EditorTransformMode mode
         return "Resize is not a group operation.";
     case EditorTransformMode::Scale:
         return "Scale is not a group operation.";
-    case EditorTransformMode::Rotate:
-        return "Rotate is not a group operation.";
     case EditorTransformMode::Translate:
+    case EditorTransformMode::Rotate:
         break;
     }
     return nullptr;

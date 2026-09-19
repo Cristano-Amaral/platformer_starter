@@ -4,6 +4,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
+#include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI) || defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
@@ -1649,6 +1650,16 @@ LevelEditorRequest DrawLevelControls(
                 ImGui::TextUnformatted(reason);
             }
         }
+        if (EditorSelectionSetIsMulti(state.selection, state.additionalSelections)
+            && state.transformMode == EditorTransformMode::Rotate)
+        {
+            const char* reason = GroupRotateDisableReason(
+                state.workingCopy, state.selection, state.additionalSelections);
+            if (reason != nullptr)
+            {
+                ImGui::TextUnformatted(reason);
+            }
+        }
         if (EditorSelectionSetIsMulti(state.selection, state.additionalSelections))
         {
             const char* groupReason = MultiSelectionTransformDisableReason(state.transformMode);
@@ -1670,6 +1681,7 @@ LevelEditorRequest DrawLevelControls(
             ImGui::TextUnformatted("Selected object is not scalable");
         }
         if (state.transformMode == EditorTransformMode::Rotate
+            && !EditorSelectionSetIsMulti(state.selection, state.additionalSelections)
             && state.selection.kind != EditorObjectKind::None
             && !IsRotateSelection(state.selection))
         {

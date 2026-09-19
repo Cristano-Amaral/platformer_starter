@@ -5,6 +5,7 @@
 #include "editor/EditorNudge.h"
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
+#include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 #include "editor/EditorSnap.h"
 #include "editor/EditorViewportGrid.h"
@@ -2734,12 +2735,24 @@ int main()
             "Resize is not a group operation");
         Expect(!editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Scale, true),
             "Scale is not a group operation");
-        Expect(!editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Rotate, true),
-            "Rotate is not a group operation");
+        Expect(editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Rotate, true),
+            "Rotate is a group operation for compatible members");
         Expect(editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Translate, true),
             "Translate remains the group mode");
         Expect(editor::EditorGroupAllowsTransformMode(editor::EditorTransformMode::Resize, false),
             "single-selection Resize remains available");
+        Expect(
+            editor::MultiSelectionTransformDisableReason(editor::EditorTransformMode::Resize)
+                != nullptr,
+            "Resize still reports that it is not a group operation");
+        Expect(
+            editor::MultiSelectionTransformDisableReason(editor::EditorTransformMode::Scale)
+                != nullptr,
+            "Scale still reports that it is not a group operation");
+        Expect(
+            editor::MultiSelectionTransformDisableReason(editor::EditorTransformMode::Rotate)
+                == nullptr,
+            "Rotate no longer uses the unsupported-group-mode message");
     }
 
     // ---- M78 live Group Translate drag uses shared snapped delta ----
@@ -2855,6 +2868,700 @@ int main()
             NearlyEqual(working.elevatedPlatforms[0].center.x, 2.0f, 0.0001f)
                 && NearlyEqual(working.elevatedPlatforms[1].center.x, 4.5f, 0.0001f),
             "originals are not translated with the copies");
+    }
+
+    // ---- M80 Group Rotate: eligibility, PRIMARY pivot, shared delta ----
+    {
+        world::LevelDefinition working{};
+        world::StaticPropSpec primary{};
+        primary.modelIdentity = "models/test_static.glb";
+        primary.position = {0.0f, 1.0f, 0.0f};
+        primary.rotationDegrees = {7.0f, 0.0f, 0.0f};
+        primary.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(primary);
+        world::StaticPropSpec secondary{};
+        secondary.modelIdentity = "models/test_static.glb";
+        secondary.position = {2.0f, 1.0f, 0.0f};
+        secondary.rotationDegrees = {31.0f, 0.0f, 0.0f};
+        secondary.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(secondary);
+        const EditorSelection primarySel{EditorObjectKind::StaticProp, 0};
+        const EditorSelection secondarySel{EditorObjectKind::StaticProp, 1};
+        std::vector<EditorSelection> additional{secondarySel};
+        Expect(
+            editor::EditorSelectionSetSupportsGroupRotate(working, primarySel, additional),
+            "two Static Props support Group Rotate");
+        Expect(
+            editor::GroupRotateDisableReason(working, primarySel, additional) == nullptr,
+            "compatible Group Rotate has no disable reason");
+        Expect(
+            !editor::EditorSelectionSetSupportsGroupRotate(working, primarySel, {}),
+            "single selection is not Group Rotate");
+
+        const std::vector<EditorSelection> members{primarySel, secondarySel};
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(
+            editor::CaptureGroupRotateStarts(working, members, startPositions, startRotations),
+            "capture Group Rotate drag-start transforms");
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, primarySel, pivot), "PRIMARY pivot exists");
+        Expect(Vec3Near(pivot, working.staticProps[0].position, 0.0001f),
+            "Static Prop Rotate pivot is authored position");
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                EditorAxis::Y,
+                90.0f),
+            "90-degree Group Rotate applies");
+        Expect(Vec3Near(working.staticProps[0].position, {0.0f, 1.0f, 0.0f}, 0.0001f),
+            "PRIMARY world position stays fixed");
+        Expect(Vec3Near(working.staticProps[1].position, {0.0f, 1.0f, -2.0f}, 0.0001f),
+            "secondary orbits PRIMARY 90 degrees around world Y");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, 90.0f, 0.0001f),
+            "PRIMARY orientation receives the shared +90 Y delta");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, 90.0f, 0.0001f),
+            "secondary orientation receives the same +90 Y delta");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.x, 7.0f, 0.0001f)
+                && NearlyEqual(working.staticProps[1].rotationDegrees.x, 31.0f, 0.0001f),
+            "inactive Euler axes stay at drag-start");
+        Expect(
+            NearlyEqual(
+                editor::Length(editor::Sub(working.staticProps[1].position, pivot)),
+                2.0f,
+                0.0001f),
+            "secondary distance to PRIMARY pivot is preserved");
+
+        working.staticProps[0].position = startPositions[0];
+        working.staticProps[1].position = startPositions[1];
+        working.staticProps[0].rotationDegrees = startRotations[0];
+        working.staticProps[1].rotationDegrees = startRotations[1];
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                EditorAxis::Y,
+                -90.0f),
+            "negative Group Rotate applies");
+        Expect(Vec3Near(working.staticProps[0].position, startPositions[0], 0.0001f),
+            "negative rotate keeps PRIMARY fixed");
+        Expect(Vec3Near(working.staticProps[1].position, {0.0f, 1.0f, 2.0f}, 0.0001f),
+            "negative Y rotation orbits the opposite direction");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, -90.0f, 0.0001f),
+            "PRIMARY receives the shared -90 Y delta");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, -90.0f, 0.0001f),
+            "secondary receives the shared -90 Y delta");
+
+        working.staticProps[0].position = startPositions[0];
+        working.staticProps[1].position = startPositions[1];
+        working.staticProps[0].rotationDegrees = startRotations[0];
+        working.staticProps[1].rotationDegrees = startRotations[1];
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                EditorAxis::X,
+                90.0f),
+            "world X Group Rotate applies");
+        Expect(Vec3Near(working.staticProps[1].position, {2.0f, 1.0f, 0.0f}, 0.0001f),
+            "world X rotation of an X-offset secondary does not move it");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.x, 97.0f, 0.0001f),
+            "world X adds the shared delta to PRIMARY X");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.x, 121.0f, 0.0001f),
+            "world X adds the same delta to secondary X");
+
+        working.staticProps[1].position = {0.0f, 1.0f, 2.0f};
+        startPositions[1] = working.staticProps[1].position;
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                EditorAxis::X,
+                90.0f),
+            "world X Group Rotate of a Z-offset secondary");
+        Expect(Vec3Near(working.staticProps[1].position, {0.0f, -1.0f, 0.0f}, 0.0001f),
+            "world X 90-degree orbit matches existing RotateX");
+        Expect(Vec3Near(working.staticProps[0].position, startPositions[0], 0.0001f),
+            "PRIMARY stays fixed on world X Group Rotate");
+    }
+
+    // ---- M80 shared Rotate Snap, Snap OFF, no per-member snap, no drift ----
+    {
+        world::LevelDefinition working{};
+        world::StaticPropSpec primary{};
+        primary.modelIdentity = "models/test_static.glb";
+        primary.position = {0.0f, 1.0f, 0.0f};
+        primary.rotationDegrees = {0.0f, 7.0f, 0.0f};
+        primary.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(primary);
+        world::StaticPropSpec secondary{};
+        secondary.modelIdentity = "models/test_static.glb";
+        secondary.position = {2.0f, 1.0f, 0.25f};
+        secondary.rotationDegrees = {0.0f, 31.0f, 0.0f};
+        secondary.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(secondary);
+        const std::vector<EditorSelection> members{
+            {EditorObjectKind::StaticProp, 0}, {EditorObjectKind::StaticProp, 1}};
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(
+            editor::CaptureGroupRotateStarts(working, members, startPositions, startRotations),
+            "capture starts for snap tests");
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, members[0], pivot), "snap-test pivot");
+
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                EditorAxis::Y,
+                15.0f),
+            "explicit shared +15 delta");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, 22.0f, 0.0001f),
+            "PRIMARY 7 + shared 15 = 22");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, 46.0f, 0.0001f),
+            "secondary 31 + shared 15 = 46");
+
+        working.staticProps[0].position = startPositions[0];
+        working.staticProps[1].position = startPositions[1];
+        working.staticProps[0].rotationDegrees = startRotations[0];
+        working.staticProps[1].rotationDegrees = startRotations[1];
+        const core::Vec3 intended{0.0f, 22.0f, 0.0f};
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                intended,
+                EditorAxis::Y,
+                true,
+                15.0f),
+            "M76 snaps PRIMARY rotation result once");
+        const core::Vec3 snappedPrimary = editor::SnappedPrimaryRotateResult(
+            intended, EditorAxis::Y, true, 15.0f);
+        Expect(NearlyEqual(snappedPrimary.y, 15.0f, 0.0001f),
+            "M76 15-degree snap sends 22 to 15");
+        const float sharedDelta =
+            editor::SharedRotationDelta(startRotations[0], snappedPrimary, EditorAxis::Y);
+        Expect(NearlyEqual(sharedDelta, 8.0f, 0.0001f),
+            "shared delta is snapped PRIMARY minus drag-start");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, 15.0f, 0.0001f),
+            "PRIMARY receives the snapped result");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, 39.0f, 0.0001f),
+            "secondary uses the shared delta, not an independent snap");
+        Expect(
+            !NearlyEqual(
+                working.staticProps[1].rotationDegrees.y,
+                editor::QuantizeToIncrement(39.0f, 15.0f),
+                0.0001f),
+            "secondary result 39 is not independently snapped to 45");
+        Expect(
+            !NearlyEqual(
+                working.staticProps[1].rotationDegrees.y,
+                editor::QuantizeToIncrement(31.0f, 15.0f),
+                0.0001f),
+            "secondary start 31 is not independently snapped to 30");
+        Expect(
+            !NearlyEqual(
+                working.staticProps[1].position.x,
+                editor::QuantizeToIncrement(working.staticProps[1].position.x, 0.25f),
+                0.0001f),
+            "secondary orbit position is not independently Translate-snapped");
+        Expect(
+            NearlyEqual(
+                editor::Length(editor::Sub(working.staticProps[1].position, pivot)),
+                editor::Length(editor::Sub(startPositions[1], pivot)),
+                0.0001f),
+            "snapped Group Rotate still preserves pivot distance");
+
+        for (int i = 0; i < 24; ++i)
+        {
+            Expect(
+                editor::ApplyGroupRotateFromPrimaryResult(
+                    working,
+                    members,
+                    startPositions,
+                    startRotations,
+                    pivot,
+                    intended,
+                    EditorAxis::Y,
+                    true,
+                    15.0f),
+                "repeated Group Rotate frames stay on drag-start authority");
+        }
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, 15.0f, 0.0001f),
+            "repeated frames do not drift PRIMARY rotation");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, 39.0f, 0.0001f),
+            "repeated frames do not drift secondary rotation");
+        Expect(Vec3Near(working.staticProps[0].position, startPositions[0], 0.0001f),
+            "repeated frames do not drift PRIMARY position");
+
+        working.staticProps[0].position = startPositions[0];
+        working.staticProps[1].position = startPositions[1];
+        working.staticProps[0].rotationDegrees = startRotations[0];
+        working.staticProps[1].rotationDegrees = startRotations[1];
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                intended,
+                EditorAxis::Y,
+                false,
+                15.0f),
+            "Snap OFF Group Rotate");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, 22.0f, 0.0001f),
+            "Snap OFF keeps unsnapped PRIMARY 22");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, 46.0f, 0.0001f),
+            "Snap OFF applies the same unsnapped +15 delta");
+
+        editor::EditorSnapPreferences snap = editor::MakeDefaultEditorSnapPreferences();
+        snap.enabled = true;
+        const bool inverted = editor::EditorSnapIsActive(&snap, true);
+        Expect(!inverted, "Ctrl inverts enabled Rotate Snap during Group Rotate");
+        working.staticProps[0].position = startPositions[0];
+        working.staticProps[1].position = startPositions[1];
+        working.staticProps[0].rotationDegrees = startRotations[0];
+        working.staticProps[1].rotationDegrees = startRotations[1];
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                intended,
+                EditorAxis::Y,
+                inverted,
+                15.0f),
+            "Ctrl inversion keeps the group unsnapped");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, 22.0f, 0.0001f),
+            "Ctrl-inverted Group Rotate does not snap PRIMARY");
+        Expect(NearlyEqual(working.staticProps[1].rotationDegrees.y, 46.0f, 0.0001f),
+            "Ctrl-inverted Group Rotate uses the same unsnapped delta");
+
+        working.staticProps[0].rotationDegrees = {0.0f, 350.0f, 0.0f};
+        working.staticProps[1].rotationDegrees = {0.0f, 31.0f, 0.0f};
+        startRotations[0] = working.staticProps[0].rotationDegrees;
+        startRotations[1] = working.staticProps[1].rotationDegrees;
+        const core::Vec3 beyondIntended{0.0f, 370.0f, 0.0f};
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                beyondIntended,
+                EditorAxis::Y,
+                true,
+                15.0f),
+            "M76 >360 authored rotation remains valid for the group");
+        const core::Vec3 beyondSnapped = editor::SnappedPrimaryRotateResult(
+            beyondIntended, EditorAxis::Y, true, 15.0f);
+        Expect(beyondSnapped.y > 360.0f, "snapped result may exceed 360");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.y, beyondSnapped.y, 0.0001f),
+            "PRIMARY keeps accumulated authored rotation beyond 360");
+        const float beyondDelta =
+            editor::SharedRotationDelta(startRotations[0], beyondSnapped, EditorAxis::Y);
+        Expect(
+            NearlyEqual(working.staticProps[1].rotationDegrees.y, 31.0f + beyondDelta, 0.0001f),
+            "secondary receives the same >360 shared delta");
+    }
+
+    // ---- M80 unsupported member refuses the complete Group Rotate ----
+    {
+        world::LevelDefinition working{};
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {1.0f, 1.0f, 0.0f};
+        prop.rotationDegrees = {10.0f, 20.0f, 30.0f};
+        prop.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(prop);
+        world::DynamicBoxSpec box{};
+        box.center = {3.0f, 1.0f, 0.0f};
+        box.size = {1.0f, 1.0f, 1.0f};
+        box.massKg = 30.0f;
+        working.dynamicBoxes.push_back(box);
+        working.elevatedPlatforms.push_back({{5.0f, 1.0f, 0.0f}, {2.0f, 0.5f, 2.0f}});
+        const EditorSelection propSel{EditorObjectKind::StaticProp, 0};
+        const EditorSelection boxSel{EditorObjectKind::DynamicBox, 0};
+        const EditorSelection platformSel{EditorObjectKind::ElevatedPlatform, 0};
+        const core::Vec3 runtimeJoltPose{9.0f, 8.0f, 7.0f};
+        const core::Vec3 runtimeJoltRotation{12.0f, 24.0f, 36.0f};
+        std::vector<EditorSelection> withBox{boxSel};
+        Expect(
+            !editor::EditorSelectionSetSupportsGroupRotate(working, propSel, withBox),
+            "Dynamic Box blocks Group Rotate");
+        Expect(
+            editor::GroupRotateDisableReason(working, propSel, withBox) != nullptr,
+            "unsupported member reports compact Group Rotate feedback");
+        Expect(!editor::IsRotateSelection(boxSel), "Dynamic Box remains Rotate-unsupported");
+        Expect(editor::GetEditableRotation(working, boxSel) == nullptr,
+            "Dynamic Box has no authored rotation field");
+        const world::LevelDefinition before = working;
+        const std::vector<EditorSelection> mixedMembers{propSel, boxSel};
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(
+            !editor::CaptureGroupRotateStarts(working, mixedMembers, startPositions, startRotations),
+            "unsupported member is not captured for a partial rotate");
+        Expect(
+            !editor::ApplySharedGroupRotation(
+                working,
+                mixedMembers,
+                {working.staticProps[0].position, working.dynamicBoxes[0].center},
+                {working.staticProps[0].rotationDegrees, {}},
+                working.staticProps[0].position,
+                EditorAxis::Y,
+                90.0f),
+            "Apply refuses the complete mixed Group Rotate");
+        Expect(world::AuthoredLevelDataEqual(working, before),
+            "unsupported refusal does not mutate a supported subset");
+        Expect(runtimeJoltPose.x == 9.0f && runtimeJoltRotation.y == 24.0f,
+            "Dynamic Box runtime Jolt pose/orientation is never captured");
+        std::vector<EditorSelection> withPlatform{platformSel};
+        Expect(
+            !editor::EditorSelectionSetSupportsGroupRotate(working, propSel, withPlatform),
+            "Platform blocks Group Rotate");
+        Expect(!editor::IsRotateSelection(platformSel), "Platform remains Rotate-unsupported");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::Checkpoint, 0}),
+            "Checkpoint remains Rotate-unsupported");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::Door, 0}),
+            "Door remains Rotate-unsupported");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::Ground, 0}),
+            "Ground remains Rotate-unsupported");
+    }
+
+    // ---- M80 Item Pickup logical position / visual rotation authority ----
+    {
+        world::LevelDefinition working{};
+        world::StaticPropSpec prop{};
+        prop.modelIdentity = "models/test_static.glb";
+        prop.position = {0.0f, 1.0f, 0.0f};
+        prop.rotationDegrees = {0.0f, 0.0f, 0.0f};
+        prop.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(prop);
+        world::ItemPickupSpec pickup{};
+        pickup.position = {2.0f, 1.0f, 0.0f};
+        pickup.itemId = "key";
+        pickup.quantity = 1;
+        pickup.visualOffset = {0.3f, 0.5f, 0.0f};
+        pickup.visualRotationDegrees = {10.0f, 20.0f, 30.0f};
+        pickup.visualScale = {1.0f, 1.0f, 1.0f};
+        pickup.idleAnimationEnabled = true;
+        pickup.idleBobAmplitude = 0.15f;
+        pickup.idleBobSpeed = 1.0f;
+        pickup.idleSpinSpeedDegrees = 90.0f;
+        working.itemPickups.push_back(pickup);
+        const EditorSelection propSel{EditorObjectKind::StaticProp, 0};
+        const EditorSelection pickupSel{EditorObjectKind::ItemPickup, 0};
+        Expect(editor::GetEditablePosition(working, pickupSel) == &working.itemPickups[0].position,
+            "Item Pickup Group orbit edits logical position");
+        Expect(
+            editor::GetEditableRotation(working, pickupSel)
+                == &working.itemPickups[0].visualRotationDegrees,
+            "Item Pickup Group Rotate edits visualRotationDegrees");
+        const std::vector<EditorSelection> members{propSel, pickupSel};
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(
+            editor::CaptureGroupRotateStarts(working, members, startPositions, startRotations),
+            "mixed Static Prop / Item Pickup capture");
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, propSel, pivot), "prop PRIMARY pivot");
+        const core::Vec3 presentedBefore =
+            world::ItemPickupPresentedVisualRotationDegrees(working.itemPickups[0], 1.25);
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working,
+                members,
+                startPositions,
+                startRotations,
+                pivot,
+                EditorAxis::Y,
+                90.0f),
+            "mixed compatible Group Rotate");
+        Expect(Vec3Near(working.staticProps[0].position, {0.0f, 1.0f, 0.0f}, 0.0001f),
+            "prop PRIMARY stays fixed");
+        Expect(Vec3Near(working.itemPickups[0].position, {0.0f, 1.0f, -2.0f}, 0.0001f),
+            "Item Pickup logical position orbits PRIMARY");
+        Expect(Vec3Near(working.itemPickups[0].visualOffset, {0.3f, 0.5f, 0.0f}, 0.0001f),
+            "Item Pickup visualOffset is untouched");
+        Expect(NearlyEqual(working.itemPickups[0].visualRotationDegrees.y, 110.0f, 0.0001f),
+            "Item Pickup visualRotationDegrees receives the shared delta");
+        Expect(working.itemPickups[0].idleAnimationEnabled, "idle flag is not captured into authored");
+        Expect(NearlyEqual(working.itemPickups[0].idleBobAmplitude, 0.15f, 0.0001f),
+            "idle bob amplitude stays authored, not runtime");
+        Expect(NearlyEqual(working.itemPickups[0].idleSpinSpeedDegrees, 90.0f, 0.0001f),
+            "idle spin speed stays authored, not runtime");
+        Expect(
+            !NearlyEqual(working.itemPickups[0].visualRotationDegrees.y, presentedBefore.y, 0.0001f),
+            "presented bob/spin rotation is not written back");
+        Expect(
+            editor::MakeRotateGizmoDrawRequest(
+                pickupSel,
+                working,
+                MakeView({20.0f, 8.0f, 20.0f}, world::ItemPickupVisualPosition(working.itemPickups[0])),
+                {})
+                .visible,
+            "Item Pickup still has a single-object Rotate gizmo");
+
+        world::LevelDefinition pickupPrimary = working;
+        pickupPrimary.itemPickups[0].position = {2.0f, 1.0f, 0.0f};
+        pickupPrimary.itemPickups[0].visualRotationDegrees = {10.0f, 20.0f, 30.0f};
+        pickupPrimary.staticProps[0].position = {0.0f, 1.0f, 0.0f};
+        pickupPrimary.staticProps[0].rotationDegrees = {};
+        const std::vector<EditorSelection> pickupFirst{pickupSel, propSel};
+        std::vector<core::Vec3> pickupStarts;
+        std::vector<core::Vec3> pickupRots;
+        Expect(
+            editor::CaptureGroupRotateStarts(pickupPrimary, pickupFirst, pickupStarts, pickupRots),
+            "Item Pickup PRIMARY capture");
+        core::Vec3 pickupPivot{};
+        Expect(
+            editor::TryPrimaryRotatePivot(pickupPrimary, pickupSel, pickupPivot),
+            "Item Pickup PRIMARY uses Rotate gizmo origin");
+        Expect(
+            Vec3Near(pickupPivot, world::ItemPickupVisualPosition(pickupPrimary.itemPickups[0]), 0.0001f),
+            "Item Pickup pivot is position + visualOffset, not bob");
+        Expect(
+            editor::ApplySharedGroupRotation(
+                pickupPrimary,
+                pickupFirst,
+                pickupStarts,
+                pickupRots,
+                pickupPivot,
+                EditorAxis::Y,
+                90.0f),
+            "Item Pickup PRIMARY Group Rotate");
+        Expect(Vec3Near(pickupPrimary.itemPickups[0].position, {2.0f, 1.0f, 0.0f}, 0.0001f),
+            "Item Pickup PRIMARY logical position stays fixed");
+        Expect(NearlyEqual(pickupPrimary.itemPickups[0].visualRotationDegrees.y, 110.0f, 0.0001f),
+            "Item Pickup PRIMARY visual rotation still receives the delta");
+    }
+
+    // ---- M80 workingCopy / selection / Duplicate Selected -> Group Rotate ----
+    {
+        world::LevelDefinition original{};
+        world::StaticPropSpec a{};
+        a.modelIdentity = "models/test_static.glb";
+        a.position = {0.0f, 1.0f, 0.0f};
+        a.rotationDegrees = {0.0f, 5.0f, 0.0f};
+        a.scale = {1.0f, 1.0f, 1.0f};
+        original.staticProps.push_back(a);
+        world::StaticPropSpec b{};
+        b.modelIdentity = "models/test_static.glb";
+        b.position = {2.0f, 1.0f, 0.0f};
+        b.rotationDegrees = {0.0f, 11.0f, 0.0f};
+        b.scale = {1.0f, 1.0f, 1.0f};
+        original.staticProps.push_back(b);
+        original.checkpoint1PlatformIndex = 0;
+        original.checkpoint2PlatformIndex = 0;
+        original.goalPlatformIndex = 0;
+        world::LevelDefinition working = original;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::StaticProp, 1}};
+        const std::vector<EditorSelection> members =
+            editor::EditorSelectionSetMembers(primary, additional);
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(
+            editor::CaptureGroupRotateStarts(working, members, startPositions, startRotations),
+            "capture workingCopy starts");
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, primary, pivot), "workingCopy pivot");
+        Expect(
+            editor::ApplySharedGroupRotation(
+                working, members, startPositions, startRotations, pivot, EditorAxis::Y, 90.0f),
+            "Group Rotate mutates workingCopy");
+        Expect(!world::AuthoredLevelDataEqual(working, original),
+            "Group Rotate makes workingCopy Modified versus active");
+        Expect(world::AuthoredLevelDataEqual(original, original),
+            "active/original is unchanged until Apply");
+        const world::LevelDefinition applied = working;
+        Expect(world::AuthoredLevelDataEqual(applied, working),
+            "Apply promotion preserves Group Rotate authored results");
+        Expect(applied.staticProps[0].rotationDegrees.y == 95.0f
+                && applied.staticProps[1].rotationDegrees.y == 101.0f,
+            "applied orientations keep the shared delta");
+        Expect(primary.kind == EditorObjectKind::StaticProp && primary.index == 0,
+            "PRIMARY identity is unchanged by Group Rotate");
+        Expect(additional.size() == 1 && additional[0].index == 1,
+            "secondary selection is unchanged by Group Rotate");
+
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(original, primary, additional);
+        Expect(duplicated.succeeded, "Duplicate Selected before Group Rotate");
+        Expect(
+            editor::EditorSelectionSetSupportsGroupRotate(
+                original, duplicated.selection, duplicated.additionalSelections),
+            "duplicated copies are immediately Group-Rotate compatible");
+        const std::vector<EditorSelection> copies =
+            editor::EditorSelectionSetMembers(
+                duplicated.selection, duplicated.additionalSelections);
+        std::vector<core::Vec3> copyPositions;
+        std::vector<core::Vec3> copyRotations;
+        Expect(
+            editor::CaptureGroupRotateStarts(original, copies, copyPositions, copyRotations),
+            "capture starts from duplicated copies");
+        core::Vec3 copyPivot{};
+        Expect(editor::TryPrimaryRotatePivot(original, duplicated.selection, copyPivot),
+            "copy PRIMARY pivot");
+        const float copyDistance =
+            editor::Length(editor::Sub(copyPositions[1], copyPivot));
+        Expect(
+            editor::ApplySharedGroupRotation(
+                original,
+                copies,
+                copyPositions,
+                copyRotations,
+                copyPivot,
+                EditorAxis::Y,
+                90.0f),
+            "Group Rotate the duplicated composition immediately");
+        Expect(Vec3Near(original.staticProps[copies[0].index].position, copyPositions[0], 0.0001f),
+            "duplicated PRIMARY stays fixed");
+        Expect(
+            NearlyEqual(
+                editor::Length(
+                    editor::Sub(original.staticProps[copies[1].index].position, copyPivot)),
+                copyDistance,
+                0.0001f),
+            "duplicated secondary orbit preserves composition distance");
+        Expect(Vec3Near(original.staticProps[0].position, a.position, 0.0001f)
+                && Vec3Near(original.staticProps[1].position, b.position, 0.0001f),
+            "originals are not rotated with the copies");
+    }
+
+    // ---- M80 live Group Rotate drag uses PRIMARY gizmo and shared delta ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        world::StaticPropSpec primary{};
+        primary.modelIdentity = "models/test_static.glb";
+        primary.position = {3.0f, 1.0f, 0.0f};
+        primary.rotationDegrees = {5.0f, 15.0f, 25.0f};
+        primary.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(primary);
+        world::StaticPropSpec secondary{};
+        secondary.modelIdentity = "models/test_static.glb";
+        secondary.position = {5.0f, 1.0f, 0.0f};
+        secondary.rotationDegrees = {1.0f, 2.0f, 3.0f};
+        secondary.scale = {1.0f, 1.0f, 1.0f};
+        working.staticProps.push_back(secondary);
+        const EditorSelection prop0{EditorObjectKind::StaticProp, 0};
+        const EditorSelection prop1{EditorObjectKind::StaticProp, 1};
+        std::vector<EditorSelection> additional{prop1};
+        const core::Vec3 propOrigin = working.staticProps[0].position;
+        const render::CameraView propView = MakeView({20.0f, 8.0f, 20.0f}, propOrigin);
+        const float propLength = editor::GizmoWorldLength(propView, propOrigin);
+        const float unique = 0.70710678f;
+        const core::Vec3 xRing{
+            propOrigin.x,
+            propOrigin.y + propLength * unique,
+            propOrigin.z + propLength * unique};
+        const core::Vec3 xSwept{
+            propOrigin.x,
+            propOrigin.y - propLength * unique,
+            propOrigin.z + propLength * unique};
+        editor::GizmoInteractionState state{};
+        editor::EditorSnapPreferences snap = editor::MakeDefaultEditorSnapPreferences();
+        snap.enabled = false;
+        Expect(
+            editor::UpdateRotateInteraction(
+                state,
+                prop0,
+                working,
+                propView,
+                RayThrough(propView, xRing),
+                false,
+                false,
+                true,
+                true,
+                false,
+                &snap,
+                false,
+                &additional),
+            "group rotate can begin on PRIMARY gizmo");
+        Expect(state.dragging, "Group Rotate press starts drag");
+        Expect(state.dragMembers.size() == 2, "drag captures both rotate members");
+        Expect(state.dragMemberStartRotations.size() == 2, "drag captures start rotations");
+        const core::Vec3 startPrimaryPos = state.dragMemberStartPositions[0];
+        const core::Vec3 startSecondaryPos = state.dragMemberStartPositions[1];
+        const core::Vec3 startPrimaryRot = state.dragMemberStartRotations[0];
+        const core::Vec3 startSecondaryRot = state.dragMemberStartRotations[1];
+        const editor::Ray3 holdRay = RayThrough(propView, xSwept);
+        const core::Vec3 intended = editor::GizmoRotateDegrees(state, holdRay);
+        Expect(
+            editor::UpdateRotateInteraction(
+                state,
+                prop0,
+                working,
+                propView,
+                holdRay,
+                false,
+                false,
+                false,
+                true,
+                false,
+                &snap,
+                false,
+                &additional),
+            "Group Rotate drag consumes pointer");
+        const float liveDelta = intended.x - startPrimaryRot.x;
+        Expect(Vec3Near(working.staticProps[0].position, startPrimaryPos, 0.0001f),
+            "live Group Rotate keeps PRIMARY position fixed");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.x, intended.x, 0.05f),
+            "live Group Rotate writes PRIMARY orientation from drag-start");
+        Expect(
+            NearlyEqual(
+                working.staticProps[1].rotationDegrees.x, startSecondaryRot.x + liveDelta, 0.05f),
+            "live secondary orientation uses the shared delta");
+        Expect(
+            NearlyEqual(
+                editor::Length(editor::Sub(working.staticProps[1].position, state.dragStartPosition)),
+                editor::Length(editor::Sub(startSecondaryPos, state.dragStartPosition)),
+                0.05f),
+            "live secondary keeps pivot distance");
+        Expect(
+            editor::UpdateRotateInteraction(
+                state,
+                prop0,
+                working,
+                propView,
+                holdRay,
+                false,
+                false,
+                false,
+                false,
+                true,
+                &snap,
+                false,
+                &additional),
+            "Group Rotate mouse-up ends the drag");
+        Expect(!state.dragging, "Group Rotate drag ends cleanly");
+        Expect(working.staticProps[0].scale.x == 1.0f && working.staticProps[1].scale.x == 1.0f,
+            "Group Rotate does not mutate scale");
     }
 
     if (gFailures != 0)
