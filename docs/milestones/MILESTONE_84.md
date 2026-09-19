@@ -1,6 +1,6 @@
 # Milestone 84 --- Materials & Textures Foundation
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/84-materials-textures-foundation`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

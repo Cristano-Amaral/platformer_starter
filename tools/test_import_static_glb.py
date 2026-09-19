@@ -214,6 +214,10 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("sounds/pause_close.wav", ids)
         self.assertIn("sounds/inventory_open.wav", ids)
         self.assertIn("sounds/inventory_close.wav", ids)
+        self.assertIn("shaders/world_lit.vs", ids)
+        self.assertIn("shaders/world_lit.fs", ids)
+        self.assertIn("shaders/shadow_depth.vs", ids)
+        self.assertIn("shaders/shadow_depth.fs", ids)
 
 
 class CookStageImportedGlbTests(unittest.TestCase):

@@ -249,6 +249,7 @@ struct DeathHudView
 };
 
 class StaticModelSceneStore;
+class WorldLightingResources;
 
 class Renderer
 {
@@ -343,5 +344,6 @@ private:
     struct PlayerModelGpuState;
     std::unique_ptr<StaticModelSceneStore> staticPropModels;
     std::unique_ptr<PlayerModelGpuState> playerModelGpu;
+    std::unique_ptr<WorldLightingResources> worldLighting;
 };
 }

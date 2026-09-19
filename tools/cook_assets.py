@@ -40,6 +40,7 @@ MANIFEST_NAME = "manifest.json"
 # Extra valid source/models/*.glb files are discovered (M47). PNGs stay explicit.
 # Extra valid source/levels/*.level files are discovered (M64.1). Canonical
 # level_01/level_02 remain required inventory.
+# Milestone 85 lighting shaders are explicit opaque `copy`.
 #   copy         = opaque byte copy (GLBs and the M61 collection WAV;
 #                  embedded GLB images are not inspected)
 #   runtime_png  = standalone runtime PNG (M19 policy applies to these only)
@@ -215,6 +216,30 @@ KNOWN_ASSETS = (
         "id": "sounds/inventory_close.wav",
         "source": "sounds/inventory_close.wav",
         "cooked": "sounds/inventory_close.wav",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "shaders/world_lit.vs",
+        "source": "shaders/world_lit.vs",
+        "cooked": "shaders/world_lit.vs",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "shaders/world_lit.fs",
+        "source": "shaders/world_lit.fs",
+        "cooked": "shaders/world_lit.fs",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "shaders/shadow_depth.vs",
+        "source": "shaders/shadow_depth.vs",
+        "cooked": "shaders/shadow_depth.vs",
+        "kind": KIND_COPY,
+    },
+    {
+        "id": "shaders/shadow_depth.fs",
+        "source": "shaders/shadow_depth.fs",
+        "cooked": "shaders/shadow_depth.fs",
         "kind": KIND_COPY,
     },
 )

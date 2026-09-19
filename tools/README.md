@@ -37,8 +37,9 @@ The cooker copies known authored files from `game/assets/source/` to
 `sounds/pressure_plate_deactivate.wav`, `sounds/door_unlock.wav`,
 `sounds/level_goal_complete.wav`, `sounds/collectible_collect.wav`,
 `sounds/ui_navigate.wav`, `sounds/ui_confirm.wav`, `sounds/pause_open.wav`,
-`sounds/pause_close.wav`, `sounds/inventory_open.wav`,
-`sounds/inventory_close.wav`) plus extra valid
+`sounds/pause_close.wav`, `sounds/inventory_open.wav`, `sounds/inventory_close.wav`,
+`shaders/world_lit.vs`, `shaders/world_lit.fs`, `shaders/shadow_depth.vs`,
+`shaders/shadow_depth.fs`) plus extra valid
 `source/models/*.glb` files discovered for Milestone 47 import and extra valid
 `source/levels/*.level` files discovered for Milestone 64.1 New Level. It does not
 glob every PNG under `source/textures/`. It does not glob sounds. Skips a

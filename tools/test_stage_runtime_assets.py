@@ -216,6 +216,10 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "sounds/pause_close.wav",
                 "sounds/inventory_open.wav",
                 "sounds/inventory_close.wav",
+                "shaders/world_lit.vs",
+                "shaders/world_lit.fs",
+                "shaders/shadow_depth.vs",
+                "shaders/shadow_depth.fs",
             ]
             repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
             for relative in required:
@@ -262,6 +266,10 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "sounds/pause_close.wav",
                 "sounds/inventory_open.wav",
                 "sounds/inventory_close.wav",
+                "shaders/world_lit.vs",
+                "shaders/world_lit.fs",
+                "shaders/shadow_depth.vs",
+                "shaders/shadow_depth.fs",
             ]
             repo_cooked = REPO_ROOT / "game" / "assets" / "cooked"
             for relative in required:

@@ -46,8 +46,47 @@ inline LevelGoalViewKind LevelGoalViewKindFromEditor(bool editorView)
     return editorView ? LevelGoalViewKind::Editor : LevelGoalViewKind::Gameplay;
 }
 
+struct LevelGoalMarkerLayout
+{
+    core::Vec3 leftPost{};
+    core::Vec3 rightPost{};
+    core::Vec3 barCenter{};
+    core::Vec3 postSize{};
+    core::Vec3 barSize{};
+};
+
+LevelGoalMarkerLayout MakeLevelGoalMarkerLayout(const world::LevelGoalSpec& goal);
+
+struct LevelGoalMarkerColors
+{
+    unsigned char postR = 156;
+    unsigned char postG = 116;
+    unsigned char postB = 52;
+    unsigned char postA = 255;
+    unsigned char barR = 188;
+    unsigned char barG = 148;
+    unsigned char barB = 64;
+    unsigned char barA = 255;
+};
+
+LevelGoalMarkerColors MakeLevelGoalMarkerColors(bool levelCompleted);
+
 void DrawLevelGoalPresentation(
     const world::LevelGoalSpec& goal,
     bool levelCompleted,
     LevelGoalViewKind view);
+
+enum class LevelGoalDrawLayer
+{
+    All,
+    Solids,
+    Wires,
+    EditorVolume
+};
+
+void DrawLevelGoalPresentation(
+    const world::LevelGoalSpec& goal,
+    bool levelCompleted,
+    LevelGoalViewKind view,
+    LevelGoalDrawLayer layer);
 }

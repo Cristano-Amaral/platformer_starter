@@ -1847,6 +1847,25 @@ int main()
                 world::ParseLevelText(canonical).status == world::LoadLevelFileStatus::Loaded
                     && world::ParseLevelText(canonical).level.staticProps.empty(),
                 "old levels with zero static_prop remain valid");
+
+            const world::ParseLevelFileResult ambientLight =
+                world::ParseLevelText(canonical + "ambient_light 1 1 1 0.3\n");
+            Expect(
+                ambientLight.status == world::LoadLevelFileStatus::Invalid,
+                "M85: ambient_light is not Level syntax");
+            Expect(
+                ambientLight.error.find("unrecognized") != std::string::npos,
+                "M85: ambient_light is an unrecognized record");
+            const world::ParseLevelFileResult directionalLight =
+                world::ParseLevelText(canonical + "directional_light 0 -1 0 1 1 1 1\n");
+            Expect(
+                directionalLight.status == world::LoadLevelFileStatus::Invalid,
+                "M85: directional_light is not Level syntax");
+            const world::ParseLevelFileResult shadowSettings =
+                world::ParseLevelText(canonical + "shadow_settings 2048 0.002 72\n");
+            Expect(
+                shadowSettings.status == world::LoadLevelFileStatus::Invalid,
+                "M85: shadow_settings is not Level syntax");
             Expect(
                 world::ParseLevelText(
                     canonical + "static_prop 0 1 0 0 0 0 1 1 1 models/missing_not_on_disk.glb\n")

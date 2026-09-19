@@ -18,6 +18,7 @@
 #include "render/LevelGoalVisualization.h"
 #include "render/LoadedModelMaterials.h"
 #include "render/StaticModelScene.h"
+#include "render/WorldLighting.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
@@ -78,6 +79,17 @@ constexpr Color kCheckpointCurrentPost{48, 140, 88, 255};
 constexpr Color kCheckpointCurrentBeacon{88, 220, 124, 255};
 constexpr Color kCheckpointPreviousPost{36, 88, 56, 255};
 constexpr Color kCheckpointPreviousBeacon{64, 148, 88, 255};
+
+enum class WorldSolidMode
+{
+    Combined,
+    Solid,
+    Wires
+};
+
+WorldSolidMode gWorldSolidMode = WorldSolidMode::Combined;
+WorldLightingResources* gWorldLighting = nullptr;
+const ModelDrawOverride* gWorldModelOverride = nullptr;
 constexpr Color kGoalVolumeIncomplete{64, 140, 92, 255};
 constexpr Color kHazardBarColor{196, 48, 36, 255};
 constexpr Color kHazardToothColor{232, 96, 40, 255};
@@ -157,7 +169,17 @@ Color MixRgb(Color from, Color to, float amount)
 
 void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
 {
+    if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
+    {
+        gWorldLighting->DrawSolidBox(center, size, fill);
+        return;
+    }
     const Vector3 position = ToRaylib(center);
+    if (gWorldSolidMode == WorldSolidMode::Wires)
+    {
+        DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
+        return;
+    }
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
 }
@@ -200,7 +222,8 @@ void DrawPlayerPresentationModel(
     rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
     rlRotatef(visual.yawDegrees, 0.0f, 1.0f, 0.0f);
     rlScalef(visual.scale.x, visual.scale.y, visual.scale.z);
-    DrawModelPreservingMaterials(model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    DrawModelPreservingMaterials(
+        model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE, gWorldModelOverride);
     rlPopMatrix();
     RestoreGreyboxImmediateState();
 }
@@ -242,6 +265,10 @@ void DrawEditorViewportGrid(const DebugWorldOverlay& overlay)
 
 void DrawGhostBox(core::Vec3 center, core::Vec3 size, Color fill, Color wire)
 {
+    if (gWorldSolidMode == WorldSolidMode::Solid || gWorldSolidMode == WorldSolidMode::Wires)
+    {
+        return;
+    }
     const Vector3 position = ToRaylib(center);
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, wire);
@@ -253,6 +280,34 @@ void DrawItemPickupFallbackCube(
     Color wire,
     bool drawWire)
 {
+    if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
+    {
+        gWorldLighting->DrawSolidBoxEulerXYZ(visual.position, {
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize}, visual.rotationDegrees, fill);
+        return;
+    }
+    if (gWorldSolidMode == WorldSolidMode::Wires)
+    {
+        if (!drawWire)
+        {
+            return;
+        }
+        rlPushMatrix();
+        rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
+        rlRotatef(visual.rotationDegrees.z, 0.0f, 0.0f, 1.0f);
+        rlRotatef(visual.rotationDegrees.y, 0.0f, 1.0f, 0.0f);
+        rlRotatef(visual.rotationDegrees.x, 1.0f, 0.0f, 0.0f);
+        DrawCubeWires(
+            Vector3{0.0f, 0.0f, 0.0f},
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            world::kItemPickupVisualSize,
+            wire);
+        rlPopMatrix();
+        return;
+    }
     rlPushMatrix();
     rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
     rlRotatef(visual.rotationDegrees.z, 0.0f, 0.0f, 1.0f);
@@ -712,9 +767,22 @@ void DrawInventoryPanel(const InventoryPanelView& panel)
 
 void DrawOrientedGreyboxBox(const world::SlopeSpec& slope, Color fill)
 {
+    if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
+    {
+        gWorldLighting->DrawSolidBoxRotatedZ(
+            slope.center, slope.size, slope.rotationZDegrees, fill);
+        return;
+    }
     rlPushMatrix();
     rlTranslatef(slope.center.x, slope.center.y, slope.center.z);
     rlRotatef(slope.rotationZDegrees, 0.0f, 0.0f, 1.0f);
+    if (gWorldSolidMode == WorldSolidMode::Wires)
+    {
+        DrawCubeWires(
+            Vector3{0.0f, 0.0f, 0.0f}, slope.size.x, slope.size.y, slope.size.z, kWireColor);
+        rlPopMatrix();
+        return;
+    }
     DrawCube(Vector3{0.0f, 0.0f, 0.0f}, slope.size.x, slope.size.y, slope.size.z, fill);
     DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, slope.size.x, slope.size.y, slope.size.z, kWireColor);
     rlPopMatrix();
@@ -746,6 +814,19 @@ void DrawRuntimeDynamicBox(const DynamicBoxDrawState& box, Color fill, Color wir
     if (degrees != 0.0f)
     {
         rlRotatef(degrees, axisX, axisY, axisZ);
+    }
+    if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
+    {
+        rlPopMatrix();
+        gWorldLighting->DrawSolidBoxAxisAngle(
+            box.center, box.size, axisX, axisY, axisZ, degrees, fill);
+        return;
+    }
+    if (gWorldSolidMode == WorldSolidMode::Wires)
+    {
+        DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, wire);
+        rlPopMatrix();
+        return;
     }
     DrawCube(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, fill);
     DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, box.size.x, box.size.y, box.size.z, wire);
@@ -1628,6 +1709,7 @@ struct Renderer::PlayerModelGpuState
 Renderer::Renderer()
     : staticPropModels(std::make_unique<StaticModelSceneStore>())
     , playerModelGpu(std::make_unique<PlayerModelGpuState>())
+    , worldLighting(std::make_unique<WorldLightingResources>())
 {
 }
 
@@ -1659,6 +1741,12 @@ const StaticModelSceneStore* Renderer::StaticPropModels() const
 
 void Renderer::LoadRuntimeAssets()
 {
+    if (worldLighting == nullptr)
+    {
+        worldLighting = std::make_unique<WorldLightingResources>();
+    }
+    worldLighting->Load();
+
     if (playerModelGpu == nullptr)
     {
         playerModelGpu = std::make_unique<PlayerModelGpuState>();
@@ -1721,6 +1809,10 @@ void Renderer::UnloadRuntimeAssets()
     if (staticPropModels)
     {
         staticPropModels->Shutdown();
+    }
+    if (worldLighting)
+    {
+        worldLighting->Unload();
     }
 }
 
@@ -1862,6 +1954,312 @@ void Renderer::DrawWorld(
     // set those to a tight model frame and must not leak into Gameplay.
     rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
 
+    bool grabHudCarrying = false;
+    bool grabHudTarget = false;
+    bool doorHudTarget = false;
+    bool pickupHudTarget = false;
+    char pickupHudText[64]{};
+
+    auto drawWorldGeometry = [&]() {
+        DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
+
+        const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
+        int platformIndex = 0;
+        for (const world::Box& platform : level.elevatedPlatforms)
+        {
+            if (!OverlayMarksPendingDelete(
+                    overlay.pendingDeletePlatformIndices, static_cast<std::size_t>(platformIndex)))
+            {
+                DrawGreyboxBox(
+                    platform.center, platform.size, platformColors[platformIndex % 2]);
+            }
+            ++platformIndex;
+        }
+
+        DrawGreyboxBox(movingPlatformPosition, movingPlatformSize, kMovingPlatformColor);
+        for (std::size_t index = 0; index < dynamicBoxes.size(); ++index)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteDynamicBoxIndices, index))
+            {
+                continue;
+            }
+            Color fill = kDynamicBoxColor;
+            Color wire = kWireColor;
+            if (dynamicBoxes[index].feedback == DynamicBoxDrawFeedback::Carried)
+            {
+                fill = kDynamicBoxCarryFill;
+                wire = kDynamicBoxCarryWire;
+                grabHudCarrying = true;
+            }
+            else if (dynamicBoxes[index].feedback == DynamicBoxDrawFeedback::Targeted)
+            {
+                fill = kDynamicBoxTargetFill;
+                wire = kDynamicBoxTargetWire;
+                grabHudTarget = true;
+            }
+            DrawRuntimeDynamicBox(dynamicBoxes[index], fill, wire);
+        }
+        for (std::size_t index = 0; index < pressurePlates.size(); ++index)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeletePressurePlateIndices, index))
+            {
+                continue;
+            }
+            const PressurePlateDrawState& plate = pressurePlates[index];
+            if (!plate.visibleInGameplay && !plate.revealInEditor)
+            {
+                continue;
+            }
+            if (!plate.visibleInGameplay && plate.revealInEditor)
+            {
+                DrawGhostBox(
+                    plate.center,
+                    plate.size,
+                    kPressurePlateHiddenEditorFill,
+                    kPressurePlateHiddenEditorWire);
+                continue;
+            }
+            DrawGreyboxBox(
+                plate.center,
+                plate.size,
+                plate.active ? kPressurePlateActive : kPressurePlateInactive);
+        }
+        for (std::size_t index = 0; index < doors.size(); ++index)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteDoorIndices, index))
+            {
+                continue;
+            }
+            const bool targeted = lockedDoorTargetIndex == static_cast<int>(index);
+            if (targeted)
+            {
+                doorHudTarget = true;
+                if (gWorldSolidMode == WorldSolidMode::Combined)
+                {
+                    DrawGhostBox(
+                        doors[index].center, doors[index].size, kDoorTargetFill, kDoorTargetWire);
+                }
+                else
+                {
+                    DrawGreyboxBox(doors[index].center, doors[index].size, kDoorTargetFill);
+                }
+            }
+            else
+            {
+                DrawGreyboxBox(doors[index].center, doors[index].size, kDoorColor);
+            }
+        }
+        if (gWorldSolidMode != WorldSolidMode::Wires)
+        {
+            for (std::size_t index = 0; index < level.staticProps.size(); ++index)
+            {
+                if (OverlayMarksPendingDelete(overlay.pendingDeleteStaticPropIndices, index))
+                {
+                    continue;
+                }
+                if (staticPropModels)
+                {
+                    if (gWorldModelOverride != nullptr)
+                    {
+                        staticPropModels->DrawProp(level.staticProps[index], *gWorldModelOverride);
+                    }
+                    else
+                    {
+                        staticPropModels->DrawProp(level.staticProps[index]);
+                    }
+                }
+            }
+        }
+        for (std::size_t index = 0; index < level.itemPickups.size(); ++index)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteItemPickupIndices, index))
+            {
+                continue;
+            }
+            if (index < itemPickupCollected.size() && itemPickupCollected[index] != 0)
+            {
+                continue;
+            }
+            const world::ItemPickupSpec& pickup = level.itemPickups[index];
+            const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
+            core::Vec3 loadedMin{};
+            core::Vec3 loadedMax{};
+            bool haveLoadedBounds = false;
+            if (!pickup.modelIdentity.empty() && staticPropModels != nullptr)
+            {
+                haveLoadedBounds = staticPropModels->TryGetLoadedLocalBounds(
+                    pickup.modelIdentity, loadedMin, loadedMax);
+            }
+            const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
+                pickup,
+                targeted,
+                false,
+                haveLoadedBounds,
+                loadedMin,
+                loadedMax,
+                elapsedSeconds);
+            if (presentation.drawHud)
+            {
+                pickupHudTarget = true;
+                std::snprintf(
+                    pickupHudText,
+                    sizeof(pickupHudText),
+                    "E Pick Up %s x%d",
+                    pickup.itemId.c_str(),
+                    pickup.quantity);
+            }
+            Color fill = kItemPickupFill;
+            if (presentation.drawFallbackHighlight)
+            {
+                const Color goldPush = MixRgb(
+                    kItemPickupFill, kItemPickupTargetGold, presentation.highlightGoldAmount);
+                fill = MixRgb(kItemPickupFill, goldPush, presentation.highlightIntensity);
+            }
+            const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
+            const bool overlayPass = gWorldSolidMode == WorldSolidMode::Combined;
+            if (!pickup.modelIdentity.empty() && staticPropModels)
+            {
+                if (gWorldSolidMode != WorldSolidMode::Wires)
+                {
+                    const world::StaticPropSpec visual =
+                        world::ItemPickupPresentedVisualProp(pickup, elapsedSeconds);
+                    if (gWorldModelOverride != nullptr)
+                    {
+                        staticPropModels->DrawProp(visual, *gWorldModelOverride);
+                    }
+                    else
+                    {
+                        staticPropModels->DrawProp(visual);
+                    }
+                }
+                if (overlayPass && presentation.drawModelHighlight)
+                {
+                    staticPropModels->DrawGameplayTargetHighlight(
+                        presentation.visual,
+                        presentation.highlightRed,
+                        presentation.highlightGreen,
+                        presentation.highlightBlue,
+                        presentation.highlightAlpha);
+                }
+                if (overlayPass && presentation.drawInteractionBounds)
+                {
+                    DrawTransformedBoundsWires(
+                        presentation.boundsCorners, kSelectedModelBoundsWire);
+                }
+                continue;
+            }
+            DrawItemPickupFallbackCube(
+                presentation.visual,
+                fill,
+                wire,
+                !targeted || presentation.drawInteractionBounds);
+        }
+        DrawOrientedGreyboxBox(
+            level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],
+            kWalkableSlopeColor);
+        DrawOrientedGreyboxBox(
+            level.slopes[static_cast<std::size_t>(world::kLevel01SteepSlopeIndex)],
+            kSteepSlopeColor);
+        for (std::size_t hazardIndex = 0; hazardIndex < level.hazards.size(); ++hazardIndex)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteHazardIndices, hazardIndex))
+            {
+                continue;
+            }
+            DrawHazard(level.hazards[hazardIndex]);
+        }
+        const std::size_t collectibleCount =
+            level.collectibles.size() < collectibleCollected.size() ? level.collectibles.size()
+                                                                    : collectibleCollected.size();
+        for (std::size_t collectibleIndex = 0; collectibleIndex < collectibleCount;
+             ++collectibleIndex)
+        {
+            if (OverlayMarksPendingDelete(
+                    overlay.pendingDeleteCollectibleIndices, collectibleIndex))
+            {
+                continue;
+            }
+            if (collectibleCollected[collectibleIndex] == 0)
+            {
+                DrawCollectible(level.collectibles[collectibleIndex]);
+            }
+        }
+        const bool playerModelLoaded = IsPlayerModelLoaded();
+        if (gWorldSolidMode != WorldSolidMode::Wires
+            && gameplay::ShouldDrawPlayerPresentationModel(playerModelLoaded)
+            && playerModelGpu != nullptr)
+        {
+            const gameplay::PlayerVisualTransform visual = gameplay::BuildPlayerVisualTransform(
+                player.Position(),
+                gameplay::kDefaultPlayerPresentationConfig,
+                playerPresentation.facingYawDegrees);
+            DrawPlayerPresentationModel(playerModelGpu->model, visual);
+        }
+        else if (gameplay::ShouldDrawPlayerGameplayPrimitive(playerModelLoaded))
+        {
+            DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
+        }
+        const std::size_t checkpointCount =
+            level.checkpoints.size() < checkpointVisuals.size() ? level.checkpoints.size()
+                                                                : checkpointVisuals.size();
+        for (std::size_t checkpointIndex = 0; checkpointIndex < checkpointCount; ++checkpointIndex)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteCheckpointIndices, checkpointIndex))
+            {
+                continue;
+            }
+            DrawCheckpointMarker(
+                level.checkpoints[checkpointIndex], checkpointVisuals[checkpointIndex]);
+        }
+        for (std::size_t goalIndex = 0; goalIndex < level.levelGoals.size(); ++goalIndex)
+        {
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteLevelGoalIndices, goalIndex))
+            {
+                continue;
+            }
+            const LevelGoalViewKind goalView =
+                LevelGoalViewKindFromEditor(overlay.drawLevelGoalAuthoredVolume);
+            if (gWorldSolidMode == WorldSolidMode::Solid)
+            {
+                const LevelGoalMarkerLayout layout =
+                    MakeLevelGoalMarkerLayout(level.levelGoals[goalIndex]);
+                const LevelGoalMarkerColors colors = MakeLevelGoalMarkerColors(levelCompleted);
+                const Color postColor{colors.postR, colors.postG, colors.postB, colors.postA};
+                const Color barColor{colors.barR, colors.barG, colors.barB, colors.barA};
+                DrawGreyboxBox(layout.leftPost, layout.postSize, postColor);
+                DrawGreyboxBox(layout.rightPost, layout.postSize, postColor);
+                DrawGreyboxBox(layout.barCenter, layout.barSize, barColor);
+            }
+            else if (gWorldSolidMode == WorldSolidMode::Wires)
+            {
+                DrawLevelGoalPresentation(
+                    level.levelGoals[goalIndex],
+                    levelCompleted,
+                    goalView,
+                    LevelGoalDrawLayer::Wires);
+            }
+            else
+            {
+                DrawLevelGoalPresentation(level.levelGoals[goalIndex], levelCompleted, goalView);
+            }
+        }
+    };
+
+    const LightingEnvironment lightingEnv = MakeDefaultLightingEnvironment();
+    const bool lightingReady = worldLighting != nullptr && worldLighting->IsReady();
+    if (lightingReady)
+    {
+        gWorldLighting = worldLighting.get();
+        gWorldSolidMode = WorldSolidMode::Solid;
+        const ModelDrawOverride shadowOverride = worldLighting->ShadowModelOverride();
+        gWorldModelOverride = &shadowOverride;
+        worldLighting->BeginShadowPass(lightingEnv);
+        drawWorldGeometry();
+        worldLighting->EndShadowPass();
+        gWorldModelOverride = nullptr;
+        rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+    }
+
     if (subViewport)
     {
         BeginMode3DInRect(view, viewRect);
@@ -1877,248 +2275,117 @@ void Renderer::DrawWorld(
     {
         DrawEditorViewportGrid(overlay);
     }
-    DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
 
-    const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
-    int platformIndex = 0;
-    for (const world::Box& platform : level.elevatedPlatforms)
+    if (lightingReady)
     {
-        if (!OverlayMarksPendingDelete(
-                overlay.pendingDeletePlatformIndices, static_cast<std::size_t>(platformIndex)))
-        {
-            DrawGreyboxBox(
-                platform.center,
-                platform.size,
-                platformColors[platformIndex % 2]);
-        }
-        ++platformIndex;
-    }
-
-    DrawGreyboxBox(movingPlatformPosition, movingPlatformSize, kMovingPlatformColor);
-    bool grabHudCarrying = false;
-    bool grabHudTarget = false;
-    for (std::size_t index = 0; index < dynamicBoxes.size(); ++index)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteDynamicBoxIndices, index))
-        {
-            continue;
-        }
-        Color fill = kDynamicBoxColor;
-        Color wire = kWireColor;
-        if (dynamicBoxes[index].feedback == DynamicBoxDrawFeedback::Carried)
-        {
-            fill = kDynamicBoxCarryFill;
-            wire = kDynamicBoxCarryWire;
-            grabHudCarrying = true;
-        }
-        else if (dynamicBoxes[index].feedback == DynamicBoxDrawFeedback::Targeted)
-        {
-            fill = kDynamicBoxTargetFill;
-            wire = kDynamicBoxTargetWire;
-            grabHudTarget = true;
-        }
-        DrawRuntimeDynamicBox(dynamicBoxes[index], fill, wire);
-    }
-    for (std::size_t index = 0; index < pressurePlates.size(); ++index)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeletePressurePlateIndices, index))
-        {
-            continue;
-        }
-        const PressurePlateDrawState& plate = pressurePlates[index];
-        if (!plate.visibleInGameplay && !plate.revealInEditor)
-        {
-            continue;
-        }
-        if (!plate.visibleInGameplay && plate.revealInEditor)
-        {
-            DrawGhostBox(
-                plate.center,
-                plate.size,
-                kPressurePlateHiddenEditorFill,
-                kPressurePlateHiddenEditorWire);
-            continue;
-        }
-        DrawGreyboxBox(
-            plate.center,
-            plate.size,
-            plate.active ? kPressurePlateActive : kPressurePlateInactive);
-    }
-    bool doorHudTarget = false;
-    for (std::size_t index = 0; index < doors.size(); ++index)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteDoorIndices, index))
-        {
-            continue;
-        }
-        const bool targeted = lockedDoorTargetIndex == static_cast<int>(index);
-        if (targeted)
-        {
-            doorHudTarget = true;
-            DrawGhostBox(doors[index].center, doors[index].size, kDoorTargetFill, kDoorTargetWire);
-        }
-        else
-        {
-            DrawGreyboxBox(doors[index].center, doors[index].size, kDoorColor);
-        }
-    }
-    if (staticPropModels)
-    {
-        staticPropModels->ResetDrawStats();
-    }
-    for (std::size_t index = 0; index < level.staticProps.size(); ++index)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteStaticPropIndices, index))
-        {
-            continue;
-        }
+        const ModelDrawOverride litOverride = worldLighting->LitModelOverride();
+        gWorldLighting = worldLighting.get();
+        gWorldSolidMode = WorldSolidMode::Solid;
+        gWorldModelOverride = &litOverride;
+        worldLighting->BindLitPass(lightingEnv);
         if (staticPropModels)
         {
-            staticPropModels->DrawProp(level.staticProps[index]);
+            staticPropModels->ResetDrawStats();
         }
+        drawWorldGeometry();
+        worldLighting->UnbindLitPass();
+        gWorldModelOverride = nullptr;
+        gWorldSolidMode = WorldSolidMode::Wires;
+        drawWorldGeometry();
     }
-    bool pickupHudTarget = false;
-    char pickupHudText[64]{};
-    for (std::size_t index = 0; index < level.itemPickups.size(); ++index)
+    else
     {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteItemPickupIndices, index))
+        gWorldLighting = nullptr;
+        gWorldSolidMode = WorldSolidMode::Combined;
+        gWorldModelOverride = nullptr;
+        if (staticPropModels)
         {
-            continue;
+            staticPropModels->ResetDrawStats();
         }
-        if (index < itemPickupCollected.size() && itemPickupCollected[index] != 0)
+        drawWorldGeometry();
+    }
+
+    gWorldSolidMode = WorldSolidMode::Combined;
+    gWorldLighting = nullptr;
+    gWorldModelOverride = nullptr;
+    RestoreGreyboxImmediateState();
+
+    if (lightingReady)
+    {
+        for (std::size_t index = 0; index < level.itemPickups.size(); ++index)
         {
-            continue;
-        }
-        const world::ItemPickupSpec& pickup = level.itemPickups[index];
-        const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
-        core::Vec3 loadedMin{};
-        core::Vec3 loadedMax{};
-        bool haveLoadedBounds = false;
-        if (!pickup.modelIdentity.empty() && staticPropModels != nullptr)
-        {
-            haveLoadedBounds = staticPropModels->TryGetLoadedLocalBounds(
-                pickup.modelIdentity, loadedMin, loadedMax);
-        }
-        const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
-            pickup,
-            targeted,
-            false,
-            haveLoadedBounds,
-            loadedMin,
-            loadedMax,
-            elapsedSeconds);
-        if (presentation.drawHud)
-        {
-            pickupHudTarget = true;
-            std::snprintf(
-                pickupHudText,
-                sizeof(pickupHudText),
-                "E Pick Up %s x%d",
-                pickup.itemId.c_str(),
-                pickup.quantity);
-        }
-        Color fill = kItemPickupFill;
-        if (presentation.drawFallbackHighlight)
-        {
-            const Color goldPush = MixRgb(
-                kItemPickupFill, kItemPickupTargetGold, presentation.highlightGoldAmount);
-            fill = MixRgb(kItemPickupFill, goldPush, presentation.highlightIntensity);
-        }
-        const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
-        if (!pickup.modelIdentity.empty() && staticPropModels)
-        {
-            staticPropModels->DrawProp(
-                world::ItemPickupPresentedVisualProp(pickup, elapsedSeconds));
-            if (presentation.drawModelHighlight)
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteItemPickupIndices, index))
             {
-                staticPropModels->DrawGameplayTargetHighlight(
-                    presentation.visual,
-                    presentation.highlightRed,
-                    presentation.highlightGreen,
-                    presentation.highlightBlue,
-                    presentation.highlightAlpha);
+                continue;
             }
-            if (presentation.drawInteractionBounds)
+            if (index < itemPickupCollected.size() && itemPickupCollected[index] != 0)
             {
-                DrawTransformedBoundsWires(
-                    presentation.boundsCorners, kSelectedModelBoundsWire);
+                continue;
             }
-            continue;
+            const world::ItemPickupSpec& pickup = level.itemPickups[index];
+            const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
+            core::Vec3 loadedMin{};
+            core::Vec3 loadedMax{};
+            bool haveLoadedBounds = false;
+            if (!pickup.modelIdentity.empty() && staticPropModels != nullptr)
+            {
+                haveLoadedBounds = staticPropModels->TryGetLoadedLocalBounds(
+                    pickup.modelIdentity, loadedMin, loadedMax);
+            }
+            const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
+                pickup,
+                targeted,
+                false,
+                haveLoadedBounds,
+                loadedMin,
+                loadedMax,
+                elapsedSeconds);
+            if (!pickup.modelIdentity.empty() && staticPropModels)
+            {
+                if (presentation.drawModelHighlight)
+                {
+                    staticPropModels->DrawGameplayTargetHighlight(
+                        presentation.visual,
+                        presentation.highlightRed,
+                        presentation.highlightGreen,
+                        presentation.highlightBlue,
+                        presentation.highlightAlpha);
+                }
+                if (presentation.drawInteractionBounds)
+                {
+                    DrawTransformedBoundsWires(
+                        presentation.boundsCorners, kSelectedModelBoundsWire);
+                }
+            }
         }
-        DrawItemPickupFallbackCube(
-            presentation.visual,
-            fill,
-            wire,
-            !targeted || presentation.drawInteractionBounds);
-    }
-    DrawOrientedGreyboxBox(
-        level.slopes[static_cast<std::size_t>(world::kLevel01WalkableSlopeIndex)],
-        kWalkableSlopeColor);
-    DrawOrientedGreyboxBox(
-        level.slopes[static_cast<std::size_t>(world::kLevel01SteepSlopeIndex)],
-        kSteepSlopeColor);
-    for (std::size_t hazardIndex = 0; hazardIndex < level.hazards.size(); ++hazardIndex)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteHazardIndices, hazardIndex))
+        for (std::size_t goalIndex = 0; goalIndex < level.levelGoals.size(); ++goalIndex)
         {
-            continue;
+            if (OverlayMarksPendingDelete(overlay.pendingDeleteLevelGoalIndices, goalIndex))
+            {
+                continue;
+            }
+            DrawLevelGoalPresentation(
+                level.levelGoals[goalIndex],
+                levelCompleted,
+                LevelGoalViewKindFromEditor(overlay.drawLevelGoalAuthoredVolume),
+                LevelGoalDrawLayer::EditorVolume);
         }
-        DrawHazard(level.hazards[hazardIndex]);
-    }
-    const std::size_t collectibleCount =
-        level.collectibles.size() < collectibleCollected.size() ? level.collectibles.size()
-                                                                : collectibleCollected.size();
-    for (std::size_t collectibleIndex = 0; collectibleIndex < collectibleCount; ++collectibleIndex)
-    {
-        if (OverlayMarksPendingDelete(
-                overlay.pendingDeleteCollectibleIndices, collectibleIndex))
+        for (std::size_t index = 0; index < pressurePlates.size(); ++index)
         {
-            continue;
+            if (OverlayMarksPendingDelete(overlay.pendingDeletePressurePlateIndices, index))
+            {
+                continue;
+            }
+            const PressurePlateDrawState& plate = pressurePlates[index];
+            if (!plate.visibleInGameplay && plate.revealInEditor)
+            {
+                DrawGhostBox(
+                    plate.center,
+                    plate.size,
+                    kPressurePlateHiddenEditorFill,
+                    kPressurePlateHiddenEditorWire);
+            }
         }
-        if (collectibleCollected[collectibleIndex] == 0)
-        {
-            DrawCollectible(level.collectibles[collectibleIndex]);
-        }
-        // Collected cubes stay hidden here. Editor F2 draws an authored
-        // wireframe placeholder from DebugWorldOverlay instead of mutating
-        // CollectibleRunState. Pending-delete collectibles use the faded
-        // overlay instead of this runtime cube or the collected gold wire.
-    }
-    const bool playerModelLoaded = IsPlayerModelLoaded();
-    if (gameplay::ShouldDrawPlayerPresentationModel(playerModelLoaded) && playerModelGpu != nullptr)
-    {
-        const gameplay::PlayerVisualTransform visual = gameplay::BuildPlayerVisualTransform(
-            player.Position(),
-            gameplay::kDefaultPlayerPresentationConfig,
-            playerPresentation.facingYawDegrees);
-        DrawPlayerPresentationModel(playerModelGpu->model, visual);
-    }
-    else if (gameplay::ShouldDrawPlayerGameplayPrimitive(playerModelLoaded))
-    {
-        DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
-    }
-    const std::size_t checkpointCount =
-        level.checkpoints.size() < checkpointVisuals.size() ? level.checkpoints.size()
-                                                            : checkpointVisuals.size();
-    for (std::size_t checkpointIndex = 0; checkpointIndex < checkpointCount; ++checkpointIndex)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteCheckpointIndices, checkpointIndex))
-        {
-            continue;
-        }
-        DrawCheckpointMarker(
-            level.checkpoints[checkpointIndex], checkpointVisuals[checkpointIndex]);
-    }
-    for (std::size_t goalIndex = 0; goalIndex < level.levelGoals.size(); ++goalIndex)
-    {
-        if (OverlayMarksPendingDelete(overlay.pendingDeleteLevelGoalIndices, goalIndex))
-        {
-            continue;
-        }
-        DrawLevelGoalPresentation(
-            level.levelGoals[goalIndex],
-            levelCompleted,
-            LevelGoalViewKindFromEditor(overlay.drawLevelGoalAuthoredVolume));
     }
 
     if (drawGameplayHud)
@@ -2138,6 +2405,7 @@ void Renderer::DrawWorld(
         staticPropModels->DrawSelectionHighlight(overlay.selectedModelGhost);
     }
     DrawWorldOverlay(overlay);
+
 
     if (subViewport)
     {

@@ -406,7 +406,8 @@ void StaticModelSceneStore::DrawPropTinted(
     unsigned char red,
     unsigned char green,
     unsigned char blue,
-    unsigned char alpha) const
+    unsigned char alpha,
+    const ModelDrawOverride* override) const
 {
     if (!world::StaticPropTransformIsValid(spec))
     {
@@ -431,17 +432,30 @@ void StaticModelSceneStore::DrawPropTinted(
     const Color tint{red, green, blue, alpha};
     if (entry != nullptr && entry->hasModel)
     {
-        DrawModelPreservingMaterials(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, tint);
+        DrawModelPreservingMaterials(
+            entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, tint, override);
     }
     else
     {
+        const bool useOverride = override != nullptr && override->shader.id != 0;
+        if (useOverride)
+        {
+            BeginShaderMode(override->shader);
+        }
         DrawCube(
             Vector3{0.0f, 0.0f, 0.0f},
             1.0f,
             1.0f,
             1.0f,
             alpha == 255 ? kMissingPropColor : tint);
-        DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, WHITE);
+        if (!useOverride)
+        {
+            DrawCubeWires(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, WHITE);
+        }
+        if (useOverride)
+        {
+            EndShaderMode();
+        }
     }
     rlPopMatrix();
     RestoreGreyboxImmediateState();
@@ -450,6 +464,13 @@ void StaticModelSceneStore::DrawPropTinted(
 void StaticModelSceneStore::DrawProp(const world::StaticPropSpec& spec) const
 {
     DrawPropTinted(spec, 255, 255, 255, 255);
+}
+
+void StaticModelSceneStore::DrawProp(
+    const world::StaticPropSpec& spec,
+    const ModelDrawOverride& override) const
+{
+    DrawPropTinted(spec, 255, 255, 255, 255, &override);
 }
 
 void StaticModelSceneStore::DrawPlacementPreview(const world::StaticPropSpec& spec) const

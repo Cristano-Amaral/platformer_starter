@@ -35,6 +35,10 @@ inline constexpr std::string_view kPauseOpenSoundLogicalId = "sounds/pause_open.
 inline constexpr std::string_view kPauseCloseSoundLogicalId = "sounds/pause_close.wav";
 inline constexpr std::string_view kInventoryOpenSoundLogicalId = "sounds/inventory_open.wav";
 inline constexpr std::string_view kInventoryCloseSoundLogicalId = "sounds/inventory_close.wav";
+inline constexpr std::string_view kWorldLitVertexShaderLogicalId = "shaders/world_lit.vs";
+inline constexpr std::string_view kWorldLitFragmentShaderLogicalId = "shaders/world_lit.fs";
+inline constexpr std::string_view kShadowDepthVertexShaderLogicalId = "shaders/shadow_depth.vs";
+inline constexpr std::string_view kShadowDepthFragmentShaderLogicalId = "shaders/shadow_depth.fs";
 inline constexpr std::string_view kRuntimeAssetDirectoryName = "assets";
 
 std::filesystem::path ExecutableDirectory();

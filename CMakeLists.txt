@@ -163,6 +163,10 @@ add_executable(Platformer3D
     game/source/platform/GameplayAudio.h
     game/source/render/Renderer.cpp
     game/source/render/Renderer.h
+    game/source/render/LightingEnvironment.cpp
+    game/source/render/LightingEnvironment.h
+    game/source/render/WorldLighting.cpp
+    game/source/render/WorldLighting.h
     game/source/render/LevelGoalVisualization.cpp
     game/source/render/LevelGoalVisualization.h
     game/source/render/CameraView.h
@@ -291,6 +295,10 @@ set_target_properties(Platformer3D PROPERTIES
 #   <exe dir>/assets/sounds/pause_close.wav
 #   <exe dir>/assets/sounds/inventory_open.wav
 #   <exe dir>/assets/sounds/inventory_close.wav
+#   <exe dir>/assets/shaders/world_lit.vs
+#   <exe dir>/assets/shaders/world_lit.fs
+#   <exe dir>/assets/shaders/shadow_depth.vs
+#   <exe dir>/assets/shaders/shadow_depth.fs
 # Do not stage textures/test_textured_basecolor.png; that PNG is Blender authoring input only.
 # Runtime lookup uses the executable directory, not the process CWD.
 # The staged level file is required at runtime; Application loads it once in Initialize.
@@ -1985,6 +1993,65 @@ target_compile_definitions(LoadedModelMaterialsTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
     "PLATFORMER_TEST_TEXTURED_GLB=\"${PLATFORMER_TEST_TEXTURED_GLB}\""
     "PLATFORMER_PLAYER_GLB=\"${PLATFORMER_PLAYER_GLB}\""
+)
+
+# Milestone 85: CPU lighting environment math/config. No window or raylib.
+add_executable(LightingEnvironmentTest
+    game/source/render/LightingEnvironment.cpp
+    game/source/render/LightingEnvironment.h
+    game/source/render/LightingEnvironmentTest.cpp
+)
+target_include_directories(LightingEnvironmentTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(LightingEnvironmentTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LightingEnvironmentTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 85: shader/shadow resource lifetime. Hidden window. Stages shaders
+# next to the test executable. No source-directory fallback.
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/shaders/world_lit.vs"
+    PLATFORMER_WORLD_LIT_VS)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/shaders/world_lit.fs"
+    PLATFORMER_WORLD_LIT_FS)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/shaders/shadow_depth.vs"
+    PLATFORMER_SHADOW_DEPTH_VS)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/shaders/shadow_depth.fs"
+    PLATFORMER_SHADOW_DEPTH_FS)
+add_executable(WorldLightingResourcesTest
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/render/LightingEnvironment.cpp
+    game/source/render/LightingEnvironment.h
+    game/source/render/LoadedModelMaterials.h
+    game/source/render/WorldLighting.cpp
+    game/source/render/WorldLighting.h
+    game/source/render/WorldLightingResourcesTest.cpp
+)
+if(WIN32)
+    target_sources(WorldLightingResourcesTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(WorldLightingResourcesTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+endif()
+target_include_directories(WorldLightingResourcesTest PRIVATE game/source)
+target_link_libraries(WorldLightingResourcesTest PRIVATE raylib)
+if(MSVC)
+    target_compile_options(WorldLightingResourcesTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(WorldLightingResourcesTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(WorldLightingResourcesTest PRIVATE ole32 shell32 uuid)
+endif()
+target_compile_definitions(WorldLightingResourcesTest PRIVATE
+    "PLATFORMER_WORLD_LIT_VS=\"${PLATFORMER_WORLD_LIT_VS}\""
+    "PLATFORMER_WORLD_LIT_FS=\"${PLATFORMER_WORLD_LIT_FS}\""
+    "PLATFORMER_SHADOW_DEPTH_VS=\"${PLATFORMER_SHADOW_DEPTH_VS}\""
+    "PLATFORMER_SHADOW_DEPTH_FS=\"${PLATFORMER_SHADOW_DEPTH_FS}\""
 )
 
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or

@@ -166,6 +166,10 @@ Staged runtime files (POST_BUILD `copy_if_different` from cooked):
     <executable directory>/assets/sounds/pause_close.wav
     <executable directory>/assets/sounds/inventory_open.wav
     <executable directory>/assets/sounds/inventory_close.wav
+    <executable directory>/assets/shaders/world_lit.vs
+    <executable directory>/assets/shaders/world_lit.fs
+    <executable directory>/assets/shaders/shadow_depth.vs
+    <executable directory>/assets/shaders/shadow_depth.fs
 
 Runtime lookup uses `platform::RuntimeAssetPath`, which joins `<executable directory>/assets/` with the logical relative path. The executable directory is queried from the OS in the platform layer (`GetModuleFileNameW` on Windows, `/proc/self/exe` on Linux). The process current working directory is never used, and non-absolute results are rejected so raylib file loads cannot silently resolve against CWD. The renderer does not hard-code `game/assets/cooked`.
 
@@ -178,6 +182,7 @@ Logical identities:
 - Milestone 31 Level 01: `levels/level_01.level` (required at Initialize; missing/invalid is fatal)
 - Milestone 64 Level 02: `levels/level_02.level` (staged destination; missing at transition fails atomically)
 - Extra valid authored `source/levels/*.level` files are discovered at cook time and extra cooked `levels/*.level` files at staging time (M64.1). They are not required inventory. Cooked and staged `levels/*.level` files that are no longer in that current inventory are removed; other asset categories are not.
+- Milestone 85 lighting shaders: `shaders/world_lit.vs`, `shaders/world_lit.fs`, `shaders/shadow_depth.vs`, `shaders/shadow_depth.fs`
 - Milestone 61 collection sound: `sounds/item_pickup_collect.wav`
 - Milestone 71 player damage sound: `sounds/player_damage.wav`
 - Milestone 71 player death sound: `sounds/player_death.wav`
@@ -226,7 +231,37 @@ Renderable Model
 
 **Reference asset:** `models/test_textured.glb` (M18 project-owned cube, labeled A1/A2/B1/B2 PNG embedded). Provenance: `tools`/Blender authoring in-repo; authoring PNG `textures/test_textured_basecolor.png` is not staged. Canonical Levels are not modified to place it.
 
-**Extension point:** additional material maps can hang off the same presentation struct later. M85 lighting/shadows is a separate milestone.
+**Extension point:** additional material maps can hang off the same presentation struct later. Lighting/shadows are a separate `LightingEnvironment` / `WorldLightingResources` boundary (Milestone 85), not a material-graph expansion.
+
+## Lighting & Shadows Foundation (Milestone 85)
+
+M85 adds an engine-owned **world lighting environment** and one directional shadow map for the current raylib renderer. It is presentation only. It is not a Lighting Editor, Level syntax, light Hierarchy object, gizmo, generic light list, ECS, PBR, or renderer rewrite.
+
+```
+World Rendering
+├─ Ambient Light
+└─ Directional Light
+   ├─ direction (ray travel)
+   ├─ color
+   ├─ intensity
+   └─ directional shadows
+```
+
+**Ownership.** `render::LightingEnvironment` is the project-level CPU configuration (`MakeDefaultLightingEnvironment`). `render::WorldLightingResources` is owned by `Renderer` and holds the lit shader, depth shader, shadow FBO, unit-cube mesh, and cached uniform locations. A future Environment / Lighting Editor can replace the default environment without adding Level records or Hierarchy lights.
+
+**Direction convention.** Stored directional `rayDirection` is the direction **light rays travel** through the world (from the sun toward surfaces). World-up is +Y. Zero/non-finite directions fall back to `{0, -1, 0}`. Shader NdotL and the shadow camera use that convention consistently (`toLight = -rayDirection`; light camera looks along the ray).
+
+**Defaults.** Ambient white at intensity `0.34`. Directional warm `{1, 0.96, 0.88}` at intensity `0.88`, default ray `normalize(-0.42, -1, -0.38)`. Single 2048² shadow map, orthographic coverage `72` world units centered at `{0, 4, 0}`, near `1`, far `120`, constant/slope bias `0.0025`, 3×3 PCF.
+
+**Shaders.** Staged runtime assets only: `shaders/world_lit.vs/.fs` and `shaders/shadow_depth.vs/.fs`. Loaded through `platform::RuntimeAssetPath`. Missing/invalid files disable lighting for the process (log once) and keep the previous unlit DrawCube/DrawModel path. No source-directory fallback. No ShaderManager.
+
+**Draw path.** `DrawWorld` renders casters into the shadow map, then the main view: editor grid (unlit), lit solids, unlit wires, then highlights/ghosts/gizmos. M84 `DrawModelPreservingMaterials` accepts a transient `ModelDrawOverride` so imported materials are not permanently mutated. Thumbnails and Model Preview keep their isolated `DrawModel` WHITE path and never bind the world shadow map.
+
+**Casters/receivers.** Greybox/platforms/slopes/moving platform, Static Props, Dynamic Boxes, Item Pickups (visual bob/spin transform), Player, Doors, gameplay Pressure Plates, Hazards, Collectibles, Checkpoint markers, Level Goal marker. **Excluded:** editor grid, gizmos, selection ghosts, placement preview, hidden Pressure Plate ghosts, Level Goal authored volume, overlay wires, highlights, Content Browser thumbnails, Model Preview.
+
+**Lifecycle.** Load with `Renderer::LoadRuntimeAssets`; unload with `UnloadRuntimeAssets` (idempotent). Shadow map is independent of window size, so resize/F2 viewport changes do not recreate it. Restart, level transition, Play Again, and Main Menu → Play reuse the same GPU objects.
+
+**Out of scope.** Point/Spot lights, per-Level lighting, Cascaded Shadow Maps, GI, SSAO, HDR/bloom, IBL/skybox, full PBR, player animation, Character Definition, ECS, scene graph, M86.
 
 Development `Assets > Import Static GLB` copies a compatible self-contained static `.glb` into `game/assets/source/models/<filename>.glb`. Canonical identity is the project-relative path `models/<filename>.glb`. The original external absolute path is import input only. Collision never overwrites. Import does not cook, stage, or mutate `workingCopy` / `active` / `savedSourceBaseline`. A derived `assets::StaticModelCatalog` discovers valid `source/models/*.glb` files (non-recursive, sorted by identity). It is not persisted and is not a level/scene object list. After import, the existing Cook Assets then Stage Runtime Assets path processes extra cooked `models/*.glb` files. Staging's required inventory remains `cmake/RuntimeAssets.cmake`; extra cooked models are discovered at staging time. Extra cooked `levels/*.level` files are discovered the same way so a Level created in the Development Levels UI can enter Cook & Stage without a per-level CMake edit.
 

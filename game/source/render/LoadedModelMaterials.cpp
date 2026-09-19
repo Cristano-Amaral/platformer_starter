@@ -131,8 +131,53 @@ bool ModelMaterialGpuStateEqual(
 
 void DrawModelPreservingMaterials(Model model, Vector3 position, float scale, Color tint)
 {
+    DrawModelPreservingMaterials(model, position, scale, tint, nullptr);
+}
+
+void DrawModelPreservingMaterials(
+    Model model,
+    Vector3 position,
+    float scale,
+    Color tint,
+    const ModelDrawOverride* override)
+{
     const ModelMaterialGpuSnapshot snapshot = CaptureModelMaterialGpuState(model);
+    Shader originalShaders[kMaxCapturedModelMaterials]{};
+    Texture2D originalSlot1[kMaxCapturedModelMaterials]{};
+    const bool useOverride = override != nullptr && override->shader.id != 0;
+    const int restoreCount =
+        model.materials == nullptr || model.materialCount <= 0
+        ? 0
+        : (model.materialCount < kMaxCapturedModelMaterials ? model.materialCount
+                                                            : kMaxCapturedModelMaterials);
+    if (useOverride)
+    {
+        for (int i = 0; i < restoreCount; ++i)
+        {
+            originalShaders[i] = model.materials[i].shader;
+            if (model.materials[i].maps != nullptr)
+            {
+                originalSlot1[i] = model.materials[i].maps[1].texture;
+                if (override->slot1Texture.id != 0)
+                {
+                    model.materials[i].maps[1].texture = override->slot1Texture;
+                }
+            }
+            model.materials[i].shader = override->shader;
+        }
+    }
     DrawModel(model, position, scale, tint);
+    if (useOverride)
+    {
+        for (int i = 0; i < restoreCount; ++i)
+        {
+            model.materials[i].shader = originalShaders[i];
+            if (model.materials[i].maps != nullptr)
+            {
+                model.materials[i].maps[1].texture = originalSlot1[i];
+            }
+        }
+    }
     RestoreModelMaterialGpuState(model, snapshot);
 }
 }

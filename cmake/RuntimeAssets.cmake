@@ -35,4 +35,8 @@ set(PLATFORMER_RUNTIME_ASSETS
     sounds/pause_close.wav
     sounds/inventory_open.wav
     sounds/inventory_close.wav
+    shaders/world_lit.vs
+    shaders/world_lit.fs
+    shaders/shadow_depth.vs
+    shaders/shadow_depth.fs
 )

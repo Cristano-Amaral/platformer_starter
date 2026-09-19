@@ -4,6 +4,7 @@
 // Model. Independent of thumbnail PNG cache and Model Preview.
 
 #include "core/Vec3.h"
+#include "render/LoadedModelMaterials.h"
 #include "world/LevelDefinition.h"
 
 #include <cstddef>
@@ -45,6 +46,7 @@ public:
     std::vector<std::string> SubmittedIdentities() const;
 
     void DrawProp(const world::StaticPropSpec& spec) const;
+    void DrawProp(const world::StaticPropSpec& spec, const ModelDrawOverride& override) const;
     void DrawPlacementPreview(const world::StaticPropSpec& spec) const;
     // Editor-only second pass of the same cached model. Does not LoadModel,
     // permanently mutate imported materials, or add a persistent scene object.
@@ -70,7 +72,8 @@ private:
         unsigned char red,
         unsigned char green,
         unsigned char blue,
-        unsigned char alpha) const;
+        unsigned char alpha,
+        const ModelDrawOverride* override = nullptr) const;
 
     struct GpuState;
     std::unique_ptr<GpuState> gpu;

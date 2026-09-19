@@ -56,7 +56,37 @@ void DrawLevelGoalEditorAuthoredVolume(
     RestoreGreyboxImmediateState();
 }
 
-void DrawLevelGoalMarkerPosts(const world::LevelGoalSpec& goal, bool levelCompleted)
+void DrawLevelGoalMarkerPosts(
+    const world::LevelGoalSpec& goal,
+    bool levelCompleted,
+    LevelGoalDrawLayer layer)
+{
+    const LevelGoalMarkerLayout layout = MakeLevelGoalMarkerLayout(goal);
+    const LevelGoalMarkerColors colors = MakeLevelGoalMarkerColors(levelCompleted);
+    const Color postColor{colors.postR, colors.postG, colors.postB, colors.postA};
+    const Color barColor{colors.barR, colors.barG, colors.barB, colors.barA};
+    const Vector3 left = ToRaylib(layout.leftPost);
+    const Vector3 right = ToRaylib(layout.rightPost);
+    const Vector3 bar = ToRaylib(layout.barCenter);
+    const Color wire{24, 26, 32, 255};
+    const bool drawFill = layer == LevelGoalDrawLayer::All || layer == LevelGoalDrawLayer::Solids;
+    const bool drawWires = layer == LevelGoalDrawLayer::All || layer == LevelGoalDrawLayer::Wires;
+    if (drawFill)
+    {
+        DrawCube(left, layout.postSize.x, layout.postSize.y, layout.postSize.z, postColor);
+        DrawCube(right, layout.postSize.x, layout.postSize.y, layout.postSize.z, postColor);
+        DrawCube(bar, layout.barSize.x, layout.barSize.y, layout.barSize.z, barColor);
+    }
+    if (drawWires)
+    {
+        DrawCubeWires(left, layout.postSize.x, layout.postSize.y, layout.postSize.z, wire);
+        DrawCubeWires(right, layout.postSize.x, layout.postSize.y, layout.postSize.z, wire);
+        DrawCubeWires(bar, layout.barSize.x, layout.barSize.y, layout.barSize.z, wire);
+    }
+}
+}
+
+LevelGoalMarkerLayout MakeLevelGoalMarkerLayout(const world::LevelGoalSpec& goal)
 {
     constexpr float postWidth = 0.16f;
     constexpr float postHeight = 1.6f;
@@ -68,25 +98,22 @@ void DrawLevelGoalMarkerPosts(const world::LevelGoalSpec& goal, bool levelComple
     const float platformTopY = goal.center.y - world::kPlayerVisualSize.y * 0.5f;
     const float postCenterY = platformTopY + postHeight * 0.5f;
     const float z = goal.center.z + zOffset;
-    const core::Vec3 postSize{postWidth, postHeight, postWidth};
-    const core::Vec3 leftPost{goal.center.x - postSpread, postCenterY, z};
-    const core::Vec3 rightPost{goal.center.x + postSpread, postCenterY, z};
-    const core::Vec3 barCenter{
-        goal.center.x, platformTopY + postHeight + barHeight * 0.5f, z};
-    const core::Vec3 barSize{postSpread * 2.0f + postWidth, barHeight, barDepth};
-
-    const Color postColor = levelCompleted ? kGoalCompletedPost : kGoalIncompletePost;
-    const Color barColor = levelCompleted ? kGoalCompletedBar : kGoalIncompleteBar;
-    const Vector3 left = ToRaylib(leftPost);
-    const Vector3 right = ToRaylib(rightPost);
-    const Vector3 bar = ToRaylib(barCenter);
-    DrawCube(left, postSize.x, postSize.y, postSize.z, postColor);
-    DrawCubeWires(left, postSize.x, postSize.y, postSize.z, Color{24, 26, 32, 255});
-    DrawCube(right, postSize.x, postSize.y, postSize.z, postColor);
-    DrawCubeWires(right, postSize.x, postSize.y, postSize.z, Color{24, 26, 32, 255});
-    DrawCube(bar, barSize.x, barSize.y, barSize.z, barColor);
-    DrawCubeWires(bar, barSize.x, barSize.y, barSize.z, Color{24, 26, 32, 255});
+    LevelGoalMarkerLayout layout{};
+    layout.postSize = {postWidth, postHeight, postWidth};
+    layout.leftPost = {goal.center.x - postSpread, postCenterY, z};
+    layout.rightPost = {goal.center.x + postSpread, postCenterY, z};
+    layout.barCenter = {goal.center.x, platformTopY + postHeight + barHeight * 0.5f, z};
+    layout.barSize = {postSpread * 2.0f + postWidth, barHeight, barDepth};
+    return layout;
 }
+
+LevelGoalMarkerColors MakeLevelGoalMarkerColors(bool levelCompleted)
+{
+    if (levelCompleted)
+    {
+        return {212, 168, 48, 255, 244, 212, 84, 255};
+    }
+    return {156, 116, 52, 255, 188, 148, 64, 255};
 }
 
 void DrawLevelGoalPresentation(
@@ -94,14 +121,24 @@ void DrawLevelGoalPresentation(
     bool levelCompleted,
     LevelGoalViewKind view)
 {
+    DrawLevelGoalPresentation(goal, levelCompleted, view, LevelGoalDrawLayer::All);
+}
+
+void DrawLevelGoalPresentation(
+    const world::LevelGoalSpec& goal,
+    bool levelCompleted,
+    LevelGoalViewKind view,
+    LevelGoalDrawLayer layer)
+{
     const LevelGoalVisualPlan plan = MakeLevelGoalVisualPlan(view);
-    if (plan.drawAuthoredVolume)
+    if (plan.drawAuthoredVolume
+        && (layer == LevelGoalDrawLayer::All || layer == LevelGoalDrawLayer::EditorVolume))
     {
         DrawLevelGoalEditorAuthoredVolume(goal, levelCompleted, plan);
     }
-    if (plan.drawMarker)
+    if (plan.drawMarker && layer != LevelGoalDrawLayer::EditorVolume)
     {
-        DrawLevelGoalMarkerPosts(goal, levelCompleted);
+        DrawLevelGoalMarkerPosts(goal, levelCompleted, layer);
     }
 }
 }
