@@ -177,6 +177,14 @@ int main()
         hierarchy[3].selection.kind == editor::EditorObjectKind::DirectionalLight,
         "hierarchy lists Directional Light");
     Expect(
+        hierarchy[4].selection.kind == editor::EditorObjectKind::Ground,
+        "hierarchy lists Ground");
+    Expect(
+        !editor::IsValidSelection(MakeStubLevel(), {editor::EditorObjectKind::Terrain, 0}),
+        "Terrain is invalid when absent");
+    Expect(!editor::IsEditableSelection({editor::EditorObjectKind::None, 0}),
+        "None is not Inspector-editable");
+    Expect(
         hierarchy[5].selection
             == editor::EditorSelection{editor::EditorObjectKind::ElevatedPlatform, 0},
         "hierarchy includes Platform 0");
@@ -1520,6 +1528,75 @@ int main()
                     "default picking proxy keeps the M85.1 size");
             }
         }
+    }
+
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        const auto hierarchyAbsent = editor::BuildHierarchyEntries(level);
+        bool hierarchyHasTerrain = false;
+        for (const editor::HierarchyEntry& entry : hierarchyAbsent)
+        {
+            hierarchyHasTerrain =
+                hierarchyHasTerrain || entry.selection.kind == editor::EditorObjectKind::Terrain;
+        }
+        Expect(!hierarchyHasTerrain, "no hierarchy Terrain when absent");
+        const editor::EditorPickingSet absent =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        bool pickHasTerrain = false;
+        for (const editor::PickingProxy& proxy : absent.proxies)
+        {
+            pickHasTerrain =
+                pickHasTerrain || proxy.selection.kind == editor::EditorObjectKind::Terrain;
+        }
+        Expect(!pickHasTerrain, "no Terrain picking proxy when absent");
+
+        level.hasTerrain = true;
+        level.terrain = world::MakeDefaultTerrain();
+        Expect(
+            editor::IsValidSelection(level, {editor::EditorObjectKind::Terrain, 0}),
+            "Terrain selection kind is valid when present");
+        Expect(
+            editor::IsEditableSelection({editor::EditorObjectKind::Terrain, 0}),
+            "Terrain is Inspector-editable");
+        const auto hierarchyPresent = editor::BuildHierarchyEntries(level);
+        hierarchyHasTerrain = false;
+        std::size_t terrainHierarchyIndex = 0;
+        for (std::size_t index = 0; index < hierarchyPresent.size(); ++index)
+        {
+            if (hierarchyPresent[index].selection.kind == editor::EditorObjectKind::Terrain)
+            {
+                hierarchyHasTerrain = true;
+                terrainHierarchyIndex = index;
+            }
+        }
+        Expect(hierarchyHasTerrain, "hierarchy entry when Terrain is present");
+        Expect(
+            hierarchyPresent[4].selection.kind == editor::EditorObjectKind::Ground
+                && hierarchyPresent[terrainHierarchyIndex].selection.kind
+                    == editor::EditorObjectKind::Terrain
+                && terrainHierarchyIndex == 5,
+            "Terrain sits with world singleton content after Ground");
+        Expect(
+            editor::FindHierarchyUngroupedRow(
+                editor::BuildHierarchyRows(level), {editor::EditorObjectKind::Terrain, 0})
+                != nullptr,
+            "hierarchy selection can target Terrain");
+
+        world::StaticPropSpec nearerProp{};
+        nearerProp.modelIdentity = "models/test_static.glb";
+        nearerProp.position = {-6.0f, 2.0f, 2.0f};
+        nearerProp.scale = {1.0f, 1.0f, 1.0f};
+        level.staticProps.push_back(nearerProp);
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::Ray3 ontoProp{{-6.0f, 10.0f, 2.0f}, {0.0f, -1.0f, 0.0f}};
+        const editor::EditorSelection nearer = editor::PickNearest(ontoProp, set);
+        Expect(
+            nearer.kind == editor::EditorObjectKind::StaticProp && nearer.index == 0,
+            "nearer authored object wins over Terrain");
+        const editor::Ray3 ontoTerrain{{-7.0f, 10.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
+        const editor::EditorSelection exposed = editor::PickNearest(ontoTerrain, set);
+        Expect(exposed.kind == editor::EditorObjectKind::Terrain, "exposed Terrain can be selected");
     }
 
     if (gFailures != 0)

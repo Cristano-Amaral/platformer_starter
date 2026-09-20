@@ -60,8 +60,9 @@ int main()
     Expect(
         physics::kMaxPhysicsElevatedPlatformCount
             == static_cast<int>(physics::kPhysicsMaxBodies)
-                - physics::kPhysicsNonPlatformBodyCount,
-        "leftover is max bodies minus non-platform count");
+                - physics::kPhysicsNonPlatformBodyCount
+                - physics::kPhysicsTerrainBodyCount,
+        "leftover is max bodies minus non-platform count minus Terrain slot");
     Expect(
         physics::kMaxAuthoredPhysicsBodies == 59,
         "shared authored-body leftover is 59");

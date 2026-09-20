@@ -835,6 +835,28 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         EditVec3("Center X Y Z", level.ground.center);
         EditVec3("Size X Y Z", level.ground.size);
         break;
+    case EditorObjectKind::Terrain:
+        if (!level.hasTerrain)
+        {
+            ImGui::TextUnformatted("No Terrain in this Level.");
+            break;
+        }
+        ImGui::TextWrapped(
+            "Singleton Level Terrain. Origin is the min-X / min-Z sample. "
+            "Heights are relative to Origin Y. Resolution is creation-time "
+            "in M86 and is not resampled here.");
+        ImGui::Checkbox("Enabled", &level.terrain.enabled);
+        EditVec3("Origin X Y Z", level.terrain.origin);
+        ImGui::InputFloat("Size X", &level.terrain.sizeX, 0.0f, 0.0f, kFloatFormat);
+        ImGui::InputFloat("Size Z", &level.terrain.sizeZ, 0.0f, 0.0f, kFloatFormat);
+        ImGui::BeginDisabled(true);
+        ImGui::InputInt("Resolution X", &level.terrain.resolutionX);
+        ImGui::InputInt("Resolution Z", &level.terrain.resolutionZ);
+        ImGui::EndDisabled();
+        ImGui::Text(
+            "Samples: %d",
+            world::TerrainSampleCount(level.terrain));
+        break;
     case EditorObjectKind::ElevatedPlatform:
         if (state.selection.index < level.elevatedPlatforms.size())
         {
@@ -2484,6 +2506,18 @@ LevelEditorRequest DrawEditorMenuBar(
         const bool gizmoDragging = state.gizmo.dragging;
         if (ImGui::BeginMenu("Add"))
         {
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::Terrain)));
+            if (ImGui::MenuItem("Terrain"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::Terrain);
+            }
+            ImGui::EndDisabled();
             ImGui::BeginDisabled(
                 !CanIssueAuthoredLifecycleRequest(
                     authoringAvailable,

@@ -3,8 +3,10 @@
 
 #include "platform/RuntimePaths.h"
 #include "render/LightingEnvironment.h"
+#include "render/TerrainMesh.h"
 #include "render/WorldLighting.h"
 #include "world/LocalLight.h"
+#include "world/Terrain.h"
 
 #include "raylib.h"
 
@@ -189,6 +191,53 @@ int main()
         !render::ShouldCastDirectionalShadow(render::ShadowParticipant::Thumbnail)
             && !render::ShouldCastDirectionalShadow(render::ShadowParticipant::Preview),
         "thumbnail/preview remain isolated from world shadow casters");
+    Expect(
+        render::ShouldCastDirectionalShadow(render::ShadowParticipant::Terrain)
+            && render::ShouldReceiveDirectionalShadow(render::ShadowParticipant::Terrain),
+        "Terrain is a Directional shadow caster and receiver");
+
+    {
+        render::TerrainGpuResources terrainGpu;
+        Expect(!terrainGpu.HasMesh(), "Terrain GPU starts unloaded");
+        Expect(terrainGpu.UploadCount() == 0 && terrainGpu.UnloadCount() == 0,
+            "Terrain GPU counters start at zero");
+        const world::TerrainSpec flat = world::MakeDefaultTerrain();
+        terrainGpu.Sync(&flat);
+        Expect(terrainGpu.HasMesh(), "Sync uploads Terrain mesh");
+        Expect(terrainGpu.UploadCount() == 1, "first Sync is one upload");
+        const std::size_t uploads = terrainGpu.UploadCount();
+        const std::size_t unloads = terrainGpu.UnloadCount();
+        terrainGpu.Sync(&flat);
+        Expect(terrainGpu.UploadCount() == uploads, "unchanged Terrain does not reupload");
+        Expect(terrainGpu.UnloadCount() == unloads, "unchanged Terrain does not unload");
+        world::TerrainSpec moved = flat;
+        moved.origin.x += 1.0f;
+        terrainGpu.Sync(&moved);
+        Expect(terrainGpu.UploadCount() == uploads + 1, "authored change rebuilds Terrain mesh");
+        Expect(terrainGpu.UnloadCount() == unloads + 1, "rebuild unloads the previous mesh");
+        lighting.BeginShadowPass(environment);
+        lighting.DrawWorldMesh(*terrainGpu.GetMesh(), WHITE);
+        lighting.EndShadowPass();
+        BeginDrawing();
+        Camera3D terrainCamera{};
+        terrainCamera.position = Vector3{0.0f, 4.0f, 12.0f};
+        terrainCamera.target = Vector3{0.0f, 1.0f, 0.0f};
+        terrainCamera.up = Vector3{0.0f, 1.0f, 0.0f};
+        terrainCamera.fovy = 40.0f;
+        terrainCamera.projection = CAMERA_PERSPECTIVE;
+        BeginMode3D(terrainCamera);
+        lighting.BindLitPass(environment);
+        lighting.DrawWorldMesh(*terrainGpu.GetMesh(), Color{118, 140, 96, 255});
+        lighting.UnbindLitPass();
+        EndMode3D();
+        EndDrawing();
+        Expect(terrainGpu.UploadCount() == uploads + 1, "drawing does not rebuild Terrain");
+        terrainGpu.Sync(nullptr);
+        Expect(!terrainGpu.HasMesh(), "removing Terrain unloads the mesh");
+        Expect(terrainGpu.UnloadCount() == unloads + 2, "removal unloads once");
+        terrainGpu.Sync(nullptr);
+        Expect(terrainGpu.UnloadCount() == unloads + 2, "second removal is idempotent");
+    }
 
     lighting.Unload();
     lighting.Unload();

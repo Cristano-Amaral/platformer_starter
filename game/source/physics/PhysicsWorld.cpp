@@ -3,6 +3,7 @@
 #include "physics/PhysicsCapacity.h"
 #include "physics/PhysicsWorldTestAccess.h"
 #include "world/LevelDefinition.h"
+#include "world/TerrainGeometry.h"
 
 #include <Jolt/Jolt.h>
 
@@ -22,6 +23,7 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/ShapeFilter.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -873,9 +875,79 @@ struct PhysicsWorld::Impl
         return true;
     }
 
+    bool AddStaticTerrain(const world::LevelDefinition& level)
+    {
+        if (!level.hasTerrain || !level.terrain.enabled)
+        {
+            return true;
+        }
+        if (!world::TerrainSpecIsValid(level.terrain))
+        {
+            std::fprintf(stderr, "PhysicsWorld: invalid authored Terrain.\n");
+            return false;
+        }
+
+        world::TerrainGeometry geometry{};
+        if (!world::GenerateTerrainGeometry(level.terrain, geometry)
+            || geometry.triangles.empty())
+        {
+            std::fprintf(stderr, "PhysicsWorld: failed to tessellate Terrain.\n");
+            return false;
+        }
+
+        JPH::VertexList vertices;
+        vertices.reserve(geometry.positions.size());
+        for (const core::Vec3& position : geometry.positions)
+        {
+            vertices.push_back(JPH::Float3(position.x, position.y, position.z));
+        }
+        JPH::IndexedTriangleList triangles;
+        triangles.reserve(geometry.triangles.size());
+        for (const world::TerrainTriangle& triangle : geometry.triangles)
+        {
+            triangles.push_back(JPH::IndexedTriangle(
+                static_cast<JPH::uint32>(triangle.i0),
+                static_cast<JPH::uint32>(triangle.i1),
+                static_cast<JPH::uint32>(triangle.i2)));
+        }
+
+        JPH::MeshShapeSettings meshSettings(vertices, triangles);
+        const JPH::ShapeSettings::ShapeResult shapeResult = meshSettings.Create();
+        if (shapeResult.HasError())
+        {
+            std::fprintf(
+                stderr,
+                "PhysicsWorld: Terrain MeshShape failed: %s\n",
+                shapeResult.GetError().c_str());
+            return false;
+        }
+
+        JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+        JPH::BodyCreationSettings settings(
+            shapeResult.Get(),
+            JPH::RVec3::sZero(),
+            JPH::Quat::sIdentity(),
+            JPH::EMotionType::Static,
+            ObjectLayers::NonMoving);
+        const JPH::BodyID id =
+            bodyInterface.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+        if (id.IsInvalid())
+        {
+            std::fprintf(stderr, "PhysicsWorld: failed to create Terrain static body.\n");
+            return false;
+        }
+
+        staticBodyIds.push_back(id);
+        return true;
+    }
+
     bool AddGreyboxStaticBodies(const world::LevelDefinition& level)
     {
         if (!AddStaticBox(level.ground, "ground"))
+        {
+            return false;
+        }
+        if (!AddStaticTerrain(level))
         {
             return false;
         }
@@ -1837,6 +1909,20 @@ void PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
         id, JPH::Vec3(linearVelocity.x, linearVelocity.y, linearVelocity.z));
     bodyInterface.SetAngularVelocity(
         id, JPH::Vec3(angularVelocity.x, angularVelocity.y, angularVelocity.z));
+}
+
+bool PhysicsWorldTestAccess::CastWorldRay(
+    const PhysicsWorld& world,
+    core::Vec3 origin,
+    core::Vec3 target,
+    float& outFraction)
+{
+    if (!world.impl->initialized || world.impl->physicsSystem == nullptr)
+    {
+        return false;
+    }
+    const JPH::Vec3 offset(target.x - origin.x, target.y - origin.y, target.z - origin.z);
+    return world.impl->CastWorldRay(ToRVec3(origin), offset, outFraction);
 }
 
 void PhysicsWorld::UpdateMovingPlatform(float deltaSeconds)

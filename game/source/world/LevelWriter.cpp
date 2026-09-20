@@ -367,6 +367,37 @@ std::string SerializeLevelText(const LevelDefinition& level)
     AppendInt(out, level.environment.directionalShadowsEnabled ? 1 : 0);
     out += '\n';
 
+    if (level.hasTerrain)
+    {
+        out += "terrain ";
+        AppendInt(out, level.terrain.enabled ? 1 : 0);
+        out += ' ';
+        AppendVec3(out, level.terrain.origin);
+        out += ' ';
+        AppendFloat(out, level.terrain.sizeX);
+        out += ' ';
+        AppendFloat(out, level.terrain.sizeZ);
+        out += ' ';
+        AppendInt(out, level.terrain.resolutionX);
+        out += ' ';
+        AppendInt(out, level.terrain.resolutionZ);
+        out += '\n';
+        for (int row = 0; row < level.terrain.resolutionZ; ++row)
+        {
+            out += "terrain_row ";
+            AppendInt(out, row);
+            for (int column = 0; column < level.terrain.resolutionX; ++column)
+            {
+                out += ' ';
+                AppendFloat(
+                    out,
+                    level.terrain.heights[static_cast<std::size_t>(
+                        TerrainHeightIndex(level.terrain, column, row))]);
+            }
+            out += '\n';
+        }
+    }
+
     for (const PointLightSpec& light : level.pointLights)
     {
         out += "point_light ";

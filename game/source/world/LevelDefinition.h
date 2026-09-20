@@ -20,6 +20,7 @@
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
 #include "world/StaticProp.h"
+#include "world/Terrain.h"
 
 #include <array>
 #include <string>
@@ -89,6 +90,10 @@ struct LevelDefinition
     LevelCameraSpec camera{};
     // Singleton authored lighting. Missing Level records resolve to M85 defaults.
     LevelEnvironment environment = MakeDefaultLevelEnvironment();
+    // Optional singleton Terrain. Absent (hasTerrain = false) is valid.
+    // At most one Terrain per Level. Not a repeatable prop category.
+    bool hasTerrain = false;
+    TerrainSpec terrain{};
 };
 
 bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level);

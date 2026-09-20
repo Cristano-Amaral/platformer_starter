@@ -48,6 +48,8 @@ const char* EditorObjectKindName(EditorObjectKind kind)
         return "PointLight";
     case EditorObjectKind::SpotLight:
         return "SpotLight";
+    case EditorObjectKind::Terrain:
+        return "Terrain";
     }
     return "None";
 }
@@ -124,6 +126,9 @@ void FormatSelectionDisplayName(
     case EditorObjectKind::SpotLight:
         std::snprintf(buffer, bufferSize, "Spot Light %zu", selection.index);
         return;
+    case EditorObjectKind::Terrain:
+        std::snprintf(buffer, bufferSize, "Terrain");
+        return;
     }
     std::snprintf(buffer, bufferSize, "(none)");
 }
@@ -173,6 +178,8 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
         return selection.index < level.collectibles.size();
     case EditorObjectKind::Goal:
         return selection.index < level.levelGoals.size();
+    case EditorObjectKind::Terrain:
+        return level.hasTerrain && selection.index == 0;
     }
     return false;
 }
@@ -199,6 +206,7 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::DirectionalLight:
     case EditorObjectKind::PointLight:
     case EditorObjectKind::SpotLight:
+    case EditorObjectKind::Terrain:
         return true;
     default:
         return false;

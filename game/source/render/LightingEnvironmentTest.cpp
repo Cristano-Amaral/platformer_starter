@@ -110,6 +110,10 @@ int main()
 
     Expect(render::ShouldCastDirectionalShadow(render::ShadowParticipant::GreyboxWorld),
         "greybox casts");
+    Expect(render::ShouldCastDirectionalShadow(render::ShadowParticipant::Terrain),
+        "Terrain casts Directional shadows");
+    Expect(render::ShouldReceiveDirectionalShadow(render::ShadowParticipant::Terrain),
+        "Terrain receives Directional shadows");
     Expect(render::ShouldCastDirectionalShadow(render::ShadowParticipant::StaticProp),
         "static props cast");
     Expect(render::ShouldCastDirectionalShadow(render::ShadowParticipant::ItemPickup),

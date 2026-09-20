@@ -314,6 +314,7 @@ bool ShouldCastDirectionalShadow(ShadowParticipant participant)
     switch (participant)
     {
     case ShadowParticipant::GreyboxWorld:
+    case ShadowParticipant::Terrain:
     case ShadowParticipant::MovingPlatform:
     case ShadowParticipant::Slope:
     case ShadowParticipant::DynamicBox:

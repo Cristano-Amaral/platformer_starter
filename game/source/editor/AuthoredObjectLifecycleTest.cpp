@@ -92,6 +92,62 @@ int main()
     Expect(editor::SupportsLifecycle(EditorObjectKind::StaticProp), "static prop supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::PointLight), "point light supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::SpotLight), "spot light supported");
+    Expect(!editor::SupportsLifecycle(EditorObjectKind::Terrain), "Terrain is not a repeatable lifecycle kind");
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        Expect(editor::CanAddTerrain(true, working, false), "Add Terrain available when absent");
+        const editor::LifecycleEditResult added = editor::AddTerrain(working);
+        Expect(added.succeeded && working.hasTerrain, "Add Terrain creates authored Terrain");
+        Expect(added.selection.kind == EditorObjectKind::Terrain, "Add Terrain selects Terrain");
+        Expect(world::TerrainSpecEqual(working.terrain, world::MakeDefaultTerrain()),
+            "Add Terrain uses deterministic default");
+        Expect(!editor::CanAddTerrain(true, working, false), "Add Terrain unavailable when present");
+        Expect(!editor::AddTerrain(working).succeeded, "second Terrain is rejected");
+        Expect(!editor::CanDuplicateSelected(true, working, added.selection, false),
+            "Duplicate Selected unavailable for Terrain");
+        Expect(!editor::DuplicateSelected(working, added.selection).succeeded,
+            "Duplicate Terrain fails");
+        Expect(working.hasTerrain && working.terrain.heights.size() == 45,
+            "failed Duplicate does not mutate Terrain");
+        Expect(editor::CanDeleteSelected(true, working, added.selection, false),
+            "Delete Terrain is available");
+        const editor::LifecycleEditResult deleted = editor::DeleteSelected(working, added.selection);
+        Expect(deleted.succeeded && !working.hasTerrain, "Delete Terrain removes authored Terrain");
+        Expect(deleted.selection.kind == EditorObjectKind::None, "Delete Terrain clears selection");
+        const world::LevelDefinition unchanged = MakeBaseLevel();
+        Expect(world::AuthoredLevelDataEqual(unchanged, unchanged), "no-op Terrain compare is equal");
+        world::LevelDefinition dirty = MakeBaseLevel();
+        editor::AddTerrain(dirty);
+        Expect(!world::AuthoredLevelDataEqual(unchanged, dirty), "Add Terrain is a semantic change");
+
+        world::LevelDefinition inspector = dirty;
+        const world::LevelDefinition inspectorBefore = inspector;
+        inspector.terrain.origin.x += 1.0f;
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "Inspector origin edit is a semantic change");
+        inspector.terrain.origin = inspectorBefore.terrain.origin;
+        Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "restored origin is a no-op");
+        inspector.terrain.sizeX = 18.0f;
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "Inspector Size X edit is a semantic change");
+        Expect(inspector.terrain.resolutionX == inspectorBefore.terrain.resolutionX
+                && inspector.terrain.resolutionZ == inspectorBefore.terrain.resolutionZ
+                && inspector.terrain.heights.size() == inspectorBefore.terrain.heights.size(),
+            "Size edit does not resample Terrain resolution");
+        inspector.terrain.sizeX = inspectorBefore.terrain.sizeX;
+        inspector.terrain.sizeZ = 10.0f;
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "Inspector Size Z edit is a semantic change");
+        inspector.terrain.enabled = false;
+        inspector.terrain.sizeZ = inspectorBefore.terrain.sizeZ;
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "Inspector Enabled edit is a semantic change");
+        inspector.terrain.enabled = inspectorBefore.terrain.enabled;
+        Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "restored Enabled is a no-op");
+    }
 
     {
         world::LevelDefinition working = MakeBaseLevel();

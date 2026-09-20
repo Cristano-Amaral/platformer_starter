@@ -80,15 +80,15 @@ For each milestone:
 11. Do not mark a milestone complete if the build is broken.
 
 ## Current milestone
-Milestone 85.4 — Local Light Gameplay Linking.
+Milestone 86 — Terrain Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_85_4.md`](docs/milestones/MILESTONE_85_4.md)
+Canonical file: [`docs/milestones/MILESTONE_86.md`](docs/milestones/MILESTONE_86.md)
 
 Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is CLOSED. Milestone 81 is CLOSED. Milestone 82 is CLOSED. Milestone 83 is CLOSED. Milestone 84 is CLOSED. Milestone 85 is CLOSED. Milestone 85.1 is CLOSED. Milestone 85.2 is CLOSED. Milestone 85.3 is CLOSED. Milestone 85.4 is implemented, awaiting manual acceptance. Do not start Milestone 86.
+Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is CLOSED. Milestone 81 is CLOSED. Milestone 82 is CLOSED. Milestone 83 is CLOSED. Milestone 84 is CLOSED. Milestone 85 is CLOSED. Milestone 85.1 is CLOSED. Milestone 85.2 is CLOSED. Milestone 85.3 is CLOSED. Milestone 85.4 is CLOSED. Milestone 86 is implemented, awaiting manual acceptance. Do not start Milestone 87.
 
 ## Source of truth
 1. Current repository code.

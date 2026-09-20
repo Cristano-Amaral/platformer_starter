@@ -32,6 +32,7 @@ enum class EditorObjectKind
     DirectionalLight,
     PointLight,
     SpotLight,
+    Terrain,
 };
 
 struct EditorSelection
@@ -53,6 +54,12 @@ inline bool operator!=(EditorSelection a, EditorSelection b)
 inline EditorSelection ClearSelection()
 {
     return {};
+}
+
+inline bool IsLightingAuthoringSelection(EditorSelection selection)
+{
+    return selection.kind == EditorObjectKind::Environment
+        || selection.kind == EditorObjectKind::DirectionalLight;
 }
 
 const char* EditorObjectKindName(EditorObjectKind kind);

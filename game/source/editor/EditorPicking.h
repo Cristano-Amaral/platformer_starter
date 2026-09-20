@@ -9,6 +9,7 @@
 #include "world/CollectibleWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/StaticProp.h"
+#include "world/TerrainGeometry.h"
 
 #include <cstddef>
 #include <vector>
@@ -44,7 +45,9 @@ struct PickingProxy
     core::Vec3 size{};
     float rotationZDegrees = 0.0f;
     bool usesStaticPropTransform = false;
+    bool usesTerrainSurface = false;
     world::StaticPropSpec staticProp{};
+    world::TerrainSpec terrain{};
     core::Vec3 localMin{-0.5f, -0.5f, -0.5f};
     core::Vec3 localMax{0.5f, 0.5f, 0.5f};
 };

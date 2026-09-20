@@ -224,6 +224,9 @@ struct ParseState
     bool seenCamera = false;
     bool seenEnvironment = false;
     bool seenDirectionalLight = false;
+    bool seenTerrain = false;
+    TerrainSpec terrain{};
+    std::vector<unsigned char> terrainRowsSeen;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
     std::vector<CheckpointSpec> checkpoints;
@@ -1031,6 +1034,82 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.spotLights.push_back(light);
             continue;
         }
+        if (keyword == "terrain")
+        {
+            if (!RequireSingleton(state.seenTerrain, failure, lineNumber, "duplicate terrain")
+                || !RequireTokenCount(tokens, 9, failure, lineNumber))
+            {
+                return failure;
+            }
+            TerrainSpec terrain{};
+            int resolutionX = 0;
+            int resolutionZ = 0;
+            if (!ParseBool01Token(tokens[1], terrain.enabled)
+                || !ParseVec3(tokens, 2, terrain.origin)
+                || !ParseFloatToken(tokens[5], terrain.sizeX)
+                || !ParseFloatToken(tokens[6], terrain.sizeZ)
+                || !ParseIntToken(tokens[7], resolutionX)
+                || !ParseIntToken(tokens[8], resolutionZ))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "malformed terrain");
+            }
+            terrain.resolutionX = resolutionX;
+            terrain.resolutionZ = resolutionZ;
+            if (!TerrainResolutionIsValid(terrain.resolutionX)
+                || !TerrainResolutionIsValid(terrain.resolutionZ)
+                || !TerrainOriginIsValid(terrain.origin)
+                || !TerrainSizeIsValid(terrain.sizeX)
+                || !TerrainSizeIsValid(terrain.sizeZ))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain");
+            }
+            ResizeTerrainHeights(terrain);
+            state.terrain = std::move(terrain);
+            state.terrainRowsSeen.assign(
+                static_cast<std::size_t>(state.terrain.resolutionZ), 0);
+            continue;
+        }
+        if (keyword == "terrain_row")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_row without terrain");
+            }
+            const std::size_t expected =
+                2 + static_cast<std::size_t>(state.terrain.resolutionX);
+            if (tokens.size() != expected)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "malformed terrain_row");
+            }
+            int rowIndex = 0;
+            if (!ParseIntToken(tokens[1], rowIndex) || rowIndex < 0
+                || rowIndex >= state.terrain.resolutionZ)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_row");
+            }
+            if (state.terrainRowsSeen[static_cast<std::size_t>(rowIndex)] != 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "duplicate terrain_row");
+            }
+            for (int column = 0; column < state.terrain.resolutionX; ++column)
+            {
+                float height = 0.0f;
+                if (!ParseFloatToken(tokens[static_cast<std::size_t>(column + 2)], height)
+                    || !TerrainHeightIsValid(height))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_row");
+                }
+                state.terrain.heights[static_cast<std::size_t>(
+                    TerrainHeightIndex(state.terrain, column, rowIndex))] = height;
+            }
+            state.terrainRowsSeen[static_cast<std::size_t>(rowIndex)] = 1;
+            continue;
+        }
 
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "unrecognized record");
     }
@@ -1067,6 +1146,23 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.pointLights = std::move(state.pointLights);
     loaded.level.spotLights = std::move(state.spotLights);
     loaded.level.authoringGroups = std::move(state.authoringGroups);
+    if (state.seenTerrain)
+    {
+        for (unsigned char seenRow : state.terrainRowsSeen)
+        {
+            if (seenRow == 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "missing terrain_row");
+            }
+        }
+        if (!TerrainSpecIsValid(state.terrain))
+        {
+            return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain");
+        }
+        loaded.level.hasTerrain = true;
+        loaded.level.terrain = std::move(state.terrain);
+    }
     CanonicalizeLevelEnvironment(loaded.level.environment);
     for (SpotLightSpec& light : loaded.level.spotLights)
     {

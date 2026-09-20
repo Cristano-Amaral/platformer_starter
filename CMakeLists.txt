@@ -179,6 +179,8 @@ add_executable(Platformer3D
     game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
+    game/source/render/TerrainMesh.cpp
+    game/source/render/TerrainMesh.h
     game/source/render/ItemPickupTargetHighlight.h
     game/source/render/ItemPickupCollectionFeedbackDraw.cpp
     game/source/render/ItemPickupCollectionFeedbackDraw.h
@@ -196,6 +198,8 @@ add_executable(Platformer3D
     game/source/world/LocalLight.h
     game/source/world/StaticProp.h
     game/source/world/StaticProp.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
     game/source/world/LevelGoal.h
     game/source/world/LevelIdentity.h
     game/source/world/LevelFile.cpp
@@ -579,6 +583,20 @@ target_compile_definitions(LevelFileTest PRIVATE
     "PLATFORMER_LEVEL02_SOURCE_PATH=\"${PLATFORMER_LEVEL02_SOURCE_PATH}\""
 )
 
+# Milestone 86: CPU Terrain tessellation/normals. No window, Jolt, or raylib.
+add_executable(TerrainGeometryTest
+    game/source/world/TerrainGeometryTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+)
+target_include_directories(TerrainGeometryTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(TerrainGeometryTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainGeometryTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+
 # Milestone 54: player runtime Inventory API and lifecycle policy. Not shipped.
 # No window, raylib, Jolt, or ImGui.
 add_executable(InventoryTest
@@ -689,6 +707,37 @@ else()
     target_compile_options(PhysicsRebuildTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(PhysicsRebuildTest PRIVATE
+    "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Milestone 86: Terrain MeshShape collision correspondence. Jolt only; no raylib.
+add_executable(TerrainCollisionTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/physics/PhysicsCapacity.h
+    game/source/physics/DynamicBoxGrab.h
+    game/source/physics/TerrainCollisionTest.cpp
+    game/source/physics/PhysicsWorld.cpp
+    game/source/physics/PhysicsWorld.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/world/LevelFile.cpp
+    game/source/world/LevelFile.h
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+)
+target_include_directories(TerrainCollisionTest PRIVATE game/source)
+target_link_libraries(TerrainCollisionTest PRIVATE Jolt)
+if(MSVC)
+    target_compile_options(TerrainCollisionTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainCollisionTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(TerrainCollisionTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
 
@@ -2046,9 +2095,13 @@ add_executable(WorldLightingResourcesTest
     game/source/render/LightingEnvironment.cpp
     game/source/render/LightingEnvironment.h
     game/source/render/LoadedModelMaterials.h
+    game/source/render/TerrainMesh.cpp
+    game/source/render/TerrainMesh.h
     game/source/render/WorldLighting.cpp
     game/source/render/WorldLighting.h
     game/source/render/WorldLightingResourcesTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
 )
 if(WIN32)
     target_sources(WorldLightingResourcesTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)

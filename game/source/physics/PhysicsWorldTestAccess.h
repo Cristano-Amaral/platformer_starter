@@ -24,5 +24,10 @@ struct PhysicsWorldTestAccess
         float rotationY = 0.0f,
         float rotationZ = 0.0f,
         float rotationW = 1.0f);
+    static bool CastWorldRay(
+        const PhysicsWorld& world,
+        core::Vec3 origin,
+        core::Vec3 target,
+        float& outFraction);
 };
 }

@@ -204,6 +204,24 @@ int main()
             !editor::SelectionCanJoinAuthoringGroup(
                 working, {EditorObjectKind::DirectionalLight, 0}),
             "Directional Light remains ungroupable");
+        working.hasTerrain = true;
+        working.terrain = world::MakeDefaultTerrain();
+        Expect(
+            !editor::SelectionCanJoinAuthoringGroup(
+                working, {EditorObjectKind::Terrain, 0}),
+            "Terrain cannot join an Authoring Group");
+        Expect(
+            !editor::CanCreateAuthoringGroup(
+                working,
+                {EditorObjectKind::Terrain, 0},
+                {{EditorObjectKind::StaticProp, 0}}),
+            "Group Selected rejects Terrain as PRIMARY");
+        Expect(
+            !editor::CanCreateAuthoringGroup(
+                working,
+                {EditorObjectKind::StaticProp, 0},
+                {{EditorObjectKind::Terrain, 0}}),
+            "Group Selected rejects Terrain as additional member");
         working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
         working.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
         Expect(

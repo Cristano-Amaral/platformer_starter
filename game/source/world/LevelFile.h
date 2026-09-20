@@ -40,7 +40,8 @@ inline int CountLevelV1RecordLines(const LevelDefinition& level)
         + static_cast<int>(level.staticProps.size())
         + static_cast<int>(level.pointLights.size())
         + static_cast<int>(level.spotLights.size())
-        + static_cast<int>(level.authoringGroups.size());
+        + static_cast<int>(level.authoringGroups.size())
+        + (level.hasTerrain ? TerrainRecordLineCount(level.terrain) : 0);
 }
 
 enum class LoadLevelFileStatus

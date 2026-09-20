@@ -61,6 +61,7 @@ public:
         float axisZ,
         float degrees,
         Color color) const;
+    void DrawWorldMesh(const Mesh& mesh, Color color) const;
 
 private:
     void DrawSolidBoxTransform(const Matrix& transform, Color color) const;

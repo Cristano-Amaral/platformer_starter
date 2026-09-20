@@ -320,6 +320,12 @@ LifecycleEditResult AddSpotLight(
 LifecycleEditResult AddSpotLightAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
+LifecycleEditResult AddTerrain(world::LevelDefinition& workingCopy);
+
+bool CanAddTerrain(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    bool gizmoDragging);
 
 inline const char* CategoryCapacityReason(EditorObjectKind kind)
 {

@@ -76,6 +76,7 @@ struct ShadowProjection
 enum class ShadowParticipant
 {
     GreyboxWorld,
+    Terrain,
     MovingPlatform,
     Slope,
     DynamicBox,

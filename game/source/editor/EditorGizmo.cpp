@@ -307,6 +307,8 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::SpotLight:
     case EditorObjectKind::DirectionalLight:
         return true;
+    case EditorObjectKind::Terrain:
+        return selection.index == 0;
     default:
         return false;
     }
@@ -452,6 +454,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
             return &level.spotLights[selection.index].position;
         }
         break;
+    case EditorObjectKind::Terrain:
+        if (level.hasTerrain && selection.index == 0)
+        {
+            return &level.terrain.origin;
+        }
+        break;
     default:
         break;
     }
@@ -546,6 +554,12 @@ const core::Vec3* GetEditablePosition(
         if (selection.index < level.spotLights.size())
         {
             return &level.spotLights[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::Terrain:
+        if (level.hasTerrain && selection.index == 0)
+        {
+            return &level.terrain.origin;
         }
         break;
     default:

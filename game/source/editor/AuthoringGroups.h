@@ -102,6 +102,7 @@ inline bool TryAuthoringGroupMemberKindFromSelection(
         return true;
     case EditorObjectKind::Environment:
     case EditorObjectKind::DirectionalLight:
+    case EditorObjectKind::Terrain:
     case EditorObjectKind::None:
         break;
     }

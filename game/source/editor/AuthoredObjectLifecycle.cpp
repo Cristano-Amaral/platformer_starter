@@ -1015,6 +1015,37 @@ LifecycleEditResult AddSpotLightAt(
     return Ok({EditorObjectKind::SpotLight, workingCopy.spotLights.size() - 1});
 }
 
+LifecycleEditResult AddTerrain(world::LevelDefinition& workingCopy)
+{
+    if (workingCopy.hasTerrain)
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+    const world::TerrainSpec terrain = world::MakeDefaultTerrain();
+    if (world::CountLevelV1RecordLines(workingCopy) + world::TerrainRecordLineCount(terrain)
+        > static_cast<int>(world::kMaxLevelLines))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    workingCopy.terrain = terrain;
+    workingCopy.hasTerrain = true;
+    return Ok({EditorObjectKind::Terrain, 0});
+}
+
+bool CanAddTerrain(
+    bool authoringAvailable,
+    const world::LevelDefinition& workingCopy,
+    bool gizmoDragging)
+{
+    if (!authoringAvailable || gizmoDragging || workingCopy.hasTerrain)
+    {
+        return false;
+    }
+    world::LevelDefinition trial = workingCopy;
+    return AddTerrain(trial).succeeded;
+}
+
 LifecycleEditResult AddPointLight(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor)
@@ -1175,6 +1206,16 @@ LifecycleEditResult DeleteSelected(
     world::LevelDefinition& workingCopy,
     EditorSelection selection)
 {
+    if (selection.kind == EditorObjectKind::Terrain)
+    {
+        if (!workingCopy.hasTerrain || selection.index != 0)
+        {
+            return Fail(LifecycleEditStatus::InvalidSelection, selection);
+        }
+        workingCopy.hasTerrain = false;
+        workingCopy.terrain = {};
+        return Ok(ClearSelection());
+    }
     if (!SupportsLifecycle(selection.kind))
     {
         return Fail(LifecycleEditStatus::UnsupportedType, selection);
@@ -1388,6 +1429,15 @@ LifecycleEditResult DeleteSelectionSet(
     }
 
     const std::vector<EditorSelection> plan = MakeDescendingCategoryDeletePlan(members);
+    if (plan.size() == 1 && plan[0].kind == EditorObjectKind::Terrain)
+    {
+        LifecycleEditResult result = DeleteSelected(workingCopy, plan[0]);
+        if (result.succeeded)
+        {
+            result.appliedPlan = plan;
+        }
+        return result;
+    }
     for (const EditorSelection& member : plan)
     {
         if (!SupportsLifecycle(member.kind))
@@ -1466,8 +1516,16 @@ bool CanDeleteSelected(
     EditorSelection selection,
     bool gizmoDragging)
 {
-    if (!authoringAvailable || gizmoDragging || !SupportsLifecycle(selection.kind)
-        || !IsValidSelection(workingCopy, selection))
+    if (!authoringAvailable || gizmoDragging || !IsValidSelection(workingCopy, selection))
+    {
+        return false;
+    }
+    // Terrain is a deletable Level singleton, not a repeatable lifecycle kind.
+    if (selection.kind == EditorObjectKind::Terrain)
+    {
+        return true;
+    }
+    if (!SupportsLifecycle(selection.kind))
     {
         return false;
     }

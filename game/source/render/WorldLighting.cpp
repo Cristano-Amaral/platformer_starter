@@ -660,4 +660,19 @@ void WorldLightingResources::DrawSolidBoxAxisAngle(
     }
     DrawSolidBoxTransform(MakeBoxTransform(center, size, rotation), color);
 }
+
+void WorldLightingResources::DrawWorldMesh(const Mesh& mesh, Color color) const
+{
+    if (!IsReady() || mesh.vertexCount <= 0)
+    {
+        return;
+    }
+    if (gpu->litPassActive)
+    {
+        rlActiveTextureSlot(1);
+        rlEnableTexture(gpu->shadowMap.depth.id);
+    }
+    gpu->solidMaterial.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    DrawMesh(mesh, gpu->solidMaterial, MatrixIdentity());
+}
 }

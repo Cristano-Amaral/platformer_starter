@@ -36,6 +36,17 @@ void AddProxy(
 
 RayHit IntersectProxy(Ray3 ray, const PickingProxy& proxy)
 {
+    if (proxy.usesTerrainSurface)
+    {
+        RayHit result{};
+        float distance = 0.0f;
+        if (world::IntersectRayTerrain(proxy.terrain, ray.origin, ray.direction, distance))
+        {
+            result.hit = true;
+            result.distance = distance;
+        }
+        return result;
+    }
     if (proxy.usesStaticPropTransform)
     {
         return IntersectRayStaticProp(ray, proxy.staticProp, proxy.localMin, proxy.localMax);
@@ -375,6 +386,16 @@ EditorPickingSet BuildPickingSet(
             appliedLevel.spotLights[index].position,
             LocalLightPickExtents(),
             0.0f);
+    }
+    if (appliedLevel.hasTerrain && appliedLevel.terrain.enabled
+        && world::TerrainSpecIsValid(appliedLevel.terrain))
+    {
+        PickingProxy proxy{};
+        proxy.selection = {EditorObjectKind::Terrain, 0};
+        world::TerrainWorldAabb(appliedLevel.terrain, proxy.center, proxy.size);
+        proxy.usesTerrainSurface = true;
+        proxy.terrain = appliedLevel.terrain;
+        set.proxies.push_back(proxy);
     }
     return set;
 }

@@ -15,10 +15,28 @@ inline bool EditorSelectionIsNone(EditorSelection selection)
     return selection.kind == EditorObjectKind::None;
 }
 
-inline bool IsLightingAuthoringSelection(EditorSelection selection)
+inline bool IsExclusiveAuthoringSelection(EditorSelection selection)
 {
-    return selection.kind == EditorObjectKind::Environment
-        || selection.kind == EditorObjectKind::DirectionalLight;
+    return IsLightingAuthoringSelection(selection)
+        || selection.kind == EditorObjectKind::Terrain;
+}
+
+inline bool EditorSelectionSetContainsExclusiveAuthoring(
+    EditorSelection primary,
+    const std::vector<EditorSelection>& additional)
+{
+    if (IsExclusiveAuthoringSelection(primary))
+    {
+        return true;
+    }
+    for (const EditorSelection& entry : additional)
+    {
+        if (IsExclusiveAuthoringSelection(entry))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 inline bool EditorSelectionSetContainsLightingAuthoring(
@@ -219,11 +237,11 @@ inline void ApplyEditorSelectionClick(
     EditorSelection clicked,
     bool additive)
 {
-    if (IsLightingAuthoringSelection(clicked)
-        || EditorSelectionSetContainsLightingAuthoring(primary, additional))
+    if (IsExclusiveAuthoringSelection(clicked)
+        || EditorSelectionSetContainsExclusiveAuthoring(primary, additional))
     {
         if (additive && primary == clicked && additional.empty()
-            && IsLightingAuthoringSelection(clicked))
+            && IsExclusiveAuthoringSelection(clicked))
         {
             ClearEditorSelectionSet(primary, additional);
             return;

@@ -56,7 +56,7 @@ No comments in v1.
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
 `level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`, `authoring_group`) is the array order in `LevelDefinition`. Required singleton records must
-appear exactly once. Optional singleton records (`environment`, `directional_light`) may be omitted and must not be duplicated. Unknown keywords and trailing unrecognized content are
+appear exactly once. Optional singleton records (`environment`, `directional_light`, `terrain` plus its `terrain_row` samples) may be omitted and must not be duplicated. Unknown keywords and trailing unrecognized content are
 `Invalid`. Optional `authoring_group` records persist Development Authoring
 Groups; they are authored organizational metadata, not gameplay objects.
 
@@ -146,11 +146,52 @@ and do not cast shadows. Pressure Plate `controlsDirectionalLight` still
 names only the singleton Directional Light.
 
 The writer emits `point_light` records then `spot_light` records after
-`directional_light`, omitted when the collections are empty.
+`directional_light` (and after optional `terrain` / `terrain_row` when present), omitted when the collections are empty.
+
+### Optional Terrain singleton (Milestone 86)
+
+```
+terrain <enabled> <originX> <originY> <originZ> <sizeX> <sizeZ> <resolutionX> <resolutionZ>
+terrain_row <rowIndex> <h0> <h1> ... <hN>
+```
+
+At most one Terrain per Level. Omitted records mean the Level has no Terrain;
+old Levels remain valid. The format version stays `1`. Terrain is a regular
+XZ heightfield, not a repeatable prop category, GUID, or tile set.
+
+`enabled` is an exact `0`/`1` bool. Origin is finite with each component in
+`[-1024, 1024]`. Horizontal `sizeX` / `sizeZ` are finite in `[0.12, 256]`.
+Resolution is an integer in `[2, 17]` on each axis. Heights are finite in
+`[-256, 256]`. Sample count must be exactly `resolutionX * resolutionZ`.
+
+Origin convention: `sample(0,0)` is the min-X / min-Z corner.
+
+```
+worldX = origin.x + ix * sizeX / (resolutionX - 1)
+worldY = origin.y + heights[iz * resolutionX + ix]
+worldZ = origin.z + iz * sizeZ / (resolutionZ - 1)
+```
+
+Heights are relative to Origin Y. World Y is up.
+
+There is exactly one `terrain` header. Each `terrain_row` names a unique
+`rowIndex` in `[0, resolutionZ)`. Row `rowIndex` contains exactly
+`resolutionX` height samples in +X order. Duplicate headers, duplicate rows,
+missing rows, extra samples, non-finite values, and out-of-range dimensions
+are `Invalid`. `terrain_row` without a preceding `terrain` header is
+`Invalid`.
+
+Default editor Terrain (Add Terrain): enabled `1`, origin `{-8, 0.25, -4}`,
+size `16 x 8`, resolution `9 x 5` (45 zero heights, 2-unit spacing). Canonical
+`level_01` / `level_02` stay valid without these lines.
+
+The writer emits `terrain` then `terrain_row 0..resolutionZ-1` after
+`directional_light` and before `point_light`, omitted when `hasTerrain` is
+false.
 
 ### Required repeated records
 
-Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Level Goals / Dynamic Boxes / Pressure Plates / Doors / Item Pickups / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Level Goal / Dynamic Box / Pressure Plate / Door / Item Pickup / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count plus Door count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 64 minus 5 fixed bodies). Pressure Plates, Item Pickups, Static Props, and Level Goals are not Jolt bodies and do **not** consume that leftover. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping. M53 Add/Duplicate append Doors (existing plate Door indices stay valid). Door delete clears links that named D and remaps later plate links `R > D` to `R - 1`. Invalid Door links fail validation; they are never silently retargeted. M55 Add/Duplicate/Delete Item Pickups have no physics remapping and never serialize runtime collected state. M63 Add/Duplicate/Delete Level Goals have no physics remapping and never serialize runtime completion.
+Encounter order of repeated records is the container order in `LevelDefinition`. Canonical Level 01 uses 6 / 2 / 2 / 2 / 3 / 0 / 0 / 0 / 0 / 0 / 0 (platforms / slopes / checkpoints / hazards / collectibles / Level Goals / Dynamic Boxes / Pressure Plates / Doors / Item Pickups / Static Props) and FOV 40. v1 does **not** require those instance counts. Checkpoint / hazard / collectible / Level Goal / Dynamic Box / Pressure Plate / Door / Item Pickup / Static Prop counts are 0 or more; the parser does **not** impose a small design cap. Shared defensive guards remain `kMaxLevelFileBytes` (64 KiB) and `kMaxLevelLines` (256). Platform count plus Dynamic Box count plus Door count is limited by the shared authored-body leftover (`kMaxAuthoredPhysicsBodies` = 59 = `kPhysicsMaxBodies` 65 minus 5 fixed bodies minus 1 reserved Terrain slot). Pressure Plates, Item Pickups, Static Props, and Level Goals are not Jolt bodies and do **not** consume that leftover. Optional Terrain uses the reserved static-body slot and also does not reduce the leftover of 59. Slopes remain exactly 2. A file may list zero `platform` records syntactically; semantic validation then fails because a valid/saveable level requires **at least one** platform (`kMinElevatedPlatformCount = 1`) so the three `support_index_*` values can be in range. Support indices must be 0-based and in range of the parsed platform list. M41 Add/Duplicate append platforms (existing indices stay valid). Platform delete remaps `R > D` to `R - 1` and rejects deleting a platform that any `support_index_*` still names. M45 Add/Duplicate/Delete Dynamic Boxes have no support-index remapping. M49 Add/Duplicate/Delete Static Props have no physics remapping. M52 Add/Duplicate/Delete Pressure Plates have no physics remapping. M53 Add/Duplicate append Doors (existing plate Door indices stay valid). Door delete clears links that named D and remaps later plate links `R > D` to `R - 1`. Invalid Door links fail validation; they are never silently retargeted. M55 Add/Duplicate/Delete Item Pickups have no physics remapping and never serialize runtime collected state. M63 Add/Duplicate/Delete Level Goals have no physics remapping and never serialize runtime completion.
 
 ```
 platform <cx> <cy> <cz> <sx> <sy> <sz>
@@ -346,8 +387,8 @@ Each group has at least two members. `<kind>` is a v1 object keyword
 member is the preferred PRIMARY when the editor reconstructs an M78
 multi-selection. One authored object may belong to at most one group.
 Overlapping membership, a one-member group, an unknown kind, or an
-out-of-range index is `Invalid`. `environment` and `directional_light` are
-**not** valid member kinds. The writer emits groups after `static_prop` and
+out-of-range index is `Invalid`. `environment`, `directional_light`, and
+`terrain` are **not** valid member kinds. The writer emits groups after `static_prop` and
 before `camera`.
 
 Camera FOV finite, `> 0` and `< 180` (same range as M30).
@@ -445,6 +486,8 @@ authoring_group     variable, authoringGroups index order
 camera
 environment
 directional_light
+terrain             omitted when absent
+terrain_row         resolutionZ rows, row index order
 point_light         variable, pointLights index order
 spot_light          variable, spotLights index order
 ```

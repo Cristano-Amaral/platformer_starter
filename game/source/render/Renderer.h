@@ -24,6 +24,9 @@ class Player;
 
 namespace render
 {
+class WorldLightingResources;
+class TerrainGpuResources;
+class StaticModelSceneStore;
 // Debug/Development overlay drawn in the same 3D pass as the world. Renderer
 // does not own selection or editor camera; Application fills this each frame.
 struct DebugWorldOverlay
@@ -266,6 +269,7 @@ struct DeathHudView
 
 class StaticModelSceneStore;
 class WorldLightingResources;
+class TerrainGpuResources;
 
 class Renderer
 {
@@ -361,5 +365,6 @@ private:
     std::unique_ptr<StaticModelSceneStore> staticPropModels;
     std::unique_ptr<PlayerModelGpuState> playerModelGpu;
     std::unique_ptr<WorldLightingResources> worldLighting;
+    std::unique_ptr<TerrainGpuResources> terrainGpu;
 };
 }

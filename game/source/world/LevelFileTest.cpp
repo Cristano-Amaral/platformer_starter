@@ -124,7 +124,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 26> allowed{
+    static constexpr std::array<std::string_view, 28> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -150,7 +150,9 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "environment",
         "directional_light",
         "point_light",
-        "spot_light"};
+        "spot_light",
+        "terrain",
+        "terrain_row"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -484,6 +486,8 @@ int main()
     Expect(CountRecords(written, "camera") == 1, "writer camera count");
     Expect(CountRecords(written, "environment") == 1, "writer environment count");
     Expect(CountRecords(written, "directional_light") == 1, "writer directional_light count");
+    Expect(CountRecords(written, "terrain") == 0, "canonical writer emits no Terrain");
+    Expect(CountRecords(written, "terrain_row") == 0, "canonical writer emits no terrain_row");
     Expect(CountRecords(written, "inventory") == 0, "writer emits no inventory records");
     Expect(OnlyAuthoredKeywords(written), "writer emits no runtime state records");
 
@@ -2540,6 +2544,155 @@ int main()
         Expect(reconciledCounts.selection.kind == editor::EditorObjectKind::None, "M39 still clears selection");
         Expect(reconciledCounts.workingCopy.elevatedPlatforms.size() == 7, "M39 working matches active");
         std::filesystem::remove_all(reloadDir, cleanupError);
+    }
+
+    {
+        Expect(!parsed.level.hasTerrain, "Level without Terrain remains valid");
+        world::LevelDefinition withFlat = parsed.level;
+        withFlat.hasTerrain = true;
+        withFlat.terrain = world::MakeDefaultTerrain();
+        Expect(world::IsWritableLevelDefinition(withFlat), "valid flat Terrain is writable");
+        const std::string flatText = world::SerializeLevelText(withFlat);
+        Expect(flatText == world::SerializeLevelText(withFlat), "Terrain writer is deterministic");
+        Expect(CountRecords(flatText, "terrain") == 1, "one Terrain header");
+        Expect(
+            CountRecords(flatText, "terrain_row") == withFlat.terrain.resolutionZ,
+            "one terrain_row per Z sample");
+        Expect(OnlyAuthoredKeywords(flatText), "terrain keywords are authored");
+        const world::ParseLevelFileResult flatParsed = world::ParseLevelText(flatText);
+        Expect(flatParsed.status == world::LoadLevelFileStatus::Loaded, "valid flat Terrain loads");
+        Expect(flatParsed.level.hasTerrain, "parsed Level has Terrain");
+        Expect(
+            world::AuthoredLevelDataEqual(withFlat, flatParsed.level),
+            "flat Terrain semantic roundtrip");
+
+        world::LevelDefinition withSloped = parsed.level;
+        withSloped.hasTerrain = true;
+        withSloped.terrain = world::MakeDefaultTerrain();
+        withSloped.terrain.resolutionX = 3;
+        withSloped.terrain.resolutionZ = 3;
+        world::ResizeTerrainHeights(withSloped.terrain);
+        withSloped.terrain.heights = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+        const std::string slopedText = world::SerializeLevelText(withSloped);
+        const world::ParseLevelFileResult slopedParsed = world::ParseLevelText(slopedText);
+        Expect(slopedParsed.status == world::LoadLevelFileStatus::Loaded, "valid non-flat Terrain loads");
+        Expect(
+            world::AuthoredLevelDataEqual(withSloped, slopedParsed.level),
+            "non-flat Terrain semantic roundtrip");
+        Expect(
+            slopedParsed.level.terrain.heights[world::TerrainHeightIndex(slopedParsed.level.terrain, 2, 2)]
+                == 2.0f,
+            "exact sample count and last height round-trip");
+
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 16 8 9 5\nterrain 1 0 0 0 16 8 9 5\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate Terrain header rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain_row 0 0 0 0 0 0 0 0 0 0\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "terrain_row without header rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 16 8\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "malformed Terrain header rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 nan 0 0 16 8 2 2\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "non-finite origin rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 0 8 2 2\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "zero size rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 -16 8 2 2\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "negative size rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 16 8 1 2\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "minimum resolution rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 16 8 17 17\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "maximum-resolution header without rows is rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain 1 0 0 0 16 8 18 2\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "resolution above bound rejected");
+        Expect(
+            world::ParseLevelText(
+                    canonical + "terrain 1 0 0.25 -4 16 8 2 2\nterrain_row 0 0 0\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "too few rows / missing sample rejected");
+        Expect(
+            world::ParseLevelText(
+                    canonical
+                    + "terrain 1 0 0.25 -4 16 8 2 2\nterrain_row 0 0 0\nterrain_row 1 0 0 1\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "too many samples on a row rejected");
+        Expect(
+            world::ParseLevelText(
+                    canonical
+                    + "terrain 1 0 0.25 -4 16 8 2 2\nterrain_row 0 0 0\nterrain_row 0 1 1\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate terrain_row rejected");
+        Expect(
+            world::ParseLevelText(
+                    canonical + "terrain 1 0 0.25 -4 16 8 2 2\nterrain_row x 0 0\nterrain_row 1 0 0\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "malformed terrain_row rejected");
+        Expect(
+            world::ParseLevelText(
+                    canonical
+                    + "terrain 1 0 0.25 -4 16 8 2 2\nterrain_row 0 0 inf\nterrain_row 1 0 0\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "non-finite height rejected");
+
+        std::string maxRows = canonical + "terrain 1 0 0.25 -4 16 8 17 17\n";
+        for (int row = 0; row < 17; ++row)
+        {
+            maxRows += "terrain_row ";
+            maxRows += std::to_string(row);
+            for (int column = 0; column < 17; ++column)
+            {
+                maxRows += " 0";
+            }
+            maxRows += "\n";
+        }
+        const world::ParseLevelFileResult maxParsed = world::ParseLevelText(maxRows);
+        Expect(maxParsed.status == world::LoadLevelFileStatus::Loaded, "maximum resolution accepted");
+        Expect(
+            maxParsed.level.terrain.resolutionX == 17 && maxParsed.level.terrain.resolutionZ == 17
+                && static_cast<int>(maxParsed.level.terrain.heights.size()) == 289,
+            "maximum resolution has exact sample count");
+        Expect(
+            world::CountLevelV1RecordLines(maxParsed.level) <= static_cast<int>(world::kMaxLevelLines),
+            "maximum Terrain stays within Level v1 line limit");
+        std::size_t cursor = 0;
+        bool anyLineTooLong = false;
+        while (cursor <= maxRows.size())
+        {
+            const std::size_t newline = maxRows.find('\n', cursor);
+            const std::size_t end = newline == std::string_view::npos ? maxRows.size() : newline;
+            if (end - cursor > world::kMaxLevelLineLength)
+            {
+                anyLineTooLong = true;
+            }
+            if (newline == std::string_view::npos)
+            {
+                break;
+            }
+            cursor = newline + 1;
+        }
+        Expect(!anyLineTooLong, "maximum Terrain rows stay within 512-character lines");
+        Expect(maxRows.size() <= world::kMaxLevelFileBytes, "maximum Terrain stays within 64 KiB");
     }
 
     Expect(

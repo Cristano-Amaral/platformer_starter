@@ -192,6 +192,12 @@ int main()
     Expect(
         editor::PlacementAddRequest(editor::PlacementMode::Goal) == LevelEditorRequest::AddGoal,
         "Object Palette Level Goal confirms AddGoal");
+    Expect(
+        editor::EditAddMenuRequest(EditorObjectKind::Terrain) == LevelEditorRequest::AddTerrain,
+        "Edit > Add > Terrain maps to AddTerrain");
+    Expect(
+        editor::IsAuthoredLifecycleRequest(LevelEditorRequest::AddTerrain),
+        "Add Terrain is an authored lifecycle request");
 
     {
         const world::LevelDefinition active = MakeActiveLevel();
@@ -2526,6 +2532,140 @@ int main()
         Expect(f2.workingCopy.pointLights.size() == 1 && f2.workingCopy.spotLights.size() == 1,
             "F2 re-seed does not duplicate local lights");
         Expect(f2.selection.kind == EditorObjectKind::None, "F2 re-seed clears stale light selection");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true, active, {}, false, LevelEditorRequest::AddTerrain),
+            "Add Terrain available when absent");
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(HierarchyKindCount(state.workingCopy, EditorObjectKind::Terrain) == 0,
+            "no hierarchy Terrain when absent");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddTerrain, true),
+            "Add Terrain request handled");
+        Expect(state.workingCopy.hasTerrain, "Add Terrain writes workingCopy");
+        Expect(world::TerrainSpecEqual(state.workingCopy.terrain, world::MakeDefaultTerrain()),
+            "Add Terrain uses deterministic default");
+        Expect(!active.hasTerrain, "Add Terrain does not mutate active");
+        Expect(state.modified, "Add Terrain sets Modified");
+        Expect(state.selection.kind == EditorObjectKind::Terrain, "Add Terrain selects Terrain");
+        Expect(HierarchyKindCount(state.workingCopy, EditorObjectKind::Terrain) == 1,
+            "hierarchy shows pending Terrain");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true, state.workingCopy, {}, false, LevelEditorRequest::AddTerrain),
+            "Add Terrain unavailable when present");
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                state.workingCopy,
+                {EditorObjectKind::Terrain, 0},
+                false,
+                LevelEditorRequest::DuplicateSelected),
+            "Duplicate Selected unavailable for Terrain");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DuplicateSelected, true),
+            "issued Duplicate Terrain is still handled");
+        Expect(state.workingCopy.hasTerrain && state.workingCopy.terrain.heights.size() == 45,
+            "refused Duplicate leaves singleton Terrain unchanged");
+
+        const world::LevelDefinition beforeEdit = state.workingCopy;
+        state.workingCopy.terrain.origin.x += 1.0f;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "Inspector origin edit sets Modified");
+        state.workingCopy.terrain.origin = beforeEdit.terrain.origin;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "restoring origin keeps Modified from Add");
+        Expect(world::AuthoredLevelDataEqual(state.workingCopy, beforeEdit),
+            "restored origin matches pre-edit workingCopy");
+
+        world::LevelDefinition applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply none -> Terrain clears Modified");
+        Expect(state.dirty, "Apply of unsaved Terrain is Dirty");
+
+        state.workingCopy.terrain.origin.y = 0.5f;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(state.modified, "changed Terrain before Apply is Modified");
+        applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply Terrain -> changed Terrain clears Modified");
+        Expect(state.workingCopy.terrain.origin.y == 0.5f, "Apply keeps changed origin");
+
+        const std::string saved = world::SerializeLevelText(applied);
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload Terrain");
+        Expect(world::AuthoredLevelDataEqual(applied, reloaded.level),
+            "reload reconstructs authored Terrain");
+
+        editor::LevelEditorState restart{};
+        SeedEditor(restart, applied);
+        Expect(restart.workingCopy.hasTerrain
+                && world::TerrainSpecEqual(restart.workingCopy.terrain, applied.terrain),
+            "Restart uses current active authored Terrain");
+        Expect(restart.workingCopy.terrain.heights.size() == applied.terrain.heights.size(),
+            "Restart does not duplicate Terrain samples");
+
+        const world::LevelDefinition destination = MakeActiveLevel();
+        editor::LevelEditorState switched{};
+        SeedEditor(switched, destination);
+        Expect(!switched.workingCopy.hasTerrain, "Terrain -> no-Terrain transition does not leak");
+
+        world::LevelDefinition terrainB = MakeActiveLevel();
+        MakeWritableEditorFixture(terrainB);
+        terrainB.hasTerrain = true;
+        terrainB.terrain = world::MakeDefaultTerrain();
+        terrainB.terrain.origin.x = 4.0f;
+        editor::LevelEditorState toB{};
+        SeedEditor(toB, terrainB);
+        Expect(toB.workingCopy.hasTerrain && toB.workingCopy.terrain.origin.x == 4.0f,
+            "no-Terrain -> Terrain transition uses destination");
+        editor::LevelEditorState aToB{};
+        SeedEditor(aToB, applied);
+        SeedEditor(aToB, terrainB);
+        Expect(aToB.workingCopy.hasTerrain && aToB.workingCopy.terrain.origin.x == 4.0f
+                && !world::TerrainSpecEqual(aToB.workingCopy.terrain, applied.terrain),
+            "Terrain A -> Terrain B uses only destination Terrain");
+
+        editor::LevelEditorState playAgain{};
+        SeedEditor(playAgain, MakeActiveLevel());
+        Expect(!playAgain.workingCopy.hasTerrain,
+            "Play Again / Main Menu starts without leftover Terrain");
+
+        editor::LevelEditorState f2{};
+        SeedEditor(f2, applied);
+        f2.selection = {EditorObjectKind::Terrain, 0};
+        SeedEditor(f2, applied);
+        Expect(f2.workingCopy.hasTerrain && world::TerrainSpecEqual(f2.workingCopy.terrain, applied.terrain),
+            "F2 re-seed does not duplicate Terrain");
+        Expect(
+            editor::IsValidSelection(f2.workingCopy, {EditorObjectKind::Terrain, 0}),
+            "Terrain remains selectable after repeated F2");
+
+        world::LevelDefinition checkpointed = applied;
+        Expect(world::AuthoredLevelDataEqual(checkpointed, applied),
+            "death/checkpoint does not alter authored Terrain");
+
+        editor::LevelEditorState deleted{};
+        SeedEditor(deleted, applied);
+        deleted.selection = {EditorObjectKind::Terrain, 0};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                deleted, applied, LevelEditorRequest::DeleteSelected, true),
+            "Delete Terrain request handled");
+        Expect(!deleted.workingCopy.hasTerrain, "Delete Terrain removes workingCopy Terrain");
+        Expect(applied.hasTerrain, "Delete Terrain does not mutate active");
+        Expect(deleted.selection.kind == EditorObjectKind::None, "Delete Terrain clears selection");
+        world::LevelDefinition none = deleted.workingCopy;
+        SeedEditor(deleted, none);
+        Expect(!deleted.workingCopy.hasTerrain, "Apply Terrain -> no Terrain");
     }
 
     if (gFailures != 0)

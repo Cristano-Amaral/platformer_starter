@@ -35,6 +35,10 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
     entries.push_back({{EditorObjectKind::Environment, 0}, ""});
     entries.push_back({{EditorObjectKind::DirectionalLight, 0}, ""});
     entries.push_back({{EditorObjectKind::Ground, 0}, ""});
+    if (level.hasTerrain)
+    {
+        entries.push_back({{EditorObjectKind::Terrain, 0}, ""});
+    }
     for (std::size_t index = 0; index < level.elevatedPlatforms.size(); ++index)
     {
         entries.push_back({{EditorObjectKind::ElevatedPlatform, index}, "Platforms"});

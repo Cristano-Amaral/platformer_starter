@@ -42,6 +42,8 @@ EditorObjectKind AddKindForRequest(LevelEditorRequest request)
         return EditorObjectKind::PointLight;
     case LevelEditorRequest::AddSpotLight:
         return EditorObjectKind::SpotLight;
+    case LevelEditorRequest::AddTerrain:
+        return EditorObjectKind::Terrain;
     default:
         return EditorObjectKind::None;
     }
@@ -75,6 +77,8 @@ const char* LifecycleCategoryLabel(EditorObjectKind kind)
         return "Point Light";
     case EditorObjectKind::SpotLight:
         return "Spot Light";
+    case EditorObjectKind::Terrain:
+        return "Terrain";
     default:
         return "Object";
     }
@@ -171,6 +175,8 @@ LifecycleEditResult RunLifecycleMutation(
     case LevelEditorRequest::AddSpotLight:
         return worldCenterPlacement ? AddSpotLightAt(workingCopy, placementAnchor)
                                     : AddSpotLight(workingCopy, placementAnchor);
+    case LevelEditorRequest::AddTerrain:
+        return AddTerrain(workingCopy);
     case LevelEditorRequest::DuplicateSelected:
         return DuplicateSelectionSet(workingCopy, selection, additionalSelections);
     case LevelEditorRequest::DeleteSelected:
@@ -218,6 +224,7 @@ void SetSuccessMessage(
     case LevelEditorRequest::AddStaticProp:
     case LevelEditorRequest::AddPointLight:
     case LevelEditorRequest::AddSpotLight:
+    case LevelEditorRequest::AddTerrain:
         state.lastMessage = std::string(label) + " added.";
         return;
     case LevelEditorRequest::DuplicateSelected:
@@ -249,6 +256,7 @@ bool IsAuthoredLifecycleRequest(LevelEditorRequest request)
     case LevelEditorRequest::AddStaticProp:
     case LevelEditorRequest::AddPointLight:
     case LevelEditorRequest::AddSpotLight:
+    case LevelEditorRequest::AddTerrain:
     case LevelEditorRequest::DuplicateSelected:
     case LevelEditorRequest::DeleteSelected:
     case LevelEditorRequest::GroupSelected:
@@ -287,6 +295,8 @@ LevelEditorRequest EditAddMenuRequest(EditorObjectKind kind)
         return LevelEditorRequest::AddPointLight;
     case EditorObjectKind::SpotLight:
         return LevelEditorRequest::AddSpotLight;
+    case EditorObjectKind::Terrain:
+        return LevelEditorRequest::AddTerrain;
     default:
         return LevelEditorRequest::None;
     }
@@ -330,6 +340,8 @@ bool CanIssueAuthoredLifecycleRequest(
     case LevelEditorRequest::AddSpotLight:
         return CanAddLifecycleObject(
             authoringAvailable, workingCopy, EditorObjectKind::SpotLight, gizmoDragging);
+    case LevelEditorRequest::AddTerrain:
+        return CanAddTerrain(authoringAvailable, workingCopy, gizmoDragging);
     case LevelEditorRequest::DuplicateSelected:
         return CanDuplicateSelected(
             authoringAvailable, workingCopy, selection, additionalSelections, gizmoDragging);
@@ -539,6 +551,12 @@ bool HandleAuthoredLifecycleRequest(
         {
             state.lastMessage =
                 RejectionMessage(LifecycleEditStatus::InvalidAssetReference, affectedKind);
+        }
+        else if (request == LevelEditorRequest::AddTerrain)
+        {
+            state.lastMessage = state.workingCopy.hasTerrain
+                ? "A Level may contain only one Terrain."
+                : "Cannot add Terrain.";
         }
         else
         {

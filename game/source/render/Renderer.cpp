@@ -18,6 +18,7 @@
 #include "render/LevelGoalVisualization.h"
 #include "render/LoadedModelMaterials.h"
 #include "render/StaticModelScene.h"
+#include "render/TerrainMesh.h"
 #include "render/WorldLighting.h"
 #include "world/CollectibleWorld.h"
 #include "world/GreyboxWorld.h"
@@ -30,6 +31,7 @@
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
 #include "world/StaticProp.h"
+#include "world/TerrainGeometry.h"
 
 #include "raylib.h"
 #include "raymath.h"
@@ -53,6 +55,7 @@ namespace
 {
 constexpr Color kBackgroundColor{32, 36, 48, 255};
 constexpr Color kGroundColor{78, 84, 96, 255};
+constexpr Color kTerrainColor{118, 140, 96, 255};
 constexpr Color kPlatformColor{110, 118, 132, 255};
 constexpr Color kPlatformAccentColor{96, 104, 118, 255};
 constexpr Color kPlayerColor{216, 96, 72, 255};
@@ -185,6 +188,41 @@ void DrawGreyboxBox(core::Vec3 center, core::Vec3 size, Color fill)
     }
     DrawCube(position, size.x, size.y, size.z, fill);
     DrawCubeWires(position, size.x, size.y, size.z, kWireColor);
+}
+
+void DrawAuthoredTerrain(const TerrainGpuResources* terrainGpu, Color fill)
+{
+    if (terrainGpu == nullptr || !terrainGpu->HasMesh() || terrainGpu->GetMesh() == nullptr)
+    {
+        return;
+    }
+    const Mesh& mesh = *terrainGpu->GetMesh();
+    if (gWorldSolidMode == WorldSolidMode::Wires)
+    {
+        return;
+    }
+    if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
+    {
+        gWorldLighting->DrawWorldMesh(mesh, fill);
+        return;
+    }
+    if (mesh.vertices == nullptr || mesh.indices == nullptr)
+    {
+        return;
+    }
+    for (int triangle = 0; triangle < mesh.triangleCount; ++triangle)
+    {
+        const int i0 = mesh.indices[triangle * 3];
+        const int i1 = mesh.indices[triangle * 3 + 1];
+        const int i2 = mesh.indices[triangle * 3 + 2];
+        const Vector3 a{
+            mesh.vertices[i0 * 3], mesh.vertices[i0 * 3 + 1], mesh.vertices[i0 * 3 + 2]};
+        const Vector3 b{
+            mesh.vertices[i1 * 3], mesh.vertices[i1 * 3 + 1], mesh.vertices[i1 * 3 + 2]};
+        const Vector3 c{
+            mesh.vertices[i2 * 3], mesh.vertices[i2 * 3 + 1], mesh.vertices[i2 * 3 + 2]};
+        DrawTriangle3D(a, b, c, fill);
+    }
 }
 
 bool PlayerModelHasRenderableMesh(const Model& model)
@@ -1860,6 +1898,7 @@ Renderer::Renderer()
     : staticPropModels(std::make_unique<StaticModelSceneStore>())
     , playerModelGpu(std::make_unique<PlayerModelGpuState>())
     , worldLighting(std::make_unique<WorldLightingResources>())
+    , terrainGpu(std::make_unique<TerrainGpuResources>())
 {
 }
 
@@ -1963,6 +2002,10 @@ void Renderer::UnloadRuntimeAssets()
     if (worldLighting)
     {
         worldLighting->Unload();
+    }
+    if (terrainGpu)
+    {
+        terrainGpu->Unload();
     }
 }
 
@@ -2110,8 +2153,16 @@ void Renderer::DrawWorld(
     bool pickupHudTarget = false;
     char pickupHudText[64]{};
 
+    if (terrainGpu)
+    {
+        const world::TerrainSpec* spec =
+            (level.hasTerrain && level.terrain.enabled) ? &level.terrain : nullptr;
+        terrainGpu->Sync(spec);
+    }
+
     auto drawWorldGeometry = [&]() {
         DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
+        DrawAuthoredTerrain(terrainGpu.get(), kTerrainColor);
 
         const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
         int platformIndex = 0;

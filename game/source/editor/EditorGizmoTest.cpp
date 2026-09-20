@@ -2572,10 +2572,42 @@ int main()
             "Platform still has no Scale");
         Expect(!editor::IsRotateSelection({EditorObjectKind::Door, 0}), "Door still has no Rotate");
         Expect(!editor::IsRotateSelection({EditorObjectKind::Ground, 0}), "Ground still has no Rotate");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::Terrain, 0}), "Terrain has no Rotate");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::Terrain, 0}), "Terrain has no generic Scale");
+        Expect(!editor::IsResizeSelection({EditorObjectKind::Terrain, 0}), "Terrain has no Resize gizmo");
         Expect(editor::IsScaleSelection({EditorObjectKind::StaticProp, 0}), "Static Prop keeps Scale");
         Expect(editor::IsRotateSelection({EditorObjectKind::StaticProp, 0}), "Static Prop keeps Rotate");
         Expect(editor::IsGizmoSelection({EditorObjectKind::Goal, 0}), "Goal keeps Translate");
         Expect(editor::IsResizeSelection({EditorObjectKind::Goal, 0}), "Goal keeps Resize");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::Terrain, 0}), "Terrain Translate moves origin");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.hasTerrain = true;
+        working.terrain = world::MakeDefaultTerrain();
+        const world::LevelDefinition before = working;
+        const EditorSelection terrain{EditorObjectKind::Terrain, 0};
+        core::Vec3* origin = editor::GetEditablePosition(working, terrain);
+        Expect(origin == &working.terrain.origin, "Terrain Translate authority is authored origin");
+        Expect(editor::GetEditableSize(working, terrain) == nullptr, "Terrain size is Inspector-authored");
+        Expect(editor::GetEditableRotation(working, terrain) == nullptr, "Terrain has no rotation field");
+        origin->x = -6.0f;
+        Expect(working.terrain.origin.x == -6.0f, "Translate mutates Terrain origin");
+        Expect(working.terrain.sizeX == before.terrain.sizeX
+                && working.terrain.resolutionX == before.terrain.resolutionX
+                && working.terrain.heights == before.terrain.heights,
+            "Translate leaves size, resolution, and heights");
+        Expect(!world::AuthoredLevelDataEqual(before, working), "semantic origin change is Dirty");
+        working.terrain.origin = before.terrain.origin;
+        Expect(world::AuthoredLevelDataEqual(before, working), "no-op origin restore is not Dirty");
+        const core::Vec3 snapped = editor::ApplyAuthoredTransformSnap(
+            {-7.9f, 0.25f, -4.0f},
+            editor::EditorTransformMode::Translate,
+            EditorAxis::X,
+            true,
+            editor::kDefaultTranslateSnapIncrement);
+        Expect(snapped.x == -8.0f, "Terrain Translate uses M76 snap");
     }
 
     // ---- M76 layout persistence / defaults / invalid values ----

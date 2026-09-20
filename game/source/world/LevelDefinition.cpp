@@ -183,6 +183,10 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     {
         return false;
     }
+    if (level.hasTerrain && !TerrainSpecIsValid(level.terrain))
+    {
+        return false;
+    }
 
     return true;
 }
@@ -493,6 +497,15 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
                 return false;
             }
         }
+    }
+
+    if (a.hasTerrain != b.hasTerrain)
+    {
+        return false;
+    }
+    if (a.hasTerrain && !TerrainSpecEqual(a.terrain, b.terrain))
+    {
+        return false;
     }
 
     return Vec3Equal(a.movingPlatform.size, b.movingPlatform.size)
