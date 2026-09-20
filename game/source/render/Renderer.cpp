@@ -25,6 +25,7 @@
 #include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelGoal.h"
+#include "world/DirectionalLightActivation.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
 #include "world/StaticProp.h"
@@ -38,6 +39,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <system_error>
@@ -1197,7 +1199,16 @@ void DrawDirectionalLightAuthoring(const DebugWorldOverlay& overlay)
 
     const Vector3 origin = ToRaylib(overlay.directionalLightAnchor);
     const core::Vec3 ray = overlay.directionalLightRay;
-    const float rayLength = 3.4f;
+    float scale = overlay.directionalLightScale;
+    if (!std::isfinite(scale) || scale < 0.25f)
+    {
+        scale = 1.0f;
+    }
+    if (scale > 8.0f)
+    {
+        scale = 8.0f;
+    }
+    const float rayLength = 3.4f * scale;
     const Vector3 tip{
         origin.x + ray.x * rayLength,
         origin.y + ray.y * rayLength,
@@ -1211,10 +1222,12 @@ void DrawDirectionalLightAuthoring(const DebugWorldOverlay& overlay)
     const Color rayColor = overlay.directionalLightSelected
         ? Color{255, 230, 140, 255}
         : Color{255, 196, 96, 255};
-    DrawSphere(origin, overlay.directionalLightSelected ? 0.28f : 0.24f, sunFill);
-    DrawSphereWires(origin, overlay.directionalLightSelected ? 0.28f : 0.24f, 8, 8, sunWire);
+    const float sunRadius = (overlay.directionalLightSelected ? 0.28f : 0.24f) * scale;
+    const float tipRadius = 0.09f * scale;
+    DrawSphere(origin, sunRadius, sunFill);
+    DrawSphereWires(origin, sunRadius, 8, 8, sunWire);
     DrawLine3D(origin, tip, rayColor);
-    DrawSphere(tip, 0.09f, rayColor);
+    DrawSphere(tip, tipRadius, rayColor);
 }
 
 void DrawWorldOverlay(const DebugWorldOverlay& overlay)
@@ -2275,8 +2288,28 @@ void Renderer::DrawWorld(
         }
     };
 
-    const LightingEnvironment lightingEnv = MakeLightingEnvironmentFromAuthored(
+    LightingEnvironment lightingEnv = MakeLightingEnvironmentFromAuthored(
         overlay.usePreviewLighting ? overlay.previewLighting : level.environment);
+    if (!overlay.usePreviewLighting)
+    {
+        std::vector<std::uint8_t> plateActive(level.pressurePlates.size(), 0);
+        const std::size_t plateCount = level.pressurePlates.size() < pressurePlates.size()
+            ? level.pressurePlates.size()
+            : pressurePlates.size();
+        for (std::size_t index = 0; index < plateCount; ++index)
+        {
+            plateActive[index] = pressurePlates[index].active ? 1 : 0;
+        }
+        const world::DirectionalLightActivation activation =
+            world::ResolveDirectionalLightActivation(
+                level.pressurePlates,
+                plateActive.empty() ? nullptr : plateActive.data(),
+                plateActive.size());
+        ApplyDirectionalLightActivation(
+            lightingEnv,
+            activation.hasLinkedPressurePlates,
+            activation.anyLinkedPressurePlateActive);
+    }
     const bool lightingReady = worldLighting != nullptr && worldLighting->IsReady();
     const bool shadowsActive = lightingReady && DirectionalShadowsAreActive(lightingEnv);
     if (shadowsActive)

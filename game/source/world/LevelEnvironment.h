@@ -2,8 +2,8 @@
 
 // Milestone 85.1: singleton Level-authored environment. Presentation lighting
 // only. Not a light list, Component, Scene node, ECS, or Environment asset.
-// A future gameplay activation seam may combine authoredEnabled with a
-// transient override; M85.1 persists authoredEnabled only.
+// M85.2 keeps directionalEnabled as persisted authored enablement. Effective
+// enablement is resolved at runtime from Pressure Plate overlap.
 
 #include "core/Vec3.h"
 
@@ -25,8 +25,8 @@ struct LevelEnvironment
 {
     core::Vec3 ambientColor = kDefaultAmbientColor;
     float ambientIntensity = kDefaultAmbientIntensity;
-    // Authored Directional Light Enabled. Effective enabled currently equals
-    // this value; gameplay override is a future seam, not M85.1 behavior.
+    // Authored Directional Light Enabled. Master OFF: a Pressure Plate cannot
+    // force this true. Effective enabled is resolved at runtime (M85.2).
     bool directionalEnabled = true;
     core::Vec3 directionalRayDirection = kDefaultDirectionalRayDirection;
     core::Vec3 directionalColor = kDefaultDirectionalColor;

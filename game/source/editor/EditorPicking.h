@@ -3,6 +3,7 @@
 // CPU editor picking. Identity is EditorSelection, never a Jolt BodyID.
 
 #include "core/Vec3.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorSelection.h"
 #include "render/CameraView.h"
 #include "world/CollectibleWorld.h"
@@ -107,7 +108,8 @@ EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& 
 // unapplied Inspector edits must not move pick/highlight ahead of the world.
 EditorPickingSet BuildPickingSet(
     const world::LevelDefinition& appliedLevel,
-    const EditorPickingWorldState& worldState);
+    const EditorPickingWorldState& worldState,
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 // Nearest positive hit. Exact distance ties keep the earlier proxy, which is
 // the stable hierarchy order BuildPickingSet uses. No hit returns None.

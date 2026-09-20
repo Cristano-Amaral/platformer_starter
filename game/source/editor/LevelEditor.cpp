@@ -1004,6 +1004,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::Checkbox("Activate By Dynamic Box", &plate.activateByDynamicBox);
             ImGui::Checkbox("Activate By Player", &plate.activateByPlayer);
             ImGui::Checkbox("Visible In Gameplay", &plate.visibleInGameplay);
+            ImGui::Checkbox("Controls Directional Light", &plate.controlsDirectionalLight);
         }
         break;
     case EditorObjectKind::Door:

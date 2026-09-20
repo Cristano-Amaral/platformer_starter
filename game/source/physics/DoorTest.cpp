@@ -13,9 +13,11 @@
 #include "world/LevelFile.h"
 #include "world/LevelWriter.h"
 #include "world/PressurePlate.h"
+#include "world/DirectionalLightActivation.h"
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -597,6 +599,38 @@ int main()
         StepWorld(world, 30);
         Expect(inventory.GetQuantity("key") == 1, "Door open does not consume Inventory");
         Expect(inventory.Entries().size() == 1, "Door update does not add Inventory entries");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        level.doors.push_back(MakeDoor(doorClosed));
+        world::PressurePlateSpec both = MakePlate(plateCenter, 0);
+        both.controlsDirectionalLight = true;
+        level.pressurePlates.push_back(both);
+        level.dynamicBoxes.push_back(MakeBox(offPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "initialize Door+light plate");
+        Expect(!world.GetPressurePlates()[0].active, "Door+light plate starts Inactive");
+        Expect(!world.GetDoors()[0].desiredOpen, "inactive Door+light plate keeps Door closed");
+        std::uint8_t inactive = 0;
+        world::DirectionalLightActivation off =
+            world::ResolveDirectionalLightActivation(level.pressurePlates, &inactive, 1);
+        Expect(
+            !world::AuthoredDirectionalLightIsEffectivelyEnabled(true, off),
+            "inactive Door+light plate turns directional OFF");
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
+            world, 0, onPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "Door+light plate activates from Box");
+        Expect(world.GetDoors()[0].desiredOpen, "Door+light plate still opens its Door");
+        std::uint8_t active = 1;
+        world::DirectionalLightActivation on =
+            world::ResolveDirectionalLightActivation(level.pressurePlates, &active, 1);
+        Expect(
+            world::AuthoredDirectionalLightIsEffectivelyEnabled(true, on),
+            "active Door+light plate turns directional ON");
+        Expect(
+            !world::AuthoredDirectionalLightIsEffectivelyEnabled(false, on),
+            "Door+light plate cannot override authored disabled");
     }
 
     Expect(

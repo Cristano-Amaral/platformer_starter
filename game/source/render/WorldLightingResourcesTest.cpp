@@ -159,6 +159,14 @@ int main()
     disabled.directional.authoredEnabled = false;
     lighting.BindLitPass(disabled);
     lighting.UnbindLitPass();
+    render::LightingEnvironment plateOff = environment;
+    render::ApplyDirectionalLightActivation(plateOff, true, false);
+    lighting.BindLitPass(plateOff);
+    lighting.UnbindLitPass();
+    render::LightingEnvironment plateOn = environment;
+    render::ApplyDirectionalLightActivation(plateOn, true, true);
+    lighting.BindLitPass(plateOn);
+    lighting.UnbindLitPass();
     Expect(lighting.ShaderLoadCount() == shaderLoads, "enabled edits do not recreate shaders");
     Expect(
         lighting.ShadowMapCreateCount() == shadowCreates,

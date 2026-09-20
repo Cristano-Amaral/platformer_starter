@@ -1,4 +1,5 @@
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorCamera.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorHierarchy.h"
@@ -1420,6 +1421,42 @@ int main()
         Expect(
             editor::MakeHighlightRequest(editor::ClearSelection(), set).visible == false,
             "cleared selection has no highlight");
+    }
+
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        editor::DirectionalLightVisualization visualization{};
+        visualization.anchor = {5.0f, 3.0f, -1.0f};
+        visualization.scale = 2.0f;
+        const editor::EditorPickingSet set = editor::BuildPickingSet(
+            level, editor::AuthoredPickingWorldState(level), &visualization);
+        bool found = false;
+        for (const editor::PickingProxy& proxy : set.proxies)
+        {
+            if (proxy.selection.kind != editor::EditorObjectKind::DirectionalLight)
+            {
+                continue;
+            }
+            found = true;
+            Expect(Vec3Near(proxy.center, visualization.anchor),
+                "picking proxy follows translated visualization");
+            Expect(
+                Vec3Near(proxy.size, editor::ScaledDirectionalLightPickSize(visualization.scale)),
+                "picking proxy follows scaled visualization");
+        }
+        Expect(found, "translated Directional Light still has a picking proxy");
+        const editor::EditorPickingSet defaults =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        for (const editor::PickingProxy& proxy : defaults.proxies)
+        {
+            if (proxy.selection.kind == editor::EditorObjectKind::DirectionalLight)
+            {
+                Expect(Vec3Near(proxy.center, editor::kDirectionalLightAuthoringAnchor),
+                    "default picking proxy keeps the M85.1 anchor");
+                Expect(Vec3Near(proxy.size, editor::kDirectionalLightAuthoringPickSize),
+                    "default picking proxy keeps the M85.1 size");
+            }
+        }
     }
 
     if (gFailures != 0)

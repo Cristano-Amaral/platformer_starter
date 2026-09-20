@@ -302,6 +302,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Door:
     case EditorObjectKind::ItemPickup:
     case EditorObjectKind::StaticProp:
+    case EditorObjectKind::DirectionalLight:
         return true;
     default:
         return false;
@@ -328,7 +329,8 @@ bool IsResizeSelection(EditorSelection selection)
 bool IsScaleSelection(EditorSelection selection)
 {
     return selection.kind == EditorObjectKind::StaticProp
-        || selection.kind == EditorObjectKind::ItemPickup;
+        || selection.kind == EditorObjectKind::ItemPickup
+        || selection.kind == EditorObjectKind::DirectionalLight;
 }
 
 bool IsRotateSelection(EditorSelection selection)
@@ -683,7 +685,8 @@ bool GetGizmoPreviewBox(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     core::Vec3& center,
-    core::Vec3& size)
+    core::Vec3& size,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     switch (selection.kind)
     {
@@ -798,8 +801,8 @@ bool GetGizmoPreviewBox(
     case EditorObjectKind::DirectionalLight:
         if (selection.index == 0)
         {
-            center = kDirectionalLightAuthoringAnchor;
-            size = kDirectionalLightAuthoringPickSize;
+            center = DirectionalLightVisualizationAnchor(directionalLightVisualization);
+            size = DirectionalLightVisualizationPickExtents(directionalLightVisualization);
             return true;
         }
         break;
@@ -850,17 +853,36 @@ GizmoDrawRequest MakeGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
     const render::CameraView& view,
-    const GizmoInteractionState& interaction)
+    const GizmoInteractionState& interaction,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     GizmoDrawRequest request{};
-    const core::Vec3* origin = GetEditablePosition(workingCopy, selection);
-    if (origin == nullptr || !IsGizmoSelection(selection))
+    if (!IsGizmoSelection(selection))
     {
         return request;
     }
 
+    core::Vec3 origin{};
+    if (selection.kind == EditorObjectKind::DirectionalLight)
+    {
+        if (selection.index != 0)
+        {
+            return request;
+        }
+        origin = DirectionalLightVisualizationAnchor(directionalLightVisualization);
+    }
+    else
+    {
+        const core::Vec3* position = GetEditablePosition(workingCopy, selection);
+        if (position == nullptr)
+        {
+            return request;
+        }
+        origin = *position;
+    }
+
     request.visible = true;
-    request.origin = *origin;
+    request.origin = origin;
     request.axisLength = GizmoWorldLength(view, request.origin);
     request.hovered = interaction.hovered;
     request.active = interaction.dragging ? interaction.active : EditorAxis::None;
@@ -1766,7 +1788,8 @@ bool UpdateResizeInteraction(
 bool TryScaleGizmoOrigin(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
-    core::Vec3& origin)
+    core::Vec3& origin,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     if (selection.kind == EditorObjectKind::ItemPickup
         && selection.index < workingCopy.itemPickups.size())
@@ -1776,7 +1799,7 @@ bool TryScaleGizmoOrigin(
     }
     if (selection.kind == EditorObjectKind::DirectionalLight && selection.index == 0)
     {
-        origin = kDirectionalLightAuthoringAnchor;
+        origin = DirectionalLightVisualizationAnchor(directionalLightVisualization);
         return true;
     }
     const core::Vec3* position = GetEditablePosition(workingCopy, selection);
@@ -1792,12 +1815,18 @@ GizmoDrawRequest MakeScaleGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
     const render::CameraView& view,
-    const GizmoInteractionState& interaction)
+    const GizmoInteractionState& interaction,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     GizmoDrawRequest request{};
     core::Vec3 origin{};
-    if (!TryScaleGizmoOrigin(workingCopy, selection, origin) || !IsScaleSelection(selection)
-        || GetEditableScale(workingCopy, selection) == nullptr)
+    if (!TryScaleGizmoOrigin(workingCopy, selection, origin, directionalLightVisualization)
+        || !IsScaleSelection(selection))
+    {
+        return request;
+    }
+    if (selection.kind != EditorObjectKind::DirectionalLight
+        && GetEditableScale(workingCopy, selection) == nullptr)
     {
         return request;
     }
@@ -1911,13 +1940,55 @@ bool UpdateScaleInteraction(
     bool selectHeld,
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences,
-    bool invertModifier)
+    bool invertModifier,
+    DirectionalLightVisualization* directionalLightVisualization)
 {
     if (state.dragging)
     {
         if (selectReleased || !selectHeld)
         {
             EndGizmoDrag(state);
+            return true;
+        }
+
+        if (state.dragTarget.kind == EditorObjectKind::DirectionalLight)
+        {
+            if (directionalLightVisualization == nullptr)
+            {
+                ClearGizmoInteraction(state);
+                return true;
+            }
+            const core::Vec3 intended = GizmoScaleSize(state, mouseRay, view);
+            float uniform = directionalLightVisualization->scale;
+            switch (state.active)
+            {
+            case EditorAxis::X:
+                uniform = intended.x;
+                break;
+            case EditorAxis::Y:
+                uniform = intended.y;
+                break;
+            case EditorAxis::Z:
+                uniform = intended.z;
+                break;
+            case EditorAxis::None:
+                break;
+            }
+            const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
+            const float increment = snapActive
+                ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Scale)
+                : 0.0f;
+            const core::Vec3 snapped = ApplyAuthoredTransformSnap(
+                {uniform, uniform, uniform},
+                EditorTransformMode::Scale,
+                state.active,
+                snapActive,
+                increment);
+            directionalLightVisualization->scale =
+                ClampDirectionalLightVisualizationScale(snapped.x);
+            CanonicalizeDirectionalLightVisualization(*directionalLightVisualization);
+            state.hovered = state.active;
+            state.hoveredSign = state.dragHandleSign;
             return true;
         }
 
@@ -1954,13 +2025,33 @@ bool UpdateScaleInteraction(
         return false;
     }
 
-    const core::Vec3* scale = GetEditableScale(workingCopy, currentSelection);
     core::Vec3 origin{};
-    if (!TryScaleGizmoOrigin(workingCopy, currentSelection, origin) || scale == nullptr)
+    if (!TryScaleGizmoOrigin(
+            workingCopy, currentSelection, origin, directionalLightVisualization))
     {
         state.hovered = EditorAxis::None;
         state.hoveredSign = 1;
         return false;
+    }
+
+    core::Vec3 workingScale{};
+    if (currentSelection.kind == EditorObjectKind::DirectionalLight)
+    {
+        const float scale = directionalLightVisualization == nullptr
+            ? kDirectionalLightAuthoringDefaultScale
+            : ClampDirectionalLightVisualizationScale(directionalLightVisualization->scale);
+        workingScale = {scale, scale, scale};
+    }
+    else
+    {
+        const core::Vec3* scale = GetEditableScale(workingCopy, currentSelection);
+        if (scale == nullptr)
+        {
+            state.hovered = EditorAxis::None;
+            state.hoveredSign = 1;
+            return false;
+        }
+        workingScale = *scale;
     }
 
     const float axisLength = GizmoWorldLength(view, origin);
@@ -1979,7 +2070,7 @@ bool UpdateScaleInteraction(
         pick.axis,
         pick.sign,
         origin,
-        *scale,
+        workingScale,
         mouseRay,
         view);
 }
@@ -1988,11 +2079,14 @@ GizmoDrawRequest MakeRotateGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
     const render::CameraView& view,
-    const GizmoInteractionState& interaction)
+    const GizmoInteractionState& interaction,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     GizmoDrawRequest request{};
     core::Vec3 origin{};
-    if (!TryScaleGizmoOrigin(workingCopy, selection, origin) || !IsRotateSelection(selection))
+    if (!TryScaleGizmoOrigin(
+            workingCopy, selection, origin, directionalLightVisualization)
+        || !IsRotateSelection(selection))
     {
         return request;
     }
@@ -2137,7 +2231,8 @@ bool UpdateRotateInteraction(
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences,
     bool invertModifier,
-    const std::vector<EditorSelection>* additionalSelections)
+    const std::vector<EditorSelection>* additionalSelections,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     const std::vector<EditorSelection> emptyAdditional;
     const std::vector<EditorSelection>& additional =
@@ -2262,7 +2357,8 @@ bool UpdateRotateInteraction(
 
     const core::Vec3* rotation = GetEditableRotation(workingCopy, currentSelection);
     core::Vec3 origin{};
-    if (!TryScaleGizmoOrigin(workingCopy, currentSelection, origin))
+    if (!TryScaleGizmoOrigin(
+            workingCopy, currentSelection, origin, directionalLightVisualization))
     {
         state.hovered = EditorAxis::None;
         return false;
@@ -2321,7 +2417,8 @@ bool UpdateGizmoInteraction(
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences,
     bool invertModifier,
-    const std::vector<EditorSelection>* additionalSelections)
+    const std::vector<EditorSelection>* additionalSelections,
+    DirectionalLightVisualization* directionalLightVisualization)
 {
     const std::vector<EditorSelection> emptyAdditional;
     const std::vector<EditorSelection>& additional =
@@ -2336,6 +2433,25 @@ bool UpdateGizmoInteraction(
             return true;
         }
 
+        const core::Vec3 intended = GizmoDragPosition(state, mouseRay, view);
+        const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
+        const float increment = snapActive
+            ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Translate)
+            : 0.0f;
+        if (state.dragTarget.kind == EditorObjectKind::DirectionalLight)
+        {
+            if (directionalLightVisualization == nullptr)
+            {
+                ClearGizmoInteraction(state);
+                return true;
+            }
+            directionalLightVisualization->anchor = ApplyAuthoredTransformSnap(
+                intended, EditorTransformMode::Translate, state.active, snapActive, increment);
+            CanonicalizeDirectionalLightVisualization(*directionalLightVisualization);
+            state.hovered = state.active;
+            return true;
+        }
+
         core::Vec3* position = GetEditablePosition(workingCopy, state.dragTarget);
         if (position == nullptr)
         {
@@ -2343,11 +2459,6 @@ bool UpdateGizmoInteraction(
             return true;
         }
 
-        const core::Vec3 intended = GizmoDragPosition(state, mouseRay, view);
-        const bool snapActive = EditorSnapIsActive(snapPreferences, invertModifier);
-        const float increment = snapActive
-            ? EditorSnapIncrementForMode(*snapPreferences, EditorTransformMode::Translate)
-            : 0.0f;
         if (state.dragMembers.size() > 1)
         {
             if (!ApplyGroupTranslateFromPrimaryResult(
@@ -2403,11 +2514,26 @@ bool UpdateGizmoInteraction(
         return false;
     }
 
-    const core::Vec3* origin = GetEditablePosition(workingCopy, currentSelection);
-    if (origin == nullptr)
+    core::Vec3 originValue{};
+    const core::Vec3* origin = nullptr;
+    if (currentSelection.kind == EditorObjectKind::DirectionalLight)
     {
-        state.hovered = EditorAxis::None;
-        return false;
+        if (currentSelection.index != 0)
+        {
+            state.hovered = EditorAxis::None;
+            return false;
+        }
+        originValue = DirectionalLightVisualizationAnchor(directionalLightVisualization);
+        origin = &originValue;
+    }
+    else
+    {
+        origin = GetEditablePosition(workingCopy, currentSelection);
+        if (origin == nullptr)
+        {
+            state.hovered = EditorAxis::None;
+            return false;
+        }
     }
 
     const float axisLength = GizmoWorldLength(view, *origin);

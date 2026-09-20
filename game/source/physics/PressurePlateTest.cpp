@@ -578,6 +578,27 @@ int main()
         Expect(world::AuthoredLevelDataEqual(a, b), "matching flags compare equal");
         a.pressurePlates[0].visibleInGameplay = false;
         Expect(!world::AuthoredLevelDataEqual(a, b), "visibleInGameplay participates in equality");
+        a.pressurePlates[0].visibleInGameplay = true;
+        a.pressurePlates[0].controlsDirectionalLight = true;
+        Expect(!world::AuthoredLevelDataEqual(a, b), "light-control participates in equality");
+        b.pressurePlates[0].controlsDirectionalLight = true;
+        Expect(world::AuthoredLevelDataEqual(a, b), "matching light-control compares equal");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec linked = MakePlate(plateCenter);
+        linked.controlsDirectionalLight = true;
+        level.pressurePlates.push_back(linked);
+        level.dynamicBoxes.push_back(MakeBox(offPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "initialize light-control plate");
+        Expect(!world.GetPressurePlates()[0].active, "light-control plate starts Inactive");
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
+            world, 0, onPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "Box activation is unchanged with light-control");
+        world.ResetDynamicBoxes();
+        Expect(!world.GetPressurePlates()[0].active, "Restart recomputes light-control plate overlap");
     }
 
     if (gFailures != 0)

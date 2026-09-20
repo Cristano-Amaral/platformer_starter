@@ -1165,8 +1165,53 @@ int main()
                 "11-token pressure_plate flags parse");
             const std::string writtenModes = world::SerializeLevelText(modeParsed.level);
             Expect(
-                writtenModes.find("pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0") != std::string::npos,
-                "canonical writer emits plate mode flags");
+                writtenModes.find("pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0 0") != std::string::npos,
+                "canonical writer emits plate mode flags and light-control default");
+            Expect(
+                !modeParsed.level.pressurePlates[0].controlsDirectionalLight,
+                "11-token pressure_plate does not control Directional Light");
+            const std::string lightControl =
+                canonical
+                + "door 4 1.5 0 1.2 3 2.4 3.2\npressure_plate 2 0.1 0 2 0.2 2 0 0 1 0 1\n";
+            const world::ParseLevelFileResult lightParsed = world::ParseLevelText(lightControl);
+            Expect(
+                lightParsed.status == world::LoadLevelFileStatus::Loaded,
+                "12-token pressure_plate loads");
+            Expect(
+                lightParsed.level.pressurePlates[0].controlsDirectionalLight,
+                "12-token pressure_plate light-control parses");
+            Expect(
+                lightParsed.level.pressurePlates[0].linkedDoorIndex == 0,
+                "12-token pressure_plate keeps Door link");
+            const std::string writtenLight = world::SerializeLevelText(lightParsed.level);
+            Expect(
+                writtenLight.find("pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0 1") != std::string::npos,
+                "writer emits deterministic light-control token");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    lightParsed.level, world::ParseLevelText(writtenLight).level),
+                "12-token pressure_plate roundtrip");
+            Expect(
+                !world::ParseLevelText(oldSeven).level.pressurePlates[0].controlsDirectionalLight,
+                "7-token pressure_plate does not control Directional Light");
+            world::LevelDefinition dirtyPlate = lightParsed.level;
+            Expect(
+                world::AuthoredLevelDataEqual(dirtyPlate, lightParsed.level),
+                "Inspector no-op does not Dirty light-control");
+            dirtyPlate.pressurePlates[0].controlsDirectionalLight = false;
+            Expect(
+                !world::AuthoredLevelDataEqual(dirtyPlate, lightParsed.level),
+                "Inspector light-control edit sets Dirty");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0 2\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "malformed pressure_plate light-control rejected");
+            Expect(
+                world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0 0 1 0 1 extra\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "13-token pressure_plate rejected");
             Expect(
                 world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0 2 0 1\n").status
                     == world::LoadLevelFileStatus::Invalid,

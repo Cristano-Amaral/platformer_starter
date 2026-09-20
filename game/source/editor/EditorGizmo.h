@@ -6,6 +6,7 @@
 // visualRotationDegrees. World-axis Euler rings only; not a Transform component.
 
 #include "core/Vec3.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/EditorPicking.h"
 #include "editor/EditorSelection.h"
 #include "render/CameraView.h"
@@ -202,11 +203,13 @@ float ClampAuthoredBoxExtent(float value);
 core::Vec3 ClampAuthoredBoxSize(core::Vec3 size);
 
 // Working-copy box used by the pending preview (spawn uses kPlayerVisualSize).
+// Directional Light uses editor-only visualization, not authored position.
 bool GetGizmoPreviewBox(
     const world::LevelDefinition& workingCopy,
     EditorSelection selection,
     core::Vec3& center,
-    core::Vec3& size);
+    core::Vec3& size,
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 float GizmoWorldLength(const render::CameraView& view, core::Vec3 origin);
 float GizmoVisualRadius(float axisLength);
@@ -216,7 +219,8 @@ GizmoDrawRequest MakeGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
     const render::CameraView& view,
-    const GizmoInteractionState& interaction);
+    const GizmoInteractionState& interaction,
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 bool AuthoredGeometryDiffers(
     const world::LevelDefinition& active,
@@ -433,7 +437,8 @@ GizmoDrawRequest MakeScaleGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
     const render::CameraView& view,
-    const GizmoInteractionState& interaction);
+    const GizmoInteractionState& interaction,
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 bool BeginScaleDrag(
     GizmoInteractionState& state,
@@ -463,13 +468,15 @@ bool UpdateScaleInteraction(
     bool selectHeld,
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences = nullptr,
-    bool invertModifier = false);
+    bool invertModifier = false,
+    DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 GizmoDrawRequest MakeRotateGizmoDrawRequest(
     EditorSelection selection,
     const world::LevelDefinition& workingCopy,
     const render::CameraView& view,
-    const GizmoInteractionState& interaction);
+    const GizmoInteractionState& interaction,
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 EditorAxis PickRotateHandle(
     Ray3 ray,
@@ -504,11 +511,12 @@ bool UpdateRotateInteraction(
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences = nullptr,
     bool invertModifier = false,
-    const std::vector<EditorSelection>* additionalSelections = nullptr);
+    const std::vector<EditorSelection>* additionalSelections = nullptr,
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 // Live per-frame interaction. Uses the tested pick/drag helpers. Returns true
 // when this frame's LMB must not also world-pick (active drag, drag start, or
-// drag end).
+// drag end). Directional Light Translate writes editor visualization only.
 bool UpdateGizmoInteraction(
     GizmoInteractionState& state,
     EditorSelection currentSelection,
@@ -522,7 +530,8 @@ bool UpdateGizmoInteraction(
     bool selectReleased,
     const EditorSnapPreferences* snapPreferences = nullptr,
     bool invertModifier = false,
-    const std::vector<EditorSelection>* additionalSelections = nullptr);
+    const std::vector<EditorSelection>* additionalSelections = nullptr,
+    DirectionalLightVisualization* directionalLightVisualization = nullptr);
 
 bool IsFiniteVec3(core::Vec3 value);
 }

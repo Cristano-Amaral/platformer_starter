@@ -264,9 +264,11 @@ void ApplyLoadedModelBoundsToPending(
 editor::EditorPickingSet MakeLivePickingSet(
     const world::LevelDefinition& appliedLevel,
     const editor::EditorPickingWorldState& worldState,
-    const render::StaticModelSceneStore* store)
+    const render::StaticModelSceneStore* store,
+    const editor::DirectionalLightVisualization* directionalLightVisualization = nullptr)
 {
-    editor::EditorPickingSet set = editor::BuildPickingSet(appliedLevel, worldState);
+    editor::EditorPickingSet set =
+        editor::BuildPickingSet(appliedLevel, worldState, directionalLightVisualization);
     ApplyLoadedModelBoundsToPickingSet(set, store);
     return set;
 }
@@ -1481,8 +1483,11 @@ int Application::Run()
                     levelDefinition, previewIdentity, &levelEditorState.workingCopy);
             }
             const render::StaticModelSceneStore* modelStore = renderer.StaticPropModels();
-            const editor::EditorPickingSet pickingSet =
-                MakeLivePickingSet(levelDefinition, pickingWorld, modelStore);
+            const editor::EditorPickingSet pickingSet = MakeLivePickingSet(
+                levelDefinition,
+                pickingWorld,
+                modelStore,
+                &levelEditorState.directionalLightVisualization);
             editor::SelectedModelGhostRequest modelGhost =
                 editor::MakeSelectedModelGhostRequest(
                     levelEditorState.selection, levelEditorState.workingCopy);
@@ -1832,11 +1837,15 @@ int Application::Run()
             overlay.usePreviewLighting = true;
             overlay.previewLighting = levelEditorState.workingCopy.environment;
             overlay.drawDirectionalLightAuthoring = true;
-            overlay.directionalLightAnchor = editor::DirectionalLightAuthoringAnchor();
+            editor::CanonicalizeDirectionalLightVisualization(
+                levelEditorState.directionalLightVisualization);
+            overlay.directionalLightAnchor = editor::DirectionalLightVisualizationAnchor(
+                &levelEditorState.directionalLightVisualization);
             overlay.directionalLightRay = world::CanonicalLevelDirectionalRay(
                 levelEditorState.workingCopy.environment.directionalRayDirection);
             overlay.directionalLightSelected =
                 levelEditorState.selection.kind == editor::EditorObjectKind::DirectionalLight;
+            overlay.directionalLightScale = levelEditorState.directionalLightVisualization.scale;
 
             editor::GizmoDrawRequest gizmo{};
             const bool multiSelected = editor::EditorSelectionSetIsMulti(
@@ -1878,7 +1887,8 @@ int Application::Run()
                     levelEditorState.selection,
                     levelEditorState.workingCopy,
                     cameraView,
-                    levelEditorState.gizmo);
+                    levelEditorState.gizmo,
+                    &levelEditorState.directionalLightVisualization);
             }
             else if (
                 levelEditorState.transformMode == editor::EditorTransformMode::Rotate
@@ -1892,7 +1902,8 @@ int Application::Run()
                     levelEditorState.selection,
                     levelEditorState.workingCopy,
                     cameraView,
-                    levelEditorState.gizmo);
+                    levelEditorState.gizmo,
+                    &levelEditorState.directionalLightVisualization);
             }
             else
             {
@@ -1900,7 +1911,8 @@ int Application::Run()
                     levelEditorState.selection,
                     levelEditorState.workingCopy,
                     cameraView,
-                    levelEditorState.gizmo);
+                    levelEditorState.gizmo,
+                    &levelEditorState.directionalLightVisualization);
             }
             overlay.drawTranslationGizmo =
                 gizmo.visible
@@ -2302,7 +2314,8 @@ int Application::Run()
                     editorInput.selectHeld,
                     editorInput.selectReleased,
                     &levelEditorState.snap,
-                    editorInput.ctrlHeld);
+                    editorInput.ctrlHeld,
+                    &levelEditorState.directionalLightVisualization);
             }
             else if (levelEditorState.transformMode == editor::EditorTransformMode::Rotate)
             {
@@ -2319,7 +2332,8 @@ int Application::Run()
                     editorInput.selectReleased,
                     &levelEditorState.snap,
                     editorInput.ctrlHeld,
-                    &levelEditorState.additionalSelections);
+                    &levelEditorState.additionalSelections,
+                    &levelEditorState.directionalLightVisualization);
             }
             else
             {
@@ -2336,7 +2350,8 @@ int Application::Run()
                     editorInput.selectReleased,
                     &levelEditorState.snap,
                     editorInput.ctrlHeld,
-                    &levelEditorState.additionalSelections);
+                    &levelEditorState.additionalSelections,
+                    &levelEditorState.directionalLightVisualization);
             }
             if (editor::ShouldCancelPlacementMode(
                     levelEditorState.placementMode,
@@ -2393,7 +2408,8 @@ int Application::Run()
                         MakeLivePickingSet(
                             levelDefinition,
                             MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors),
-                            renderer.StaticPropModels()),
+                            renderer.StaticPropModels(),
+                            &levelEditorState.directionalLightVisualization),
                         localMin,
                         localMax);
                 const bool canAdd = editor::CanIssueAuthoredLifecycleRequest(
@@ -2441,7 +2457,8 @@ int Application::Run()
                     MakeLivePickingSet(
                         levelDefinition,
                         MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors),
-                        renderer.StaticPropModels()),
+                        renderer.StaticPropModels(),
+                        &levelEditorState.directionalLightVisualization),
                     editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
                 editor::HandleAuthoredLifecycleRequest(
                     levelEditorState,
@@ -2475,7 +2492,8 @@ int Application::Run()
                 if (editor::TryResolveEditorViewportPick(
                         ray,
                         MakeLivePickingSet(
-                            levelDefinition, pickingWorld, renderer.StaticPropModels()),
+                            levelDefinition, pickingWorld, renderer.StaticPropModels(),
+                            &levelEditorState.directionalLightVisualization),
                         pendingProxies,
                         levelEditorState.structuralMap,
                         workingPick))
@@ -3048,6 +3066,7 @@ bool Application::OpenAuthoredLevelFromEditor()
     levelEditorState.savedSourceBaseline = levelDefinition;
     levelEditorState.modified = false;
     levelEditorState.dirty = false;
+    editor::ResetDirectionalLightVisualization(levelEditorState.directionalLightVisualization);
     editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     levelEditorState.selection =
@@ -3310,6 +3329,7 @@ bool Application::ReloadRuntimeLevelFromStaged()
     editor::ClearCategoryStructuralPending(levelEditorState.structuralPending);
     editor::ResetStructuralIndexMap(levelEditorState.structuralMap, levelDefinition);
     editor::ClearGizmoInteraction(levelEditorState.gizmo);
+    editor::ResetDirectionalLightVisualization(levelEditorState.directionalLightVisualization);
     editor::CancelAllEditorPlacement(
         levelEditorState.placementMode,
         levelEditorState.placementPointerBlocked,
@@ -3524,6 +3544,7 @@ void Application::TryFinishPendingLevelTransition()
     ResetGameplayAfterLevelTransition();
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    editor::ResetDirectionalLightVisualization(levelEditorState.directionalLightVisualization);
     if (levelEditorState.modified)
     {
         editor::ClearGizmoInteraction(levelEditorState.gizmo);
@@ -3676,6 +3697,7 @@ void Application::TryFinishPendingFreshRun()
     const char* successMessage = menuPlay
         ? "Play loaded staged level_01."
         : "Play Again loaded staged level_01.";
+    editor::ResetDirectionalLightVisualization(levelEditorState.directionalLightVisualization);
     if (levelEditorState.modified)
     {
         editor::ClearGizmoInteraction(levelEditorState.gizmo);

@@ -32,6 +32,10 @@ struct PressurePlateSpec
     bool activateByDynamicBox = true;
     bool activateByPlayer = false;
     bool visibleInGameplay = true;
+    // M85.2: optional control of the singleton Level Directional Light.
+    // Independent of linkedDoorIndex. Default false keeps pre-M85.2 plates
+    // from affecting lighting.
+    bool controlsDirectionalLight = false;
 };
 
 inline bool PressurePlateSizeIsValid(core::Vec3 size)

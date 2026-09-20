@@ -590,7 +590,8 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "pressure_plate")
         {
-            if (tokens.size() != 7 && tokens.size() != 8 && tokens.size() != 11)
+            if (tokens.size() != 7 && tokens.size() != 8 && tokens.size() != 11
+                && tokens.size() != 12)
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
             }
@@ -610,11 +611,19 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                         LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
                 }
             }
-            if (tokens.size() == 11)
+            if (tokens.size() >= 11)
             {
                 if (!ParseBool01Token(tokens[8], plate.activateByDynamicBox)
                     || !ParseBool01Token(tokens[9], plate.activateByPlayer)
                     || !ParseBool01Token(tokens[10], plate.visibleInGameplay))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+            }
+            if (tokens.size() == 12)
+            {
+                if (!ParseBool01Token(tokens[11], plate.controlsDirectionalLight))
                 {
                     return MakeStatus(
                         LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");

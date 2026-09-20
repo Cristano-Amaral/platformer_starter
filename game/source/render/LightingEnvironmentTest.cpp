@@ -1,8 +1,12 @@
 #include "render/LightingEnvironment.h"
+#include "world/DirectionalLightActivation.h"
+#include "world/PressurePlate.h"
 
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <limits>
+#include <vector>
 
 namespace
 {
@@ -171,6 +175,85 @@ int main()
         render::MakeLightingEnvironmentFromAuthored(noShadows);
     Expect(render::EffectiveDirectionalEnabled(litNoShadow), "shadows-off keeps directional");
     Expect(!render::DirectionalShadowsAreActive(litNoShadow), "shadows-off disables shadow pass");
+
+    {
+        world::PressurePlateSpec unlinked{};
+        world::PressurePlateSpec linkedOff{};
+        linkedOff.controlsDirectionalLight = true;
+        world::PressurePlateSpec linkedOn = linkedOff;
+        const std::uint8_t inactive = 0;
+        const std::uint8_t active = 1;
+        const world::DirectionalLightActivation none =
+            world::ResolveDirectionalLightActivation({}, nullptr, 0);
+        Expect(!none.hasLinkedPressurePlates, "no plates means no light control");
+        Expect(
+            world::AuthoredDirectionalLightIsEffectivelyEnabled(true, none),
+            "unlinked authored-enabled stays ON");
+        Expect(
+            !world::AuthoredDirectionalLightIsEffectivelyEnabled(false, none),
+            "authored disabled stays OFF without plates");
+
+        const std::vector<world::PressurePlateSpec> unlinkedPlates{unlinked};
+        const world::DirectionalLightActivation unlinkedActive =
+            world::ResolveDirectionalLightActivation(unlinkedPlates, &active, 1);
+        Expect(!unlinkedActive.hasLinkedPressurePlates, "unlinked plate does not control light");
+        Expect(
+            world::AuthoredDirectionalLightIsEffectivelyEnabled(true, unlinkedActive),
+            "unlinked active plate leaves authored-enabled ON");
+
+        const std::vector<world::PressurePlateSpec> oneLinked{linkedOff};
+        const world::DirectionalLightActivation linkedInactive =
+            world::ResolveDirectionalLightActivation(oneLinked, &inactive, 1);
+        Expect(linkedInactive.hasLinkedPressurePlates, "linked plate is detected");
+        Expect(!linkedInactive.anyLinkedPressurePlateActive, "inactive linked plate");
+        Expect(
+            !world::AuthoredDirectionalLightIsEffectivelyEnabled(true, linkedInactive),
+            "linked inactive plate makes authored-enabled effectively OFF");
+
+        const world::DirectionalLightActivation linkedActive =
+            world::ResolveDirectionalLightActivation(oneLinked, &active, 1);
+        Expect(
+            world::AuthoredDirectionalLightIsEffectivelyEnabled(true, linkedActive),
+            "linked active plate makes authored-enabled ON");
+        Expect(
+            !world::AuthoredDirectionalLightIsEffectivelyEnabled(false, linkedActive),
+            "authored disabled remains OFF with active linked plate");
+
+        const std::vector<world::PressurePlateSpec> twoLinked{linkedOff, linkedOn};
+        const std::uint8_t bothOff[2] = {0, 0};
+        const std::uint8_t firstOn[2] = {1, 0};
+        const std::uint8_t secondOn[2] = {0, 1};
+        const std::uint8_t bothOn[2] = {1, 1};
+        Expect(
+            !world::ResolveDirectionalLightActivation(twoLinked, bothOff, 2)
+                 .anyLinkedPressurePlateActive,
+            "OR: both inactive");
+        Expect(
+            world::ResolveDirectionalLightActivation(twoLinked, firstOn, 2)
+                .anyLinkedPressurePlateActive,
+            "OR: first active");
+        Expect(
+            world::ResolveDirectionalLightActivation(twoLinked, secondOn, 2)
+                .anyLinkedPressurePlateActive,
+            "OR: second active");
+        Expect(
+            world::ResolveDirectionalLightActivation(twoLinked, bothOn, 2)
+                .anyLinkedPressurePlateActive,
+            "OR: both active");
+
+        render::LightingEnvironment env = render::MakeLightingEnvironmentFromAuthored(authored);
+        Expect(render::EffectiveDirectionalEnabled(env), "from-authored defaults to M85.1 ON");
+        render::ApplyDirectionalLightActivation(env, true, false);
+        Expect(!render::EffectiveDirectionalEnabled(env), "activation overlay can turn effective OFF");
+        Expect(!render::DirectionalShadowsAreActive(env), "effective OFF skips shadows");
+        render::ApplyDirectionalLightActivation(env, true, true);
+        Expect(render::EffectiveDirectionalEnabled(env), "active plate restores effective ON");
+        env.directional.shadowsEnabled = false;
+        Expect(render::EffectiveDirectionalEnabled(env), "Shadows Enabled stays independent");
+        Expect(!render::DirectionalShadowsAreActive(env), "effective ON + shadows OFF skips shadow pass");
+        env.directional.authoredEnabled = false;
+        Expect(!render::EffectiveDirectionalEnabled(env), "master authored OFF wins");
+    }
 
     const core::Vec3 rotated = render::RotateDirectionalRay(
         {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 90.0f);

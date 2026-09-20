@@ -230,6 +230,8 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendInt(out, plate.activateByPlayer ? 1 : 0);
         out += ' ';
         AppendInt(out, plate.visibleInGameplay ? 1 : 0);
+        out += ' ';
+        AppendInt(out, plate.controlsDirectionalLight ? 1 : 0);
         out += '\n';
     }
 

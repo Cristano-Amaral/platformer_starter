@@ -1,6 +1,6 @@
 # Milestone 85.1 --- Environment & Directional Light Authoring
 
-**Status:** implemented, awaiting manual acceptance\
+**Status:** CLOSED\
 **Branch:** `milestone/85-1-environment-light-authoring`\
 **Recommended Cursor model:** Grok 4.6 High --- Fast OFF
 

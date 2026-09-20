@@ -106,12 +106,18 @@ int main()
                 == nullptr,
             "out-of-range platform has no gizmo origin");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::Camera, 0}), "camera has no gizmo");
-        Expect(
+            Expect(
             !editor::IsGizmoSelection({EditorObjectKind::Environment, 0}),
             "Environment has no Translate gizmo");
         Expect(
-            !editor::IsGizmoSelection({EditorObjectKind::DirectionalLight, 0}),
-            "Directional Light Translate does not change lighting");
+            editor::IsGizmoSelection({EditorObjectKind::DirectionalLight, 0}),
+            "Directional Light Translate moves the editor visualization");
+        Expect(
+            editor::IsScaleSelection({EditorObjectKind::DirectionalLight, 0}),
+            "Directional Light Scale changes visualization size");
+        Expect(
+            !editor::IsResizeSelection({EditorObjectKind::DirectionalLight, 0}),
+            "Directional Light is not resizable");
         Expect(
             editor::IsRotateSelection({EditorObjectKind::DirectionalLight, 0}),
             "Directional Light uses the Rotate gizmo");
@@ -3596,6 +3602,228 @@ int main()
         Expect(!state.dragging, "Group Rotate drag ends cleanly");
         Expect(working.staticProps[0].scale.x == 1.0f && working.staticProps[1].scale.x == 1.0f,
             "Group Rotate does not mutate scale");
+    }
+
+    // ---- M85.2 Directional Light visualization Translate/Scale ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        const core::Vec3 startRay = working.environment.directionalRayDirection;
+        const float startIntensity = working.environment.directionalIntensity;
+        const bool startEnabled = working.environment.directionalEnabled;
+        const bool startShadows = working.environment.directionalShadowsEnabled;
+        editor::DirectionalLightVisualization visualization{};
+        Expect(Vec3Near(visualization.anchor, editor::kDirectionalLightAuthoringAnchor),
+            "default visualization anchor preserves M85.1");
+        Expect(visualization.scale == editor::kDirectionalLightAuthoringDefaultScale,
+            "default visualization scale preserves M85.1 size");
+
+        const EditorSelection light{EditorObjectKind::DirectionalLight, 0};
+        editor::GizmoInteractionState state{};
+        const core::Vec3 origin = visualization.anchor;
+        const render::CameraView view = MakeView({20.0f, 8.0f, 20.0f}, origin);
+        const float length = editor::GizmoWorldLength(view, origin);
+        const core::Vec3 xHandle{origin.x + length, origin.y, origin.z};
+        const core::Vec3 xMoved{origin.x + length + 3.0f, origin.y, origin.z};
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                light,
+                working,
+                view,
+                RayThrough(view, xHandle),
+                false,
+                false,
+                true,
+                true,
+                false,
+                nullptr,
+                false,
+                nullptr,
+                &visualization),
+            "Directional Light Translate drag starts");
+        Expect(state.dragging && state.active == EditorAxis::X,
+            "Translate drag captures the X handle");
+        const core::Vec3 intendedTranslate =
+            editor::GizmoDragPosition(state, RayThrough(view, xMoved), view);
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                light,
+                working,
+                view,
+                RayThrough(view, xMoved),
+                false,
+                false,
+                false,
+                true,
+                false,
+                nullptr,
+                false,
+                nullptr,
+                &visualization),
+            "Directional Light Translate drag updates");
+        Expect(NearlyEqual(visualization.anchor.x, intendedTranslate.x, 0.15f)
+                && visualization.anchor.x > origin.x + 0.5f,
+            "Translate moves the visualization anchor");
+        Expect(NearlyEqual(visualization.anchor.y, origin.y, 0.001f)
+                && NearlyEqual(visualization.anchor.z, origin.z, 0.001f),
+            "Translate X keeps visualization Y/Z");
+        Expect(Vec3Near(working.environment.directionalRayDirection, startRay, 0.0001f),
+            "Translate does not change ray direction");
+        Expect(working.environment.directionalIntensity == startIntensity,
+            "Translate does not change intensity");
+        Expect(working.environment.directionalEnabled == startEnabled,
+            "Translate does not change authored enabled");
+        Expect(working.environment.directionalShadowsEnabled == startShadows,
+            "Translate does not change shadows");
+        Expect(
+            editor::GetEditablePosition(working, light) == nullptr,
+            "visualization is not authored Level position");
+
+        editor::EditorSnapPreferences snap = editor::MakeDefaultEditorSnapPreferences();
+        snap.enabled = true;
+        snap.translateIncrement = 0.25f;
+        visualization.anchor = editor::kDirectionalLightAuthoringAnchor;
+        editor::EndGizmoDrag(state);
+        const float snapLength = editor::GizmoWorldLength(view, visualization.anchor);
+        const core::Vec3 snapHandle{
+            visualization.anchor.x + snapLength, visualization.anchor.y, visualization.anchor.z};
+        const core::Vec3 snapMoved{
+            visualization.anchor.x + snapLength + 1.10f,
+            visualization.anchor.y,
+            visualization.anchor.z};
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                light,
+                working,
+                view,
+                RayThrough(view, snapHandle),
+                false,
+                false,
+                true,
+                true,
+                false,
+                &snap,
+                false,
+                nullptr,
+                &visualization),
+            "snapped Translate drag starts");
+        const core::Vec3 intendedSnap = editor::ApplyAuthoredTransformSnap(
+            editor::GizmoDragPosition(state, RayThrough(view, snapMoved), view),
+            editor::EditorTransformMode::Translate,
+            state.active,
+            true,
+            0.25f);
+        Expect(
+            editor::UpdateGizmoInteraction(
+                state,
+                light,
+                working,
+                view,
+                RayThrough(view, snapMoved),
+                false,
+                false,
+                false,
+                true,
+                false,
+                &snap,
+                false,
+                nullptr,
+                &visualization),
+            "snapped Translate drag updates");
+        Expect(NearlyEqual(visualization.anchor.x, intendedSnap.x, 0.001f),
+            "Translate uses M76 snapping");
+        editor::EndGizmoDrag(state);
+
+        visualization.anchor = origin;
+        visualization.scale = 1.0f;
+        const float scaleLength = editor::GizmoWorldLength(view, visualization.anchor);
+        const core::Vec3 scaleHandle{
+            visualization.anchor.x + scaleLength, visualization.anchor.y, visualization.anchor.z};
+        const core::Vec3 scaleMoved{
+            visualization.anchor.x + scaleLength + 1.0f,
+            visualization.anchor.y,
+            visualization.anchor.z};
+        Expect(
+            editor::UpdateScaleInteraction(
+                state,
+                light,
+                working,
+                view,
+                RayThrough(view, scaleHandle),
+                false,
+                false,
+                true,
+                true,
+                false,
+                nullptr,
+                false,
+                &visualization),
+            "Directional Light Scale drag starts");
+        Expect(
+            editor::UpdateScaleInteraction(
+                state,
+                light,
+                working,
+                view,
+                RayThrough(view, scaleMoved),
+                false,
+                false,
+                false,
+                true,
+                false,
+                nullptr,
+                false,
+                &visualization),
+            "Directional Light Scale drag updates");
+        Expect(visualization.scale > 1.0f, "Scale increases visualization size");
+        Expect(Vec3Near(working.environment.directionalRayDirection, startRay, 0.0001f),
+            "Scale does not change ray direction");
+        Expect(working.environment.directionalIntensity == startIntensity,
+            "Scale does not change intensity");
+        Expect(working.environment.directionalShadowsEnabled == startShadows,
+            "Scale does not change shadow coverage");
+        editor::EndGizmoDrag(state);
+
+        visualization.scale = -4.0f;
+        editor::CanonicalizeDirectionalLightVisualization(visualization);
+        Expect(visualization.scale == editor::kMinDirectionalLightVisualizationScale,
+            "Scale stays positive and at the floor");
+        visualization.scale = 99.0f;
+        editor::CanonicalizeDirectionalLightVisualization(visualization);
+        Expect(visualization.scale == editor::kMaxDirectionalLightVisualizationScale,
+            "Scale stays bounded");
+
+        visualization.scale = 1.14f;
+        snap.scaleIncrement = 0.10f;
+        const core::Vec3 snappedScale = editor::ApplyAuthoredTransformSnap(
+            {visualization.scale, visualization.scale, visualization.scale},
+            editor::EditorTransformMode::Scale,
+            EditorAxis::X,
+            true,
+            0.10f);
+        Expect(NearlyEqual(snappedScale.x, 1.10f, 0.0001f), "Scale snapping uses M76 increments");
+
+        visualization.anchor = {4.0f, 6.0f, -2.0f};
+        visualization.scale = 2.0f;
+        core::Vec3 boxCenter{};
+        core::Vec3 boxSize{};
+        Expect(
+            editor::GetGizmoPreviewBox(working, light, boxCenter, boxSize, &visualization)
+                && Vec3Near(boxCenter, visualization.anchor)
+                && Vec3Near(boxSize, editor::ScaledDirectionalLightPickSize(2.0f)),
+            "picking/preview box follows translated and scaled visualization");
+
+        const core::Vec3 rotated = editor::RotateAuthoredDirectionalRay(
+            startRay, {0.0f, 1.0f, 0.0f}, 40.0f);
+        Expect(NearlyEqual(
+                std::sqrt(rotated.x * rotated.x + rotated.y * rotated.y + rotated.z * rotated.z),
+                1.0f),
+            "Rotate result stays normalized");
+        Expect(!Vec3Near(rotated, startRay, 0.01f), "Rotate still edits real ray direction");
+        Expect(Vec3Near(visualization.anchor, {4.0f, 6.0f, -2.0f}),
+            "Rotate does not move visualization anchor");
     }
 
     if (gFailures != 0)

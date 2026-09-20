@@ -28,6 +28,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemIdInspectorEdit.h"
+#include "editor/DirectionalLightAuthoring.h"
 #include "editor/StaticModelFraming.h"
 
 #include <string>
@@ -193,6 +194,10 @@ struct LevelEditorState
     EditorCamera editorCamera{};
     GizmoInteractionState gizmo{};
     EditorTransformMode transformMode = EditorTransformMode::Translate;
+    // M85.2 editor-only Directional Light visualization. Transient session
+    // state: not Level Format, not Dirty, not editor_layout.ini (layout is
+    // global, not per-Level). Defaults preserve the M85.1 anchor/size.
+    DirectionalLightVisualization directionalLightVisualization{};
     // M76 snapping. Persisted in editor_layout.ini. Reset Editor Layout does
     // not restore these defaults.
     EditorSnapPreferences snap{};

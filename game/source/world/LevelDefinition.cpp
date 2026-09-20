@@ -385,7 +385,9 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || a.pressurePlates[index].activateByDynamicBox
                 != b.pressurePlates[index].activateByDynamicBox
             || a.pressurePlates[index].activateByPlayer != b.pressurePlates[index].activateByPlayer
-            || a.pressurePlates[index].visibleInGameplay != b.pressurePlates[index].visibleInGameplay)
+            || a.pressurePlates[index].visibleInGameplay != b.pressurePlates[index].visibleInGameplay
+            || a.pressurePlates[index].controlsDirectionalLight
+                != b.pressurePlates[index].controlsDirectionalLight)
         {
             return false;
         }

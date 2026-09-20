@@ -109,7 +109,9 @@ the active representation is normalized. Duplicate records are `Invalid`.
 `Enabled = 0` disables directional illumination and directional shadows;
 ambient remains. `Shadows Enabled = 0` with `Enabled = 1` keeps directional
 lighting without the shadow pass. Intensity `0` is not a substitute for
-`enabled`. Gameplay light links/events are out of scope.
+`enabled`. M85.2 Pressure Plate `controlsDirectionalLight` may gate
+effective enablement at runtime; it is not a generic event/receiver
+system.
 
 The writer always emits both records after `camera`.
 
@@ -125,7 +127,7 @@ hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
 level_goal <cx> <cy> <cz> <sx> <sy> <sz> [<nextLevelId>]
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
-pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay>]]
+pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay> [<controlsDirectionalLight>]]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [highlight <intensity>] [gold <amount>] [idle <0|1> <bobAmplitude> <bobSpeed> <spinSpeedDegrees>] [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
@@ -185,18 +187,24 @@ Level Format field.
 
 A 7-token `pressure_plate` is a no-link plate (`linkedDoorIndex = -1`) with
 legacy M52/M53 modes: `activateByDynamicBox = true`, `activateByPlayer =
-false`, `visibleInGameplay = true`. An 8-token record adds the authored Door
+false`, `visibleInGameplay = true`, and `controlsDirectionalLight = false`.
+An 8-token record adds the authored Door
 index into `LevelDefinition.doors` (0-based). `-1` is explicit no-link.
 Omitted mode flags keep those legacy defaults. An 11-token record adds three
 strict `0`/`1` flags: Dynamic Box activation, Player activation, gameplay
-visibility. Invalid flag tokens are rejected. The writer always emits 11
-tokens. Both activation sources may be true (OR) or both false (never
-Active). `visibleInGameplay = 0` suppresses the Gameplay fill; Editor
-authoring still draws/selects the plate. The Door index is **not** a BodyID,
-pointer, or GUID. Out-of-range and non-integer links fail validation; they
-do not silently retarget another Door. Cardinality is one Pressure Plate →
-zero or one Door. Multiple plates may name the same Door. One plate cannot
-name multiple Doors.
+visibility. A 12-token record adds `controlsDirectionalLight` (`0`/`1`) so
+the plate may activate the singleton Level Directional Light. The field is
+independent of `linkedDoorIndex`; one plate may control its Door and the
+Directional Light together. Invalid flag tokens are rejected. The writer
+always emits 12 tokens. Both activation sources may be true (OR) or both
+false (never Active). `visibleInGameplay = 0` suppresses the Gameplay fill;
+Editor authoring still draws/selects the plate. The Door index is **not** a
+BodyID, pointer, or GUID. Out-of-range and non-integer links fail
+validation; they do not silently retarget another Door. Cardinality is one
+Pressure Plate → zero or one Door, plus an optional singleton Directional
+Light flag. Multiple plates may name the same Door. Multiple plates may
+control the same Directional Light (OR). One plate cannot name multiple
+Doors. There is no light index, receiver ID, or generic target list.
 
 `door` is a repeatable authored solid. Position is the **closed** world center.
 Size is extents; each axis finite and `>= kMinDoorExtent` (0.12). Open

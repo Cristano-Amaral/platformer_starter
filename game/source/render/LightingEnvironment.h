@@ -23,9 +23,12 @@ struct DirectionalLight
     core::Vec3 rayDirection{-0.42f, -1.0f, -0.38f};
     core::Vec3 color{1.0f, 0.96f, 0.88f};
     float intensity = 0.88f;
-    // Authored enabled. Effective enabled currently equals this value.
+    // Authored enabled. Effective enabled also considers transient Pressure
+    // Plate control (M85.2). These plate fields are runtime-only.
     bool authoredEnabled = true;
     bool shadowsEnabled = true;
+    bool hasLinkedPressurePlates = false;
+    bool anyLinkedPressurePlateActive = false;
 };
 
 struct DirectionalShadowConfig
@@ -100,6 +103,10 @@ inline constexpr int kMaxShadowMapResolution = 4096;
 LightingEnvironment MakeDefaultLightingEnvironment();
 LightingEnvironment ValidateLightingEnvironment(LightingEnvironment environment);
 LightingEnvironment MakeLightingEnvironmentFromAuthored(const world::LevelEnvironment& authored);
+void ApplyDirectionalLightActivation(
+    LightingEnvironment& environment,
+    bool hasLinkedPressurePlates,
+    bool anyLinkedPressurePlateActive);
 bool EffectiveDirectionalEnabled(const LightingEnvironment& environment);
 bool DirectionalShadowsAreActive(const LightingEnvironment& environment);
 core::Vec3 NormalizeDirectionalLight(core::Vec3 rayDirection);

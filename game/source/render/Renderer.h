@@ -139,6 +139,7 @@ struct DebugWorldOverlay
     core::Vec3 directionalLightAnchor{0.0f, 8.0f, 0.0f};
     core::Vec3 directionalLightRay{0.0f, -1.0f, 0.0f};
     bool directionalLightSelected = false;
+    float directionalLightScale = 1.0f;
     // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
     // authored, not a Jolt body, and never a Gameplay/Release world grid.
     int editorViewportGridLineCount = 0;

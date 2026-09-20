@@ -192,7 +192,8 @@ EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& 
 
 EditorPickingSet BuildPickingSet(
     const world::LevelDefinition& appliedLevel,
-    const EditorPickingWorldState& worldState)
+    const EditorPickingWorldState& worldState,
+    const DirectionalLightVisualization* directionalLightVisualization)
 {
     EditorPickingSet set{};
 
@@ -208,8 +209,8 @@ EditorPickingSet BuildPickingSet(
         set,
         EditorObjectKind::DirectionalLight,
         0,
-        kDirectionalLightAuthoringAnchor,
-        kDirectionalLightAuthoringPickSize,
+        DirectionalLightVisualizationAnchor(directionalLightVisualization),
+        DirectionalLightVisualizationPickExtents(directionalLightVisualization),
         0.0f);
     AddProxy(
         set,

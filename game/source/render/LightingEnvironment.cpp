@@ -1,5 +1,7 @@
 #include "render/LightingEnvironment.h"
 
+#include "world/DirectionalLightActivation.h"
+
 #include <cmath>
 
 namespace render
@@ -210,9 +212,22 @@ LightingEnvironment MakeLightingEnvironmentFromAuthored(const world::LevelEnviro
     return ValidateLightingEnvironment(environment);
 }
 
+void ApplyDirectionalLightActivation(
+    LightingEnvironment& environment,
+    bool hasLinkedPressurePlates,
+    bool anyLinkedPressurePlateActive)
+{
+    environment.directional.hasLinkedPressurePlates = hasLinkedPressurePlates;
+    environment.directional.anyLinkedPressurePlateActive = anyLinkedPressurePlateActive;
+}
+
 bool EffectiveDirectionalEnabled(const LightingEnvironment& environment)
 {
-    return environment.directional.authoredEnabled;
+    return world::AuthoredDirectionalLightIsEffectivelyEnabled(
+        environment.directional.authoredEnabled,
+        world::DirectionalLightActivation{
+            environment.directional.hasLinkedPressurePlates,
+            environment.directional.anyLinkedPressurePlateActive});
 }
 
 bool DirectionalShadowsAreActive(const LightingEnvironment& environment)
