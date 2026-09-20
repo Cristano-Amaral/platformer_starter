@@ -126,6 +126,8 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::Door:
     case EditorObjectKind::ItemPickup:
     case EditorObjectKind::StaticProp:
+    case EditorObjectKind::PointLight:
+    case EditorObjectKind::SpotLight:
         return true;
     default:
         return false;
@@ -148,6 +150,8 @@ int CategoryMaxCount(EditorObjectKind kind)
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::ItemPickup:
+    case EditorObjectKind::PointLight:
+    case EditorObjectKind::SpotLight:
         return static_cast<int>(world::kMaxLevelLines) - world::kLevelV1FixedRecordLineCount;
     default:
         return 0;
@@ -178,6 +182,10 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.itemPickups.size();
     case EditorObjectKind::StaticProp:
         return level.staticProps.size();
+    case EditorObjectKind::PointLight:
+        return level.pointLights.size();
+    case EditorObjectKind::SpotLight:
+        return level.spotLights.size();
     default:
         return 0;
     }
@@ -244,6 +252,12 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::StaticProp:
         pending.staticProps = true;
         break;
+    case EditorObjectKind::PointLight:
+        pending.pointLights = true;
+        break;
+    case EditorObjectKind::SpotLight:
+        pending.spotLights = true;
+        break;
     default:
         break;
     }
@@ -275,6 +289,10 @@ bool CategoryHasStructuralPending(
         return pending.itemPickups;
     case EditorObjectKind::StaticProp:
         return pending.staticProps;
+    case EditorObjectKind::PointLight:
+        return pending.pointLights;
+    case EditorObjectKind::SpotLight:
+        return pending.spotLights;
     default:
         return false;
     }
@@ -306,6 +324,10 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.itemPickups;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
+    case EditorObjectKind::PointLight:
+        return &map.pointLights;
+    case EditorObjectKind::SpotLight:
+        return &map.spotLights;
     default:
         return nullptr;
     }
@@ -335,6 +357,10 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.itemPickups;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
+    case EditorObjectKind::PointLight:
+        return &map.pointLights;
+    case EditorObjectKind::SpotLight:
+        return &map.spotLights;
     default:
         return nullptr;
     }
@@ -369,6 +395,8 @@ void ResetStructuralIndexMap(
     FillIdentity(map.doors, active.doors.size());
     FillIdentity(map.itemPickups, active.itemPickups.size());
     FillIdentity(map.staticProps, active.staticProps.size());
+    FillIdentity(map.pointLights, active.pointLights.size());
+    FillIdentity(map.spotLights, active.spotLights.size());
 }
 
 void EnsureStructuralIndexMap(
@@ -384,7 +412,9 @@ void EnsureStructuralIndexMap(
         && CategoryMapMatchesActive(map.pressurePlates, active.pressurePlates.size())
         && CategoryMapMatchesActive(map.doors, active.doors.size())
         && CategoryMapMatchesActive(map.itemPickups, active.itemPickups.size())
-        && CategoryMapMatchesActive(map.staticProps, active.staticProps.size()))
+        && CategoryMapMatchesActive(map.staticProps, active.staticProps.size())
+        && CategoryMapMatchesActive(map.pointLights, active.pointLights.size())
+        && CategoryMapMatchesActive(map.spotLights, active.spotLights.size()))
     {
         return;
     }
@@ -957,6 +987,58 @@ LifecycleEditResult AddStaticPropAt(
     return Ok({EditorObjectKind::StaticProp, workingCopy.staticProps.size() - 1});
 }
 
+LifecycleEditResult AddPointLightAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::PointLight))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    workingCopy.pointLights.push_back(
+        world::MakeDefaultPointLight(ApplyWorldCenter(worldCenter, {})));
+    return Ok({EditorObjectKind::PointLight, workingCopy.pointLights.size() - 1});
+}
+
+LifecycleEditResult AddSpotLightAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::SpotLight))
+    {
+        return Fail(LifecycleEditStatus::AtLimit);
+    }
+
+    workingCopy.spotLights.push_back(
+        world::MakeDefaultSpotLight(ApplyWorldCenter(worldCenter, {})));
+    return Ok({EditorObjectKind::SpotLight, workingCopy.spotLights.size() - 1});
+}
+
+LifecycleEditResult AddPointLight(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddPointLightAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedPointLightOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
+LifecycleEditResult AddSpotLight(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor)
+{
+    return AddSpotLightAt(
+        workingCopy,
+        ApplyPlacementAnchor(
+            placementAnchor,
+            kDefaultAddedSpotLightOffset,
+            workingCopy.initialSpawnVisualCenter.z));
+}
+
 LifecycleEditResult AddStaticProp(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor,
@@ -1062,6 +1144,20 @@ LifecycleEditResult DuplicateSelected(
         workingCopy.staticProps.push_back(copy);
         return Ok({EditorObjectKind::StaticProp, workingCopy.staticProps.size() - 1});
     }
+    case EditorObjectKind::PointLight:
+    {
+        world::PointLightSpec copy = workingCopy.pointLights[selection.index];
+        OffsetX(copy.position, kLifecycleDuplicateOffsetX);
+        workingCopy.pointLights.push_back(copy);
+        return Ok({EditorObjectKind::PointLight, workingCopy.pointLights.size() - 1});
+    }
+    case EditorObjectKind::SpotLight:
+    {
+        world::SpotLightSpec copy = workingCopy.spotLights[selection.index];
+        OffsetX(copy.position, kLifecycleDuplicateOffsetX);
+        workingCopy.spotLights.push_back(copy);
+        return Ok({EditorObjectKind::SpotLight, workingCopy.spotLights.size() - 1});
+    }
     default:
         break;
     }
@@ -1145,6 +1241,14 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::StaticProp:
         workingCopy.staticProps.erase(
             workingCopy.staticProps.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::PointLight:
+        workingCopy.pointLights.erase(
+            workingCopy.pointLights.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::SpotLight:
+        workingCopy.spotLights.erase(
+            workingCopy.spotLights.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     default:
         return Fail(LifecycleEditStatus::UnsupportedType, selection);

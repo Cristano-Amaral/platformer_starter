@@ -2282,6 +2282,82 @@ int main()
             "27. F2/Open roundtrip has no stale group selection");
     }
 
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddPointLight, true),
+            "Add Point Light request handled");
+        Expect(state.workingCopy.pointLights.size() == 1, "Add Point Light count +1");
+        Expect(active.pointLights.empty(), "active unchanged by Add Point Light");
+        Expect(
+            state.selection.kind == EditorObjectKind::PointLight && state.selection.index == 0,
+            "Add selects new Point Light");
+        Expect(state.modified, "Add Point Light sets Modified");
+        Expect(
+            HierarchyKindCount(state.workingCopy, EditorObjectKind::PointLight) == 1,
+            "hierarchy shows pending Point Light");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddSpotLight, true),
+            "Add Spot Light request handled");
+        Expect(state.workingCopy.spotLights.size() == 1, "Add Spot Light count +1");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Spot Light request handled");
+        Expect(state.workingCopy.spotLights.size() == 2, "Duplicate Spot Light count +1");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Spot Light request handled");
+        Expect(state.workingCopy.spotLights.size() == 1, "Delete remaps remaining Spot Light");
+        Expect(
+            editor::IsValidSelection(state.workingCopy, state.selection),
+            "selection after Delete is valid");
+
+        world::LevelDefinition applied = state.workingCopy;
+        Expect(world::LevelDefinitionHasRequiredAuthoredContent(applied),
+            "Apply validation accepts local lights");
+        SeedEditor(state, applied);
+        Expect(!state.modified, "after Apply, workingCopy matches active");
+        Expect(state.workingCopy.pointLights.size() == 1, "Apply promotes Point Light");
+        Expect(state.workingCopy.spotLights.size() == 1, "Apply promotes Spot Light");
+
+        const std::string saved = world::SerializeLevelText(applied);
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload local lights");
+        Expect(world::AuthoredLevelDataEqual(applied, reloaded.level),
+            "reload reconstructs authored local lights");
+
+        editor::LevelEditorState restart{};
+        SeedEditor(restart, applied);
+        Expect(restart.workingCopy.pointLights.size() == 1
+                && restart.workingCopy.spotLights.size() == 1,
+            "Restart uses current active authored local lights");
+
+        const world::LevelDefinition destination = MakeActiveLevel();
+        editor::LevelEditorState switched{};
+        SeedEditor(switched, destination);
+        Expect(switched.workingCopy.pointLights.empty() && switched.workingCopy.spotLights.empty(),
+            "Level transition does not leak source local lights");
+
+        editor::LevelEditorState playAgain{};
+        SeedEditor(playAgain, MakeActiveLevel());
+        Expect(playAgain.workingCopy.pointLights.empty() && playAgain.workingCopy.spotLights.empty(),
+            "Play Again / Main Menu starts without leftover local lights");
+
+        editor::LevelEditorState f2{};
+        SeedEditor(f2, applied);
+        SeedEditor(f2, applied);
+        Expect(f2.workingCopy.pointLights.size() == 1 && f2.workingCopy.spotLights.size() == 1,
+            "F2 re-seed does not duplicate local lights");
+        Expect(f2.selection.kind == EditorObjectKind::None, "F2 re-seed clears stale light selection");
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d authored lifecycle integration test(s) failed.\n", gFailures);

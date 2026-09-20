@@ -1,6 +1,7 @@
 #include "editor/EditorGizmo.h"
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/DirectionalLightAuthoring.h"
+#include "editor/LocalLightAuthoring.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorNudge.h"
@@ -134,6 +135,16 @@ int main()
         Expect(editor::IsGizmoSelection({EditorObjectKind::Door, 0}), "Door has gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::ItemPickup, 0}), "Item Pickup has Translate gizmo");
         Expect(editor::IsGizmoSelection({EditorObjectKind::StaticProp, 0}), "Static Prop has Translate gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::PointLight, 0}), "Point Light has Translate gizmo");
+        Expect(editor::IsGizmoSelection({EditorObjectKind::SpotLight, 0}), "Spot Light has Translate gizmo");
+        Expect(!editor::IsRotateSelection({EditorObjectKind::PointLight, 0}),
+            "Point Light Rotate has no lighting meaning");
+        Expect(editor::IsRotateSelection({EditorObjectKind::SpotLight, 0}),
+            "Spot Light Rotate edits authored direction");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::PointLight, 0}),
+            "Point Light Scale is unsupported (Range is Inspector-authored)");
+        Expect(!editor::IsScaleSelection({EditorObjectKind::SpotLight, 0}),
+            "Spot Light Scale is unsupported (Range is Inspector-authored)");
         Expect(!editor::IsGizmoSelection({EditorObjectKind::None, 0}), "none is not gizmo");
     }
 
@@ -3824,6 +3835,170 @@ int main()
         Expect(!Vec3Near(rotated, startRay, 0.01f), "Rotate still edits real ray direction");
         Expect(Vec3Near(visualization.anchor, {4.0f, 6.0f, -2.0f}),
             "Rotate does not move visualization anchor");
+    }
+
+    // ---- M85.3 Point/Spot Light gizmos ----
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        working.pointLights.push_back(world::MakeDefaultPointLight({1.13f, 2.0f, 0.0f}));
+        working.spotLights.push_back(world::MakeDefaultSpotLight({2.0f, 4.0f, 0.0f}));
+        const EditorSelection point{EditorObjectKind::PointLight, 0};
+        const EditorSelection spot{EditorObjectKind::SpotLight, 0};
+        Expect(editor::GetEditablePosition(working, point) != nullptr, "Point Light has an editable position");
+        Expect(editor::GetEditablePosition(working, spot) != nullptr, "Spot Light has an editable position");
+
+        const core::Vec3 snappedPoint = editor::ApplyAuthoredTransformSnap(
+            working.pointLights[0].position,
+            editor::EditorTransformMode::Translate,
+            EditorAxis::X,
+            true,
+            0.25f);
+        Expect(NearlyEqual(snappedPoint.x, 1.25f, 0.0001f), "Point Translate snapping uses M76 increments");
+        *editor::GetEditablePosition(working, point) = snappedPoint;
+        Expect(Vec3Near(working.pointLights[0].position, {1.25f, 2.0f, 0.0f}, 0.0001f),
+            "Point Translate edits the real illumination origin");
+
+        const core::Vec3 snappedSpot = editor::ApplyAuthoredTransformSnap(
+            working.spotLights[0].position,
+            editor::EditorTransformMode::Translate,
+            EditorAxis::X,
+            true,
+            0.5f);
+        Expect(NearlyEqual(snappedSpot.x, 2.0f, 0.0001f), "Spot Translate snapping uses M76 increments");
+        *editor::GetEditablePosition(working, spot) = {2.5f, 4.0f, 0.0f};
+        Expect(Vec3Near(working.spotLights[0].position, {2.5f, 4.0f, 0.0f}, 0.0001f),
+            "Spot Translate edits the real illumination origin");
+
+        const core::Vec3 startDir = working.spotLights[0].direction;
+        const core::Vec3 rotated = editor::RotateAuthoredSpotDirection(startDir, {1.0f, 0.0f, 0.0f}, 40.0f);
+        Expect(NearlyEqual(
+                std::sqrt(rotated.x * rotated.x + rotated.y * rotated.y + rotated.z * rotated.z),
+                1.0f),
+            "Spot Rotate result stays normalized");
+        Expect(!Vec3Near(rotated, startDir, 0.01f), "Spot Rotate edits real direction");
+        const core::Vec3 snappedRotation = editor::ApplyAuthoredTransformSnap(
+            {40.0f, 0.0f, 0.0f},
+            editor::EditorTransformMode::Rotate,
+            EditorAxis::X,
+            true,
+            15.0f);
+        Expect(NearlyEqual(snappedRotation.x, 45.0f, 0.0001f), "Spot Rotate snapping uses M76 increments");
+        working.spotLights[0].direction = editor::RotateAuthoredSpotDirection(
+            startDir, {1.0f, 0.0f, 0.0f}, snappedRotation.x);
+        Expect(world::SpotLightDirectionIsValid(working.spotLights[0].direction),
+            "snapped Spot direction remains valid");
+
+        const float startIntensity = working.pointLights[0].intensity;
+        const float startRange = working.pointLights[0].range;
+        Expect(!editor::IsScaleSelection(point) && !editor::IsScaleSelection(spot),
+            "Scale stays unsupported so intensity/range are Inspector-authored");
+        Expect(working.pointLights[0].intensity == startIntensity
+                && working.pointLights[0].range == startRange,
+            "unsupported Scale does not mutate Point intensity or range");
+
+        core::Vec3 boxCenter{};
+        core::Vec3 boxSize{};
+        Expect(
+            editor::GetGizmoPreviewBox(working, point, boxCenter, boxSize)
+                && Vec3Near(boxCenter, working.pointLights[0].position)
+                && Vec3Near(boxSize, editor::LocalLightPickExtents()),
+            "Point visualization/pick box follows authored position");
+        Expect(
+            editor::GetGizmoPreviewBox(working, spot, boxCenter, boxSize)
+                && Vec3Near(boxCenter, working.spotLights[0].position)
+                && Vec3Near(boxSize, editor::LocalLightPickExtents()),
+            "Spot visualization/pick box follows authored position, not the range volume");
+    }
+
+    {
+        world::LevelDefinition working = MakeStubLevel();
+        working.spotLights.push_back(world::MakeDefaultSpotLight({2.0f, 4.0f, 0.0f}));
+        working.pointLights.push_back(world::MakeDefaultPointLight({6.0f, 3.0f, 0.0f}));
+        const EditorSelection spot{EditorObjectKind::SpotLight, 0};
+        const EditorSelection point{EditorObjectKind::PointLight, 0};
+        const EditorSelection directional{EditorObjectKind::DirectionalLight, 0};
+        const EditorSelection environment{EditorObjectKind::Environment, 0};
+        const world::LevelDefinition active = working;
+        Expect(editor::IsRotateSelection(spot), "1. single ungrouped Spot Light is Rotate-capable");
+        Expect(editor::SelectionHasRotateOrientation(working, spot),
+            "1. Spot authored direction is a Rotate orientation");
+        Expect(editor::GetEditableRotation(working, spot) == nullptr,
+            "Spot Rotate does not invent Euler storage");
+        const render::CameraView spotView = MakeView({20.0f, 8.0f, 20.0f}, working.spotLights[0].position);
+        const editor::GizmoDrawRequest spotDraw =
+            editor::MakeRotateGizmoDrawRequest(spot, working, spotView, {});
+        Expect(spotDraw.visible, "2. Rotate gizmo resolves for a single Spot selection");
+        Expect(Vec3Near(spotDraw.origin, working.spotLights[0].position),
+            "2. Spot Rotate pivot is authored position");
+        Expect(
+            !Vec3Near(spotDraw.origin, editor::kDirectionalLightAuthoringAnchor),
+            "2. Spot Rotate does not use the Directional visualization anchor");
+
+        const core::Vec3 spotOrigin = working.spotLights[0].position;
+        const float spotLength = editor::GizmoWorldLength(spotView, spotOrigin);
+        const float unique = 0.70710678f;
+        const core::Vec3 xRing{
+            spotOrigin.x, spotOrigin.y + spotLength * unique, spotOrigin.z + spotLength * unique};
+        const core::Vec3 xSwept{
+            spotOrigin.x, spotOrigin.y - spotLength * unique, spotOrigin.z + spotLength * unique};
+        editor::GizmoInteractionState state{};
+        const core::Vec3 startDir = working.spotLights[0].direction;
+        const core::Vec3 startPos = working.spotLights[0].position;
+        const core::Vec3 startColor = working.spotLights[0].color;
+        const float startIntensity = working.spotLights[0].intensity;
+        const float startRange = working.spotLights[0].range;
+        const float startInner = working.spotLights[0].innerConeDegrees;
+        const float startOuter = working.spotLights[0].outerConeDegrees;
+        const bool startEnabled = working.spotLights[0].enabled;
+        Expect(
+            editor::UpdateRotateInteraction(
+                state, spot, working, spotView, RayThrough(spotView, xRing), false, false, true, true, false),
+            "3. individual Spot Rotate press starts");
+        Expect(state.dragging, "3. individual Spot Rotate drag is active");
+        Expect(
+            editor::UpdateRotateInteraction(
+                state, spot, working, spotView, RayThrough(spotView, xSwept), false, false, false, true, false),
+            "3. individual Spot Rotate drag updates direction");
+        Expect(!Vec3Near(working.spotLights[0].direction, startDir, 0.01f),
+            "3. individual Spot Rotate changes direction");
+        Expect(Vec3Near(working.spotLights[0].position, startPos),
+            "4. individual Spot Rotate does not change position");
+        Expect(world::SpotLightDirectionIsValid(working.spotLights[0].direction)
+                && Vec3Near(
+                    working.spotLights[0].direction,
+                    world::CanonicalSpotLightDirection(working.spotLights[0].direction)),
+            "5. individual Spot direction remains normalized");
+        Expect(Vec3Near(working.spotLights[0].color, startColor)
+                && working.spotLights[0].intensity == startIntensity
+                && working.spotLights[0].range == startRange
+                && working.spotLights[0].innerConeDegrees == startInner
+                && working.spotLights[0].outerConeDegrees == startOuter
+                && working.spotLights[0].enabled == startEnabled,
+            "individual Spot Rotate does not mutate non-direction fields");
+        Expect(editor::AuthoredGeometryDiffers(active, working, spot),
+            "6. individual Spot Rotate marks authored geometry changed");
+        Expect(!world::AuthoredLevelDataEqual(working, active),
+            "6. individual Spot Rotate is Dirty vs active");
+        editor::EndGizmoDrag(state);
+
+        Expect(!editor::IsRotateSelection(point), "15. Point Light alone remains Rotate-ineligible");
+        Expect(!editor::SelectionHasRotateOrientation(working, point),
+            "15. Point Light has no authored orientation");
+        Expect(
+            !editor::MakeRotateGizmoDrawRequest(point, working, spotView, {}).visible,
+            "15. Point Light has no Rotate gizmo");
+        Expect(editor::IsRotateSelection(directional)
+                && editor::SelectionHasRotateOrientation(working, directional),
+            "21. Directional Light individual Rotate remains eligible");
+        Expect(
+            editor::MakeRotateGizmoDrawRequest(directional, working, spotView, {}).visible,
+            "21. Directional Light Rotate gizmo remains visible");
+        Expect(!editor::IsRotateSelection(environment)
+                && !editor::SelectionHasRotateOrientation(working, environment),
+            "22. Environment remains Rotate-ineligible");
+        Expect(
+            !editor::MakeRotateGizmoDrawRequest(environment, working, spotView, {}).visible,
+            "22. Environment has no Rotate gizmo");
     }
 
     if (gFailures != 0)

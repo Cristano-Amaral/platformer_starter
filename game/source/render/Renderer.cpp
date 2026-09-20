@@ -1230,6 +1230,111 @@ void DrawDirectionalLightAuthoring(const DebugWorldOverlay& overlay)
     DrawSphere(tip, tipRadius, rayColor);
 }
 
+void DrawLocalLightAuthoring(const DebugWorldOverlay& overlay)
+{
+    if (!overlay.drawLocalLightAuthoring)
+    {
+        return;
+    }
+
+    auto orthonormal = [](core::Vec3 axis, core::Vec3& right, core::Vec3& up) {
+        core::Vec3 unit = axis;
+        const float lengthSq = unit.x * unit.x + unit.y * unit.y + unit.z * unit.z;
+        if (!(lengthSq > 1.0e-10f))
+        {
+            unit = {0.0f, -1.0f, 0.0f};
+        }
+        else
+        {
+            const float inv = 1.0f / std::sqrt(lengthSq);
+            unit = {unit.x * inv, unit.y * inv, unit.z * inv};
+        }
+        core::Vec3 helper = (std::fabs(unit.y) > 0.9f) ? core::Vec3{1.0f, 0.0f, 0.0f}
+                                                       : core::Vec3{0.0f, 1.0f, 0.0f};
+        right = {
+            helper.y * unit.z - helper.z * unit.y,
+            helper.z * unit.x - helper.x * unit.z,
+            helper.x * unit.y - helper.y * unit.x};
+        const float rightSq = right.x * right.x + right.y * right.y + right.z * right.z;
+        const float invRight = 1.0f / std::sqrt(rightSq > 1.0e-10f ? rightSq : 1.0f);
+        right = {right.x * invRight, right.y * invRight, right.z * invRight};
+        up = {
+            unit.y * right.z - unit.z * right.y,
+            unit.z * right.x - unit.x * right.z,
+            unit.x * right.y - unit.y * right.x};
+        return unit;
+    };
+
+    constexpr int kConeSegments = 12;
+    for (std::size_t index = 0; index < overlay.previewPointLights.size(); ++index)
+    {
+        const world::PointLightSpec& light = overlay.previewPointLights[index];
+        const bool selected = index == overlay.selectedPointLightIndex;
+        const Color fill = selected ? Color{255, 210, 96, 255} : Color{255, 176, 64, 220};
+        const Color wire = selected ? Color{255, 236, 150, 255} : Color{255, 196, 110, 255};
+        const Vector3 origin = ToRaylib(light.position);
+        DrawSphere(origin, selected ? 0.22f : 0.18f, fill);
+        DrawSphereWires(origin, selected ? 0.22f : 0.18f, 8, 8, wire);
+        const float range = world::ClampLocalLightRange(light.range);
+        DrawCircle3D(origin, range, Vector3{1.0f, 0.0f, 0.0f}, 90.0f, wire);
+        DrawCircle3D(origin, range, Vector3{0.0f, 1.0f, 0.0f}, 0.0f, wire);
+        DrawCircle3D(origin, range, Vector3{0.0f, 0.0f, 1.0f}, 90.0f, wire);
+    }
+
+    for (std::size_t index = 0; index < overlay.previewSpotLights.size(); ++index)
+    {
+        const world::SpotLightSpec& light = overlay.previewSpotLights[index];
+        const bool selected = index == overlay.selectedSpotLightIndex;
+        const Color fill = selected ? Color{120, 196, 255, 255} : Color{80, 160, 230, 220};
+        const Color wire = selected ? Color{180, 220, 255, 255} : Color{120, 186, 240, 255};
+        const Vector3 origin = ToRaylib(light.position);
+        DrawSphere(origin, selected ? 0.22f : 0.18f, fill);
+        DrawSphereWires(origin, selected ? 0.22f : 0.18f, 8, 8, wire);
+        core::Vec3 right{};
+        core::Vec3 up{};
+        const core::Vec3 axis = orthonormal(light.direction, right, up);
+        const float range = world::ClampLocalLightRange(light.range);
+        const Vector3 tip{
+            origin.x + axis.x * range,
+            origin.y + axis.y * range,
+            origin.z + axis.z * range};
+        DrawLine3D(origin, tip, wire);
+        const float outerRadians = light.outerConeDegrees * (3.14159265f / 180.0f);
+        const float innerRadians = light.innerConeDegrees * (3.14159265f / 180.0f);
+        const float outerRadius = range * std::tan(outerRadians);
+        const float innerRadius = range * std::tan(innerRadians);
+        Vector3 prevOuter{};
+        Vector3 prevInner{};
+        for (int segment = 0; segment <= kConeSegments; ++segment)
+        {
+            const float angle = (static_cast<float>(segment % kConeSegments) / static_cast<float>(kConeSegments))
+                * 6.2831853f;
+            const float cosine = std::cos(angle);
+            const float sine = std::sin(angle);
+            const Vector3 outer{
+                tip.x + right.x * cosine * outerRadius + up.x * sine * outerRadius,
+                tip.y + right.y * cosine * outerRadius + up.y * sine * outerRadius,
+                tip.z + right.z * cosine * outerRadius + up.z * sine * outerRadius};
+            const Vector3 inner{
+                tip.x + right.x * cosine * innerRadius + up.x * sine * innerRadius,
+                tip.y + right.y * cosine * innerRadius + up.y * sine * innerRadius,
+                tip.z + right.z * cosine * innerRadius + up.z * sine * innerRadius};
+            if (segment == 0 || segment == kConeSegments / 4 || segment == kConeSegments / 2
+                || segment == (3 * kConeSegments) / 4)
+            {
+                DrawLine3D(origin, outer, wire);
+            }
+            if (segment > 0)
+            {
+                DrawLine3D(prevOuter, outer, wire);
+                DrawLine3D(prevInner, inner, Color{wire.r, wire.g, wire.b, 140});
+            }
+            prevOuter = outer;
+            prevInner = inner;
+        }
+    }
+}
+
 void DrawWorldOverlay(const DebugWorldOverlay& overlay)
 {
     if (overlay.drawSpawnMarker
@@ -1579,6 +1684,7 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
         }
     }
     DrawDirectionalLightAuthoring(overlay);
+    DrawLocalLightAuthoring(overlay);
     DrawTranslationGizmo(overlay);
     DrawResizeGizmo(overlay);
     DrawRotateGizmo(overlay);
@@ -2290,6 +2396,10 @@ void Renderer::DrawWorld(
 
     LightingEnvironment lightingEnv = MakeLightingEnvironmentFromAuthored(
         overlay.usePreviewLighting ? overlay.previewLighting : level.environment);
+    ApplyAuthoredLocalLights(
+        lightingEnv,
+        overlay.usePreviewLighting ? overlay.previewPointLights : level.pointLights,
+        overlay.usePreviewLighting ? overlay.previewSpotLights : level.spotLights);
     if (!overlay.usePreviewLighting)
     {
         std::vector<std::uint8_t> plateActive(level.pressurePlates.size(), 0);

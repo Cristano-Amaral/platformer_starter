@@ -94,6 +94,12 @@ inline bool TryAuthoringGroupMemberKindFromSelection(
     case EditorObjectKind::StaticProp:
         outKind = world::AuthoringGroupMemberKind::StaticProp;
         return true;
+    case EditorObjectKind::PointLight:
+        outKind = world::AuthoringGroupMemberKind::PointLight;
+        return true;
+    case EditorObjectKind::SpotLight:
+        outKind = world::AuthoringGroupMemberKind::SpotLight;
+        return true;
     case EditorObjectKind::Environment:
     case EditorObjectKind::DirectionalLight:
     case EditorObjectKind::None:
@@ -137,6 +143,10 @@ inline EditorObjectKind EditorObjectKindFromAuthoringGroupMember(
         return EditorObjectKind::ItemPickup;
     case world::AuthoringGroupMemberKind::StaticProp:
         return EditorObjectKind::StaticProp;
+    case world::AuthoringGroupMemberKind::PointLight:
+        return EditorObjectKind::PointLight;
+    case world::AuthoringGroupMemberKind::SpotLight:
+        return EditorObjectKind::SpotLight;
     }
     return EditorObjectKind::None;
 }

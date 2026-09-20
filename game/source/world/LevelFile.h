@@ -22,8 +22,9 @@ inline constexpr std::size_t kMaxLevelLineLength = 512;
 inline constexpr std::size_t kMaxLevelLines = 256;
 // header + id + spawn + kill_plane + ground + 3 support indices + 2 slopes +
 // moving_platform + camera + environment + directional_light. Repeatable
-// records are counted separately. Environment records are optional on parse
-// (old Levels) and always emitted by the writer.
+// records (including point_light / spot_light) are counted separately.
+// Environment records are optional on parse (old Levels) and always emitted
+// by the writer. Local-light records are optional and omitted when empty.
 inline constexpr int kLevelV1FixedRecordLineCount = 14;
 
 inline int CountLevelV1RecordLines(const LevelDefinition& level)
@@ -37,6 +38,8 @@ inline int CountLevelV1RecordLines(const LevelDefinition& level)
         + static_cast<int>(level.doors.size())
         + static_cast<int>(level.itemPickups.size())
         + static_cast<int>(level.staticProps.size())
+        + static_cast<int>(level.pointLights.size())
+        + static_cast<int>(level.spotLights.size())
         + static_cast<int>(level.authoringGroups.size());
 }
 

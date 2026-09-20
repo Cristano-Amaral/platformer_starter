@@ -39,6 +39,8 @@ inline constexpr core::Vec3 kDefaultAddedPressurePlateOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedDoorOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedItemPickupOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultAddedStaticPropOffset{0.0f, 0.0f, 0.0f};
+inline constexpr core::Vec3 kDefaultAddedPointLightOffset{0.0f, 2.0f, 0.0f};
+inline constexpr core::Vec3 kDefaultAddedSpotLightOffset{0.0f, 3.0f, 0.0f};
 
 struct CategoryStructuralPending
 {
@@ -52,6 +54,8 @@ struct CategoryStructuralPending
     bool doors = false;
     bool itemPickups = false;
     bool staticProps = false;
+    bool pointLights = false;
+    bool spotLights = false;
 };
 
 inline void ClearCategoryStructuralPending(CategoryStructuralPending& pending)
@@ -80,6 +84,8 @@ struct StructuralIndexMap
     CategoryIndexMap doors;
     CategoryIndexMap itemPickups;
     CategoryIndexMap staticProps;
+    CategoryIndexMap pointLights;
+    CategoryIndexMap spotLights;
 };
 
 struct PendingDeleteVisuals
@@ -104,6 +110,10 @@ struct PendingDeleteVisuals
     std::vector<world::ItemPickupSpec> itemPickups;
     std::vector<int> staticPropIndices;
     std::vector<world::StaticPropSpec> staticProps;
+    std::vector<int> pointLightIndices;
+    std::vector<world::PointLightSpec> pointLights;
+    std::vector<int> spotLightIndices;
+    std::vector<world::SpotLightSpec> spotLights;
 };
 
 // Tiny editor visual mode. Not a render-state / material architecture.
@@ -298,6 +308,18 @@ LifecycleEditResult AddStaticPropAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter,
     std::string_view modelIdentity);
+LifecycleEditResult AddPointLight(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor);
+LifecycleEditResult AddPointLightAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
+LifecycleEditResult AddSpotLight(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 placementAnchor);
+LifecycleEditResult AddSpotLightAt(
+    world::LevelDefinition& workingCopy,
+    core::Vec3 worldCenter);
 
 inline const char* CategoryCapacityReason(EditorObjectKind kind)
 {
@@ -319,6 +341,9 @@ inline const char* CategoryCapacityReason(EditorObjectKind kind)
     case EditorObjectKind::ItemPickup:
         return "Level file record limit reached.";
     case EditorObjectKind::StaticProp:
+        return "Level file record limit reached.";
+    case EditorObjectKind::PointLight:
+    case EditorObjectKind::SpotLight:
         return "Level file record limit reached.";
     default:
         return "Technical capacity reached.";

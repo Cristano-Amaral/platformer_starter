@@ -1,5 +1,6 @@
 #include "render/LightingEnvironment.h"
 #include "world/DirectionalLightActivation.h"
+#include "world/LocalLight.h"
 #include "world/PressurePlate.h"
 
 #include <cmath>
@@ -259,6 +260,18 @@ int main()
         {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 90.0f);
     Expect(NearlyEqual(Length(rotated), 1.0f), "rotated ray stays normalized");
     Expect(NearlyEqual(rotated.y, 0.0f, 0.05f), "90 deg around X moves off -Y");
+
+    {
+        render::LightingEnvironment env = render::MakeDefaultLightingEnvironment();
+        const core::Vec3 ray = env.directional.rayDirection;
+        std::vector<world::PointLightSpec> points(9, world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        points[8].enabled = false;
+        render::ApplyAuthoredLocalLights(env, points, {});
+        Expect(env.localLights.count == 8, "LightingEnvironment packs at most 8 enabled lights");
+        Expect(VecNear(env.directional.rayDirection, ray),
+            "packing local lights does not mutate Directional ray");
+        Expect(env.directional.shadowsEnabled, "packing local lights does not disable shadows");
+    }
 
     if (gFailures != 0)
     {

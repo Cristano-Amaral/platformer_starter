@@ -133,6 +133,8 @@ struct DebugWorldOverlay
     // unrelated authored geometry. Gameplay/Release leave this false.
     bool usePreviewLighting = false;
     world::LevelEnvironment previewLighting{};
+    std::vector<world::PointLightSpec> previewPointLights{};
+    std::vector<world::SpotLightSpec> previewSpotLights{};
     // Development-only Directional Light authoring visualization. Anchor is
     // not a lighting position/range.
     bool drawDirectionalLightAuthoring = false;
@@ -140,6 +142,9 @@ struct DebugWorldOverlay
     core::Vec3 directionalLightRay{0.0f, -1.0f, 0.0f};
     bool directionalLightSelected = false;
     float directionalLightScale = 1.0f;
+    bool drawLocalLightAuthoring = false;
+    std::size_t selectedPointLightIndex = static_cast<std::size_t>(-1);
+    std::size_t selectedSpotLightIndex = static_cast<std::size_t>(-1);
     // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
     // authored, not a Jolt body, and never a Gameplay/Release world grid.
     int editorViewportGridLineCount = 0;

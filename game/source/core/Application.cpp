@@ -1836,7 +1836,18 @@ int Application::Run()
 
             overlay.usePreviewLighting = true;
             overlay.previewLighting = levelEditorState.workingCopy.environment;
+            overlay.previewPointLights = levelEditorState.workingCopy.pointLights;
+            overlay.previewSpotLights = levelEditorState.workingCopy.spotLights;
             overlay.drawDirectionalLightAuthoring = true;
+            overlay.drawLocalLightAuthoring = true;
+            overlay.selectedPointLightIndex =
+                levelEditorState.selection.kind == editor::EditorObjectKind::PointLight
+                ? levelEditorState.selection.index
+                : static_cast<std::size_t>(-1);
+            overlay.selectedSpotLightIndex =
+                levelEditorState.selection.kind == editor::EditorObjectKind::SpotLight
+                ? levelEditorState.selection.index
+                : static_cast<std::size_t>(-1);
             editor::CanonicalizeDirectionalLightVisualization(
                 levelEditorState.directionalLightVisualization);
             overlay.directionalLightAnchor = editor::DirectionalLightVisualizationAnchor(

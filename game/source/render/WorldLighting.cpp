@@ -1,6 +1,7 @@
 #include "render/WorldLighting.h"
 
 #include "platform/RuntimePaths.h"
+#include "render/LocalLights.h"
 
 #include "raymath.h"
 #include "rlgl.h"
@@ -142,6 +143,11 @@ struct WorldLightingResources::GpuState
     int locShadowMap = -1;
     int locShadowBias = -1;
     int locShadowMapResolution = -1;
+    int locLocalLightCount = -1;
+    int locLocalLightPosRange = -1;
+    int locLocalLightColorIntensity = -1;
+    int locLocalLightDirType = -1;
+    int locLocalLightConeCos = -1;
     int shadowResolution = 0;
     std::size_t shaderLoadCount = 0;
     std::size_t shadowMapCreateCount = 0;
@@ -340,6 +346,11 @@ void WorldLightingResources::Load()
     gpu->locShadowMap = GetShaderLocation(gpu->lit, "shadowMap");
     gpu->locShadowBias = GetShaderLocation(gpu->lit, "shadowBias");
     gpu->locShadowMapResolution = GetShaderLocation(gpu->lit, "shadowMapResolution");
+    gpu->locLocalLightCount = GetShaderLocation(gpu->lit, "localLightCount");
+    gpu->locLocalLightPosRange = GetShaderLocation(gpu->lit, "localLightPosRange");
+    gpu->locLocalLightColorIntensity = GetShaderLocation(gpu->lit, "localLightColorIntensity");
+    gpu->locLocalLightDirType = GetShaderLocation(gpu->lit, "localLightDirType");
+    gpu->locLocalLightConeCos = GetShaderLocation(gpu->lit, "localLightConeCos");
 
     gpu->shadowResolution = environment.shadows.mapResolution;
     gpu->shadowMap = LoadShadowMap(gpu->shadowResolution);
@@ -504,6 +515,71 @@ void WorldLightingResources::BindLitPass(const LightingEnvironment& environment)
     {
         SetShaderValue(gpu->lit, gpu->locShadowMap, &shadowSlot, SHADER_UNIFORM_INT);
     }
+
+    float posRange[kMaxActiveLocalLights * 4]{};
+    float colorIntensity[kMaxActiveLocalLights * 4]{};
+    float dirType[kMaxActiveLocalLights * 4]{};
+    float coneCos[kMaxActiveLocalLights * 4]{};
+    int localCount = validated.localLights.count;
+    if (localCount < 0)
+    {
+        localCount = 0;
+    }
+    if (localCount > kMaxActiveLocalLights)
+    {
+        localCount = kMaxActiveLocalLights;
+    }
+    for (int index = 0; index < kMaxActiveLocalLights; ++index)
+    {
+        const PackedLocalLight& light = validated.localLights.lights[static_cast<std::size_t>(index)];
+        const int base = index * 4;
+        if (index < localCount && (light.type == kLocalLightTypePoint || light.type == kLocalLightTypeSpot))
+        {
+            posRange[base + 0] = light.position.x;
+            posRange[base + 1] = light.position.y;
+            posRange[base + 2] = light.position.z;
+            posRange[base + 3] = light.range;
+            colorIntensity[base + 0] = light.color.x;
+            colorIntensity[base + 1] = light.color.y;
+            colorIntensity[base + 2] = light.color.z;
+            colorIntensity[base + 3] = light.intensity;
+            dirType[base + 0] = light.direction.x;
+            dirType[base + 1] = light.direction.y;
+            dirType[base + 2] = light.direction.z;
+            dirType[base + 3] = static_cast<float>(light.type);
+            coneCos[base + 0] = light.innerCos;
+            coneCos[base + 1] = light.outerCos;
+        }
+    }
+    if (gpu->locLocalLightCount >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locLocalLightCount, &localCount, SHADER_UNIFORM_INT);
+    }
+    if (gpu->locLocalLightPosRange >= 0)
+    {
+        SetShaderValueV(
+            gpu->lit, gpu->locLocalLightPosRange, posRange, SHADER_UNIFORM_VEC4, kMaxActiveLocalLights);
+    }
+    if (gpu->locLocalLightColorIntensity >= 0)
+    {
+        SetShaderValueV(
+            gpu->lit,
+            gpu->locLocalLightColorIntensity,
+            colorIntensity,
+            SHADER_UNIFORM_VEC4,
+            kMaxActiveLocalLights);
+    }
+    if (gpu->locLocalLightDirType >= 0)
+    {
+        SetShaderValueV(
+            gpu->lit, gpu->locLocalLightDirType, dirType, SHADER_UNIFORM_VEC4, kMaxActiveLocalLights);
+    }
+    if (gpu->locLocalLightConeCos >= 0)
+    {
+        SetShaderValueV(
+            gpu->lit, gpu->locLocalLightConeCos, coneCos, SHADER_UNIFORM_VEC4, kMaxActiveLocalLights);
+    }
+
     rlActiveTextureSlot(1);
     rlEnableTexture(gpu->shadowMap.depth.id);
     gpu->litPassActive = true;

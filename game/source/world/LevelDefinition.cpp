@@ -53,6 +53,20 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     {
         return false;
     }
+    for (const PointLightSpec& light : level.pointLights)
+    {
+        if (!PointLightIsValid(light))
+        {
+            return false;
+        }
+    }
+    for (const SpotLightSpec& light : level.spotLights)
+    {
+        if (!SpotLightIsValid(light))
+        {
+            return false;
+        }
+    }
     if (!std::isfinite(level.movingPlatform.pathMinX) || !std::isfinite(level.movingPlatform.pathMaxX)
         || !std::isfinite(level.movingPlatform.speed) || !std::isfinite(level.movingPlatform.centerY)
         || !std::isfinite(level.movingPlatform.centerZ) || !std::isfinite(level.movingPlatform.startX)
@@ -202,6 +216,10 @@ bool AuthoringGroupMemberIsValid(const LevelDefinition& level, AuthoringGroupMem
         return member.index < level.itemPickups.size();
     case AuthoringGroupMemberKind::StaticProp:
         return member.index < level.staticProps.size();
+    case AuthoringGroupMemberKind::PointLight:
+        return member.index < level.pointLights.size();
+    case AuthoringGroupMemberKind::SpotLight:
+        return member.index < level.spotLights.size();
     }
     return false;
 }
@@ -311,6 +329,8 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.doors.size() != b.doors.size()
         || a.itemPickups.size() != b.itemPickups.size()
         || a.staticProps.size() != b.staticProps.size()
+        || a.pointLights.size() != b.pointLights.size()
+        || a.spotLights.size() != b.spotLights.size()
         || a.authoringGroups.size() != b.authoringGroups.size())
     {
         return false;
@@ -435,6 +455,20 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || !Vec3Equal(a.staticProps[index].position, b.staticProps[index].position)
             || !Vec3Equal(a.staticProps[index].rotationDegrees, b.staticProps[index].rotationDegrees)
             || !Vec3Equal(a.staticProps[index].scale, b.staticProps[index].scale))
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.pointLights.size(); ++index)
+    {
+        if (!PointLightEqual(a.pointLights[index], b.pointLights[index]))
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.spotLights.size(); ++index)
+    {
+        if (!SpotLightEqual(a.spotLights[index], b.spotLights[index]))
         {
             return false;
         }

@@ -124,7 +124,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 24> allowed{
+    static constexpr std::array<std::string_view, 26> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -148,7 +148,9 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "authoring_group",
         "camera",
         "environment",
-        "directional_light"};
+        "directional_light",
+        "point_light",
+        "spot_light"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -2016,6 +2018,183 @@ int main()
             Expect(
                 !world::AuthoredLevelDataEqual(dirtyProbe, missingEnvironment.level),
                 "ambient intensity edit is a semantic authored change");
+
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 2 3 4 1 0.5 0.25 1.5 8 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded,
+                "valid point_light");
+            const world::ParseLevelFileResult onePoint = world::ParseLevelText(
+                canonical + "point_light 2 3 4 1 0.5 0.25 1.5 8 1\n");
+            Expect(onePoint.level.pointLights.size() == 1, "one point_light count");
+            Expect(
+                onePoint.level.pointLights[0].position.x == 2.0f
+                    && onePoint.level.pointLights[0].enabled,
+                "point_light fields");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "point_light 0 2 0 1 1 1 1 8 1\n"
+                      "point_light 4 2 0 0.2 0.4 1 2 6 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded
+                    && world::ParseLevelText(
+                           canonical
+                           + "point_light 0 2 0 1 1 1 1 8 1\n"
+                             "point_light 4 2 0 0.2 0.4 1 2 6 0\n")
+                           .level.pointLights.size()
+                        == 2,
+                "multiple point_light records");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 20 35 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded,
+                "valid spot_light");
+            const world::ParseLevelFileResult oneSpot = world::ParseLevelText(
+                canonical + "spot_light 1 4 0 0 -2 0 1 1 1 1.5 8 20 35 1\n");
+            Expect(oneSpot.status == world::LoadLevelFileStatus::Loaded, "spot direction loads");
+            Expect(
+                oneSpot.level.spotLights.size() == 1
+                    && oneSpot.level.spotLights[0].direction.y == -1.0f,
+                "spot direction is normalized");
+            Expect(
+                world::ParseLevelText(
+                    canonical
+                    + "spot_light 0 4 0 0 -1 0 1 1 1 1 8 15 30 1\n"
+                      "spot_light 6 4 0 1 0 0 1 0.8 0.6 2 10 10 25 0\n")
+                    .level.spotLights.size()
+                    == 2,
+                "multiple spot_light records");
+            const world::ParseLevelFileResult mixedLights = world::ParseLevelText(
+                canonical
+                + "point_light 0 2 0 1 1 1 1 8 1\n"
+                  "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 20 35 1\n");
+            Expect(
+                mixedLights.status == world::LoadLevelFileStatus::Loaded
+                    && mixedLights.level.pointLights.size() == 1
+                    && mixedLights.level.spotLights.size() == 1,
+                "mixed point/spot lights");
+            const std::string mixedText = world::SerializeLevelText(mixedLights.level);
+            Expect(CountRecords(mixedText, "point_light") == 1, "writer point_light count");
+            Expect(CountRecords(mixedText, "spot_light") == 1, "writer spot_light count");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    mixedLights.level, world::ParseLevelText(mixedText).level),
+                "local light writer roundtrip");
+            Expect(
+                missingEnvironment.level.pointLights.empty()
+                    && missingEnvironment.level.spotLights.empty(),
+                "old Levels without local lights remain valid");
+            Expect(
+                world::ParseLevelText(canonical + "point_light 0 2 0 1 1 1 1 8\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "short point_light token count is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 20 35\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "short spot_light token count is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 2 0 1 1 1 1 8 true\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "invalid point_light bool");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 nan 0 1 1 1 1 8 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-finite point_light is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 2 0 1 1 1 -1 8 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative intensity is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 2 0 1 1 1 1 0 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero range is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 0 0 1 1 1 1.5 8 20 35 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero spot direction is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 35 20 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "inner >= outer cone is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 -1 35 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "negative inner cone is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 20 120 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "outer cone above bound is invalid");
+            world::LevelDefinition defaultsProbe = missingEnvironment.level;
+            defaultsProbe.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+            defaultsProbe.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+            Expect(world::PointLightIsValid(defaultsProbe.pointLights[0]), "default point is valid");
+            Expect(world::SpotLightIsValid(defaultsProbe.spotLights[0]), "default spot is valid");
+            Expect(
+                world::ParseLevelText(world::SerializeLevelText(defaultsProbe)).status
+                    == world::LoadLevelFileStatus::Loaded,
+                "default local lights serialize/parse");
+            Expect(
+                world::CountLevelV1RecordLines(defaultsProbe)
+                    == world::CountLevelV1RecordLines(missingEnvironment.level) + 2,
+                "local lights count toward Level v1 line constraints");
+            Expect(
+                world::AuthoredLevelDataEqual(defaultsProbe, defaultsProbe),
+                "Inspector no-op local-light compare is equal");
+            world::LevelDefinition dirtyLights = defaultsProbe;
+            dirtyLights.pointLights[0].intensity = 2.0f;
+            Expect(
+                !world::AuthoredLevelDataEqual(defaultsProbe, dirtyLights),
+                "Inspector semantic intensity edit is Dirty");
+            dirtyLights = defaultsProbe;
+            dirtyLights.spotLights[0].innerConeDegrees = 18.0f;
+            Expect(
+                !world::AuthoredLevelDataEqual(defaultsProbe, dirtyLights),
+                "Inspector semantic cone edit is Dirty");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 2 0 1 1 1 1 8 1 extra\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "extra point_light tokens are invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 20 35 1 extra\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "extra spot_light tokens are invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 2 0 1 1 1 5 8 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "point intensity above bound is invalid");
+            Expect(
+                world::ParseLevelText(
+                    canonical + "point_light 0 2 0 1.1 1 1 1 8 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "point color above 1 is invalid");
             Expect(
                 world::ParseLevelText(
                     canonical + "static_prop 0 1 0 0 0 0 1 1 1 models/missing_not_on_disk.glb\n")
@@ -2113,19 +2292,55 @@ int main()
             propB.position.x = 3.0f;
             grouped.staticProps.push_back(propA);
             grouped.staticProps.push_back(propB);
+            world::StaticPropSpec propC = propA;
+            propC.position.x = 5.0f;
+            world::StaticPropSpec propD = propA;
+            propD.position.x = 7.0f;
+            grouped.staticProps.push_back(propC);
+            grouped.staticProps.push_back(propD);
             world::AuthoringGroup group{};
             group.name = "Group_01";
             group.members.push_back({world::AuthoringGroupMemberKind::StaticProp, 0});
             group.members.push_back({world::AuthoringGroupMemberKind::StaticProp, 1});
             grouped.authoringGroups.push_back(group);
+            grouped.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 3.0f, 0.0f}));
+            grouped.spotLights.push_back(world::MakeDefaultSpotLight({2.0f, 5.0f, 0.0f}));
+            world::AuthoringGroup lamp{};
+            lamp.name = "Lamp_01";
+            lamp.members.push_back({world::AuthoringGroupMemberKind::StaticProp, 2});
+            lamp.members.push_back({world::AuthoringGroupMemberKind::SpotLight, 0});
+            grouped.authoringGroups.push_back(lamp);
+            world::AuthoringGroup wallLamp{};
+            wallLamp.name = "Lamp_02";
+            wallLamp.members.push_back({world::AuthoringGroupMemberKind::StaticProp, 3});
+            wallLamp.members.push_back({world::AuthoringGroupMemberKind::PointLight, 0});
+            grouped.authoringGroups.push_back(wallLamp);
             const std::string groupedText = world::SerializeLevelText(grouped);
-            Expect(CountRecords(groupedText, "authoring_group") == 1, "writer one authoring_group");
+            Expect(CountRecords(groupedText, "authoring_group") == 3, "writer three authoring_groups");
+            Expect(groupedText.find("authoring_group Lamp_01 static_prop 2 spot_light 0")
+                    != std::string::npos,
+                "writer emits spot_light group member token");
+            Expect(groupedText.find("authoring_group Lamp_02 static_prop 3 point_light 0")
+                    != std::string::npos,
+                "writer emits point_light group member token");
             Expect(OnlyAuthoredKeywords(groupedText), "authoring_group is an authored keyword");
             const world::ParseLevelFileResult groupedParsed = world::ParseLevelText(groupedText);
             Expect(groupedParsed.status == world::LoadLevelFileStatus::Loaded,
                 "authoring_group round trip loads");
             Expect(world::AuthoredLevelDataEqual(grouped, groupedParsed.level),
-                "authoring_group round trip equality");
+                "authoring_group round trip equality including local lights");
+            std::string invalidPointIndex = groupedText;
+            const std::string goodLamp02 = "authoring_group Lamp_02 static_prop 3 point_light 0\n";
+            const std::string badLamp02 = "authoring_group Lamp_02 static_prop 3 point_light 9\n";
+            const std::size_t lamp02 = invalidPointIndex.find(goodLamp02);
+            Expect(lamp02 != std::string::npos, "Lamp_02 group line exists");
+            if (lamp02 != std::string::npos)
+            {
+                invalidPointIndex.replace(lamp02, goodLamp02.size(), badLamp02);
+            }
+            Expect(
+                world::ParseLevelText(invalidPointIndex).status == world::LoadLevelFileStatus::Invalid,
+                "out-of-range point_light group index rejected");
             Expect(
                 world::ParseLevelText(
                     canonical + "authoring_group Group_01 static_prop 0\n")

@@ -1,8 +1,10 @@
 #include "render/LightingEnvironment.h"
 
 #include "world/DirectionalLightActivation.h"
+#include "world/LocalLight.h"
 
 #include <cmath>
+#include <vector>
 
 namespace render
 {
@@ -210,6 +212,14 @@ LightingEnvironment MakeLightingEnvironmentFromAuthored(const world::LevelEnviro
     environment.directional.intensity = authored.directionalIntensity;
     environment.directional.shadowsEnabled = authored.directionalShadowsEnabled;
     return ValidateLightingEnvironment(environment);
+}
+
+void ApplyAuthoredLocalLights(
+    LightingEnvironment& environment,
+    const std::vector<world::PointLightSpec>& pointLights,
+    const std::vector<world::SpotLightSpec>& spotLights)
+{
+    environment.localLights = PackAuthoredLocalLights(pointLights, spotLights);
 }
 
 void ApplyDirectionalLightActivation(

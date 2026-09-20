@@ -1,5 +1,6 @@
 #include "editor/AuthoringGroups.h"
 #include "editor/AuthoredObjectLifecycle.h"
+#include "editor/EditorGizmo.h"
 #include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 #include "editor/EditorHierarchy.h"
@@ -10,7 +11,9 @@
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/LevelWriter.h"
+#include "world/LocalLight.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -94,6 +97,46 @@ bool Vec3Equal(core::Vec3 a, core::Vec3 b)
 {
     return a.x == b.x && a.y == b.y && a.z == b.z;
 }
+
+bool NearlyEqual(float a, float b, float epsilon = 0.0001f)
+{
+    return std::fabs(a - b) <= epsilon;
+}
+
+bool NearlyEqualVec(core::Vec3 a, core::Vec3 b, float epsilon = 0.0001f)
+{
+    return NearlyEqual(a.x, b.x, epsilon) && NearlyEqual(a.y, b.y, epsilon)
+        && NearlyEqual(a.z, b.z, epsilon);
+}
+
+render::CameraView MakeEditorView(core::Vec3 position, core::Vec3 target)
+{
+    render::CameraView view{};
+    view.position = position;
+    view.target = target;
+    view.up = {0.0f, 1.0f, 0.0f};
+    view.fieldOfViewY = 60.0f;
+    return view;
+}
+
+editor::Ray3 RayThroughView(const render::CameraView& view, core::Vec3 worldPoint)
+{
+    editor::Ray3 ray{};
+    ray.origin = view.position;
+    ray.direction = editor::NormalizeOr(
+        {worldPoint.x - view.position.x,
+         worldPoint.y - view.position.y,
+         worldPoint.z - view.position.z},
+        {0.0f, 0.0f, -1.0f});
+    return ray;
+}
+
+world::SpotLightSpec MakeSpot(core::Vec3 position, core::Vec3 direction)
+{
+    world::SpotLightSpec light = world::MakeDefaultSpotLight(position);
+    light.direction = world::CanonicalSpotLightDirection(direction);
+    return light;
+}
 }
 
 int main()
@@ -153,6 +196,36 @@ int main()
             !editor::CanDeleteSelected(
                 true, working, {EditorObjectKind::DirectionalLight, 0}, false),
             "Directional Light cannot Delete");
+        Expect(
+            !editor::SelectionCanJoinAuthoringGroup(
+                working, {EditorObjectKind::Environment, 0}),
+            "Environment remains ungroupable");
+        Expect(
+            !editor::SelectionCanJoinAuthoringGroup(
+                working, {EditorObjectKind::DirectionalLight, 0}),
+            "Directional Light remains ungroupable");
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        working.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+        Expect(
+            editor::SelectionCanJoinAuthoringGroup(
+                working, {EditorObjectKind::PointLight, 0}),
+            "1. Point Light is a valid Authoring Group member");
+        Expect(
+            editor::SelectionCanJoinAuthoringGroup(
+                working, {EditorObjectKind::SpotLight, 0}),
+            "2. Spot Light is a valid Authoring Group member");
+        Expect(
+            editor::CanCreateAuthoringGroup(
+                working,
+                {EditorObjectKind::StaticProp, 0},
+                {{EditorObjectKind::PointLight, 0}}),
+            "3. Static Prop + Point Light can Group Selected");
+        Expect(
+            editor::CanCreateAuthoringGroup(
+                working,
+                {EditorObjectKind::StaticProp, 0},
+                {{EditorObjectKind::SpotLight, 0}}),
+            "4. Static Prop + Spot Light can Group Selected");
     }
 
     {
@@ -913,6 +986,653 @@ int main()
         Expect(editor::FindHierarchyMemberRow(remapped, {EditorObjectKind::StaticProp, 0}) != nullptr
                 && editor::FindHierarchyMemberRow(remapped, {EditorObjectKind::StaticProp, 2}) != nullptr,
             "23. remapped members remain identifiable");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({1.0f, 3.0f, 0.0f}));
+        working.pointLights[0].color = {0.2f, 0.4f, 0.6f};
+        working.pointLights[0].intensity = 2.25f;
+        working.pointLights[0].range = 12.0f;
+        working.pointLights[0].enabled = false;
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 0},
+            {{EditorObjectKind::PointLight, 0}});
+        Expect(working.authoringGroups[0].members[0].kind
+                == world::AuthoringGroupMemberKind::StaticProp,
+            "fixture group PRIMARY is Static Prop");
+        Expect(working.authoringGroups[0].members[1].kind
+                == world::AuthoringGroupMemberKind::PointLight,
+            "fixture group stores point_light member kind");
+        const std::string text = world::SerializeLevelText(working);
+        Expect(text.find("authoring_group Group_01 static_prop 0 point_light 0") != std::string::npos,
+            "5. writer emits point_light typed member token");
+        const world::ParseLevelFileResult parsed = world::ParseLevelText(text);
+        Expect(parsed.status == world::LoadLevelFileStatus::Loaded, "5. point member roundtrip loads");
+        Expect(world::AuthoredLevelDataEqual(working, parsed.level),
+            "5. group writer/parser roundtrip preserves Point member");
+        std::string invalidPoint = text;
+        const std::string goodPoint = "authoring_group Group_01 static_prop 0 point_light 0\n";
+        const std::string badPoint = "authoring_group Group_01 static_prop 0 point_light 1\n";
+        const std::size_t pointLine = invalidPoint.find(goodPoint);
+        Expect(pointLine != std::string::npos, "7. serialized point group line exists");
+        if (pointLine != std::string::npos)
+        {
+            invalidPoint.replace(pointLine, goodPoint.size(), badPoint);
+        }
+        Expect(world::ParseLevelText(invalidPoint).status == world::LoadLevelFileStatus::Invalid,
+            "7. invalid Point Light group index is rejected");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.spotLights.push_back(MakeSpot({3.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        working.spotLights[0].color = {0.9f, 0.1f, 0.2f};
+        working.spotLights[0].intensity = 3.0f;
+        working.spotLights[0].range = 16.0f;
+        working.spotLights[0].innerConeDegrees = 10.0f;
+        working.spotLights[0].outerConeDegrees = 25.0f;
+        working.spotLights[0].enabled = false;
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 1},
+            {{EditorObjectKind::SpotLight, 0}});
+        Expect(working.authoringGroups[0].members[1].kind
+                == world::AuthoringGroupMemberKind::SpotLight,
+            "fixture group stores spot_light member kind");
+        const std::string text = world::SerializeLevelText(working);
+        Expect(text.find("authoring_group Group_01 static_prop 1 spot_light 0") != std::string::npos,
+            "6. writer emits spot_light typed member token");
+        const world::ParseLevelFileResult parsed = world::ParseLevelText(text);
+        Expect(parsed.status == world::LoadLevelFileStatus::Loaded, "6. spot member roundtrip loads");
+        Expect(world::AuthoredLevelDataEqual(working, parsed.level),
+            "6. group writer/parser roundtrip preserves Spot member");
+        std::string invalidSpot = text;
+        const std::string goodSpot = "authoring_group Group_01 static_prop 1 spot_light 0\n";
+        const std::string badSpot = "authoring_group Group_01 static_prop 1 spot_light 4\n";
+        const std::size_t spotLine = invalidSpot.find(goodSpot);
+        Expect(spotLine != std::string::npos, "7. serialized spot group line exists");
+        if (spotLine != std::string::npos)
+        {
+            invalidSpot.replace(spotLine, goodSpot.size(), badSpot);
+        }
+        Expect(world::ParseLevelText(invalidSpot).status == world::LoadLevelFileStatus::Invalid,
+            "7. invalid Spot Light group index is rejected");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({4.0f, 2.0f, 1.0f}));
+        working.pointLights[0].intensity = 1.75f;
+        working.pointLights[0].range = 9.0f;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::PointLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(editor::FindHierarchyMemberRow(rows, additional[0]) != nullptr,
+            "grouped Point Light appears as a group member");
+        Expect(editor::FindHierarchyUngroupedRow(rows, additional[0]) == nullptr,
+            "grouped Point Light is omitted from Point Lights category");
+        Expect(!editor::HierarchyHasDuplicateTopLevelObject(rows, additional[0]),
+            "grouped Point Light is not duplicated top-level");
+        EditorSelection selectedPrimary{};
+        std::vector<EditorSelection> selectedAdditional;
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working, *editor::FindHierarchyGroupRow(rows, 0), selectedPrimary, selectedAdditional, false),
+            "group row selects complete Point fixture");
+        Expect(selectedPrimary == primary && selectedAdditional == additional,
+            "group row reconstructs Prop + Point");
+        Expect(
+            editor::EditorSelectionSetSupportsGroupTranslate(working, primary, additional),
+            "8. Prop + Point supports Group Translate");
+        std::vector<core::Vec3> starts;
+        Expect(editor::CaptureGroupTranslateStarts(working, {primary, additional[0]}, starts),
+            "8. capture Point Group Translate starts");
+        const core::Vec3 pointBefore = working.pointLights[0].position;
+        const float intensityBefore = working.pointLights[0].intensity;
+        const float rangeBefore = working.pointLights[0].range;
+        Expect(
+            editor::ApplyGroupTranslateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                starts,
+                {starts[0].x + 2.0f, starts[0].y, starts[0].z},
+                editor::EditorAxis::X,
+                false,
+                0.25f),
+            "8. Group Translate moves Point fixture");
+        Expect(NearlyEqual(working.staticProps[0].position.x, starts[0].x + 2.0f),
+            "8. Static Prop receives shared delta");
+        Expect(NearlyEqualVec(working.pointLights[0].position, {pointBefore.x + 2.0f, pointBefore.y, pointBefore.z}),
+            "8. group Translate moves Point position by exact shared delta");
+        Expect(working.pointLights[0].intensity == intensityBefore
+                && working.pointLights[0].range == rangeBefore,
+            "8. Point intensity/range unchanged by Group Translate");
+        Expect(
+            editor::ApplyGroupTranslateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                starts,
+                {starts[0].x + 0.13f, starts[0].y, starts[0].z},
+                editor::EditorAxis::X,
+                true,
+                0.25f),
+            "11. Group Translate still snaps PRIMARY then shares delta");
+        Expect(NearlyEqual(working.pointLights[0].position.x - pointBefore.x,
+                   working.staticProps[0].position.x - starts[0].x),
+            "11. snapped Point delta matches PRIMARY shared delta");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.spotLights.push_back(MakeSpot({5.0f, 3.0f, -1.0f}, {0.0f, -1.0f, 0.0f}));
+        const core::Vec3 spotDirectionBefore = working.spotLights[0].direction;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::SpotLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(editor::FindHierarchyUngroupedRow(rows, additional[0]) == nullptr,
+            "grouped Spot Light is omitted from Spot Lights category");
+        Expect(
+            editor::EditorSelectionSetSupportsGroupTranslate(working, primary, additional),
+            "9. Prop + Spot supports Group Translate");
+        std::vector<core::Vec3> starts;
+        Expect(editor::CaptureGroupTranslateStarts(working, {primary, additional[0]}, starts),
+            "9. capture Spot Group Translate starts");
+        const core::Vec3 spotBefore = working.spotLights[0].position;
+        Expect(
+            editor::ApplyGroupTranslateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                starts,
+                {starts[0].x, starts[0].y + 1.5f, starts[0].z},
+                editor::EditorAxis::Y,
+                false,
+                0.25f),
+            "9. Group Translate moves Spot fixture");
+        Expect(NearlyEqualVec(working.spotLights[0].position, {spotBefore.x, spotBefore.y + 1.5f, spotBefore.z}),
+            "9. group Translate moves Spot position by exact shared delta");
+        Expect(NearlyEqualVec(working.spotLights[0].direction, spotDirectionBefore),
+            "9. Spot direction unchanged by Group Translate");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.staticProps[0].position = {0.0f, 1.0f, 0.0f};
+        working.staticProps[0].rotationDegrees = {0.0f, 0.0f, 0.0f};
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 1.0f, 2.0f}));
+        working.pointLights[0].color = {0.1f, 0.2f, 0.3f};
+        working.pointLights[0].intensity = 2.0f;
+        working.pointLights[0].range = 11.0f;
+        working.pointLights[0].enabled = true;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::PointLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        Expect(
+            editor::EditorSelectionSetSupportsGroupRotate(working, primary, additional),
+            "10. Prop + Point supports Group Rotate");
+        Expect(!editor::IsRotateSelection(additional[0]),
+            "10. Point Light still has no individual orientation");
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, primary, pivot), "10. PRIMARY rotate pivot");
+        Expect(editor::CaptureGroupRotateStarts(
+                   working, {primary, additional[0]}, startPositions, startRotations),
+            "10. capture Point Group Rotate starts");
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                startPositions,
+                startRotations,
+                pivot,
+                {90.0f, 0.0f, 0.0f},
+                editor::EditorAxis::X,
+                false,
+                15.0f),
+            "10. Group Rotate pivots Point position");
+        Expect(NearlyEqualVec(working.pointLights[0].position, {0.0f, -1.0f, 0.0f}),
+            "10. group Rotate orbits Point around PRIMARY pivot");
+        Expect(working.pointLights[0].color.x == 0.1f && working.pointLights[0].intensity == 2.0f
+                && working.pointLights[0].range == 11.0f && working.pointLights[0].enabled,
+            "10. Point Rotate does not invent orientation or mutate lighting fields");
+        Expect(!editor::IsScaleSelection(additional[0]),
+            "group Scale remains unsupported for Point Light");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.staticProps[0].position = {0.0f, 1.0f, 0.0f};
+        working.staticProps[0].rotationDegrees = {0.0f, 0.0f, 0.0f};
+        working.spotLights.push_back(MakeSpot({0.0f, 1.0f, 2.0f}, {0.0f, -1.0f, 0.0f}));
+        working.spotLights[0].color = {0.5f, 0.6f, 0.7f};
+        working.spotLights[0].intensity = 1.25f;
+        working.spotLights[0].range = 7.0f;
+        working.spotLights[0].innerConeDegrees = 12.0f;
+        working.spotLights[0].outerConeDegrees = 22.0f;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::SpotLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        Expect(
+            editor::EditorSelectionSetSupportsGroupRotate(working, primary, additional),
+            "11. Prop + Spot supports Group Rotate");
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, primary, pivot), "11. Spot PRIMARY pivot");
+        Expect(editor::CaptureGroupRotateStarts(
+                   working, {primary, additional[0]}, startPositions, startRotations),
+            "11. capture Spot Group Rotate starts");
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                startPositions,
+                startRotations,
+                pivot,
+                {90.0f, 0.0f, 0.0f},
+                editor::EditorAxis::X,
+                false,
+                15.0f),
+            "11. Group Rotate pivots Spot position");
+        Expect(NearlyEqualVec(working.spotLights[0].position, {0.0f, -1.0f, 0.0f}),
+            "11. group Rotate orbits Spot around PRIMARY pivot");
+        Expect(NearlyEqualVec(working.spotLights[0].direction, {0.0f, 0.0f, -1.0f}),
+            "12. group Rotate rotates Spot direction by the same world-axis delta");
+        Expect(world::SpotLightDirectionIsValid(working.spotLights[0].direction),
+            "13. Spot direction remains finite/non-zero");
+        Expect(NearlyEqualVec(
+                   working.spotLights[0].direction,
+                   world::CanonicalSpotLightDirection(working.spotLights[0].direction)),
+            "13. Spot direction remains normalized");
+        Expect(working.spotLights[0].intensity == 1.25f && working.spotLights[0].range == 7.0f
+                && working.spotLights[0].innerConeDegrees == 12.0f
+                && working.spotLights[0].outerConeDegrees == 22.0f,
+            "Spot cone/intensity/range unchanged by Group Rotate");
+        Expect(!editor::IsScaleSelection(additional[0]),
+            "group Scale remains unsupported for Spot Light");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({2.0f, 2.0f, 0.0f}));
+        working.pointLights[0].color = {0.3f, 0.5f, 0.7f};
+        working.pointLights[0].intensity = 2.5f;
+        working.pointLights[0].range = 14.0f;
+        working.pointLights[0].enabled = false;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::PointLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(duplicated.succeeded, "14. complete-group Duplicate with Point succeeds");
+        Expect(working.authoringGroups.size() == 2, "14. copied Point fixture has a new group");
+        Expect(working.pointLights.size() == 2, "14. copied Point Light is independent");
+        Expect(duplicated.selection.kind == EditorObjectKind::StaticProp
+                && duplicated.additionalSelections.size() == 1
+                && duplicated.additionalSelections[0].kind == EditorObjectKind::PointLight,
+            "14. duplicated selection remaps onto copied Point");
+        Expect(working.authoringGroups[1].members[1].kind
+                    == world::AuthoringGroupMemberKind::PointLight
+                && working.authoringGroups[1].members[1].index
+                    == duplicated.additionalSelections[0].index,
+            "14. copied group remaps Point Light index");
+        Expect(working.pointLights[1].color.x == working.pointLights[0].color.x
+                && working.pointLights[1].intensity == 2.5f
+                && working.pointLights[1].range == 14.0f
+                && working.pointLights[1].enabled == false,
+            "14. copied Point preserves authored lighting fields");
+        Expect(NearlyEqual(
+                   working.pointLights[1].position.x,
+                   working.pointLights[0].position.x + editor::kLifecycleDuplicateOffsetX),
+            "14. copied Point uses existing duplicate placement offset");
+        Expect(
+            !editor::DuplicateSelectionSet(working, primary, {}).succeeded,
+            "16. partial-group Duplicate remains an atomic refusal");
+        Expect(working.pointLights.size() == 2 && working.authoringGroups.size() == 2,
+            "16. refused Point partial Duplicate mutates nothing");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.spotLights.push_back(MakeSpot({6.0f, 5.0f, 1.0f}, {1.0f, 0.0f, 0.0f}));
+        working.spotLights[0].color = {0.8f, 0.2f, 0.1f};
+        working.spotLights[0].intensity = 3.5f;
+        working.spotLights[0].range = 20.0f;
+        working.spotLights[0].innerConeDegrees = 8.0f;
+        working.spotLights[0].outerConeDegrees = 18.0f;
+        working.spotLights[0].enabled = false;
+        const EditorSelection primary{EditorObjectKind::StaticProp, 2};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::SpotLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        const editor::LifecycleEditResult duplicated =
+            editor::DuplicateSelectionSet(working, primary, additional);
+        Expect(duplicated.succeeded, "15. complete-group Duplicate with Spot succeeds");
+        Expect(working.spotLights.size() == 2, "15. copied Spot Light is independent");
+        Expect(working.authoringGroups[1].members[1].kind
+                    == world::AuthoringGroupMemberKind::SpotLight
+                && working.authoringGroups[1].members[1].index
+                    == duplicated.additionalSelections[0].index,
+            "15. copied group remaps Spot Light index");
+        Expect(NearlyEqualVec(working.spotLights[1].direction, working.spotLights[0].direction)
+                && Vec3Equal(working.spotLights[1].color, working.spotLights[0].color)
+                && working.spotLights[1].intensity == 3.5f
+                && working.spotLights[1].range == 20.0f
+                && working.spotLights[1].innerConeDegrees == 8.0f
+                && working.spotLights[1].outerConeDegrees == 18.0f
+                && working.spotLights[1].enabled == false,
+            "15. copied Spot preserves authored semantic data");
+        Expect(NearlyEqual(
+                   working.spotLights[1].position.x,
+                   working.spotLights[0].position.x + editor::kLifecycleDuplicateOffsetX),
+            "15. copied Spot uses existing duplicate placement offset");
+        Expect(
+            !editor::DuplicateSelectionSet(
+                    working, additional[0], std::vector<EditorSelection>{})
+                .succeeded,
+            "16. partial Spot-member Duplicate remains an atomic refusal");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        working.pointLights.push_back(world::MakeDefaultPointLight({4.0f, 2.0f, 0.0f}));
+        working.spotLights.push_back(MakeSpot({0.0f, 5.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        working.spotLights.push_back(MakeSpot({4.0f, 5.0f, 0.0f}, {1.0f, 0.0f, 0.0f}));
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 0},
+            {{EditorObjectKind::PointLight, 1}});
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 1},
+            {{EditorObjectKind::SpotLight, 1}});
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::PointLight, 0}).succeeded,
+            "17. deleting an earlier Point remaps grouped Point");
+        Expect(working.authoringGroups[0].members[1].kind
+                    == world::AuthoringGroupMemberKind::PointLight
+                && working.authoringGroups[0].members[1].index == 0,
+            "17. grouped Point index remaps after earlier Point delete");
+        Expect(working.authoringGroups[1].members[1].kind
+                    == world::AuthoringGroupMemberKind::SpotLight
+                && working.authoringGroups[1].members[1].index == 1,
+            "17. Spot membership is independent of Point remap");
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::SpotLight, 0}).succeeded,
+            "17. deleting an earlier Spot remaps grouped Spot");
+        Expect(working.authoringGroups[1].members[1].index == 0,
+            "17. grouped Spot index remaps after earlier Spot delete");
+        Expect(working.authoringGroups[0].members[1].index == 0,
+            "17. Point membership is independent of Spot remap");
+
+        Expect(
+            editor::DeleteSelectionSet(
+                working,
+                {EditorObjectKind::StaticProp, 0},
+                {{EditorObjectKind::PointLight, 0}})
+                .succeeded,
+            "complete Point fixture group Delete succeeds");
+        Expect(working.authoringGroups.size() == 1, "unrelated Spot fixture group remains");
+        Expect(working.pointLights.empty(), "deleted grouped Point is removed");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({2.0f, 3.0f, 0.0f}));
+        working.pointLights[0].intensity = 2.75f;
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 0},
+            {{EditorObjectKind::PointLight, 0}});
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::StaticProp, 0}).succeeded,
+            "18. deleting down to one local-light member auto-dissolves");
+        Expect(working.authoringGroups.empty(), "18. auto-dissolve removes group metadata");
+        Expect(working.pointLights.size() == 1 && working.pointLights[0].intensity == 2.75f,
+            "18. surviving Point Light remains authored");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.spotLights.push_back(MakeSpot({1.0f, 4.0f, 2.0f}, {0.0f, -1.0f, 0.0f}));
+        working.spotLights[0].color = {0.4f, 0.5f, 0.6f};
+        working.spotLights[0].intensity = 1.8f;
+        working.spotLights[0].range = 13.0f;
+        working.spotLights[0].innerConeDegrees = 15.0f;
+        working.spotLights[0].outerConeDegrees = 30.0f;
+        working.spotLights[0].enabled = false;
+        editor::CreateAuthoringGroupFromSelection(
+            working,
+            {EditorObjectKind::StaticProp, 0},
+            {{EditorObjectKind::SpotLight, 0}});
+        const world::SpotLightSpec beforeUngroup = working.spotLights[0];
+        const core::Vec3 propBefore = working.staticProps[0].position;
+        Expect(editor::UngroupAuthoringGroup(working, 0).succeeded, "19. Ungroup succeeds");
+        Expect(working.authoringGroups.empty(), "19. Ungroup removes only group metadata");
+        Expect(world::SpotLightEqual(working.spotLights[0], beforeUngroup),
+            "19. Ungroup preserves Spot authored semantic data");
+        Expect(Vec3Equal(working.staticProps[0].position, propBefore),
+            "19. Ungroup preserves fixture object data");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        const EditorSelection pickupPrimary{EditorObjectKind::StaticProp, 2};
+        const std::vector<EditorSelection> pickupAdditional{{EditorObjectKind::ItemPickup, 0}};
+        Expect(editor::CanCreateAuthoringGroup(working, pickupPrimary, pickupAdditional),
+            "22. existing Static Prop / Item Pickup grouping remains valid");
+        Expect(editor::CreateAuthoringGroupFromSelection(working, pickupPrimary, pickupAdditional)
+                   .succeeded,
+            "22. Static Prop + Item Pickup Group Selected unchanged");
+        Expect(working.authoringGroups[0].members[0].kind
+                    == world::AuthoringGroupMemberKind::StaticProp
+                && working.authoringGroups[0].members[1].kind
+                    == world::AuthoringGroupMemberKind::ItemPickup,
+            "22. Item Pickup typed membership is unchanged");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.spotLights.push_back(MakeSpot({2.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        const EditorSelection prop{EditorObjectKind::StaticProp, 0};
+        const EditorSelection spot{EditorObjectKind::SpotLight, 0};
+        editor::CreateAuthoringGroupFromSelection(working, prop, {{spot}});
+        const world::StaticPropSpec propBefore = working.staticProps[0];
+        Expect(editor::IsRotateSelection(spot)
+                && editor::SelectionHasRotateOrientation(working, spot),
+            "7. grouped Spot member remains Rotate-capable");
+        const render::CameraView spotView = MakeEditorView({20.0f, 8.0f, 20.0f}, working.spotLights[0].position);
+        Expect(editor::MakeRotateGizmoDrawRequest(spot, working, spotView, {}).visible,
+            "7. grouped Spot member still shows the Rotate gizmo");
+        const core::Vec3 origin = working.spotLights[0].position;
+        const float length = editor::GizmoWorldLength(spotView, origin);
+        const float unique = 0.70710678f;
+        const core::Vec3 xRing{origin.x, origin.y + length * unique, origin.z + length * unique};
+        const core::Vec3 xSwept{origin.x, origin.y - length * unique, origin.z + length * unique};
+        editor::GizmoInteractionState state{};
+        const core::Vec3 startDir = working.spotLights[0].direction;
+        Expect(
+            editor::UpdateRotateInteraction(
+                state, spot, working, spotView, RayThroughView(spotView, xRing), false, false, true, true, false),
+            "8. grouped-member Spot Rotate starts");
+        Expect(
+            editor::UpdateRotateInteraction(
+                state, spot, working, spotView, RayThroughView(spotView, xSwept), false, false, false, true, false),
+            "8. grouped-member Spot Rotate updates");
+        Expect(!NearlyEqualVec(working.spotLights[0].direction, startDir, 0.01f),
+            "8. individual grouped-member Rotate changes only that Spot direction");
+        Expect(NearlyEqualVec(working.spotLights[0].position, origin),
+            "8. grouped-member Rotate leaves Spot position");
+        Expect(Vec3Equal(working.staticProps[0].position, propBefore.position)
+                && Vec3Equal(working.staticProps[0].rotationDegrees, propBefore.rotationDegrees),
+            "8. grouped-member Rotate leaves Static Prop unchanged");
+        editor::EndGizmoDrag(state);
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.spotLights.push_back(MakeSpot({0.0f, 2.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        working.spotLights.push_back(MakeSpot({0.0f, 2.0f, 2.0f}, {0.0f, -1.0f, 0.0f}));
+        const EditorSelection primary{EditorObjectKind::SpotLight, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::SpotLight, 1}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        Expect(working.authoringGroups[0].members[0].kind == world::AuthoringGroupMemberKind::SpotLight,
+            "9. persisted PRIMARY is Spot Light");
+        Expect(editor::EditorSelectionSetSupportsGroupRotate(working, primary, additional),
+            "9. complete group with Spot PRIMARY is Group-Rotate-capable");
+        Expect(editor::GroupRotateDisableReason(working, primary, additional) == nullptr,
+            "9. Spot-primary group has no Rotate disable reason");
+        const render::CameraView view = MakeEditorView({20.0f, 8.0f, 20.0f}, working.spotLights[0].position);
+        const editor::GizmoDrawRequest draw =
+            editor::MakeRotateGizmoDrawRequest(primary, working, view, {});
+        Expect(draw.visible, "9. Spot-primary group exposes the Rotate gizmo");
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, primary, pivot), "10. Spot-primary pivot exists");
+        Expect(NearlyEqualVec(pivot, working.spotLights[0].position),
+            "10. Spot-primary group pivot equals Spot PRIMARY position");
+        Expect(NearlyEqualVec(draw.origin, working.spotLights[0].position),
+            "10. drawn Rotate gizmo origin matches Spot PRIMARY");
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        Expect(editor::CaptureGroupRotateStarts(working, {primary, additional[0]}, startPositions, startRotations),
+            "11. capture Spot-primary Group Rotate starts");
+        const core::Vec3 primaryDirBefore = working.spotLights[0].direction;
+        const core::Vec3 primaryPosBefore = working.spotLights[0].position;
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                startPositions,
+                startRotations,
+                pivot,
+                {90.0f, 0.0f, 0.0f},
+                editor::EditorAxis::X,
+                false,
+                15.0f),
+            "11. Spot-primary Group Rotate applies");
+        Expect(NearlyEqualVec(working.spotLights[0].position, primaryPosBefore),
+            "11. Spot PRIMARY position stays at the pivot");
+        Expect(!NearlyEqualVec(working.spotLights[0].direction, primaryDirBefore, 0.01f),
+            "11. Spot PRIMARY direction rotates");
+        Expect(NearlyEqualVec(working.spotLights[0].direction, {0.0f, 0.0f, -1.0f}),
+            "11. Spot PRIMARY direction receives the shared world-axis delta");
+        Expect(NearlyEqualVec(working.spotLights[1].position, {0.0f, 0.0f, 0.0f}),
+            "12. secondary Spot position orbits pivot");
+        Expect(NearlyEqualVec(working.spotLights[1].direction, {0.0f, 0.0f, -1.0f}),
+            "13. secondary Spot direction rotates by the same delta");
+        Expect(world::SpotLightDirectionIsValid(working.spotLights[0].direction)
+                && world::SpotLightDirectionIsValid(working.spotLights[1].direction),
+            "Spot-primary directions remain finite/non-zero");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.staticProps[0].position = {0.0f, 1.0f, 2.0f};
+        working.staticProps[0].rotationDegrees = {};
+        working.spotLights.push_back(MakeSpot({0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        const EditorSelection primary{EditorObjectKind::SpotLight, 0};
+        const std::vector<EditorSelection> additional{{EditorObjectKind::StaticProp, 0}};
+        editor::CreateAuthoringGroupFromSelection(working, primary, additional);
+        Expect(editor::EditorSelectionSetSupportsGroupRotate(working, primary, additional),
+            "14. Spot-primary + Static Prop group can start Rotate");
+        Expect(editor::MakeRotateGizmoDrawRequest(
+                   primary, working, MakeEditorView({20.0f, 8.0f, 20.0f}, working.spotLights[0].position), {})
+                   .visible,
+            "14. Spot-primary mixed group exposes Rotate gizmo");
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(working, primary, pivot)
+                && NearlyEqualVec(pivot, working.spotLights[0].position),
+            "14. mixed group pivot remains Spot PRIMARY position");
+        Expect(editor::CaptureGroupRotateStarts(working, {primary, additional[0]}, startPositions, startRotations),
+            "14. capture mixed Spot-primary starts");
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                working,
+                {primary, additional[0]},
+                startPositions,
+                startRotations,
+                pivot,
+                {90.0f, 0.0f, 0.0f},
+                editor::EditorAxis::X,
+                false,
+                15.0f),
+            "14. mixed Spot-primary Group Rotate applies");
+        Expect(NearlyEqual(working.staticProps[0].rotationDegrees.x, 90.0f),
+            "14. Static Prop Euler receives the shared delta");
+        Expect(NearlyEqualVec(working.staticProps[0].position, {0.0f, -1.0f, 0.0f}),
+            "14. Static Prop orbits around Spot PRIMARY");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 2.0f}));
+        working.spotLights.push_back(MakeSpot({0.0f, 2.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        const EditorSelection point0{EditorObjectKind::PointLight, 0};
+        const EditorSelection point1{EditorObjectKind::PointLight, 1};
+        editor::CreateAuthoringGroupFromSelection(working, point0, {{point1}});
+        Expect(!editor::IsRotateSelection(point0), "16. Point member remains Rotate-ineligible");
+        Expect(!editor::SelectionHasRotateOrientation(working, point0),
+            "16. individually selected Point member has no Rotate orientation");
+        Expect(!editor::MakeRotateGizmoDrawRequest(
+                    point0, working, MakeEditorView({20.0f, 8.0f, 20.0f}, working.pointLights[0].position), {})
+                    .visible,
+            "16. Point member has no Rotate gizmo");
+        Expect(!editor::EditorSelectionSetSupportsGroupRotate(working, point0, {{point1}}),
+            "17. Point PRIMARY limitation is retained");
+        Expect(editor::GroupRotateDisableReason(working, point0, {{point1}}) != nullptr,
+            "17. Point-primary group cannot start Rotate");
+
+        world::LevelDefinition mixed = MakeLevelWithProps();
+        mixed.staticProps[0].position = {0.0f, 1.0f, 0.0f};
+        mixed.staticProps[0].rotationDegrees = {};
+        mixed.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 1.0f, 2.0f}));
+        const EditorSelection propPrimary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> pointAdditional{{EditorObjectKind::PointLight, 0}};
+        editor::CreateAuthoringGroupFromSelection(mixed, propPrimary, pointAdditional);
+        Expect(editor::EditorSelectionSetSupportsGroupRotate(mixed, propPrimary, pointAdditional),
+            "18. Point member orbits when another valid PRIMARY drives Rotate");
+        std::vector<core::Vec3> startPositions;
+        std::vector<core::Vec3> startRotations;
+        core::Vec3 pivot{};
+        Expect(editor::TryPrimaryRotatePivot(mixed, propPrimary, pivot), "18. Prop PRIMARY pivot");
+        Expect(editor::CaptureGroupRotateStarts(mixed, {propPrimary, pointAdditional[0]}, startPositions, startRotations),
+            "18. capture Point member orbit");
+        Expect(
+            editor::ApplyGroupRotateFromPrimaryResult(
+                mixed,
+                {propPrimary, pointAdditional[0]},
+                startPositions,
+                startRotations,
+                pivot,
+                {90.0f, 0.0f, 0.0f},
+                editor::EditorAxis::X,
+                false,
+                15.0f),
+            "18. Point member Group Rotate from Prop PRIMARY");
+        Expect(NearlyEqualVec(mixed.pointLights[0].position, {0.0f, -1.0f, 0.0f}),
+            "18. Point member still orbits the valid PRIMARY pivot");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.staticProps[0].position = {0.0f, 1.0f, 0.0f};
+        working.staticProps[0].rotationDegrees = {};
+        working.staticProps[1].position = {2.0f, 1.0f, 0.0f};
+        working.staticProps[1].rotationDegrees = {15.0f, 0.0f, 0.0f};
+        const EditorSelection prop0{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> prop1{{EditorObjectKind::StaticProp, 1}};
+        Expect(editor::EditorSelectionSetSupportsGroupRotate(working, prop0, prop1),
+            "19. existing Static Prop group Rotate unchanged");
+        working.itemPickups[0].position = {4.0f, 1.0f, 0.0f};
+        working.itemPickups[0].visualRotationDegrees = {};
+        Expect(
+            editor::EditorSelectionSetSupportsGroupRotate(
+                working, prop0, std::vector<EditorSelection>{{EditorObjectKind::ItemPickup, 0}}),
+            "20. existing Item Pickup group Rotate unchanged");
     }
 
     if (gFailures != 0)

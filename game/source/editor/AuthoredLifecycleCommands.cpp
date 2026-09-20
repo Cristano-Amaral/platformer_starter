@@ -38,6 +38,10 @@ EditorObjectKind AddKindForRequest(LevelEditorRequest request)
         return EditorObjectKind::Goal;
     case LevelEditorRequest::AddStaticProp:
         return EditorObjectKind::StaticProp;
+    case LevelEditorRequest::AddPointLight:
+        return EditorObjectKind::PointLight;
+    case LevelEditorRequest::AddSpotLight:
+        return EditorObjectKind::SpotLight;
     default:
         return EditorObjectKind::None;
     }
@@ -67,6 +71,10 @@ const char* LifecycleCategoryLabel(EditorObjectKind kind)
         return "Level Goal";
     case EditorObjectKind::StaticProp:
         return "Static Prop";
+    case EditorObjectKind::PointLight:
+        return "Point Light";
+    case EditorObjectKind::SpotLight:
+        return "Spot Light";
     default:
         return "Object";
     }
@@ -92,6 +100,8 @@ const char* RejectionMessage(LifecycleEditStatus status, EditorObjectKind kind)
         case EditorObjectKind::StaticProp:
         case EditorObjectKind::ItemPickup:
         case EditorObjectKind::Goal:
+        case EditorObjectKind::PointLight:
+        case EditorObjectKind::SpotLight:
             return "Level file record limit reached.";
         case EditorObjectKind::DynamicBox:
         case EditorObjectKind::Door:
@@ -155,6 +165,12 @@ LifecycleEditResult RunLifecycleMutation(
         return worldCenterPlacement
             ? AddStaticPropAt(workingCopy, placementAnchor, staticPropIdentity)
             : AddStaticProp(workingCopy, placementAnchor, staticPropIdentity);
+    case LevelEditorRequest::AddPointLight:
+        return worldCenterPlacement ? AddPointLightAt(workingCopy, placementAnchor)
+                                    : AddPointLight(workingCopy, placementAnchor);
+    case LevelEditorRequest::AddSpotLight:
+        return worldCenterPlacement ? AddSpotLightAt(workingCopy, placementAnchor)
+                                    : AddSpotLight(workingCopy, placementAnchor);
     case LevelEditorRequest::DuplicateSelected:
         return DuplicateSelectionSet(workingCopy, selection, additionalSelections);
     case LevelEditorRequest::DeleteSelected:
@@ -200,6 +216,8 @@ void SetSuccessMessage(
     case LevelEditorRequest::AddItemPickup:
     case LevelEditorRequest::AddGoal:
     case LevelEditorRequest::AddStaticProp:
+    case LevelEditorRequest::AddPointLight:
+    case LevelEditorRequest::AddSpotLight:
         state.lastMessage = std::string(label) + " added.";
         return;
     case LevelEditorRequest::DuplicateSelected:
@@ -229,6 +247,8 @@ bool IsAuthoredLifecycleRequest(LevelEditorRequest request)
     case LevelEditorRequest::AddItemPickup:
     case LevelEditorRequest::AddGoal:
     case LevelEditorRequest::AddStaticProp:
+    case LevelEditorRequest::AddPointLight:
+    case LevelEditorRequest::AddSpotLight:
     case LevelEditorRequest::DuplicateSelected:
     case LevelEditorRequest::DeleteSelected:
     case LevelEditorRequest::GroupSelected:
@@ -263,6 +283,10 @@ LevelEditorRequest EditAddMenuRequest(EditorObjectKind kind)
         return LevelEditorRequest::AddGoal;
     case EditorObjectKind::StaticProp:
         return LevelEditorRequest::AddStaticProp;
+    case EditorObjectKind::PointLight:
+        return LevelEditorRequest::AddPointLight;
+    case EditorObjectKind::SpotLight:
+        return LevelEditorRequest::AddSpotLight;
     default:
         return LevelEditorRequest::None;
     }
@@ -300,6 +324,12 @@ bool CanIssueAuthoredLifecycleRequest(
         return CanAddLifecycleObject(
                    authoringAvailable, workingCopy, EditorObjectKind::StaticProp, gizmoDragging)
             && world::StaticPropIdentityIsValid(staticPropIdentity);
+    case LevelEditorRequest::AddPointLight:
+        return CanAddLifecycleObject(
+            authoringAvailable, workingCopy, EditorObjectKind::PointLight, gizmoDragging);
+    case LevelEditorRequest::AddSpotLight:
+        return CanAddLifecycleObject(
+            authoringAvailable, workingCopy, EditorObjectKind::SpotLight, gizmoDragging);
     case LevelEditorRequest::DuplicateSelected:
         return CanDuplicateSelected(
             authoringAvailable, workingCopy, selection, additionalSelections, gizmoDragging);
@@ -499,7 +529,9 @@ bool HandleAuthoredLifecycleRequest(
                 || request == LevelEditorRequest::AddDoor
                 || request == LevelEditorRequest::AddItemPickup
                 || request == LevelEditorRequest::AddGoal
-                || request == LevelEditorRequest::AddStaticProp))
+                || request == LevelEditorRequest::AddStaticProp
+                || request == LevelEditorRequest::AddPointLight
+                || request == LevelEditorRequest::AddSpotLight))
         {
             state.lastMessage = RejectionMessage(LifecycleEditStatus::AtLimit, affectedKind);
         }

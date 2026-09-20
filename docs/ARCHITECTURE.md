@@ -261,7 +261,7 @@ World Rendering
 
 **Lifecycle.** Load with `Renderer::LoadRuntimeAssets`; unload with `UnloadRuntimeAssets` (idempotent). Shadow map is independent of window size, so resize/F2 viewport changes do not recreate it. Restart, level transition, Play Again, and Main Menu → Play reuse the same GPU objects.
 
-**Out of scope.** Point/Spot lights, Cascaded Shadow Maps, GI, SSAO, HDR/bloom, IBL/skybox, full PBR, player animation, Character Definition, ECS, scene graph, M86.
+**Out of scope for M85 itself.** Cascaded Shadow Maps, GI, SSAO, HDR/bloom, IBL/skybox, full PBR, player animation, Character Definition, ECS, scene graph, M86. Point/Spot Lights arrive in Milestone 85.3.
 
 ## Environment & Directional Light Authoring (Milestone 85.1)
 
@@ -288,7 +288,7 @@ Level
 
 **Lifecycle.** Level transition, Restart, Play Again, Main Menu → Play, and reload adopt the destination/current Level environment. M85 GPU shadow resources are not recreated per edit. Thumbnails and Preview stay isolated. Release has no sun visualization.
 
-**Out of scope.** Point/Spot lights, multiple Directional Lights, day/night, skybox/fog/HDR, CSM, PBR expansion, Environment asset files, Undo/Redo, M86.
+**Out of scope for M85.1 itself.** Multiple Directional Lights, day/night, skybox/fog/HDR, CSM, PBR expansion, Environment asset files, Undo/Redo, M86. Point/Spot Lights arrive in Milestone 85.3.
 
 ## Directional Light Gameplay Activation & Authoring Polish (Milestone 85.2)
 
@@ -307,7 +307,31 @@ Directional Light
 
 **Lifecycle.** Restart, Apply/reload, Level transition, Play Again, and Main Menu → Play rebuild from destination authored data plus current overlap. Death/checkpoint do not persist a stale plate-active bool. Visualization resets on Level switch/reload/transition/Play Again/Main Menu → Play and survives F2.
 
-**Out of scope.** Multiple Directional Lights, Point/Spot lights, generic Source/Receiver/Event/Action framework, AND/XOR/inversion, Switch/Trigger objects, day/night, Terrain, player animation, ECS, scene graph, M86.
+**Out of scope for M85.2 itself.** Multiple Directional Lights, generic Source/Receiver/Event/Action framework, AND/XOR/inversion, Switch/Trigger objects, day/night, Terrain, player animation, ECS, scene graph, M86. Point/Spot Lights arrive in Milestone 85.3.
+
+## Local Lights Foundation (Milestone 85.3)
+
+M85.3 adds repeatable authored **Point Lights** and **Spot Lights** on top of the M85–M85.2 singleton Environment/Directional path. It is not a deferred/Forward+/clustered rewrite, not local-light shadows, and not a gameplay link/target framework.
+
+```
+World Lighting
+├─ Environment (Ambient + singleton Directional Light)
+└─ Local Lights
+   ├─ Point Light (position, color, intensity, range, enabled)
+   └─ Spot Light (position, direction, color, intensity, range, inner/outer cone, enabled)
+```
+
+**Authored data.** `world::PointLightSpec` / `SpotLightSpec` live on `LevelDefinition`. Parser/writer records: `point_light <px py pz r g b intensity range enabled>` and `spot_light <px py pz dx dy dz r g b intensity range innerConeDegrees outerConeDegrees enabled>`. Old Levels without those records remain valid. Format version stays `1`.
+
+**Defaults / bounds.** Color `{1, 0.95, 0.85}` in `[0,1]`. Intensity `1.5` in `[0, 4]`. Range `8` in `[0.1, 64]`. Spot direction `{0, -1, 0}` normalized. Cones `20°` / `35°` with `0 <= inner`, `outer <= 89`, `outer - inner >= 0.5`. Enabled is an exact bool.
+
+**Runtime.** `render::PackAuthoredLocalLights` fills a fixed 8-slot uniform array: enabled Points in authored order, then enabled Spots; extras are dropped. Distance attenuation is `(1 - d/range)^2` with a hard cutoff. Spot angular attenuation lerps from inner cosine (1) to outer cosine (0). `world_lit.fs` adds that loop to ambient + directional. Local lights do **not** cast shadows. Directional shadow map ownership is unchanged.
+
+**Editor.** Repeatable Hierarchy categories `Point Lights` / `Spot Lights`. Palette and `Edit > Add` create defaults into `workingCopy`. Inspector edits enabled/position/color/intensity/range and Spot direction/cones. Translate edits real position with M76 snap. A selected Spot Light is native Rotate-capable: the Rotate gizmo appears at authored position and edits normalized `SpotLightSpec::direction` with the M85.1 Rodrigues path and M76 snap, without Euler storage. A Spot Light may be Group Rotate PRIMARY; the pivot is that Spot position. Scale is unsupported (Range stays Inspector-authored). Development-only origin/range/cone wires. Pick proxy is a `0.7` cube at the origin. Duplicate/Delete remaps indices. Point/Spot Lights are valid M81/M82 Authoring Group members (`point_light` / `spot_light` typed tokens). Group Translate applies the existing M78 shared delta to authored positions. Group Rotate orbits Point position around the PRIMARY pivot with no invented orientation; Spot position orbits and Spot direction receives the same world-axis Rodrigues delta. Environment and Directional Light remain ungroupable. Directional Light remains the exclusive singleton. Pressure Plate `controlsDirectionalLight` still names only that singleton.
+
+**Authority.** Inspector/gizmo edit `workingCopy`. Apply promotes. Save writes records. Restart/reload/transition/Play Again/Main Menu reconstruct from the destination authored Level. F2 preview uses `workingCopy` lighting and does not duplicate GPU lights. Thumbnails and Model Preview stay isolated. Release is staged-only and has no editor icons/cones.
+
+**Out of scope.** Local-light shadows, Pressure Plate → Point/Spot, GUIDs/receiver IDs, area/tube/rect lights, cookies/IES/volumetrics, physical units, deferred/Forward+/clustered lighting, HDR/bloom/CSM, Undo/Redo, M85.4, M86.
 
 Development `Assets > Import Static GLB` copies a compatible self-contained static `.glb` into `game/assets/source/models/<filename>.glb`. Canonical identity is the project-relative path `models/<filename>.glb`. The original external absolute path is import input only. Collision never overwrites. Import does not cook, stage, or mutate `workingCopy` / `active` / `savedSourceBaseline`. A derived `assets::StaticModelCatalog` discovers valid `source/models/*.glb` files (non-recursive, sorted by identity). It is not persisted and is not a level/scene object list. After import, the existing Cook Assets then Stage Runtime Assets path processes extra cooked `models/*.glb` files. Staging's required inventory remains `cmake/RuntimeAssets.cmake`; extra cooked models are discovered at staging time. Extra cooked `levels/*.level` files are discovered the same way so a Level created in the Development Levels UI can enter Cook & Stage without a per-level CMake edit.
 
@@ -867,7 +891,7 @@ M64 is the narrowest safe `level_01 → level_02` progression. M64.1 adds Develo
 
 **Group Rotate (Milestone 80).** With two or more currently Rotate-compatible members (Static Prop and Item Pickup), Rotate mode uses the PRIMARY object's existing world-axis Rotate gizmo as the only pivot. PRIMARY authored position stays fixed; secondaries orbit that pivot; every member's existing authored orientation field receives one shared signed world-axis delta derived from drag-start transforms. M76 snaps the PRIMARY rotation result once, then that exact delta is applied to the group. An unsupported selected member (including Dynamic Box, which still has no authored Rotate) refuses the complete operation. Item Pickup Group orbit edits logical `position` and Group orientation edits `visualRotationDegrees`; idle bob/spin and Jolt poses are never captured. `editor::EditorGroupRotate.h` keeps the math testable without ImGui. No Group Resize/Scale, alternate pivots, local-space group rotate, scene graph, or GUIDs.
 
-**Authoring Groups (Milestone 81 / 82).** Persistent authored organizational metadata in `LevelDefinition.authoringGroups`. Membership is typed `{kind,index}` (the same identity as `EditorSelection`) and remapped by the existing M79 lifecycle delete path. Groups are not gameplay objects, Prefabs, transform parents, or GUIDs. `Edit > Group Selected` and the Hierarchy **Group Selected** action create one flat group from 2+ currently ungrouped authored objects (PRIMARY stays `members[0]`). Hierarchy lists persistent groups under **Authoring Groups**, then ungrouped authored objects in the existing category trees; grouped members appear only under their group. Clicking a group row reconstructs the M78 PRIMARY + `additionalSelections` set (`members[0]` PRIMARY). Clicking a member row selects only that object. Ctrl on a group row still selects the complete group; Ctrl on member/object rows is the M78 toggle. Expand/collapse is transient editor UI (`HierarchyExpansionState`), not Level data and not Dirty. Hierarchy **Rename** starts an inline name edit that reuses M81 `RenameAuthoringGroup` validation; **Ungroup** emits the existing Ungroup request. Duplicate Selected of a complete group copies members with M79 semantics and creates one independent copied group (`<name>_Copy`). Partial grouped selections refuse Duplicate. Deleting members remaps or dissolves groups below 2 members. Ungroup removes metadata only. Level Format v1 `authoring_group <name> <kind> <index> ...` is optional; old group-less files still load. `editor::AuthoringGroups.h` and `editor::BuildHierarchyRows` keep the semantics and presentation testable without ImGui.
+**Authoring Groups (Milestone 81 / 82).** Persistent authored organizational metadata in `LevelDefinition.authoringGroups`. Membership is typed `{kind,index}` (the same identity as `EditorSelection`) and remapped by the existing M79 lifecycle delete path. Point Lights and Spot Lights are valid members (`point_light` / `spot_light`); Environment and Directional Light are not. Groups are not gameplay objects, Prefabs, transform parents, or GUIDs. `Edit > Group Selected` and the Hierarchy **Group Selected** action create one flat group from 2+ currently ungrouped authored objects (PRIMARY stays `members[0]`). Hierarchy lists persistent groups under **Authoring Groups**, then ungrouped authored objects in the existing category trees; grouped members appear only under their group. Clicking a group row reconstructs the M78 PRIMARY + `additionalSelections` set (`members[0]` PRIMARY). Clicking a member row selects only that object. Ctrl on a group row still selects the complete group; Ctrl on member/object rows is the M78 toggle. Expand/collapse is transient editor UI (`HierarchyExpansionState`), not Level data and not Dirty. Hierarchy **Rename** starts an inline name edit that reuses M81 `RenameAuthoringGroup` validation; **Ungroup** emits the existing Ungroup request. Duplicate Selected of a complete group copies members with M79 semantics and creates one independent copied group (`<name>_Copy`). Partial grouped selections refuse Duplicate. Deleting members remaps or dissolves groups below 2 members. Ungroup removes metadata only. Level Format v1 `authoring_group <name> <kind> <index> ...` is optional; old group-less files still load. `editor::AuthoringGroups.h` and `editor::BuildHierarchyRows` keep the semantics and presentation testable without ImGui.
 
 **Failure.** Missing/malformed/unsafe destinations fail before replacing `levelDefinition` or PhysicsWorld, whether requested by timeout or Enter. Completed state remains. stderr reports the failure. The failed destination is not retried every frame. Hold state is cleared.
 

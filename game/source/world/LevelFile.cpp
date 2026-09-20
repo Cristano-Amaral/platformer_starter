@@ -200,6 +200,11 @@ bool ParseColor01(
     return ParseVec3(tokens, offset, color) && LevelEnvironmentColorIsValid(color);
 }
 
+bool ParseBoundedRange(std::string_view token, float& range)
+{
+    return ParseFloatToken(token, range) && LocalLightRangeIsValid(range);
+}
+
 bool ParseBoundedIntensity(std::string_view token, float maxIntensity, float& intensity)
 {
     return ParseFloatToken(token, intensity)
@@ -230,6 +235,8 @@ struct ParseState
     std::vector<DoorSpec> doors;
     std::vector<ItemPickupSpec> itemPickups;
     std::vector<StaticPropSpec> staticProps;
+    std::vector<PointLightSpec> pointLights;
+    std::vector<SpotLightSpec> spotLights;
     std::vector<AuthoringGroup> authoringGroups;
 };
 
@@ -921,6 +928,61 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             loaded.level.environment.directionalRayDirection = CanonicalLevelDirectionalRay(ray);
             continue;
         }
+        if (keyword == "point_light")
+        {
+            if (!RequireTokenCount(tokens, 10, failure, lineNumber))
+            {
+                return failure;
+            }
+            PointLightSpec light{};
+            if (!ParseVec3(tokens, 1, light.position)
+                || !LocalLightPositionIsValid(light.position)
+                || !ParseColor01(tokens, 4, light.color)
+                || !ParseBoundedIntensity(
+                    tokens[7], kMaxAuthoredLocalLightIntensity, light.intensity)
+                || !ParseBoundedRange(tokens[8], light.range)
+                || !ParseBool01Token(tokens[9], light.enabled)
+                || !PointLightIsValid(light))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid point_light");
+            }
+            state.pointLights.push_back(light);
+            continue;
+        }
+        if (keyword == "spot_light")
+        {
+            if (!RequireTokenCount(tokens, 15, failure, lineNumber))
+            {
+                return failure;
+            }
+            SpotLightSpec light{};
+            core::Vec3 direction{};
+            if (!ParseVec3(tokens, 1, light.position)
+                || !LocalLightPositionIsValid(light.position)
+                || !ParseVec3(tokens, 4, direction)
+                || !SpotLightDirectionIsValid(direction)
+                || !ParseColor01(tokens, 7, light.color)
+                || !ParseBoundedIntensity(
+                    tokens[10], kMaxAuthoredLocalLightIntensity, light.intensity)
+                || !ParseBoundedRange(tokens[11], light.range)
+                || !ParseFloatToken(tokens[12], light.innerConeDegrees)
+                || !ParseFloatToken(tokens[13], light.outerConeDegrees)
+                || !SpotConeAnglesAreValid(light.innerConeDegrees, light.outerConeDegrees)
+                || !ParseBool01Token(tokens[14], light.enabled))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid spot_light");
+            }
+            light.direction = CanonicalSpotLightDirection(direction);
+            if (!SpotLightIsValid(light))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid spot_light");
+            }
+            state.spotLights.push_back(light);
+            continue;
+        }
 
         return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "unrecognized record");
     }
@@ -954,8 +1016,14 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.doors = std::move(state.doors);
     loaded.level.itemPickups = std::move(state.itemPickups);
     loaded.level.staticProps = std::move(state.staticProps);
+    loaded.level.pointLights = std::move(state.pointLights);
+    loaded.level.spotLights = std::move(state.spotLights);
     loaded.level.authoringGroups = std::move(state.authoringGroups);
     CanonicalizeLevelEnvironment(loaded.level.environment);
+    for (SpotLightSpec& light : loaded.level.spotLights)
+    {
+        CanonicalizeSpotLight(light);
+    }
 
     if (!physics::AuthoredPhysicsBodiesWithinBudget(
             static_cast<int>(loaded.level.elevatedPlatforms.size()),

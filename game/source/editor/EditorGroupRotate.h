@@ -12,8 +12,10 @@
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
 #include "editor/EditorSnap.h"
+#include "editor/LocalLightAuthoring.h"
 #include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
+#include "world/LocalLight.h"
 
 #include <cmath>
 #include <vector>
@@ -29,6 +31,69 @@ inline bool SelectionSupportsRotate(
         && GetEditablePosition(workingCopy, selection) != nullptr;
 }
 
+inline bool SelectionIsGroupRotatePointOrbit(EditorSelection selection)
+{
+    return selection.kind == EditorObjectKind::PointLight;
+}
+
+inline bool SelectionIsGroupRotateSpot(EditorSelection selection)
+{
+    return selection.kind == EditorObjectKind::SpotLight;
+}
+
+inline bool CaptureGroupRotateStartRotation(
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    core::Vec3& outRotation)
+{
+    if (SelectionIsGroupRotatePointOrbit(selection)
+        && selection.index < workingCopy.pointLights.size())
+    {
+        // Point Lights have no authored orientation. Capture a dummy so the
+        // existing start-rotation array stays aligned with members.
+        outRotation = {};
+        return true;
+    }
+    if (SelectionIsGroupRotateSpot(selection)
+        && selection.index < workingCopy.spotLights.size())
+    {
+        const core::Vec3 direction = workingCopy.spotLights[selection.index].direction;
+        if (!world::SpotLightDirectionIsValid(direction) || !IsFiniteVec3(direction))
+        {
+            return false;
+        }
+        outRotation = world::CanonicalSpotLightDirection(direction);
+        return true;
+    }
+    const core::Vec3* rotation = GetEditableRotation(workingCopy, selection);
+    if (rotation == nullptr || !IsFiniteVec3(*rotation))
+    {
+        return false;
+    }
+    outRotation = *rotation;
+    return true;
+}
+
+inline bool SelectionSupportsGroupRotateMember(
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection)
+{
+    if (GetEditablePosition(workingCopy, selection) == nullptr)
+    {
+        return false;
+    }
+    core::Vec3 ignored{};
+    return CaptureGroupRotateStartRotation(workingCopy, selection, ignored);
+}
+
+inline bool SelectionDrivesGroupRotate(
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection)
+{
+    return SelectionHasRotateOrientation(workingCopy, selection)
+        && GetEditablePosition(workingCopy, selection) != nullptr;
+}
+
 inline bool EditorSelectionSetSupportsGroupRotate(
     const world::LevelDefinition& workingCopy,
     EditorSelection primary,
@@ -36,13 +101,13 @@ inline bool EditorSelectionSetSupportsGroupRotate(
 {
     const std::vector<EditorSelection> members =
         EditorSelectionSetMembers(primary, additional);
-    if (members.size() < 2)
+    if (members.size() < 2 || !SelectionDrivesGroupRotate(workingCopy, primary))
     {
         return false;
     }
     for (const EditorSelection& member : members)
     {
-        if (!SelectionSupportsRotate(workingCopy, member))
+        if (!SelectionSupportsGroupRotateMember(workingCopy, member))
         {
             return false;
         }
@@ -210,18 +275,57 @@ inline bool CaptureGroupRotateStarts(
     for (const EditorSelection& member : members)
     {
         const core::Vec3* position = GetEditablePosition(workingCopy, member);
-        const core::Vec3* rotation = GetEditableRotation(workingCopy, member);
-        if (position == nullptr || rotation == nullptr || !IsFiniteVec3(*position)
-            || !IsFiniteVec3(*rotation))
+        core::Vec3 startRotation{};
+        if (position == nullptr || !IsFiniteVec3(*position)
+            || !CaptureGroupRotateStartRotation(workingCopy, member, startRotation))
         {
             outPositions.clear();
             outRotations.clear();
             return false;
         }
         outPositions.push_back(*position);
-        outRotations.push_back(*rotation);
+        outRotations.push_back(startRotation);
     }
     return !members.empty();
+}
+
+inline bool ApplyGroupRotateOrientationTo(
+    world::LevelDefinition& workingCopy,
+    EditorSelection selection,
+    core::Vec3 nextOrientation)
+{
+    if (SelectionIsGroupRotatePointOrbit(selection))
+    {
+        return selection.index < workingCopy.pointLights.size();
+    }
+    if (SelectionIsGroupRotateSpot(selection))
+    {
+        if (selection.index >= workingCopy.spotLights.size())
+        {
+            return false;
+        }
+        return TryCommitAuthoredSpotDirection(
+            nextOrientation, workingCopy.spotLights[selection.index].direction);
+    }
+    return ApplyAuthoredRotationTo(workingCopy, selection, nextOrientation);
+}
+
+inline core::Vec3 NextGroupRotateOrientation(
+    EditorSelection selection,
+    core::Vec3 startOrientation,
+    EditorAxis axis,
+    float sharedDeltaDegrees)
+{
+    if (SelectionIsGroupRotatePointOrbit(selection))
+    {
+        return startOrientation;
+    }
+    if (SelectionIsGroupRotateSpot(selection))
+    {
+        return RotateAuthoredSpotDirection(
+            startOrientation, EditorAxisDirection(axis), sharedDeltaDegrees);
+    }
+    return ApplyAuthoredRotationDelta(startOrientation, axis, sharedDeltaDegrees);
 }
 
 // members[0] is PRIMARY. PRIMARY authored position stays at its drag-start
@@ -253,7 +357,7 @@ inline bool ApplySharedGroupRotation(
     nextRotations.reserve(members.size());
     for (std::size_t index = 0; index < members.size(); ++index)
     {
-        if (!SelectionSupportsRotate(workingCopy, members[index])
+        if (!SelectionSupportsGroupRotateMember(workingCopy, members[index])
             || !IsFiniteVec3(startPositions[index]) || !IsFiniteVec3(startRotations[index]))
         {
             return false;
@@ -265,9 +369,14 @@ inline bool ApplySharedGroupRotation(
             nextPosition = OrbitAuthoredPositionAroundPivot(
                 startPositions[index], primaryPivot, axis, sharedDeltaDegrees);
         }
-        const core::Vec3 nextRotation =
-            ApplyAuthoredRotationDelta(startRotations[index], axis, sharedDeltaDegrees);
+        const core::Vec3 nextRotation = NextGroupRotateOrientation(
+            members[index], startRotations[index], axis, sharedDeltaDegrees);
         if (!IsFiniteVec3(nextPosition) || !IsFiniteVec3(nextRotation))
+        {
+            return false;
+        }
+        if (SelectionIsGroupRotateSpot(members[index])
+            && !world::SpotLightDirectionIsValid(nextRotation))
         {
             return false;
         }
@@ -278,7 +387,8 @@ inline bool ApplySharedGroupRotation(
     for (std::size_t index = 0; index < members.size(); ++index)
     {
         if (!ApplyAuthoredTranslationTo(workingCopy, members[index], nextPositions[index])
-            || !ApplyAuthoredRotationTo(workingCopy, members[index], nextRotations[index]))
+            || !ApplyGroupRotateOrientationTo(
+                   workingCopy, members[index], nextRotations[index]))
         {
             return false;
         }

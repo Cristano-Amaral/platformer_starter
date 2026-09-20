@@ -44,6 +44,10 @@ const char* EditorObjectKindName(EditorObjectKind kind)
         return "Environment";
     case EditorObjectKind::DirectionalLight:
         return "DirectionalLight";
+    case EditorObjectKind::PointLight:
+        return "PointLight";
+    case EditorObjectKind::SpotLight:
+        return "SpotLight";
     }
     return "None";
 }
@@ -114,6 +118,12 @@ void FormatSelectionDisplayName(
     case EditorObjectKind::DirectionalLight:
         std::snprintf(buffer, bufferSize, "Directional Light");
         return;
+    case EditorObjectKind::PointLight:
+        std::snprintf(buffer, bufferSize, "Point Light %zu", selection.index);
+        return;
+    case EditorObjectKind::SpotLight:
+        std::snprintf(buffer, bufferSize, "Spot Light %zu", selection.index);
+        return;
     }
     std::snprintf(buffer, bufferSize, "(none)");
 }
@@ -137,6 +147,10 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
     case EditorObjectKind::Ground:
     case EditorObjectKind::MovingPlatform:
         return selection.index == 0;
+    case EditorObjectKind::PointLight:
+        return selection.index < level.pointLights.size();
+    case EditorObjectKind::SpotLight:
+        return selection.index < level.spotLights.size();
     case EditorObjectKind::DynamicBox:
         return selection.index < level.dynamicBoxes.size();
     case EditorObjectKind::StaticProp:
@@ -183,6 +197,8 @@ bool IsEditableSelection(EditorSelection selection)
         return true;
     case EditorObjectKind::Environment:
     case EditorObjectKind::DirectionalLight:
+    case EditorObjectKind::PointLight:
+    case EditorObjectKind::SpotLight:
         return true;
     default:
         return false;

@@ -165,6 +165,7 @@ add_executable(Platformer3D
     game/source/render/Renderer.h
     game/source/render/LightingEnvironment.cpp
     game/source/render/LightingEnvironment.h
+    game/source/render/LocalLights.h
     game/source/render/WorldLighting.cpp
     game/source/render/WorldLighting.h
     game/source/render/LevelGoalVisualization.cpp
@@ -192,6 +193,7 @@ add_executable(Platformer3D
     game/source/world/HazardWorld.h
     game/source/world/LevelDefinition.h
     game/source/world/LevelDefinition.cpp
+    game/source/world/LocalLight.h
     game/source/world/StaticProp.h
     game/source/world/StaticProp.cpp
     game/source/world/LevelGoal.h
@@ -1459,6 +1461,7 @@ add_executable(AuthoringGroupsTest
     game/source/editor/EditorSelectionSet.h
     game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorGroupRotate.h
+    game/source/editor/LocalLightAuthoring.h
     game/source/editor/ItemIdInspectorEdit.h
     game/source/platform/FileReplace.h
     game/source/render/CameraView.h
@@ -1999,6 +2002,7 @@ target_compile_definitions(LoadedModelMaterialsTest PRIVATE
 add_executable(LightingEnvironmentTest
     game/source/render/LightingEnvironment.cpp
     game/source/render/LightingEnvironment.h
+    game/source/render/LocalLights.h
     game/source/render/LightingEnvironmentTest.cpp
 )
 target_include_directories(LightingEnvironmentTest PRIVATE game/source)
@@ -2006,6 +2010,20 @@ if(MSVC)
     target_compile_options(LightingEnvironmentTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(LightingEnvironmentTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 85.3: CPU local-light packing/attenuation. No window or raylib.
+add_executable(LocalLightsTest
+    game/source/render/LightingEnvironment.cpp
+    game/source/render/LightingEnvironment.h
+    game/source/render/LocalLights.h
+    game/source/render/LocalLightsTest.cpp
+)
+target_include_directories(LocalLightsTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(LocalLightsTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(LocalLightsTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 85: shader/shadow resource lifetime. Hidden window. Stages shaders

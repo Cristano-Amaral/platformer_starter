@@ -87,6 +87,8 @@ int main()
     Expect(editor::SupportsLifecycle(EditorObjectKind::DynamicBox), "dynamic box supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::PressurePlate), "pressure plate supported");
     Expect(editor::SupportsLifecycle(EditorObjectKind::StaticProp), "static prop supported");
+    Expect(editor::SupportsLifecycle(EditorObjectKind::PointLight), "point light supported");
+    Expect(editor::SupportsLifecycle(EditorObjectKind::SpotLight), "spot light supported");
 
     {
         world::LevelDefinition working = MakeBaseLevel();
@@ -1922,6 +1924,74 @@ int main()
         Expect(std::strcmp(field.buffer, "coin") == 0, "invalid focus-loss restores buffer");
         Expect(working.itemPickups[1].itemId == "coin", "invalid focus-loss leaves workingCopy");
         Expect(working.itemPickups[0].itemId == "key", "invalid edit does not mutate the other pickup");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        const editor::LifecycleEditResult addedPoint =
+            editor::AddPointLight(working, kTestPlacementA);
+        Expect(addedPoint.succeeded && working.pointLights.size() == 1, "add point light");
+        Expect(
+            addedPoint.selection.kind == EditorObjectKind::PointLight
+                && addedPoint.selection.index == 0,
+            "add point selects new");
+        Expect(
+            Vec3Near(
+                working.pointLights[0].position,
+                {kTestPlacementA.x + editor::kDefaultAddedPointLightOffset.x,
+                 kTestPlacementA.y + editor::kDefaultAddedPointLightOffset.y,
+                 working.initialSpawnVisualCenter.z + editor::kDefaultAddedPointLightOffset.z}),
+            "default point uses camera X/Y and spawn-lane Z");
+        Expect(working.pointLights[0].enabled, "default point is enabled");
+        const world::LevelDefinition afterAdd = working;
+        Expect(world::AuthoredLevelDataEqual(working, afterAdd), "Inspector no-op is not Dirty");
+        working.pointLights[0].intensity = 2.25f;
+        Expect(!world::AuthoredLevelDataEqual(working, afterAdd), "Inspector intensity edit is Dirty");
+        working.pointLights[0].intensity = afterAdd.pointLights[0].intensity;
+
+        const editor::LifecycleEditResult dupPoint =
+            editor::DuplicateSelected(working, {EditorObjectKind::PointLight, 0});
+        Expect(dupPoint.succeeded && working.pointLights.size() == 2, "duplicate point light");
+        Expect(
+            NearlyEqual(
+                working.pointLights[1].position.x,
+                working.pointLights[0].position.x + editor::kLifecycleDuplicateOffsetX),
+            "duplicated point uses placement offset");
+        Expect(working.pointLights[1].enabled == working.pointLights[0].enabled,
+            "duplicated point copies enabled");
+        working.pointLights[1].color = {0.2f, 0.4f, 1.0f};
+        Expect(!world::PointLightEqual(working.pointLights[0], working.pointLights[1]),
+            "duplicated point is an independent instance");
+
+        const editor::LifecycleEditResult deleted =
+            editor::DeleteSelected(working, {EditorObjectKind::PointLight, 0});
+        Expect(deleted.succeeded && working.pointLights.size() == 1, "delete remaps remaining point");
+        Expect(working.pointLights[0].color.z == 1.0f, "survivor keeps duplicated color");
+        Expect(
+            editor::IsValidSelection(working, {EditorObjectKind::PointLight, 0})
+                && !editor::IsValidSelection(working, {EditorObjectKind::PointLight, 1}),
+            "stale point selection index is invalid after delete");
+
+        const editor::LifecycleEditResult addedSpot =
+            editor::AddSpotLight(working, kTestPlacementA);
+        Expect(addedSpot.succeeded && working.spotLights.size() == 1, "add spot light");
+        Expect(Vec3Near(working.spotLights[0].direction, {0.0f, -1.0f, 0.0f}),
+            "default spot aims down");
+        const editor::LifecycleEditResult dupSpot =
+            editor::DuplicateSelected(working, {EditorObjectKind::SpotLight, 0});
+        Expect(dupSpot.succeeded && working.spotLights.size() == 2, "duplicate spot light");
+        Expect(
+            NearlyEqual(
+                working.spotLights[1].position.x,
+                working.spotLights[0].position.x + editor::kLifecycleDuplicateOffsetX),
+            "duplicated spot uses placement offset");
+        working.spotLights[1].direction = world::CanonicalSpotLightDirection({1.0f, 0.0f, 0.0f});
+        Expect(!world::SpotLightEqual(working.spotLights[0], working.spotLights[1]),
+            "duplicated spot is an independent instance");
+        Expect(editor::DeleteSelected(working, {EditorObjectKind::SpotLight, 0}).succeeded,
+            "delete remaps remaining spot");
+        Expect(working.spotLights.size() == 1 && working.spotLights[0].direction.x == 1.0f,
+            "survivor keeps duplicated direction");
     }
 
     if (gFailures != 0)

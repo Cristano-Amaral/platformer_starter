@@ -2,6 +2,7 @@
 
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/DirectionalLightAuthoring.h"
+#include "editor/LocalLightAuthoring.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/StaticPropTransform.h"
@@ -354,6 +355,26 @@ EditorPickingSet BuildPickingSet(
         StaticPropWorldAabb(
             prop, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
         set.proxies.push_back(proxy);
+    }
+    for (std::size_t index = 0; index < appliedLevel.pointLights.size(); ++index)
+    {
+        AddProxy(
+            set,
+            EditorObjectKind::PointLight,
+            index,
+            appliedLevel.pointLights[index].position,
+            LocalLightPickExtents(),
+            0.0f);
+    }
+    for (std::size_t index = 0; index < appliedLevel.spotLights.size(); ++index)
+    {
+        AddProxy(
+            set,
+            EditorObjectKind::SpotLight,
+            index,
+            appliedLevel.spotLights[index].position,
+            LocalLightPickExtents(),
+            0.0f);
     }
     return set;
 }

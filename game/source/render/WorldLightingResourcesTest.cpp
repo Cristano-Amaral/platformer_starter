@@ -4,6 +4,7 @@
 #include "platform/RuntimePaths.h"
 #include "render/LightingEnvironment.h"
 #include "render/WorldLighting.h"
+#include "world/LocalLight.h"
 
 #include "raylib.h"
 
@@ -13,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 namespace
 {
@@ -171,6 +173,18 @@ int main()
     Expect(
         lighting.ShadowMapCreateCount() == shadowCreates,
         "enabled edits do not recreate shadow maps");
+    render::LightingEnvironment withLocal = environment;
+    std::vector<world::PointLightSpec> packedPoints(
+        8, world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+    packedPoints.push_back(world::MakeDefaultPointLight({4.0f, 2.0f, 0.0f}));
+    render::ApplyAuthoredLocalLights(withLocal, packedPoints, {});
+    Expect(withLocal.localLights.count == 8, "BindLitPass overflow packing stays at 8");
+    lighting.BindLitPass(withLocal);
+    lighting.UnbindLitPass();
+    Expect(lighting.ShaderLoadCount() == shaderLoads, "local-light bind does not recreate shaders");
+    Expect(
+        lighting.ShadowMapCreateCount() == shadowCreates,
+        "local-light bind does not recreate shadow maps");
     Expect(
         !render::ShouldCastDirectionalShadow(render::ShadowParticipant::Thumbnail)
             && !render::ShouldCastDirectionalShadow(render::ShadowParticipant::Preview),

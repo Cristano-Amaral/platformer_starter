@@ -353,6 +353,42 @@ std::string SerializeLevelText(const LevelDefinition& level)
     AppendInt(out, level.environment.directionalShadowsEnabled ? 1 : 0);
     out += '\n';
 
+    for (const PointLightSpec& light : level.pointLights)
+    {
+        out += "point_light ";
+        AppendVec3(out, light.position);
+        out += ' ';
+        AppendVec3(out, light.color);
+        out += ' ';
+        AppendFloat(out, light.intensity);
+        out += ' ';
+        AppendFloat(out, light.range);
+        out += ' ';
+        AppendInt(out, light.enabled ? 1 : 0);
+        out += '\n';
+    }
+
+    for (const SpotLightSpec& light : level.spotLights)
+    {
+        out += "spot_light ";
+        AppendVec3(out, light.position);
+        out += ' ';
+        AppendVec3(out, CanonicalSpotLightDirection(light.direction));
+        out += ' ';
+        AppendVec3(out, light.color);
+        out += ' ';
+        AppendFloat(out, light.intensity);
+        out += ' ';
+        AppendFloat(out, light.range);
+        out += ' ';
+        AppendFloat(out, light.innerConeDegrees);
+        out += ' ';
+        AppendFloat(out, light.outerConeDegrees);
+        out += ' ';
+        AppendInt(out, light.enabled ? 1 : 0);
+        out += '\n';
+    }
+
     return out;
 }
 

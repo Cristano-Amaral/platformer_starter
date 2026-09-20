@@ -92,8 +92,9 @@ directional_light <enabled> <dx> <dy> <dz> <r> <g> <b> <intensity> <shadowsEnabl
 
 These author the single M85 lighting environment. They are not a light list,
 Component, Scene node, or gameplay activation target. There is no
-`ambient_light`, `shadow_settings`, `linkedLightIndex`, Point Light, or Spot
-Light record.
+`ambient_light`, `shadow_settings`, or `linkedLightIndex` record. Milestone
+85.3 adds optional repeatable `point_light` / `spot_light` records below;
+they are not Directional Light and are not gameplay targets.
 
 Omitted records resolve to M85-compatible defaults: ambient color `{1,1,1}`
 intensity `0.34`; directional enabled `1`, ray `normalize(-0.42,-1,-0.38)`,
@@ -114,6 +115,37 @@ effective enablement at runtime; it is not a generic event/receiver
 system.
 
 The writer always emits both records after `camera`.
+
+### Optional local lights (Milestone 85.3)
+
+```
+point_light <px> <py> <pz> <r> <g> <b> <intensity> <range> <enabled>
+spot_light <px> <py> <pz> <dx> <dy> <dz> <r> <g> <b> <intensity> <range> <innerConeDegrees> <outerConeDegrees> <enabled>
+```
+
+Repeatable authored Point and Spot Lights. Zero or more of each. Encounter
+order is `LevelDefinition` container order. Old Levels without these records
+remain valid and keep M85–M85.2 global lighting semantics. Canonical
+`level_01` / `level_02` stay valid without these lines. The format version
+stays `1`.
+
+`enabled` is an exact `0`/`1` bool. Colors are finite in `[0,1]`. Intensity
+is finite in `[0, 4]` (same ceiling as Directional). Range is finite in
+`[0.1, 64]`. Spot direction is finite, non-zero, and stored normalized
+(illumination axis / ray travel). Cone angles are degrees:
+`0 <= inner`, `outer <= 89`, and `outer - inner >= 0.5`. Token counts are
+strict (10 / 15). Malformed records are `Invalid`.
+
+Defaults for newly created editor lights: color `{1, 0.95, 0.85}`, intensity
+`1.5`, range `8`, enabled `1`, Spot direction `{0, -1, 0}`, inner `20`,
+outer `35`.
+
+Local lights are presentation lighting only. They are not gameplay targets,
+not Directional Light, and do not cast shadows. Pressure Plate
+`controlsDirectionalLight` still names only the singleton Directional Light.
+
+The writer emits `point_light` records then `spot_light` records after
+`directional_light`, omitted when the collections are empty.
 
 ### Required repeated records
 
@@ -299,12 +331,14 @@ authoring_group <name> <kind> <index> <kind> <index> ...
 Names are unique within a Level. Default created names are `Group_01`,
 `Group_02`, … Copied groups use `<name>_Copy`, then `<name>_Copy_2`.
 Each group has at least two members. `<kind>` is a v1 object keyword
-(`platform`, `static_prop`, `item_pickup`, …). `<index>` is a 0-based
-unsigned index into that authored collection. The first member is the
-preferred PRIMARY when the editor reconstructs an M78 multi-selection.
-One authored object may belong to at most one group. Overlapping membership,
-a one-member group, an unknown kind, or an out-of-range index is `Invalid`.
-The writer emits groups after `static_prop` and before `camera`.
+(`platform`, `static_prop`, `item_pickup`, `point_light`, `spot_light`, …).
+`<index>` is a 0-based unsigned index into that authored collection. The first
+member is the preferred PRIMARY when the editor reconstructs an M78
+multi-selection. One authored object may belong to at most one group.
+Overlapping membership, a one-member group, an unknown kind, or an
+out-of-range index is `Invalid`. `environment` and `directional_light` are
+**not** valid member kinds. The writer emits groups after `static_prop` and
+before `camera`.
 
 Camera FOV finite, `> 0` and `< 180` (same range as M30).
 
@@ -325,7 +359,7 @@ CharacterVirtual max slope and shape, `kPlayerVisualSize`, inner-body settings.
 Camera follow policy: dead zone X/Y, follow sharpness.
 
 `LevelFileTest` asserts this by whitelist: every keyword the writer emits must
-be one of the 22 v1 keywords, so no runtime state can appear in output.
+be one of the 26 v1 keywords, so no runtime state can appear in output.
 
 ## Cooker
 
@@ -401,6 +435,8 @@ authoring_group     variable, authoringGroups index order
 camera
 environment
 directional_light
+point_light         variable, pointLights index order
+spot_light          variable, spotLights index order
 ```
 
 One record per line, single-space separated, `\n` line endings, trailing

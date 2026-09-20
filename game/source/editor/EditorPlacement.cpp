@@ -1,6 +1,7 @@
 #include "editor/EditorPlacement.h"
 
 #include "editor/LevelEditor.h"
+#include "editor/LocalLightAuthoring.h"
 #include "world/ItemPickup.h"
 #include "world/LevelGoal.h"
 
@@ -28,6 +29,10 @@ const char* PlacementModeName(PlacementMode mode)
         return "Item Pickup";
     case PlacementMode::Goal:
         return "Level Goal";
+    case PlacementMode::PointLight:
+        return "Point Light";
+    case PlacementMode::SpotLight:
+        return "Spot Light";
     default:
         return "None";
     }
@@ -55,6 +60,10 @@ EditorObjectKind KindFromPlacementMode(PlacementMode mode)
         return EditorObjectKind::ItemPickup;
     case PlacementMode::Goal:
         return EditorObjectKind::Goal;
+    case PlacementMode::PointLight:
+        return EditorObjectKind::PointLight;
+    case PlacementMode::SpotLight:
+        return EditorObjectKind::SpotLight;
     default:
         return EditorObjectKind::None;
     }
@@ -82,6 +91,10 @@ PlacementMode PlacementModeFromKind(EditorObjectKind kind)
         return PlacementMode::ItemPickup;
     case EditorObjectKind::Goal:
         return PlacementMode::Goal;
+    case EditorObjectKind::PointLight:
+        return PlacementMode::PointLight;
+    case EditorObjectKind::SpotLight:
+        return PlacementMode::SpotLight;
     default:
         return PlacementMode::None;
     }
@@ -109,6 +122,10 @@ LevelEditorRequest PlacementAddRequest(PlacementMode mode)
         return LevelEditorRequest::AddItemPickup;
     case PlacementMode::Goal:
         return LevelEditorRequest::AddGoal;
+    case PlacementMode::PointLight:
+        return LevelEditorRequest::AddPointLight;
+    case PlacementMode::SpotLight:
+        return LevelEditorRequest::AddSpotLight;
     default:
         return LevelEditorRequest::None;
     }
@@ -136,6 +153,9 @@ core::Vec3 DefaultPlacementSize(PlacementMode mode)
         return world::kItemPickupVisualExtents;
     case PlacementMode::Goal:
         return world::kDefaultLevelGoalSize;
+    case PlacementMode::PointLight:
+    case PlacementMode::SpotLight:
+        return LocalLightPickExtents();
     default:
         return {};
     }
@@ -163,6 +183,10 @@ core::Vec3 DefaultPlacementOffset(PlacementMode mode)
         return kDefaultAddedItemPickupOffset;
     case PlacementMode::Goal:
         return kDefaultAddedLevelGoalOffset;
+    case PlacementMode::PointLight:
+        return kDefaultAddedPointLightOffset;
+    case PlacementMode::SpotLight:
+        return kDefaultAddedSpotLightOffset;
     default:
         return {};
     }

@@ -2,6 +2,7 @@
 
 #include "editor/AuthoredObjectLifecycle.h"
 #include "editor/DirectionalLightAuthoring.h"
+#include "editor/LocalLightAuthoring.h"
 #include "editor/EditorGroupRotate.h"
 #include "editor/EditorGroupTranslate.h"
 #include "editor/EditorMath.h"
@@ -302,6 +303,8 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::Door:
     case EditorObjectKind::ItemPickup:
     case EditorObjectKind::StaticProp:
+    case EditorObjectKind::PointLight:
+    case EditorObjectKind::SpotLight:
     case EditorObjectKind::DirectionalLight:
         return true;
     default:
@@ -337,7 +340,28 @@ bool IsRotateSelection(EditorSelection selection)
 {
     return selection.kind == EditorObjectKind::StaticProp
         || selection.kind == EditorObjectKind::ItemPickup
-        || selection.kind == EditorObjectKind::DirectionalLight;
+        || selection.kind == EditorObjectKind::DirectionalLight
+        || selection.kind == EditorObjectKind::SpotLight;
+}
+
+bool SelectionHasRotateOrientation(
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection)
+{
+    if (!IsRotateSelection(selection))
+    {
+        return false;
+    }
+    if (selection.kind == EditorObjectKind::DirectionalLight)
+    {
+        return selection.index == 0;
+    }
+    if (selection.kind == EditorObjectKind::SpotLight)
+    {
+        return selection.index < workingCopy.spotLights.size()
+            && world::SpotLightDirectionIsValid(workingCopy.spotLights[selection.index].direction);
+    }
+    return GetEditableRotation(workingCopy, selection) != nullptr;
 }
 
 core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection selection)
@@ -414,6 +438,18 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.staticProps.size())
         {
             return &level.staticProps[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::PointLight:
+        if (selection.index < level.pointLights.size())
+        {
+            return &level.pointLights[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::SpotLight:
+        if (selection.index < level.spotLights.size())
+        {
+            return &level.spotLights[selection.index].position;
         }
         break;
     default:
@@ -498,6 +534,18 @@ const core::Vec3* GetEditablePosition(
         if (selection.index < level.staticProps.size())
         {
             return &level.staticProps[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::PointLight:
+        if (selection.index < level.pointLights.size())
+        {
+            return &level.pointLights[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::SpotLight:
+        if (selection.index < level.spotLights.size())
+        {
+            return &level.spotLights[selection.index].position;
         }
         break;
     default:
@@ -803,6 +851,22 @@ bool GetGizmoPreviewBox(
         {
             center = DirectionalLightVisualizationAnchor(directionalLightVisualization);
             size = DirectionalLightVisualizationPickExtents(directionalLightVisualization);
+            return true;
+        }
+        break;
+    case EditorObjectKind::PointLight:
+        if (selection.index < workingCopy.pointLights.size())
+        {
+            center = workingCopy.pointLights[selection.index].position;
+            size = LocalLightPickExtents();
+            return true;
+        }
+        break;
+    case EditorObjectKind::SpotLight:
+        if (selection.index < workingCopy.spotLights.size())
+        {
+            center = workingCopy.spotLights[selection.index].position;
+            size = LocalLightPickExtents();
             return true;
         }
         break;
@@ -1116,6 +1180,40 @@ bool AuthoredGeometryDiffers(
             || Vec3Differs(activeProp.rotationDegrees, workingProp.rotationDegrees)
             || Vec3Differs(activeProp.scale, workingProp.scale);
     }
+    case EditorObjectKind::PointLight:
+    {
+        if (selection.index >= workingCopy.pointLights.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::PointLight, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.pointLights.size())
+        {
+            return true;
+        }
+        return !world::PointLightEqual(
+            active.pointLights[static_cast<std::size_t>(activeIndex)],
+            workingCopy.pointLights[selection.index]);
+    }
+    case EditorObjectKind::SpotLight:
+    {
+        if (selection.index >= workingCopy.spotLights.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::SpotLight, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.spotLights.size())
+        {
+            return true;
+        }
+        return !world::SpotLightEqual(
+            active.spotLights[static_cast<std::size_t>(activeIndex)],
+            workingCopy.spotLights[selection.index]);
+    }
     default:
         return false;
     }
@@ -1327,7 +1425,9 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::PressurePlate,
         EditorObjectKind::Door,
         EditorObjectKind::ItemPickup,
-        EditorObjectKind::StaticProp};
+        EditorObjectKind::StaticProp,
+        EditorObjectKind::PointLight,
+        EditorObjectKind::SpotLight};
     for (const EditorObjectKind kind : kinds)
     {
         const std::size_t count = [&]() -> std::size_t {
@@ -1353,6 +1453,10 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.itemPickups.size();
             case EditorObjectKind::StaticProp:
                 return workingCopy.staticProps.size();
+            case EditorObjectKind::PointLight:
+                return workingCopy.pointLights.size();
+            case EditorObjectKind::SpotLight:
+                return workingCopy.spotLights.size();
             default:
                 return 0;
             }
@@ -2086,12 +2190,7 @@ GizmoDrawRequest MakeRotateGizmoDrawRequest(
     core::Vec3 origin{};
     if (!TryScaleGizmoOrigin(
             workingCopy, selection, origin, directionalLightVisualization)
-        || !IsRotateSelection(selection))
-    {
-        return request;
-    }
-    if (selection.kind != EditorObjectKind::DirectionalLight
-        && GetEditableRotation(workingCopy, selection) == nullptr)
+        || !SelectionHasRotateOrientation(workingCopy, selection))
     {
         return request;
     }
@@ -2294,7 +2393,8 @@ bool UpdateRotateInteraction(
         }
         else
         {
-            if (state.dragTarget.kind == EditorObjectKind::DirectionalLight)
+            if (state.dragTarget.kind == EditorObjectKind::DirectionalLight
+                || state.dragTarget.kind == EditorObjectKind::SpotLight)
             {
                 const core::Vec3 intendedRotation = GizmoRotateDegrees(state, mouseRay);
                 float delta = 0.0f;
@@ -2316,10 +2416,21 @@ bool UpdateRotateInteraction(
                 {
                     delta = std::round(delta / increment) * increment;
                 }
-                workingCopy.environment.directionalRayDirection = RotateAuthoredDirectionalRay(
-                    world::CanonicalLevelDirectionalRay(state.dragStartRotation),
-                    EditorAxisDirection(state.active),
-                    delta);
+                if (state.dragTarget.kind == EditorObjectKind::DirectionalLight)
+                {
+                    workingCopy.environment.directionalRayDirection = RotateAuthoredDirectionalRay(
+                        world::CanonicalLevelDirectionalRay(state.dragStartRotation),
+                        EditorAxisDirection(state.active),
+                        delta);
+                }
+                else if (state.dragTarget.index < workingCopy.spotLights.size())
+                {
+                    workingCopy.spotLights[state.dragTarget.index].direction =
+                        RotateAuthoredSpotDirection(
+                            world::CanonicalSpotLightDirection(state.dragStartRotation),
+                            EditorAxisDirection(state.active),
+                            delta);
+                }
                 state.hovered = state.active;
                 return true;
             }
@@ -2342,7 +2453,7 @@ bool UpdateRotateInteraction(
         return false;
     }
 
-    if (!IsRotateSelection(currentSelection))
+    if (!SelectionHasRotateOrientation(workingCopy, currentSelection))
     {
         state.hovered = EditorAxis::None;
         return false;
@@ -2363,11 +2474,6 @@ bool UpdateRotateInteraction(
         state.hovered = EditorAxis::None;
         return false;
     }
-    if (currentSelection.kind != EditorObjectKind::DirectionalLight && rotation == nullptr)
-    {
-        state.hovered = EditorAxis::None;
-        return false;
-    }
 
     const float axisLength = GizmoWorldLength(view, origin);
     const float hitRadius = axisLength * kRotateHitRadiusFraction;
@@ -2377,9 +2483,20 @@ bool UpdateRotateInteraction(
         return false;
     }
 
-    const core::Vec3 startRotation = currentSelection.kind == EditorObjectKind::DirectionalLight
-        ? workingCopy.environment.directionalRayDirection
-        : *rotation;
+    core::Vec3 startRotation{};
+    if (currentSelection.kind == EditorObjectKind::DirectionalLight)
+    {
+        startRotation = workingCopy.environment.directionalRayDirection;
+    }
+    else if (currentSelection.kind == EditorObjectKind::SpotLight
+        && currentSelection.index < workingCopy.spotLights.size())
+    {
+        startRotation = workingCopy.spotLights[currentSelection.index].direction;
+    }
+    else
+    {
+        startRotation = *rotation;
+    }
     if (!BeginRotateDrag(
             state, currentSelection, state.hovered, origin, startRotation, mouseRay))
     {

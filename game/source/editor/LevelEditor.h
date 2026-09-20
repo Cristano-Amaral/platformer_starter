@@ -105,6 +105,8 @@ enum class LevelEditorRequest
     AddItemPickup,
     AddGoal,
     AddStaticProp,
+    AddPointLight,
+    AddSpotLight,
     DuplicateSelected,
     DeleteSelected,
     GroupSelected,

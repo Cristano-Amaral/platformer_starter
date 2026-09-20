@@ -30,6 +30,8 @@ enum class EditorObjectKind
     ItemPickup,
     Environment,
     DirectionalLight,
+    PointLight,
+    SpotLight,
 };
 
 struct EditorSelection

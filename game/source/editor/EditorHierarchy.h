@@ -80,6 +80,14 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
     {
         entries.push_back({{EditorObjectKind::StaticProp, index}, "Static Props"});
     }
+    for (std::size_t index = 0; index < level.pointLights.size(); ++index)
+    {
+        entries.push_back({{EditorObjectKind::PointLight, index}, "Point Lights"});
+    }
+    for (std::size_t index = 0; index < level.spotLights.size(); ++index)
+    {
+        entries.push_back({{EditorObjectKind::SpotLight, index}, "Spot Lights"});
+    }
     return entries;
 }
 

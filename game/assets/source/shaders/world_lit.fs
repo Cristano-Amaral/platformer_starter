@@ -21,6 +21,11 @@ uniform float shadowsEnabled;
 uniform mat4 lightVP;
 uniform float shadowBias;
 uniform int shadowMapResolution;
+uniform int localLightCount;
+uniform vec4 localLightPosRange[8];
+uniform vec4 localLightColorIntensity[8];
+uniform vec4 localLightDirType[8];
+uniform vec4 localLightConeCos[8];
 
 out vec4 finalColor;
 
@@ -66,5 +71,56 @@ void main()
 
     vec3 ambient = albedo.rgb * ambientColor * ambientIntensity;
     vec3 directional = albedo.rgb * lightColor * lightIntensity * nDotL * visibility * directionalScale;
-    finalColor = vec4(ambient + directional, albedo.a);
+    vec3 local = vec3(0.0);
+    int count = localLightCount;
+    if (count > 8)
+    {
+        count = 8;
+    }
+    for (int i = 0; i < 8; ++i)
+    {
+        if (i >= count)
+        {
+            break;
+        }
+        vec4 posRange = localLightPosRange[i];
+        vec4 colorIntensity = localLightColorIntensity[i];
+        vec4 dirType = localLightDirType[i];
+        vec4 cone = localLightConeCos[i];
+        vec3 toFrag = fragPosition - posRange.xyz;
+        float dist = length(toFrag);
+        float range = posRange.w;
+        float distAtt = 0.0;
+        if (range > 0.0 && dist < range)
+        {
+            float falloff = 1.0 - (dist / range);
+            distAtt = falloff * falloff;
+        }
+        if (distAtt <= 0.0)
+        {
+            continue;
+        }
+        vec3 toLocalLight = normalize(posRange.xyz - fragPosition);
+        float localNdotL = max(dot(normal, toLocalLight), 0.0);
+        float angular = 1.0;
+        if (dirType.w > 1.5)
+        {
+            vec3 spotAxis = normalize(dirType.xyz);
+            vec3 lightToFrag = (dist > 1.0e-8) ? (toFrag / dist) : spotAxis;
+            float cosTheta = dot(lightToFrag, spotAxis);
+            float innerCos = cone.x;
+            float outerCos = cone.y;
+            if (cosTheta <= outerCos)
+            {
+                angular = 0.0;
+            }
+            else if (cosTheta < innerCos)
+            {
+                float denom = innerCos - outerCos;
+                angular = (denom > 1.0e-5) ? ((cosTheta - outerCos) / denom) : 1.0;
+            }
+        }
+        local += albedo.rgb * colorIntensity.rgb * colorIntensity.a * localNdotL * distAtt * angular;
+    }
+    finalColor = vec4(ambient + directional + local, albedo.a);
 }

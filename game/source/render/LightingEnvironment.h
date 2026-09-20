@@ -5,6 +5,7 @@
 // Not a scene-light list, ECS component, or Lighting Editor panel.
 
 #include "core/Vec3.h"
+#include "render/LocalLights.h"
 #include "world/LevelEnvironment.h"
 
 namespace render
@@ -48,6 +49,7 @@ struct LightingEnvironment
     AmbientLight ambient{};
     DirectionalLight directional{};
     DirectionalShadowConfig shadows{};
+    PackedLocalLights localLights{};
 };
 
 struct DirectionalLightView
@@ -103,6 +105,10 @@ inline constexpr int kMaxShadowMapResolution = 4096;
 LightingEnvironment MakeDefaultLightingEnvironment();
 LightingEnvironment ValidateLightingEnvironment(LightingEnvironment environment);
 LightingEnvironment MakeLightingEnvironmentFromAuthored(const world::LevelEnvironment& authored);
+void ApplyAuthoredLocalLights(
+    LightingEnvironment& environment,
+    const std::vector<world::PointLightSpec>& pointLights,
+    const std::vector<world::SpotLightSpec>& spotLights);
 void ApplyDirectionalLightActivation(
     LightingEnvironment& environment,
     bool hasLinkedPressurePlates,

@@ -16,6 +16,7 @@
 #include "editor/ContentBrowser.h"
 #include "editor/ContentBrowserView.h"
 #include "editor/DirectionalLightAuthoring.h"
+#include "editor/LocalLightAuthoring.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
 #include "editor/EditorPlacement.h"
@@ -1238,6 +1239,77 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             EditVec3("Scale X Y Z", prop.scale);
         }
         break;
+    case EditorObjectKind::PointLight:
+        if (state.selection.index < level.pointLights.size())
+        {
+            world::PointLightSpec& light = level.pointLights[state.selection.index];
+            ImGui::TextWrapped(
+                "Repeatable Point Light. Position is the real illumination origin.");
+            ImGui::Checkbox("Enabled", &light.enabled);
+            EditVec3("Position X Y Z", light.position);
+            ImGui::ColorEdit3("Color", &light.color.x);
+            ClampColor01(light.color);
+            ImGui::SliderFloat(
+                "Intensity",
+                &light.intensity,
+                0.0f,
+                world::kMaxAuthoredLocalLightIntensity,
+                "%.3f");
+            light.intensity = world::ClampLocalLightIntensity(light.intensity);
+            ImGui::SliderFloat(
+                "Range",
+                &light.range,
+                world::kMinAuthoredLocalLightRange,
+                world::kMaxAuthoredLocalLightRange,
+                "%.3f");
+            light.range = world::ClampLocalLightRange(light.range);
+        }
+        break;
+    case EditorObjectKind::SpotLight:
+        if (state.selection.index < level.spotLights.size())
+        {
+            world::SpotLightSpec& light = level.spotLights[state.selection.index];
+            ImGui::TextWrapped(
+                "Repeatable Spot Light. Position is the illumination origin. "
+                "Direction is the cone axis (ray travel).");
+            ImGui::Checkbox("Enabled", &light.enabled);
+            EditVec3("Position X Y Z", light.position);
+            core::Vec3 direction = light.direction;
+            EditVec3("Direction X Y Z", direction);
+            if (!TryCommitAuthoredSpotDirection(direction, light.direction))
+            {
+            }
+            ImGui::ColorEdit3("Color", &light.color.x);
+            ClampColor01(light.color);
+            ImGui::SliderFloat(
+                "Intensity",
+                &light.intensity,
+                0.0f,
+                world::kMaxAuthoredLocalLightIntensity,
+                "%.3f");
+            light.intensity = world::ClampLocalLightIntensity(light.intensity);
+            ImGui::SliderFloat(
+                "Range",
+                &light.range,
+                world::kMinAuthoredLocalLightRange,
+                world::kMaxAuthoredLocalLightRange,
+                "%.3f");
+            light.range = world::ClampLocalLightRange(light.range);
+            ImGui::SliderFloat(
+                "Inner Cone Angle",
+                &light.innerConeDegrees,
+                world::kMinSpotInnerConeDegrees,
+                world::kMaxSpotOuterConeDegrees,
+                "%.2f");
+            ImGui::SliderFloat(
+                "Outer Cone Angle",
+                &light.outerConeDegrees,
+                world::kMinSpotInnerConeDegrees,
+                world::kMaxSpotOuterConeDegrees,
+                "%.2f");
+            world::ClampSpotConeAngles(light.innerConeDegrees, light.outerConeDegrees);
+        }
+        break;
     case EditorObjectKind::None:
     default:
         break;
@@ -1290,6 +1362,8 @@ void DrawObjectPalette(LevelEditorState& state, const LevelEditorViewContext& vi
     paletteButton("Door", PlacementMode::Door, LevelEditorRequest::AddDoor);
     paletteButton("Item Pickup", PlacementMode::ItemPickup, LevelEditorRequest::AddItemPickup);
     paletteButton("Level Goal", PlacementMode::Goal, LevelEditorRequest::AddGoal);
+    paletteButton("Point Light", PlacementMode::PointLight, LevelEditorRequest::AddPointLight);
+    paletteButton("Spot Light", PlacementMode::SpotLight, LevelEditorRequest::AddSpotLight);
 
     ImGui::Separator();
     if (StaticPropPlacementIsActive(state.staticPropPlacement))
@@ -2439,6 +2513,30 @@ LevelEditorRequest DrawEditorMenuBar(
             if (ImGui::MenuItem("Level Goal"))
             {
                 request = EditAddMenuRequest(EditorObjectKind::Goal);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::PointLight)));
+            if (ImGui::MenuItem("Point Light"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::PointLight);
+            }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(
+                !CanIssueAuthoredLifecycleRequest(
+                    authoringAvailable,
+                    state.workingCopy,
+                    state.selection,
+                    gizmoDragging,
+                    EditAddMenuRequest(EditorObjectKind::SpotLight)));
+            if (ImGui::MenuItem("Spot Light"))
+            {
+                request = EditAddMenuRequest(EditorObjectKind::SpotLight);
             }
             ImGui::EndDisabled();
             // Static Prop is the only Add entry whose enablement depends on

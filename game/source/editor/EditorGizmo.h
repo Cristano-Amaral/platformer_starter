@@ -163,6 +163,12 @@ bool IsResizeSelection(EditorSelection selection);
 bool IsScaleSelection(EditorSelection selection);
 bool IsRotateSelection(EditorSelection selection);
 
+// Rotate-capable authored orientation: Euler GetEditableRotation, Directional
+// ray, or Spot Light direction. Point Light is not included.
+bool SelectionHasRotateOrientation(
+    const world::LevelDefinition& workingCopy,
+    EditorSelection selection);
+
 // Mutable authored position in workingCopy. Null for Camera and remaining
 // read-only kinds. Checkpoint, Hazard, and Collectible are Translate-only.
 core::Vec3* GetEditablePosition(

@@ -1403,6 +1403,69 @@ int main()
             "Directional Light is always valid");
     }
 
+    {
+        world::LevelDefinition level = MakeStubLevel();
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 12.0f, 0.0f}));
+        level.pointLights.push_back(world::MakeDefaultPointLight({6.0f, 12.0f, 0.0f}));
+        level.spotLights.push_back(world::MakeDefaultSpotLight({3.0f, 12.0f, 0.0f}));
+        const std::vector<editor::HierarchyEntry> lightHierarchy = editor::BuildHierarchyEntries(level);
+        bool foundPoint0 = false;
+        bool foundPoint1 = false;
+        bool foundSpot = false;
+        for (const editor::HierarchyEntry& entry : lightHierarchy)
+        {
+            foundPoint0 = foundPoint0
+                || (entry.selection.kind == editor::EditorObjectKind::PointLight
+                    && entry.selection.index == 0);
+            foundPoint1 = foundPoint1
+                || (entry.selection.kind == editor::EditorObjectKind::PointLight
+                    && entry.selection.index == 1);
+            foundSpot = foundSpot
+                || (entry.selection.kind == editor::EditorObjectKind::SpotLight
+                    && entry.selection.index == 0);
+        }
+        Expect(foundPoint0 && foundPoint1, "hierarchy lists repeatable Point Lights");
+        Expect(foundSpot, "hierarchy lists repeatable Spot Lights");
+        Expect(
+            editor::IsValidSelection(level, {editor::EditorObjectKind::PointLight, 0})
+                && editor::IsValidSelection(level, {editor::EditorObjectKind::SpotLight, 0}),
+            "local lights are valid selections");
+        Expect(
+            editor::IsEditableSelection({editor::EditorObjectKind::PointLight, 0})
+                && editor::IsEditableSelection({editor::EditorObjectKind::SpotLight, 0}),
+            "local lights are Inspector-editable");
+
+        const editor::EditorPickingSet set =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        const editor::Ray3 atPoint{{0.0f, 12.0f, 10.0f}, {0.0f, 0.0f, -1.0f}};
+        const editor::Ray3 atSpot{{3.0f, 12.0f, 10.0f}, {0.0f, 0.0f, -1.0f}};
+        const editor::Ray3 atRangeEdge{{8.0f, 12.0f, 10.0f}, {0.0f, 0.0f, -1.0f}};
+        Expect(
+            editor::PickNearest(atPoint, set)
+                == editor::EditorSelection{editor::EditorObjectKind::PointLight, 0},
+            "Point Light origin pick proxy is selectable");
+        Expect(
+            editor::PickNearest(atSpot, set)
+                == editor::EditorSelection{editor::EditorObjectKind::SpotLight, 0},
+            "Spot Light origin pick proxy is selectable");
+        Expect(
+            editor::PickNearest(atRangeEdge, set).kind != editor::EditorObjectKind::PointLight,
+            "Point range volume is not an aggressive pick target");
+
+        editor::EditorSelection primary{};
+        std::vector<editor::EditorSelection> additional;
+        const editor::EditorSelection point0{editor::EditorObjectKind::PointLight, 0};
+        const editor::EditorSelection point1{editor::EditorObjectKind::PointLight, 1};
+        const editor::EditorSelection directional{editor::EditorObjectKind::DirectionalLight, 0};
+        editor::ApplyEditorSelectionClick(primary, additional, point0, false);
+        editor::ApplyEditorSelectionClick(primary, additional, point1, true);
+        Expect(primary == point1 && additional.size() == 1 && additional[0] == point0,
+            "Ctrl multi-selects repeatable Point Lights");
+        editor::ApplyEditorSelectionClick(primary, additional, directional, true);
+        Expect(primary == directional && additional.empty(),
+            "Ctrl-clicking Directional Light still replaces rather than mixing");
+    }
+
     // ---- M78 visual highlight requests distinguish primary vs secondary ----
     {
         world::LevelDefinition level{};

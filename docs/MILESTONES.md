@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 85.2 — Directional Light Gameplay Activation & Authoring Polish**
+**Milestone 85.3 — Local Lights Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_85_2.md`](milestones/MILESTONE_85_2.md)
+Canonical file: [`docs/milestones/MILESTONE_85_3.md`](milestones/MILESTONE_85_3.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -43,6 +43,7 @@ Milestone 83 is CLOSED.
 Milestone 84 is CLOSED.
 Milestone 85 is CLOSED.
 Milestone 85.1 is CLOSED.
+Milestone 85.2 is CLOSED.
 Do not start Milestone 86.
 
 ## Cursor loading contract
@@ -166,7 +167,8 @@ Historical milestone files do not override current implemented behavior.
 | 84 | [Milestone 84 — Materials & Textures Foundation](milestones/MILESTONE_84.md) | complete |
 | 85 | [Milestone 85 — Lighting & Shadows Foundation](milestones/MILESTONE_85.md) | complete |
 | 85.1 | [Milestone 85.1 — Environment & Directional Light Authoring](milestones/MILESTONE_85_1.md) | complete |
-| 85.2 | [Milestone 85.2 — Directional Light Gameplay Activation & Authoring Polish](milestones/MILESTONE_85_2.md) | implemented, awaiting manual acceptance |
+| 85.2 | [Milestone 85.2 — Directional Light Gameplay Activation & Authoring Polish](milestones/MILESTONE_85_2.md) | complete |
+| 85.3 | [Milestone 85.3 — Local Lights Foundation](milestones/MILESTONE_85_3.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

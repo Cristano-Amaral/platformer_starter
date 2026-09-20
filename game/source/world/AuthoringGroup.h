@@ -30,6 +30,8 @@ enum class AuthoringGroupMemberKind
     Door,
     ItemPickup,
     StaticProp,
+    PointLight,
+    SpotLight,
 };
 
 struct AuthoringGroupMember
@@ -93,6 +95,10 @@ inline const char* AuthoringGroupMemberKindKeyword(AuthoringGroupMemberKind kind
         return "item_pickup";
     case AuthoringGroupMemberKind::StaticProp:
         return "static_prop";
+    case AuthoringGroupMemberKind::PointLight:
+        return "point_light";
+    case AuthoringGroupMemberKind::SpotLight:
+        return "spot_light";
     }
     return "";
 }
@@ -174,6 +180,16 @@ inline bool TryParseAuthoringGroupMemberKind(
     if (token == "static_prop")
     {
         kind = AuthoringGroupMemberKind::StaticProp;
+        return true;
+    }
+    if (token == "point_light")
+    {
+        kind = AuthoringGroupMemberKind::PointLight;
+        return true;
+    }
+    if (token == "spot_light")
+    {
+        kind = AuthoringGroupMemberKind::SpotLight;
         return true;
     }
     return false;

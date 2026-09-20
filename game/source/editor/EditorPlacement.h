@@ -26,6 +26,8 @@ enum class PlacementMode
     Door,
     ItemPickup,
     Goal,
+    PointLight,
+    SpotLight,
 };
 
 // Transient, not authored, not Level Format.

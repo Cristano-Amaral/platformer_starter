@@ -10,6 +10,7 @@
 #include "world/GreyboxWorld.h"
 #include "world/HazardWorld.h"
 #include "world/LevelEnvironment.h"
+#include "world/LocalLight.h"
 #include "world/LevelGoal.h"
 #include "world/LevelIdentity.h"
 #include "world/MovingPlatform.h"
@@ -78,6 +79,9 @@ struct LevelDefinition
     std::vector<DoorSpec> doors{};
     std::vector<ItemPickupSpec> itemPickups{};
     std::vector<StaticPropSpec> staticProps{};
+    // Repeatable local lights. Not Directional Light. Not gameplay targets.
+    std::vector<PointLightSpec> pointLights{};
+    std::vector<SpotLightSpec> spotLights{};
     // Persistent Authoring Groups. Organizational authored metadata, not
     // gameplay. Membership is typed {kind,index} and remapped by lifecycle.
     std::vector<AuthoringGroup> authoringGroups{};
