@@ -598,7 +598,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         if (keyword == "pressure_plate")
         {
             if (tokens.size() != 7 && tokens.size() != 8 && tokens.size() != 11
-                && tokens.size() != 12)
+                && tokens.size() < 12)
             {
                 return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
             }
@@ -628,12 +628,60 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                         LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
                 }
             }
-            if (tokens.size() == 12)
+            if (tokens.size() >= 12)
             {
                 if (!ParseBool01Token(tokens[11], plate.controlsDirectionalLight))
                 {
                     return MakeStatus(
                         LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+            }
+            if (tokens.size() > 12)
+            {
+                if (tokens[12] != kPressurePlateLocalLightsMarker)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+                if (tokens.size() < 14)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+                int targetCount = 0;
+                if (!ParseIntToken(tokens[13], targetCount) || targetCount < 1)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+                const std::size_t expectedTokens =
+                    14 + static_cast<std::size_t>(targetCount) * 2;
+                if (tokens.size() != expectedTokens)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                }
+                plate.controlledLocalLights.reserve(static_cast<std::size_t>(targetCount));
+                for (int targetIndex = 0; targetIndex < targetCount; ++targetIndex)
+                {
+                    const std::size_t kindToken = 14 + static_cast<std::size_t>(targetIndex) * 2;
+                    LocalLightTarget target{};
+                    if (!TryParseLocalLightKind(tokens[kindToken], target.kind))
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                    }
+                    if (!ParseIntToken(tokens[kindToken + 1], target.index) || target.index < 0)
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                    }
+                    if (PressurePlateHasLocalLightTarget(plate, target))
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid pressure_plate");
+                    }
+                    plate.controlledLocalLights.push_back(target);
                 }
             }
             state.pressurePlates.push_back(plate);

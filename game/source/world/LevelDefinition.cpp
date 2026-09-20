@@ -151,7 +151,9 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
     for (const PressurePlateSpec& plate : level.pressurePlates)
     {
         if (!PressurePlateSpecIsValid(plate)
-            || !PressurePlateDoorLinkIsValid(plate.linkedDoorIndex, level.doors.size()))
+            || !PressurePlateDoorLinkIsValid(plate.linkedDoorIndex, level.doors.size())
+            || !PressurePlateLocalLightTargetsAreValid(
+                plate, level.pointLights.size(), level.spotLights.size()))
         {
             return false;
         }
@@ -407,7 +409,9 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || a.pressurePlates[index].activateByPlayer != b.pressurePlates[index].activateByPlayer
             || a.pressurePlates[index].visibleInGameplay != b.pressurePlates[index].visibleInGameplay
             || a.pressurePlates[index].controlsDirectionalLight
-                != b.pressurePlates[index].controlsDirectionalLight)
+                != b.pressurePlates[index].controlsDirectionalLight
+            || a.pressurePlates[index].controlledLocalLights
+                != b.pressurePlates[index].controlledLocalLights)
         {
             return false;
         }

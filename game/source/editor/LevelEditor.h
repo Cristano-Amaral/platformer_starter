@@ -28,6 +28,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemIdInspectorEdit.h"
+#include "editor/PressurePlateLocalLightTargets.h"
 #include "editor/DirectionalLightAuthoring.h"
 #include "editor/StaticModelFraming.h"
 

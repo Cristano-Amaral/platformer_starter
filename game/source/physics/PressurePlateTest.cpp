@@ -14,9 +14,13 @@
 #include "world/LevelWriter.h"
 #include "world/PressurePlate.h"
 #include "world/StaticProp.h"
+#include "world/LocalLight.h"
+#include "world/LocalLightActivation.h"
+#include "render/LocalLights.h"
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -599,6 +603,189 @@ int main()
         Expect(world.GetPressurePlates()[0].active, "Box activation is unchanged with light-control");
         world.ResetDynamicBoxes();
         Expect(!world.GetPressurePlates()[0].active, "Restart recomputes light-control plate overlap");
+    }
+
+    auto effectiveLocal = [](const world::LevelDefinition& level,
+                             std::size_t pointIndex,
+                             const std::uint8_t* plateActive,
+                             std::size_t plateCount) {
+        return world::AuthoredLocalLightIsEffectivelyEnabled(
+            level.pointLights[pointIndex].enabled,
+            world::ResolveLocalLightActivation(
+                world::LocalLightKind::Point,
+                static_cast<int>(pointIndex),
+                level.pressurePlates,
+                plateActive,
+                plateCount));
+    };
+    auto effectiveSpot = [](const world::LevelDefinition& level,
+                            std::size_t spotIndex,
+                            const std::uint8_t* plateActive,
+                            std::size_t plateCount) {
+        return world::AuthoredLocalLightIsEffectivelyEnabled(
+            level.spotLights[spotIndex].enabled,
+            world::ResolveLocalLightActivation(
+                world::LocalLightKind::Spot,
+                static_cast<int>(spotIndex),
+                level.pressurePlates,
+                plateActive,
+                plateCount));
+    };
+
+    {
+        world::LevelDefinition level = parsed.level;
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        Expect(effectiveLocal(level, 0, nullptr, 0), "unlinked authored-enabled Point follows authored ON");
+        level.pointLights[0].enabled = false;
+        Expect(!effectiveLocal(level, 0, nullptr, 0), "unlinked authored-disabled Point stays OFF");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        level.pressurePlates.push_back(plate);
+        const std::uint8_t inactive = 0;
+        const std::uint8_t active = 1;
+        Expect(!effectiveLocal(level, 0, &inactive, 1), "linked authored-enabled Point + inactive plate is OFF");
+        Expect(effectiveLocal(level, 0, &active, 1), "linked authored-enabled Point + active plate is ON");
+        level.pointLights[0].enabled = false;
+        Expect(!effectiveLocal(level, 0, &active, 1), "authoredEnabled false remains OFF with active plate");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        level.pointLights.push_back(world::MakeDefaultPointLight({4.0f, 2.0f, 0.0f}));
+        level.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+        level.spotLights.push_back(world::MakeDefaultSpotLight({6.0f, 4.0f, 0.0f}));
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.activateByDynamicBox = true;
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 1});
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Spot, 0});
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Spot, 1});
+        level.pressurePlates.push_back(plate);
+        const std::uint8_t inactive = 0;
+        const std::uint8_t active = 1;
+        Expect(!effectiveLocal(level, 0, &inactive, 1) && !effectiveSpot(level, 1, &inactive, 1),
+            "one plate inactive turns all mixed targets OFF");
+        Expect(
+            effectiveLocal(level, 0, &active, 1) && effectiveLocal(level, 1, &active, 1)
+                && effectiveSpot(level, 0, &active, 1) && effectiveSpot(level, 1, &active, 1),
+            "one plate active turns all mixed Point/Spot targets ON");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        level.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+        world::PressurePlateSpec a = MakePlate(plateCenter);
+        world::PressurePlateSpec b = MakePlate(plateBCenter);
+        a.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        a.controlledLocalLights.push_back({world::LocalLightKind::Spot, 0});
+        b.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        b.controlledLocalLights.push_back({world::LocalLightKind::Spot, 0});
+        level.pressurePlates.push_back(a);
+        level.pressurePlates.push_back(b);
+        const std::uint8_t bothOff[2] = {0, 0};
+        const std::uint8_t firstOn[2] = {1, 0};
+        const std::uint8_t secondOn[2] = {0, 1};
+        const std::uint8_t bothOn[2] = {1, 1};
+        Expect(!effectiveLocal(level, 0, bothOff, 2) && !effectiveSpot(level, 0, bothOff, 2),
+            "OR: both plates inactive keeps Point and Spot OFF");
+        Expect(effectiveLocal(level, 0, firstOn, 2) && effectiveSpot(level, 0, firstOn, 2),
+            "OR: first plate active turns Point and Spot ON");
+        Expect(effectiveLocal(level, 0, secondOn, 2) && effectiveSpot(level, 0, secondOn, 2),
+            "OR: second plate active turns Point and Spot ON");
+        Expect(effectiveLocal(level, 0, bothOn, 2) && effectiveSpot(level, 0, bothOn, 2),
+            "OR: both plates active stays ON");
+        level.pointLights[0].enabled = false;
+        level.spotLights[0].enabled = false;
+        Expect(!effectiveLocal(level, 0, bothOn, 2) && !effectiveSpot(level, 0, bothOn, 2),
+            "OR still cannot override authored Enabled false");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        plate.visibleInGameplay = false;
+        plate.activateByDynamicBox = true;
+        plate.activateByPlayer = false;
+        level.pressurePlates.push_back(plate);
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        level.dynamicBoxes.push_back(MakeBox(offPlate));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "invisible plate still evaluates local-light Box activation");
+        Expect(!world.GetPressurePlates()[0].active, "invisible local-light plate starts Inactive");
+        Expect(!world.GetPressurePlates()[0].visibleInGameplay, "visibleInGameplay remains presentation-only");
+        const std::uint8_t inactive = 0;
+        Expect(!effectiveLocal(level, 0, &inactive, 1), "inactive Box plate keeps linked Point OFF");
+        physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(world, 0, onPlate, {}, {});
+        Expect(world.GetPressurePlates()[0].active, "Box activation drives local-light plate");
+        const std::uint8_t active = 1;
+        Expect(effectiveLocal(level, 0, &active, 1), "active Box plate turns linked Point ON");
+        world.ResetDynamicBoxes();
+        Expect(!world.GetPressurePlates()[0].active, "Restart recomputes local-light plate overlap");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        world::PressurePlateSpec plate = MakePlate(
+            parsed.level.initialSpawnVisualCenter, {2.0f, 2.0f, 2.0f});
+        plate.activateByDynamicBox = false;
+        plate.activateByPlayer = true;
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Spot, 0});
+        level.pressurePlates.push_back(plate);
+        level.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+        physics::PhysicsWorld world;
+        Expect(StartWorld(world, level), "Player activation plate for Spot");
+        Expect(world.GetPressurePlates()[0].active, "Player overlap activates local-light plate");
+        const std::uint8_t active = 1;
+        Expect(effectiveSpot(level, 0, &active, 1), "Player activation turns linked Spot ON");
+        world.ResetCharacter({28.0f, parsed.level.initialSpawnVisualCenter.y, 0.0f}, {});
+        Expect(!world.GetPressurePlates()[0].active, "leaving volume deactivates local-light plate");
+        const std::uint8_t inactive = 0;
+        Expect(!effectiveSpot(level, 0, &inactive, 1), "inactive Player plate turns linked Spot OFF");
+    }
+
+    {
+        world::LevelDefinition level = parsed.level;
+        std::vector<world::PointLightSpec> many(6, world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        std::vector<world::SpotLightSpec> spots(4, world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+        world::PressurePlateSpec plate = MakePlate(plateCenter);
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Spot, 0});
+        std::vector<world::PressurePlateSpec> plates{plate};
+        const std::uint8_t inactive = 0;
+        std::vector<std::uint8_t> pointEff;
+        std::vector<std::uint8_t> spotEff;
+        world::FillEffectiveLocalLightEnabled(
+            many, spots, plates, &inactive, 1, pointEff, spotEff);
+        render::PackedLocalLights packed = render::PackAuthoredLocalLights(
+            many, spots, pointEff.data(), pointEff.size(), spotEff.data(), spotEff.size());
+        Expect(packed.count == 8, "effectively OFF linked lights do not consume renderer cap");
+        Expect(packed.lights[0].type == render::kLocalLightTypePoint, "cap fill still starts with remaining Points");
+        Expect(packed.lights[5].type == render::kLocalLightTypeSpot, "deterministic Point-then-Spot overflow remains");
+        const std::uint8_t active = 1;
+        world::FillEffectiveLocalLightEnabled(
+            many, spots, plates, &active, 1, pointEff, spotEff);
+        packed = render::PackAuthoredLocalLights(
+            many, spots, pointEff.data(), pointEff.size(), spotEff.data(), spotEff.size());
+        Expect(packed.count == 8, "effectively ON lights enter the same packing path and cap");
+    }
+
+    {
+        world::LevelDefinition a = parsed.level;
+        world::LevelDefinition b = parsed.level;
+        a.pressurePlates.push_back(MakePlate(plateCenter));
+        b.pressurePlates.push_back(MakePlate(plateCenter));
+        a.pressurePlates[0].controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        Expect(!world::AuthoredLevelDataEqual(a, b), "equality includes local-light targets");
+        b.pressurePlates[0].controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        Expect(world::AuthoredLevelDataEqual(a, b), "matching local-light targets compare equal");
     }
 
     if (gFailures != 0)

@@ -232,6 +232,20 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendInt(out, plate.visibleInGameplay ? 1 : 0);
         out += ' ';
         AppendInt(out, plate.controlsDirectionalLight ? 1 : 0);
+        if (!plate.controlledLocalLights.empty())
+        {
+            out += ' ';
+            out += kPressurePlateLocalLightsMarker;
+            out += ' ';
+            AppendInt(out, static_cast<int>(plate.controlledLocalLights.size()));
+            for (const LocalLightTarget& target : plate.controlledLocalLights)
+            {
+                out += ' ';
+                out += LocalLightKindToken(target.kind);
+                out += ' ';
+                AppendInt(out, target.index);
+            }
+        }
         out += '\n';
     }
 

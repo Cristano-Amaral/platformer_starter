@@ -1006,6 +1006,83 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::Checkbox("Activate By Player", &plate.activateByPlayer);
             ImGui::Checkbox("Visible In Gameplay", &plate.visibleInGameplay);
             ImGui::Checkbox("Controls Directional Light", &plate.controlsDirectionalLight);
+            ImGui::Separator();
+            ImGui::TextUnformatted("Controlled Local Lights");
+            if (plate.controlledLocalLights.empty())
+            {
+                ImGui::TextUnformatted("None");
+            }
+            for (std::size_t targetIndex = 0; targetIndex < plate.controlledLocalLights.size();
+                 ++targetIndex)
+            {
+                ImGui::PushID(static_cast<int>(targetIndex));
+                const world::LocalLightTarget target = plate.controlledLocalLights[targetIndex];
+                const EditorObjectKind kind = target.kind == world::LocalLightKind::Point
+                    ? EditorObjectKind::PointLight
+                    : EditorObjectKind::SpotLight;
+                char label[64]{};
+                FormatSelectionDisplayName(
+                    {kind, static_cast<std::size_t>(target.index)}, label, sizeof(label));
+                ImGui::TextUnformatted(label);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove"))
+                {
+                    TryRemovePressurePlateLocalLightTargetAt(plate, targetIndex);
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::PopID();
+            }
+            {
+                if (ImGui::BeginCombo("Add Point Light", "None"))
+                {
+                    ImGui::Selectable("None", true);
+                    for (std::size_t lightIndex = 0; lightIndex < level.pointLights.size();
+                         ++lightIndex)
+                    {
+                        const world::LocalLightTarget target{
+                            world::LocalLightKind::Point, static_cast<int>(lightIndex)};
+                        if (world::PressurePlateHasLocalLightTarget(plate, target))
+                        {
+                            continue;
+                        }
+                        char label[64]{};
+                        FormatSelectionDisplayName(
+                            {EditorObjectKind::PointLight, lightIndex}, label, sizeof(label));
+                        if (ImGui::Selectable(label, false))
+                        {
+                            TryAddPressurePlateLocalLightTarget(
+                                plate, target, level.pointLights.size(), level.spotLights.size());
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+            {
+                if (ImGui::BeginCombo("Add Spot Light", "None"))
+                {
+                    ImGui::Selectable("None", true);
+                    for (std::size_t lightIndex = 0; lightIndex < level.spotLights.size();
+                         ++lightIndex)
+                    {
+                        const world::LocalLightTarget target{
+                            world::LocalLightKind::Spot, static_cast<int>(lightIndex)};
+                        if (world::PressurePlateHasLocalLightTarget(plate, target))
+                        {
+                            continue;
+                        }
+                        char label[64]{};
+                        FormatSelectionDisplayName(
+                            {EditorObjectKind::SpotLight, lightIndex}, label, sizeof(label));
+                        if (ImGui::Selectable(label, false))
+                        {
+                            TryAddPressurePlateLocalLightTarget(
+                                plate, target, level.pointLights.size(), level.spotLights.size());
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
         }
         break;
     case EditorObjectKind::Door:

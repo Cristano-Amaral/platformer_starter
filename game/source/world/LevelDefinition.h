@@ -79,7 +79,8 @@ struct LevelDefinition
     std::vector<DoorSpec> doors{};
     std::vector<ItemPickupSpec> itemPickups{};
     std::vector<StaticPropSpec> staticProps{};
-    // Repeatable local lights. Not Directional Light. Not gameplay targets.
+    // Repeatable local lights. Not Directional Light. M85.4 Pressure Plates
+    // may target them by typed index.
     std::vector<PointLightSpec> pointLights{};
     std::vector<SpotLightSpec> spotLights{};
     // Persistent Authoring Groups. Organizational authored metadata, not

@@ -2285,6 +2285,88 @@ int main()
     {
         world::LevelDefinition active = MakeActiveLevel();
         MakeWritableEditorFixture(active);
+        world::StaticPropSpec propA{};
+        propA.modelIdentity = "models/test_static.glb";
+        propA.position = {0.0f, 1.0f, 0.0f};
+        propA.scale = {1.0f, 1.0f, 1.0f};
+        world::StaticPropSpec propB = propA;
+        propB.position.x = 2.0f;
+        active.staticProps.push_back(propA);
+        active.staticProps.push_back(propB);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        state.selection = {EditorObjectKind::StaticProp, 0};
+        state.additionalSelections = {{EditorObjectKind::StaticProp, 1}};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::GroupSelected, true),
+            "group two Static Props for Duplicate enablement");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                state.workingCopy,
+                state.selection,
+                false,
+                LevelEditorRequest::DuplicateSelected,
+                {},
+                state.additionalSelections),
+            "Edit Duplicate Selected is enabled for a complete Authoring Group");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                state.workingCopy,
+                state.selection,
+                false,
+                LevelEditorRequest::DeleteSelected,
+                {},
+                state.additionalSelections),
+            "Edit Delete Selected remains enabled for a complete Authoring Group");
+
+        const world::LevelDefinition grouped = state.workingCopy;
+        editor::LevelEditorState partial{};
+        SeedEditor(partial, grouped);
+        partial.selection = {EditorObjectKind::StaticProp, 0};
+        partial.additionalSelections.clear();
+        Expect(
+            !editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                partial.workingCopy,
+                partial.selection,
+                false,
+                LevelEditorRequest::DuplicateSelected,
+                {},
+                partial.additionalSelections),
+            "Edit Duplicate Selected is disabled for a single grouped member");
+        Expect(
+            editor::CanIssueAuthoredLifecycleRequest(
+                true,
+                partial.workingCopy,
+                partial.selection,
+                false,
+                LevelEditorRequest::DeleteSelected,
+                {},
+                partial.additionalSelections),
+            "Edit Delete Selected remains enabled for a single grouped member");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                partial, grouped, LevelEditorRequest::DuplicateSelected, true),
+            "issued Duplicate on a partial group is still handled");
+        Expect(world::AuthoredLevelDataEqual(partial.workingCopy, grouped),
+            "refused editor Duplicate leaves workingCopy unchanged");
+        Expect(std::string(partial.lastMessage).find("complete Authoring Group") != std::string::npos,
+            "refused partial Duplicate keeps existing group feedback");
+
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DuplicateSelected, true),
+            "complete-group Duplicate Selected still executes from the editor command");
+        Expect(state.workingCopy.authoringGroups.size() == 2,
+            "editor complete-group Duplicate creates an independent group");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
         editor::LevelEditorState state{};
         SeedEditor(state, active);
         Expect(
@@ -2326,6 +2408,94 @@ int main()
         Expect(!state.modified, "after Apply, workingCopy matches active");
         Expect(state.workingCopy.pointLights.size() == 1, "Apply promotes Point Light");
         Expect(state.workingCopy.spotLights.size() == 1, "Apply promotes Spot Light");
+
+        world::PressurePlateSpec linkedPlate{};
+        linkedPlate.center = {2.0f, 0.1f, 0.0f};
+        linkedPlate.size = world::kDefaultPressurePlateSize;
+        linkedPlate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        linkedPlate.controlledLocalLights.push_back({world::LocalLightKind::Spot, 0});
+        state.workingCopy.pressurePlates.push_back(linkedPlate);
+        Expect(!world::AuthoredLevelDataEqual(state.workingCopy, applied),
+            "adding local-light targets Dirties workingCopy");
+        applied = state.workingCopy;
+        Expect(world::LevelDefinitionHasRequiredAuthoredContent(applied),
+            "Apply validation accepts local-light targets");
+        SeedEditor(state, applied);
+        Expect(!state.modified, "Apply promotes local-light targets");
+        Expect(state.workingCopy.pressurePlates[0].controlledLocalLights.size() == 2,
+            "Apply reconstructs Point and Spot targets");
+
+        const std::string savedLinks = world::SerializeLevelText(applied);
+        const world::ParseLevelFileResult reloadedLinks = world::ParseLevelText(savedLinks);
+        Expect(reloadedLinks.status == world::LoadLevelFileStatus::Loaded,
+            "Save/reload local-light targets");
+        Expect(world::AuthoredLevelDataEqual(applied, reloadedLinks.level),
+            "reload reconstructs authored local-light targets");
+
+        editor::LevelEditorState restartLinks{};
+        SeedEditor(restartLinks, applied);
+        Expect(restartLinks.workingCopy.pressurePlates[0].controlledLocalLights.size() == 2,
+            "Restart preserves authored local-light targets");
+
+        const world::LevelDefinition destination = MakeActiveLevel();
+        editor::LevelEditorState switchedLinks{};
+        SeedEditor(switchedLinks, destination);
+        Expect(switchedLinks.workingCopy.pressurePlates.empty(),
+            "Level transition does not leak source local-light targets");
+
+        editor::LevelEditorState playAgainLinks{};
+        SeedEditor(playAgainLinks, MakeActiveLevel());
+        Expect(playAgainLinks.workingCopy.pressurePlates.empty(),
+            "Play Again / Main Menu starts without leftover local-light targets");
+
+        editor::LevelEditorState f2Links{};
+        SeedEditor(f2Links, applied);
+        SeedEditor(f2Links, applied);
+        Expect(f2Links.workingCopy.pressurePlates.size() == 1
+                && f2Links.workingCopy.pressurePlates[0].controlledLocalLights.size() == 2,
+            "F2 re-seed does not duplicate local-light targets");
+        Expect(applied.pointLights[0].enabled && applied.spotLights[0].enabled,
+            "F2/Apply does not mutate authored Enabled");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddPointLight, true),
+            "Add Point Light request handled");
+        Expect(state.workingCopy.pointLights.size() == 1, "Add Point Light count +1");
+        Expect(active.pointLights.empty(), "active unchanged by Add Point Light");
+        Expect(
+            state.selection.kind == EditorObjectKind::PointLight && state.selection.index == 0,
+            "Add selects new Point Light");
+        Expect(state.modified, "Add Point Light sets Modified");
+        Expect(
+            HierarchyKindCount(state.workingCopy, EditorObjectKind::PointLight) == 1,
+            "hierarchy shows pending Point Light");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddSpotLight, true),
+            "Add Spot Light request handled");
+        Expect(state.workingCopy.spotLights.size() == 1, "Add Spot Light count +1");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DuplicateSelected, true),
+            "Duplicate Spot Light request handled");
+        Expect(state.workingCopy.spotLights.size() == 2, "Duplicate Spot Light count +1");
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::DeleteSelected, true),
+            "Delete Spot Light request handled");
+        Expect(state.workingCopy.spotLights.size() == 1, "Delete remaps remaining Spot Light");
+        Expect(
+            editor::IsValidSelection(state.workingCopy, state.selection),
+            "selection after Delete is valid");
+
+        world::LevelDefinition applied = state.workingCopy;
 
         const std::string saved = world::SerializeLevelText(applied);
         const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);

@@ -26,6 +26,7 @@
 #include "world/LevelDefinition.h"
 #include "world/LevelGoal.h"
 #include "world/DirectionalLightActivation.h"
+#include "world/LocalLightActivation.h"
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
 #include "world/StaticProp.h"
@@ -2396,11 +2397,12 @@ void Renderer::DrawWorld(
 
     LightingEnvironment lightingEnv = MakeLightingEnvironmentFromAuthored(
         overlay.usePreviewLighting ? overlay.previewLighting : level.environment);
-    ApplyAuthoredLocalLights(
-        lightingEnv,
-        overlay.usePreviewLighting ? overlay.previewPointLights : level.pointLights,
-        overlay.usePreviewLighting ? overlay.previewSpotLights : level.spotLights);
-    if (!overlay.usePreviewLighting)
+    if (overlay.usePreviewLighting)
+    {
+        ApplyAuthoredLocalLights(
+            lightingEnv, overlay.previewPointLights, overlay.previewSpotLights);
+    }
+    else
     {
         std::vector<std::uint8_t> plateActive(level.pressurePlates.size(), 0);
         const std::size_t plateCount = level.pressurePlates.size() < pressurePlates.size()
@@ -2419,6 +2421,24 @@ void Renderer::DrawWorld(
             lightingEnv,
             activation.hasLinkedPressurePlates,
             activation.anyLinkedPressurePlateActive);
+        std::vector<std::uint8_t> pointEffective;
+        std::vector<std::uint8_t> spotEffective;
+        world::FillEffectiveLocalLightEnabled(
+            level.pointLights,
+            level.spotLights,
+            level.pressurePlates,
+            plateActive.empty() ? nullptr : plateActive.data(),
+            plateActive.size(),
+            pointEffective,
+            spotEffective);
+        ApplyEffectiveLocalLights(
+            lightingEnv,
+            level.pointLights,
+            level.spotLights,
+            pointEffective.empty() ? nullptr : pointEffective.data(),
+            pointEffective.size(),
+            spotEffective.empty() ? nullptr : spotEffective.data(),
+            spotEffective.size());
     }
     const bool lightingReady = worldLighting != nullptr && worldLighting->IsReady();
     const bool shadowsActive = lightingReady && DirectionalShadowsAreActive(lightingEnv);

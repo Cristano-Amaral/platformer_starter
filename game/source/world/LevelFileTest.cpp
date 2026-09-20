@@ -1218,6 +1218,172 @@ int main()
                 world::ParseLevelText(canonical + "pressure_plate 2 0.1 0 2 0.2 2 0 2 0 1\n").status
                     == world::LoadLevelFileStatus::Invalid,
                 "invalid pressure_plate bool flag rejected");
+
+            const std::string localLights =
+                "point_light 0 2 0 1 1 1 1.5 8 1\n"
+                "point_light 4 2 0 1 1 1 1.5 8 1\n"
+                "spot_light 1 4 0 0 -1 0 1 1 1 1.5 8 20 35 1\n"
+                "spot_light 6 4 0 1 0 0 1 1 1 1.5 8 20 35 1\n"
+                "spot_light 8 4 0 0 -1 0 1 1 1 1.5 8 20 35 1\n";
+            Expect(
+                world::ParseLevelText(canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2\n")
+                    .level.pressurePlates[0]
+                    .controlledLocalLights.empty(),
+                "7-token pressure_plate has no local-light targets");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2 -1\n")
+                    .level.pressurePlates[0]
+                    .controlledLocalLights.empty(),
+                "8-token pressure_plate has no local-light targets");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1\n")
+                    .level.pressurePlates[0]
+                    .controlledLocalLights.empty(),
+                "11-token pressure_plate has no local-light targets");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0\n")
+                    .level.pressurePlates[0]
+                    .controlledLocalLights.empty(),
+                "12-token pressure_plate has no local-light targets");
+
+            const std::string onePoint =
+                canonical + localLights
+                + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 point 0\n";
+            const world::ParseLevelFileResult onePointParsed = world::ParseLevelText(onePoint);
+            Expect(onePointParsed.status == world::LoadLevelFileStatus::Loaded, "one Point target loads");
+            Expect(
+                onePointParsed.level.pressurePlates[0].controlledLocalLights.size() == 1
+                    && onePointParsed.level.pressurePlates[0].controlledLocalLights[0].kind
+                        == world::LocalLightKind::Point
+                    && onePointParsed.level.pressurePlates[0].controlledLocalLights[0].index == 0,
+                "one Point target parses");
+            const std::string oneSpot =
+                canonical + localLights
+                + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 spot 1\n";
+            const world::ParseLevelFileResult oneSpotParsed = world::ParseLevelText(oneSpot);
+            Expect(oneSpotParsed.status == world::LoadLevelFileStatus::Loaded, "one Spot target loads");
+            Expect(
+                oneSpotParsed.level.pressurePlates[0].controlledLocalLights[0].kind
+                        == world::LocalLightKind::Spot
+                    && oneSpotParsed.level.pressurePlates[0].controlledLocalLights[0].index == 1,
+                "one Spot target parses");
+            const std::string manyPoints =
+                canonical + localLights
+                + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 2 point 1 point 0\n";
+            Expect(
+                world::ParseLevelText(manyPoints).level.pressurePlates[0].controlledLocalLights.size()
+                    == 2,
+                "multiple Point targets load");
+            const std::string manySpots =
+                canonical + localLights
+                + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 2 spot 0 spot 2\n";
+            Expect(
+                world::ParseLevelText(manySpots).level.pressurePlates[0].controlledLocalLights.size()
+                    == 2,
+                "multiple Spot targets load");
+            const std::string mixed =
+                canonical + localLights
+                + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 3 point 0 spot 1 spot 2\n";
+            const world::ParseLevelFileResult mixedParsed = world::ParseLevelText(mixed);
+            Expect(mixedParsed.status == world::LoadLevelFileStatus::Loaded, "mixed Point/Spot targets load");
+            Expect(
+                mixedParsed.level.pressurePlates[0].controlledLocalLights.size() == 3
+                    && mixedParsed.level.pressurePlates[0].controlledLocalLights[0].kind
+                        == world::LocalLightKind::Point
+                    && mixedParsed.level.pressurePlates[0].controlledLocalLights[1].kind
+                        == world::LocalLightKind::Spot
+                    && mixedParsed.level.pressurePlates[0].controlledLocalLights[2].index == 2,
+                "mixed targets preserve authored order");
+            const std::string writtenMixed = world::SerializeLevelText(mixedParsed.level);
+            Expect(
+                writtenMixed.find(
+                    "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 3 point 0 spot 1 spot 2")
+                    != std::string::npos,
+                "writer emits deterministic lights suffix");
+            Expect(
+                world::AuthoredLevelDataEqual(
+                    mixedParsed.level, world::ParseLevelText(writtenMixed).level),
+                "mixed local-light targets roundtrip");
+            world::LevelDefinition emptyWritten = mixedParsed.level;
+            emptyWritten.pressurePlates[0].controlledLocalLights.clear();
+            const std::string writtenEmpty = world::SerializeLevelText(emptyWritten);
+            Expect(
+                writtenEmpty.find("lights") == std::string::npos,
+                "writer omits empty lights marker");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 extra 1 point 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "malformed lights marker rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights abc point 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "malformed target count rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "missing target kind rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 door 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "unknown target kind rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 point 0.5\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "non-integer target index rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 point 2\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "out-of-range Point index rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 spot 3\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "out-of-range Spot index rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 2 point 0 point 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "duplicate identical target rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 1 point 0 extra\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "extra target tokens rejected");
+            Expect(
+                world::ParseLevelText(
+                    canonical + localLights
+                    + "pressure_plate 2 0.1 0 2 0.2 2 -1 1 0 1 0 lights 0\n")
+                    .status
+                    == world::LoadLevelFileStatus::Invalid,
+                "zero target count rejected");
+            Expect(
+                world::CountLevelV1RecordLines(mixedParsed.level)
+                    <= static_cast<int>(world::kMaxLevelLines),
+                "local-light targets stay within existing Level v1 line limits");
         }
 
         {

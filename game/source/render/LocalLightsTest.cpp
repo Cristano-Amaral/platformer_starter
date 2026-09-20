@@ -1,9 +1,12 @@
 #include "render/LightingEnvironment.h"
 #include "render/LocalLights.h"
 #include "world/LocalLight.h"
+#include "world/LocalLightActivation.h"
+#include "world/PressurePlate.h"
 
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <vector>
 
 namespace
@@ -151,6 +154,32 @@ int main()
     Expect(
         environment.directional.authoredEnabled && environment.directional.shadowsEnabled,
         "local-light packing does not change Directional Light");
+
+    {
+        world::PointLightSpec linked = defaultPoint;
+        world::PointLightSpec unlinked = defaultPoint;
+        unlinked.position = {4.0f, 2.0f, 0.0f};
+        std::vector<world::PointLightSpec> points{linked, unlinked};
+        world::PressurePlateSpec plate{};
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        const std::uint8_t inactive = 0;
+        std::vector<std::uint8_t> pointEff;
+        std::vector<std::uint8_t> spotEff;
+        world::FillEffectiveLocalLightEnabled(
+            points, {}, {plate}, &inactive, 1, pointEff, spotEff);
+        packed = render::PackAuthoredLocalLights(
+            points, {}, pointEff.data(), pointEff.size(), spotEff.data(), spotEff.size());
+        Expect(packed.count == 1 && packed.lights[0].position.x == 4.0f,
+            "effectively OFF Point does not occupy a renderer slot");
+        const std::uint8_t active = 1;
+        world::FillEffectiveLocalLightEnabled(
+            points, {}, {plate}, &active, 1, pointEff, spotEff);
+        packed = render::PackAuthoredLocalLights(
+            points, {}, pointEff.data(), pointEff.size(), spotEff.data(), spotEff.size());
+        Expect(packed.count == 2, "effectively ON Point occupies a slot in authored order");
+    }
+
+    Expect(render::kMaxActiveLocalLights == 8, "M85.4 does not raise the local-light cap");
 
     if (gFailures != 0)
     {

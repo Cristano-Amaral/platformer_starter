@@ -1,6 +1,7 @@
 #include "render/LightingEnvironment.h"
 #include "world/DirectionalLightActivation.h"
 #include "world/LocalLight.h"
+#include "world/LocalLightActivation.h"
 #include "world/PressurePlate.h"
 
 #include <cmath>
@@ -271,6 +272,17 @@ int main()
         Expect(VecNear(env.directional.rayDirection, ray),
             "packing local lights does not mutate Directional ray");
         Expect(env.directional.shadowsEnabled, "packing local lights does not disable shadows");
+        world::PressurePlateSpec linked{};
+        linked.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        const std::uint8_t inactive = 0;
+        std::vector<std::uint8_t> pointEff;
+        std::vector<std::uint8_t> spotEff;
+        world::FillEffectiveLocalLightEnabled(
+            points, {}, {linked}, &inactive, 1, pointEff, spotEff);
+        render::ApplyEffectiveLocalLights(
+            env, points, {}, pointEff.data(), pointEff.size(), spotEff.data(), spotEff.size());
+        Expect(env.localLights.count == 7,
+            "effectively OFF linked Point does not consume a LightingEnvironment slot");
     }
 
     if (gFailures != 0)

@@ -1,8 +1,8 @@
 #pragma once
 
 // Milestone 85.3: repeatable authored Point and Spot Lights.
-// Presentation lighting only. Not gameplay targets, not Directional Light,
-// not a GUID/reference framework.
+// Presentation lighting. M85.4 may name them as Pressure Plate targets via
+// typed indices. Not Directional Light, not a GUID/reference framework.
 
 #include "core/Vec3.h"
 #include "world/LevelEnvironment.h"

@@ -14,6 +14,8 @@
 #include "world/LevelWriter.h"
 #include "world/PressurePlate.h"
 #include "world/DirectionalLightActivation.h"
+#include "world/LocalLight.h"
+#include "world/LocalLightActivation.h"
 
 #include <cmath>
 #include <cstddef>
@@ -631,6 +633,34 @@ int main()
         Expect(
             !world::AuthoredDirectionalLightIsEffectivelyEnabled(false, on),
             "Door+light plate cannot override authored disabled");
+        level.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 3.0f, 0.0f}));
+        level.spotLights.push_back(world::MakeDefaultSpotLight({2.0f, 4.0f, 0.0f}));
+        level.pressurePlates[0].controlledLocalLights.push_back(
+            {world::LocalLightKind::Point, 0});
+        level.pressurePlates[0].controlledLocalLights.push_back(
+            {world::LocalLightKind::Spot, 0});
+        Expect(world.GetDoors()[0].desiredOpen, "Door relationship remains after adding local targets");
+        Expect(
+            world::AuthoredDirectionalLightIsEffectivelyEnabled(true, on),
+            "Directional relationship remains after adding local targets");
+        Expect(
+            world::AuthoredLocalLightIsEffectivelyEnabled(
+                true,
+                world::ResolveLocalLightActivation(
+                    world::LocalLightKind::Point, 0, level.pressurePlates, &active, 1)),
+            "same plate also turns Point ON");
+        Expect(
+            world::AuthoredLocalLightIsEffectivelyEnabled(
+                true,
+                world::ResolveLocalLightActivation(
+                    world::LocalLightKind::Spot, 0, level.pressurePlates, &active, 1)),
+            "same plate also turns Spot ON");
+        Expect(
+            !world::AuthoredLocalLightIsEffectivelyEnabled(
+                true,
+                world::ResolveLocalLightActivation(
+                    world::LocalLightKind::Point, 0, level.pressurePlates, &inactive, 1)),
+            "inactive plate turns local targets OFF without dropping Door/Directional authorship");
     }
 
     Expect(

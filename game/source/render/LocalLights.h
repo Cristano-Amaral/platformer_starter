@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace render
@@ -222,10 +223,16 @@ inline PackedLocalLight PackSpotLight(const world::SpotLightSpec& authored)
 
 // Enabled Point Lights in authored array order, then enabled Spot Lights in
 // authored array order. Disabled lights do not occupy a slot. Lights beyond
-// kMaxActiveLocalLights are ignored.
+// kMaxActiveLocalLights are ignored. Optional effective-enabled masks replace
+// authored Enabled for packing without mutating the specs; nullptr uses
+// authored Enabled (editor preview / unlinked default).
 inline PackedLocalLights PackAuthoredLocalLights(
     const std::vector<world::PointLightSpec>& pointLights,
-    const std::vector<world::SpotLightSpec>& spotLights)
+    const std::vector<world::SpotLightSpec>& spotLights,
+    const std::uint8_t* pointEffectiveEnabled = nullptr,
+    std::size_t pointEffectiveCount = 0,
+    const std::uint8_t* spotEffectiveEnabled = nullptr,
+    std::size_t spotEffectiveCount = 0)
 {
     PackedLocalLights packed{};
     auto tryAdd = [&](const PackedLocalLight& light) {
@@ -237,25 +244,42 @@ inline PackedLocalLights PackAuthoredLocalLights(
         packed.count += 1;
     };
 
-    for (const world::PointLightSpec& light : pointLights)
+    auto pointIsEnabled = [&](std::size_t index, const world::PointLightSpec& light) {
+        if (pointEffectiveEnabled != nullptr && index < pointEffectiveCount)
+        {
+            return pointEffectiveEnabled[index] != 0;
+        }
+        return light.enabled;
+    };
+    auto spotIsEnabled = [&](std::size_t index, const world::SpotLightSpec& light) {
+        if (spotEffectiveEnabled != nullptr && index < spotEffectiveCount)
+        {
+            return spotEffectiveEnabled[index] != 0;
+        }
+        return light.enabled;
+    };
+
+    for (std::size_t index = 0; index < pointLights.size(); ++index)
     {
         if (packed.count >= kMaxActiveLocalLights)
         {
             break;
         }
-        if (!light.enabled || !world::PointLightIsValid(light))
+        const world::PointLightSpec& light = pointLights[index];
+        if (!pointIsEnabled(index, light) || !world::PointLightIsValid(light))
         {
             continue;
         }
         tryAdd(PackPointLight(light));
     }
-    for (const world::SpotLightSpec& light : spotLights)
+    for (std::size_t index = 0; index < spotLights.size(); ++index)
     {
         if (packed.count >= kMaxActiveLocalLights)
         {
             break;
         }
-        if (!light.enabled || !world::SpotLightIsValid(light))
+        const world::SpotLightSpec& light = spotLights[index];
+        if (!spotIsEnabled(index, light) || !world::SpotLightIsValid(light))
         {
             continue;
         }

@@ -2,15 +2,18 @@
 #include "editor/EditorSelection.h"
 #include "editor/EditorSelectionSet.h"
 #include "editor/ItemIdInspectorEdit.h"
+#include "editor/PressurePlateLocalLightTargets.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
 #include "world/HazardWorld.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
+#include "world/LocalLightActivation.h"
 #include "world/RespawnWorld.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -1971,7 +1974,180 @@ int main()
             editor::IsValidSelection(working, {EditorObjectKind::PointLight, 0})
                 && !editor::IsValidSelection(working, {EditorObjectKind::PointLight, 1}),
             "stale point selection index is invalid after delete");
+    }
 
+    {
+        world::LevelDefinition working = MakeBaseLevel();
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        working.pointLights.push_back(world::MakeDefaultPointLight({4.0f, 2.0f, 0.0f}));
+        working.spotLights.push_back(world::MakeDefaultSpotLight({1.0f, 4.0f, 0.0f}));
+        working.spotLights.push_back(world::MakeDefaultSpotLight({6.0f, 4.0f, 0.0f}));
+        working.spotLights.push_back(world::MakeDefaultSpotLight({8.0f, 4.0f, 0.0f}));
+        world::PressurePlateSpec plate{};
+        plate.center = {0.0f, 0.1f, 0.0f};
+        plate.size = world::kDefaultPressurePlateSize;
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 1});
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Spot, 2});
+        working.pressurePlates.push_back(plate);
+        const world::LevelDefinition baseline = working;
+        Expect(
+            editor::TryAddPressurePlateLocalLightTarget(
+                working.pressurePlates[0],
+                {world::LocalLightKind::Point, 0},
+                working.pointLights.size(),
+                working.spotLights.size())
+                == editor::PressurePlateLocalLightTargetEditResult::Added,
+            "Inspector can add a Point target");
+        Expect(
+            editor::TryAddPressurePlateLocalLightTarget(
+                working.pressurePlates[0],
+                {world::LocalLightKind::Spot, 0},
+                working.pointLights.size(),
+                working.spotLights.size())
+                == editor::PressurePlateLocalLightTargetEditResult::Added,
+            "Inspector can add a Spot target");
+        Expect(working.pressurePlates[0].controlledLocalLights.size() == 4,
+            "Inspector can hold multiple local-light targets");
+        Expect(!world::AuthoredLevelDataEqual(working, baseline), "semantic target add Dirties");
+        Expect(
+            editor::TryAddPressurePlateLocalLightTarget(
+                working.pressurePlates[0],
+                {world::LocalLightKind::Point, 0},
+                working.pointLights.size(),
+                working.spotLights.size())
+                == editor::PressurePlateLocalLightTargetEditResult::Unchanged,
+            "duplicate identical target is prevented");
+        const world::LevelDefinition afterAdds = working;
+        Expect(world::AuthoredLevelDataEqual(working, afterAdds), "duplicate add is not Dirty");
+        Expect(
+            editor::TryRemovePressurePlateLocalLightTargetAt(working.pressurePlates[0], 0)
+                == editor::PressurePlateLocalLightTargetEditResult::Removed,
+            "Inspector can remove a target");
+        Expect(!world::AuthoredLevelDataEqual(working, afterAdds), "semantic target remove Dirties");
+        Expect(
+            editor::TryRemovePressurePlateLocalLightTargetAt(working.pressurePlates[0], 99)
+                == editor::PressurePlateLocalLightTargetEditResult::Unchanged,
+            "removing a missing target is a no-op");
+        Expect(working.pressurePlates[0].linkedDoorIndex == world::kNoLinkedDoor,
+            "Door Inspector field remains independent");
+        Expect(working.pressurePlates[0].activateByDynamicBox
+                && !working.pressurePlates[0].activateByPlayer
+                && working.pressurePlates[0].visibleInGameplay,
+            "Box/Player/visible fields remain independent");
+        Expect(!working.pressurePlates[0].controlsDirectionalLight,
+            "Controls Directional Light remains independent");
+
+        working.pressurePlates[0].controlledLocalLights = {
+            {world::LocalLightKind::Point, 1}, {world::LocalLightKind::Spot, 2}};
+        const editor::LifecycleEditResult dupPlate =
+            editor::DuplicateSelected(working, {EditorObjectKind::PressurePlate, 0});
+        Expect(dupPlate.succeeded && working.pressurePlates.size() == 2,
+            "duplicate Pressure Plate succeeds");
+        Expect(
+            working.pressurePlates[1].controlledLocalLights
+                == working.pressurePlates[0].controlledLocalLights,
+            "duplicated plate preserves original local-light targets");
+
+        const editor::LifecycleEditResult dupPoint =
+            editor::DuplicateSelected(working, {EditorObjectKind::PointLight, 1});
+        Expect(dupPoint.succeeded && working.pointLights.size() == 3, "duplicate targeted Point");
+        Expect(
+            !world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Point, 2})
+                && !world::PressurePlateHasLocalLightTarget(
+                    working.pressurePlates[1], {world::LocalLightKind::Point, 2}),
+            "duplicating a targeted Point does not auto-target the copy");
+        Expect(
+            world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Point, 1}),
+            "existing plates still target the original Point");
+
+        const editor::LifecycleEditResult dupSpot =
+            editor::DuplicateSelected(working, {EditorObjectKind::SpotLight, 2});
+        Expect(dupSpot.succeeded && working.spotLights.size() == 4, "duplicate targeted Spot");
+        Expect(
+            !world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Spot, 3}),
+            "duplicating a targeted Spot does not auto-target the copy");
+
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::PointLight, 1}).succeeded,
+            "delete targeted Point");
+        Expect(
+            !world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Point, 1}),
+            "deleting a targeted Point removes its reference");
+        Expect(
+            working.pressurePlates[0].controlledLocalLights[0].kind == world::LocalLightKind::Spot
+                && working.pressurePlates[0].controlledLocalLights[0].index == 2,
+            "deleting a Point does not alter Spot target indices");
+
+        working.pressurePlates[0].controlledLocalLights = {
+            {world::LocalLightKind::Point, 1}, {world::LocalLightKind::Spot, 2}};
+        working.pressurePlates[1].controlledLocalLights = {
+            {world::LocalLightKind::Point, 1}, {world::LocalLightKind::Spot, 2}};
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::PointLight, 0}).succeeded,
+            "delete earlier Point remaps later Point targets");
+        Expect(
+            world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Point, 0})
+                && world::PressurePlateHasLocalLightTarget(
+                    working.pressurePlates[0], {world::LocalLightKind::Spot, 2}),
+            "later Point indices remap independently of Spot");
+
+        working.pressurePlates[0].controlledLocalLights = {
+            {world::LocalLightKind::Point, 0}, {world::LocalLightKind::Spot, 2}};
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::SpotLight, 0}).succeeded,
+            "delete earlier Spot remaps later Spot targets");
+        Expect(
+            world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Spot, 1})
+                && world::PressurePlateHasLocalLightTarget(
+                    working.pressurePlates[0], {world::LocalLightKind::Point, 0}),
+            "Spot remap decrements later Spot indices and leaves Point indices alone");
+
+        working.pressurePlates[0].controlledLocalLights = {
+            {world::LocalLightKind::Spot, 1}};
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::SpotLight, 1}).succeeded,
+            "delete targeted Spot");
+        Expect(working.pressurePlates[0].controlledLocalLights.empty(),
+            "deleting a targeted Spot removes its reference");
+
+        working.pressurePlates[0].controlledLocalLights.push_back(
+            {world::LocalLightKind::Point, 0});
+        working.pressurePlates[1].controlledLocalLights.push_back(
+            {world::LocalLightKind::Point, 0});
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::PressurePlate, 0}).succeeded,
+            "delete controlling Pressure Plate");
+        Expect(working.pointLights[0].enabled, "deleting a plate does not mutate authored Point Enabled");
+        const std::uint8_t remainingActive = 1;
+        Expect(
+            world::AuthoredLocalLightIsEffectivelyEnabled(
+                true,
+                world::ResolveLocalLightActivation(
+                    world::LocalLightKind::Point,
+                    0,
+                    working.pressurePlates,
+                    &remainingActive,
+                    1)),
+            "remaining controlling plate keeps OR semantics");
+        Expect(
+            editor::DeleteSelected(working, {EditorObjectKind::PressurePlate, 0}).succeeded,
+            "delete last controlling plate");
+        Expect(
+            world::AuthoredLocalLightIsEffectivelyEnabled(
+                true,
+                world::ResolveLocalLightActivation(
+                    world::LocalLightKind::Point, 0, working.pressurePlates, nullptr, 0)),
+            "no remaining plates restore authoredEnabled behavior");
+    }
+
+    {
+        world::LevelDefinition working = MakeBaseLevel();
         const editor::LifecycleEditResult addedSpot =
             editor::AddSpotLight(working, kTestPlacementA);
         Expect(addedSpot.succeeded && working.spotLights.size() == 1, "add spot light");

@@ -8,6 +8,10 @@
 #include "render/LocalLights.h"
 #include "world/LevelEnvironment.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
 namespace render
 {
 // Stored directional direction is the direction light *rays travel* through
@@ -109,6 +113,14 @@ void ApplyAuthoredLocalLights(
     LightingEnvironment& environment,
     const std::vector<world::PointLightSpec>& pointLights,
     const std::vector<world::SpotLightSpec>& spotLights);
+void ApplyEffectiveLocalLights(
+    LightingEnvironment& environment,
+    const std::vector<world::PointLightSpec>& pointLights,
+    const std::vector<world::SpotLightSpec>& spotLights,
+    const std::uint8_t* pointEffectiveEnabled,
+    std::size_t pointEffectiveCount,
+    const std::uint8_t* spotEffectiveEnabled,
+    std::size_t spotEffectiveCount);
 void ApplyDirectionalLightActivation(
     LightingEnvironment& environment,
     bool hasLinkedPressurePlates,

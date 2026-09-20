@@ -1243,10 +1243,14 @@ LifecycleEditResult DeleteSelected(
             workingCopy.staticProps.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     case EditorObjectKind::PointLight:
+        world::RemapPressurePlateLocalLightTargetsAfterDelete(
+            workingCopy.pressurePlates, world::LocalLightKind::Point, selection.index);
         workingCopy.pointLights.erase(
             workingCopy.pointLights.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     case EditorObjectKind::SpotLight:
+        world::RemapPressurePlateLocalLightTargetsAfterDelete(
+            workingCopy.pressurePlates, world::LocalLightKind::Spot, selection.index);
         workingCopy.spotLights.erase(
             workingCopy.spotLights.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
@@ -1438,9 +1442,7 @@ bool CanDuplicateSelected(
     EditorSelection selection,
     bool gizmoDragging)
 {
-    return authoringAvailable && !gizmoDragging && SupportsLifecycle(selection.kind)
-        && IsValidSelection(workingCopy, selection)
-        && !CategoryAtCountLimit(workingCopy, selection.kind);
+    return CanDuplicateSelected(authoringAvailable, workingCopy, selection, {}, gizmoDragging);
 }
 
 bool CanDuplicateSelected(
@@ -1450,10 +1452,6 @@ bool CanDuplicateSelected(
     const std::vector<EditorSelection>& additional,
     bool gizmoDragging)
 {
-    if (additional.empty())
-    {
-        return CanDuplicateSelected(authoringAvailable, workingCopy, primary, gizmoDragging);
-    }
     if (!authoringAvailable || gizmoDragging)
     {
         return false;

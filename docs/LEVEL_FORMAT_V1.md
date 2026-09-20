@@ -140,9 +140,10 @@ Defaults for newly created editor lights: color `{1, 0.95, 0.85}`, intensity
 `1.5`, range `8`, enabled `1`, Spot direction `{0, -1, 0}`, inner `20`,
 outer `35`.
 
-Local lights are presentation lighting only. They are not gameplay targets,
-not Directional Light, and do not cast shadows. Pressure Plate
-`controlsDirectionalLight` still names only the singleton Directional Light.
+Local lights are presentation lighting. M85.4 Pressure Plates may target
+specific Point/Spot Lights by typed index. They are not Directional Light
+and do not cast shadows. Pressure Plate `controlsDirectionalLight` still
+names only the singleton Directional Light.
 
 The writer emits `point_light` records then `spot_light` records after
 `directional_light`, omitted when the collections are empty.
@@ -159,7 +160,7 @@ hazard <cx> <cy> <cz> <sx> <sy> <sz>
 collectible <cx> <cy> <cz> <sx> <sy> <sz>
 level_goal <cx> <cy> <cz> <sx> <sy> <sz> [<nextLevelId>]
 dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
-pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay> [<controlsDirectionalLight>]]]
+pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay> [<controlsDirectionalLight> [lights <count> <kind> <index> ...]]]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [highlight <intensity>] [gold <amount>] [idle <0|1> <bobAmplitude> <bobSpeed> <spinSpeedDegrees>] [<modelIdentity...>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
@@ -228,15 +229,24 @@ visibility. A 12-token record adds `controlsDirectionalLight` (`0`/`1`) so
 the plate may activate the singleton Level Directional Light. The field is
 independent of `linkedDoorIndex`; one plate may control its Door and the
 Directional Light together. Invalid flag tokens are rejected. The writer
-always emits 12 tokens. Both activation sources may be true (OR) or both
-false (never Active). `visibleInGameplay = 0` suppresses the Gameplay fill;
-Editor authoring still draws/selects the plate. The Door index is **not** a
-BodyID, pointer, or GUID. Out-of-range and non-integer links fail
-validation; they do not silently retarget another Door. Cardinality is one
-Pressure Plate → zero or one Door, plus an optional singleton Directional
-Light flag. Multiple plates may name the same Door. Multiple plates may
-control the same Directional Light (OR). One plate cannot name multiple
-Doors. There is no light index, receiver ID, or generic target list.
+always emits 12 positional tokens. An optional `lights <count> <kind>
+<index> ...` suffix names zero or more Point/Spot targets (`kind` is exact
+`point` or `spot`; indices are 0-based into those collections). The writer
+emits the suffix only when the target list is non-empty. Duplicate identical
+`{kind,index}` pairs, unknown kinds, non-integer indices, the wrong token
+count, `lights 0`, and out-of-range indices are rejected. Old 7 / 8 / 11 /
+12-token records remain valid and mean an empty target list. Both activation
+sources may be true (OR) or both false (never Active). `visibleInGameplay = 0`
+suppresses the Gameplay fill; Editor authoring still draws/selects the plate.
+The Door index is **not** a BodyID, pointer, or GUID. Out-of-range and
+non-integer links fail validation; they do not silently retarget another Door.
+Cardinality is one Pressure Plate → zero or one Door, plus an optional
+singleton Directional Light flag, plus zero or more typed local-light
+targets. Multiple plates may name the same Door. Multiple plates may
+control the same Directional Light (OR). Multiple plates may target the same
+Point or Spot Light (OR). One plate cannot name multiple Doors. Local-light
+target kinds are separate index namespaces; deleting a Point remaps only
+Point targets.
 
 `door` is a repeatable authored solid. Position is the **closed** world center.
 Size is extents; each axis finite and `>= kMinDoorExtent` (0.12). Open

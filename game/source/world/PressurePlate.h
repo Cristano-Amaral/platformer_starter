@@ -9,6 +9,8 @@
 
 #include <cmath>
 #include <cstddef>
+#include <string_view>
+#include <vector>
 
 namespace world
 {
@@ -21,6 +23,61 @@ inline constexpr int kLevel01PressurePlateCount = 0;
 // -1 means no linked Door. Validated against the Door collection, never
 // silently retargeted.
 inline constexpr int kNoLinkedDoor = -1;
+
+// M85.4: typed index into LevelDefinition.pointLights or .spotLights.
+// Separate namespaces. Not a GUID, BodyID, Authoring Group, or Directional Light.
+enum class LocalLightKind
+{
+    Point,
+    Spot
+};
+
+inline constexpr std::string_view kPressurePlateLocalLightsMarker = "lights";
+inline constexpr std::string_view kLocalLightKindPointToken = "point";
+inline constexpr std::string_view kLocalLightKindSpotToken = "spot";
+
+struct LocalLightTarget
+{
+    LocalLightKind kind = LocalLightKind::Point;
+    int index = 0;
+};
+
+inline bool operator==(LocalLightTarget a, LocalLightTarget b)
+{
+    return a.kind == b.kind && a.index == b.index;
+}
+
+inline bool operator!=(LocalLightTarget a, LocalLightTarget b)
+{
+    return !(a == b);
+}
+
+inline const char* LocalLightKindToken(LocalLightKind kind)
+{
+    switch (kind)
+    {
+    case LocalLightKind::Point:
+        return kLocalLightKindPointToken.data();
+    case LocalLightKind::Spot:
+        return kLocalLightKindSpotToken.data();
+    }
+    return "";
+}
+
+inline bool TryParseLocalLightKind(std::string_view token, LocalLightKind& kind)
+{
+    if (token == kLocalLightKindPointToken)
+    {
+        kind = LocalLightKind::Point;
+        return true;
+    }
+    if (token == kLocalLightKindSpotToken)
+    {
+        kind = LocalLightKind::Spot;
+        return true;
+    }
+    return false;
+}
 
 struct PressurePlateSpec
 {
@@ -36,6 +93,9 @@ struct PressurePlateSpec
     // Independent of linkedDoorIndex. Default false keeps pre-M85.2 plates
     // from affecting lighting.
     bool controlsDirectionalLight = false;
+    // M85.4: ordered unique Point/Spot targets. Empty means no local-light
+    // control. Independent of linkedDoorIndex and controlsDirectionalLight.
+    std::vector<LocalLightTarget> controlledLocalLights{};
 };
 
 inline bool PressurePlateSizeIsValid(core::Vec3 size)
@@ -62,6 +122,116 @@ inline bool PressurePlateDoorLinkIsValid(int linkedDoorIndex, std::size_t doorCo
         return true;
     }
     return linkedDoorIndex >= 0 && static_cast<std::size_t>(linkedDoorIndex) < doorCount;
+}
+
+inline bool LocalLightTargetIndexIsValid(
+    LocalLightKind kind,
+    int index,
+    std::size_t pointCount,
+    std::size_t spotCount)
+{
+    if (index < 0)
+    {
+        return false;
+    }
+    const std::size_t unsignedIndex = static_cast<std::size_t>(index);
+    switch (kind)
+    {
+    case LocalLightKind::Point:
+        return unsignedIndex < pointCount;
+    case LocalLightKind::Spot:
+        return unsignedIndex < spotCount;
+    }
+    return false;
+}
+
+inline bool LocalLightTargetIsValid(
+    LocalLightTarget target,
+    std::size_t pointCount,
+    std::size_t spotCount)
+{
+    return LocalLightTargetIndexIsValid(target.kind, target.index, pointCount, spotCount);
+}
+
+inline bool PressurePlateHasLocalLightTarget(
+    const PressurePlateSpec& plate,
+    LocalLightTarget target)
+{
+    for (const LocalLightTarget& existing : plate.controlledLocalLights)
+    {
+        if (existing == target)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool PressurePlateLocalLightTargetsAreUnique(const PressurePlateSpec& plate)
+{
+    for (std::size_t index = 0; index < plate.controlledLocalLights.size(); ++index)
+    {
+        for (std::size_t later = index + 1; later < plate.controlledLocalLights.size(); ++later)
+        {
+            if (plate.controlledLocalLights[index] == plate.controlledLocalLights[later])
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+inline bool PressurePlateLocalLightTargetsAreValid(
+    const PressurePlateSpec& plate,
+    std::size_t pointCount,
+    std::size_t spotCount)
+{
+    if (!PressurePlateLocalLightTargetsAreUnique(plate))
+    {
+        return false;
+    }
+    for (const LocalLightTarget& target : plate.controlledLocalLights)
+    {
+        if (!LocalLightTargetIsValid(target, pointCount, spotCount))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Drop targets of `kind` at deletedIndex; decrement later same-kind indices.
+// The other kind is untouched. Order of surviving targets is preserved.
+inline void RemapPressurePlateLocalLightTargetsAfterDelete(
+    std::vector<PressurePlateSpec>& plates,
+    LocalLightKind kind,
+    std::size_t deletedIndex)
+{
+    const int deleted = static_cast<int>(deletedIndex);
+    for (PressurePlateSpec& plate : plates)
+    {
+        std::vector<LocalLightTarget> surviving;
+        surviving.reserve(plate.controlledLocalLights.size());
+        for (LocalLightTarget target : plate.controlledLocalLights)
+        {
+            if (target.kind != kind)
+            {
+                surviving.push_back(target);
+                continue;
+            }
+            if (target.index == deleted)
+            {
+                continue;
+            }
+            if (target.index > deleted)
+            {
+                --target.index;
+            }
+            surviving.push_back(target);
+        }
+        plate.controlledLocalLights = std::move(surviving);
+    }
 }
 
 // Generic AABB overlap against the authored plate volume.

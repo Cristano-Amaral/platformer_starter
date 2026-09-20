@@ -1112,7 +1112,9 @@ bool AuthoredGeometryDiffers(
             || activePlate.linkedDoorIndex != workingPlate.linkedDoorIndex
             || activePlate.activateByDynamicBox != workingPlate.activateByDynamicBox
             || activePlate.activateByPlayer != workingPlate.activateByPlayer
-            || activePlate.visibleInGameplay != workingPlate.visibleInGameplay;
+            || activePlate.visibleInGameplay != workingPlate.visibleInGameplay
+            || activePlate.controlsDirectionalLight != workingPlate.controlsDirectionalLight
+            || activePlate.controlledLocalLights != workingPlate.controlledLocalLights;
     }
     case EditorObjectKind::Door:
     {

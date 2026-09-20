@@ -409,6 +409,193 @@ int main()
 
     {
         world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        working.spotLights.push_back(MakeSpot({1.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        const EditorSelection ungroupedProp{EditorObjectKind::StaticProp, 0};
+        const EditorSelection ungroupedPickup{EditorObjectKind::ItemPickup, 0};
+        const EditorSelection ungroupedPoint{EditorObjectKind::PointLight, 0};
+        const EditorSelection ungroupedSpot{EditorObjectKind::SpotLight, 0};
+        Expect(
+            editor::CanDuplicateSelected(true, working, ungroupedProp, false),
+            "ungrouped Static Prop Duplicate is eligible");
+        Expect(
+            editor::CanDuplicateSelected(true, working, ungroupedPickup, {}, false),
+            "ungrouped Item Pickup Duplicate is eligible");
+        Expect(
+            editor::CanDuplicateSelected(true, working, ungroupedPoint, false),
+            "ungrouped Point Light Duplicate is eligible");
+        Expect(
+            editor::CanDuplicateSelected(true, working, ungroupedSpot, {}, false),
+            "ungrouped Spot Light Duplicate is eligible");
+        Expect(
+            editor::CanDeleteSelected(true, working, ungroupedProp, false)
+                && editor::CanDeleteSelected(true, working, ungroupedPickup, {}, false)
+                && editor::CanDeleteSelected(true, working, ungroupedPoint, false)
+                && editor::CanDeleteSelected(true, working, ungroupedSpot, {}, false),
+            "ungrouped Delete Selected eligibility is unchanged");
+
+        const EditorSelection fixturePrimary{EditorObjectKind::StaticProp, 2};
+        const std::vector<EditorSelection> fixtureAdditional{{EditorObjectKind::SpotLight, 0}};
+        Expect(
+            editor::CreateAuthoringGroupFromSelection(working, fixturePrimary, fixtureAdditional)
+                .succeeded,
+            "create complete Static Prop + Spot fixture group");
+        Expect(
+            editor::CanDuplicateSelected(true, working, fixturePrimary, fixtureAdditional, false),
+            "complete Static Prop + Spot group Duplicate is eligible");
+        Expect(
+            editor::CanDeleteSelected(true, working, fixturePrimary, fixtureAdditional, false),
+            "complete group Delete Selected remains eligible");
+
+        const std::vector<editor::HierarchyRow> rows = editor::BuildHierarchyRows(working);
+        Expect(editor::FindHierarchyGroupRow(rows, 0) != nullptr,
+            "fixture group row exists for composition");
+        EditorSelection rowPrimary{};
+        std::vector<EditorSelection> rowAdditional;
+        Expect(
+            editor::ApplyHierarchyRowClick(
+                working,
+                *editor::FindHierarchyGroupRow(rows, 0),
+                rowPrimary,
+                rowAdditional,
+                false),
+            "group-row click reconstructs complete fixture selection");
+        Expect(
+            editor::CanDuplicateSelected(true, working, rowPrimary, rowAdditional, false),
+            "complete group selected from group-row composition is Duplicate-eligible");
+        Expect(rowPrimary == fixturePrimary && rowAdditional == fixtureAdditional,
+            "group-row composition matches the authored group members");
+
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::SpotLight, 0}, false),
+            "single grouped Spot Light Duplicate is ineligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::StaticProp, 2}, {}, false),
+            "single grouped Static Prop Duplicate is ineligible");
+        Expect(
+            editor::CanDeleteSelected(
+                true, working, {EditorObjectKind::SpotLight, 0}, false),
+            "single grouped Spot Light remains Delete-eligible");
+        Expect(
+            editor::DuplicateSelectedDisableReason(
+                true, working, {EditorObjectKind::SpotLight, 0}, false)
+                != nullptr,
+            "partial grouped member still has the existing Duplicate disable reason");
+        Expect(
+            std::strcmp(
+                editor::DuplicateSelectedDisableReason(
+                    true, working, {EditorObjectKind::SpotLight, 0}, false),
+                "Duplicate blocked: select the complete Authoring Group.")
+                == 0,
+            "existing complete-group Duplicate disable text is preserved");
+
+        const world::LevelDefinition beforeCompleteDuplicate = working;
+        const editor::LifecycleEditResult completeCopy =
+            editor::DuplicateSelectionSet(working, fixturePrimary, fixtureAdditional);
+        Expect(completeCopy.succeeded, "complete group duplicate still succeeds");
+        Expect(working.authoringGroups.size() == 2, "duplicated complete group is independently grouped");
+        Expect(working.staticProps.size() == beforeCompleteDuplicate.staticProps.size() + 1
+                && working.spotLights.size() == beforeCompleteDuplicate.spotLights.size() + 1,
+            "complete group duplicate copies each member once");
+        Expect(completeCopy.selection.kind == EditorObjectKind::StaticProp
+                && completeCopy.additionalSelections.size() == 1
+                && completeCopy.additionalSelections[0].kind == EditorObjectKind::SpotLight,
+            "duplicated complete group remaps onto the copied members");
+        Expect(
+            editor::FindAuthoringGroupContaining(working, fixturePrimary)
+                != editor::FindAuthoringGroupContaining(working, completeCopy.selection),
+            "copied group is independent of the source group");
+        Expect(
+            editor::CanDuplicateSelected(
+                true, working, completeCopy.selection, completeCopy.additionalSelections, false),
+            "duplicated complete group selection remains Duplicate-eligible");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
+        working.pointLights.push_back(world::MakeDefaultPointLight({0.0f, 2.0f, 0.0f}));
+        working.spotLights.push_back(MakeSpot({1.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}));
+        const EditorSelection primary{EditorObjectKind::StaticProp, 0};
+        const std::vector<EditorSelection> additional{
+            {EditorObjectKind::ItemPickup, 0},
+            {EditorObjectKind::PointLight, 0},
+            {EditorObjectKind::SpotLight, 0}};
+        Expect(
+            editor::CreateAuthoringGroupFromSelection(working, primary, additional).succeeded,
+            "create mixed 4-member Authoring Group");
+        Expect(
+            editor::CanDuplicateSelected(true, working, primary, additional, false),
+            "complete mixed group Duplicate is eligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::StaticProp, 0}, false),
+            "single grouped Static Prop member Duplicate is ineligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::ItemPickup, 0}, {}, false),
+            "single grouped Item Pickup member Duplicate is ineligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::PointLight, 0}, false),
+            "single grouped Point Light member Duplicate is ineligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true, working, {EditorObjectKind::SpotLight, 0}, {}, false),
+            "single grouped Spot Light member Duplicate is ineligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true,
+                working,
+                {EditorObjectKind::StaticProp, 0},
+                {{EditorObjectKind::ItemPickup, 0}, {EditorObjectKind::PointLight, 0}},
+                false),
+            "partial selection of several members from a larger group is Duplicate-ineligible");
+        Expect(
+            !editor::CanDuplicateSelected(
+                true,
+                working,
+                {EditorObjectKind::SpotLight, 0},
+                {{EditorObjectKind::StaticProp, 1}},
+                false),
+            "partial group plus unrelated object is Duplicate-ineligible");
+        Expect(
+            editor::CanDeleteSelected(
+                true, working, {EditorObjectKind::ItemPickup, 0}, false),
+            "single grouped Item Pickup remains Delete-eligible");
+        Expect(
+            editor::CanDeleteSelected(
+                true, working, {EditorObjectKind::PointLight, 0}, {}, false),
+            "single grouped Point Light remains Delete-eligible");
+        Expect(
+            editor::CanDeleteSelected(true, working, primary, additional, false),
+            "complete mixed group Delete Selected remains eligible");
+
+        const world::LevelDefinition beforePartial = working;
+        const editor::LifecycleEditResult refused = editor::DuplicateSelectionSet(
+            working, {EditorObjectKind::StaticProp, 0}, {});
+        Expect(!refused.succeeded, "lower-level duplicate still refuses a partial group");
+        Expect(refused.status == editor::LifecycleEditStatus::InvalidGroupOperation,
+            "partial group duplicate execution keeps InvalidGroupOperation");
+        Expect(world::AuthoredLevelDataEqual(working, beforePartial),
+            "partial group duplicate execution remains atomic");
+        const editor::LifecycleEditResult mixed = editor::DuplicateSelectionSet(
+            working,
+            {EditorObjectKind::SpotLight, 0},
+            {{EditorObjectKind::StaticProp, 1}});
+        Expect(!mixed.succeeded, "partial group plus unrelated object remains an atomic refusal");
+        Expect(world::AuthoredLevelDataEqual(working, beforePartial),
+            "mixed partial+unrelated duplicate mutates nothing");
+        Expect(
+            editor::DuplicateSelectionSet(working, primary, additional).succeeded,
+            "complete mixed group duplicate still succeeds after refused partials");
+        Expect(working.authoringGroups.size() == 2,
+            "duplicated mixed group remains independently grouped");
+    }
+
+    {
+        world::LevelDefinition working = MakeLevelWithProps();
         editor::CreateAuthoringGroupFromSelection(
             working,
             {EditorObjectKind::StaticProp, 0},
@@ -1294,6 +1481,22 @@ int main()
             "16. partial-group Duplicate remains an atomic refusal");
         Expect(working.pointLights.size() == 2 && working.authoringGroups.size() == 2,
             "16. refused Point partial Duplicate mutates nothing");
+
+        world::PressurePlateSpec plate{};
+        plate.center = {0.0f, 0.1f, 0.0f};
+        plate.size = {2.0f, 0.2f, 2.0f};
+        plate.controlledLocalLights.push_back({world::LocalLightKind::Point, 0});
+        working.pressurePlates.push_back(plate);
+        Expect(
+            editor::DuplicateSelectionSet(working, primary, additional).succeeded,
+            "complete-group Duplicate after a plate targets the original Point");
+        Expect(working.pressurePlates[0].controlledLocalLights.size() == 1
+                && working.pressurePlates[0].controlledLocalLights[0].index == 0,
+            "complete Authoring Group duplication does not invent Pressure Plate gameplay links");
+        Expect(
+            !world::PressurePlateHasLocalLightTarget(
+                working.pressurePlates[0], {world::LocalLightKind::Point, 2}),
+            "copied grouped Point is not auto-targeted");
     }
 
     {

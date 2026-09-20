@@ -222,6 +222,24 @@ void ApplyAuthoredLocalLights(
     environment.localLights = PackAuthoredLocalLights(pointLights, spotLights);
 }
 
+void ApplyEffectiveLocalLights(
+    LightingEnvironment& environment,
+    const std::vector<world::PointLightSpec>& pointLights,
+    const std::vector<world::SpotLightSpec>& spotLights,
+    const std::uint8_t* pointEffectiveEnabled,
+    std::size_t pointEffectiveCount,
+    const std::uint8_t* spotEffectiveEnabled,
+    std::size_t spotEffectiveCount)
+{
+    environment.localLights = PackAuthoredLocalLights(
+        pointLights,
+        spotLights,
+        pointEffectiveEnabled,
+        pointEffectiveCount,
+        spotEffectiveEnabled,
+        spotEffectiveCount);
+}
+
 void ApplyDirectionalLightActivation(
     LightingEnvironment& environment,
     bool hasLinkedPressurePlates,

@@ -376,6 +376,8 @@ LifecycleEditResult DeleteSelectionSet(
     const std::vector<EditorSelection>& additional);
 
 // Phase B enable rules. Dirty is not a parameter and does not block.
+// Duplicate enablement is a trial of DuplicateSelectionSet so the Edit menu
+// matches execution, including complete-Authoring-Group eligibility.
 bool CanAddLifecycleObject(
     bool authoringAvailable,
     const world::LevelDefinition& workingCopy,
