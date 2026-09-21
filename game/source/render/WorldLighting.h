@@ -14,6 +14,23 @@
 
 namespace render
 {
+// raylib DrawMesh binds MATERIAL_MAP index i to texture unit i and writes
+// sampler uniforms texture0..textureN. maps[1] holds the directional shadow
+// depth texture, so extra Terrain albedo layers use dedicated sampler names
+// on units DrawMesh does not claim.
+inline constexpr int kWorldLitDiffuseTextureUnit = 0;
+inline constexpr int kWorldLitShadowMapTextureUnit = 1;
+inline constexpr int kWorldLitTerrainExtraTextureUnits[3] = {5, 6, 7};
+
+struct TerrainLayerDrawRequest
+{
+    int layerCount = 0;
+    const Texture2D* layers[4]{};
+    float tiling[4]{0.25f, 0.25f, 0.25f, 0.25f};
+    float originX = 0.0f;
+    float originZ = 0.0f;
+};
+
 class WorldLightingResources
 {
 public:
@@ -33,6 +50,7 @@ public:
     unsigned int ShadowMapId() const;
     int ShadowMapResolution() const;
     bool FailureLogged() const;
+    int TerrainExtraAlbedoSamplerLocation(int extraLayer) const;
 
     ModelDrawOverride ShadowModelOverride() const;
     ModelDrawOverride LitModelOverride() const;
@@ -63,6 +81,7 @@ public:
         Color color) const;
     void DrawWorldMesh(const Mesh& mesh, Color color) const;
     void DrawWorldMesh(const Mesh& mesh, Color color, const Texture2D* albedo) const;
+    void DrawWorldTerrain(const Mesh& mesh, Color color, const TerrainLayerDrawRequest& request) const;
 
 private:
     void DrawSolidBoxTransform(const Matrix& transform, Color color) const;

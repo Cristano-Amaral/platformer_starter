@@ -331,6 +331,18 @@ int main()
     Expect(
         !editor::AuthoredLevelsProtectTerrainTextureIdentity(active, active, active, "textures/grass.png"),
         "unreferenced texture is not protected");
+    Expect(
+        world::TryAddTerrainMaterialLayer(working.terrain, "textures/dirt.png"),
+        "extra Terrain layer fixture");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(working, active, active, "textures/dirt.png"),
+        "loaded Terrain extra layer blocks delete");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(working, active, active, "textures/grass.png"),
+        "base Terrain layer remains protected");
+    Expect(
+        working.terrain.extraLayers[0].textureIdentity == "textures/dirt.png",
+        "assigned extra layer identity is the Texture thumbnail request");
 
     editor::ThumbnailSourceStamp missingStamp{};
     editor::ThumbnailSourceStamp presentStamp{};
@@ -347,6 +359,10 @@ int main()
         editor::ClassifyTextureThumbnailEnsure(true, false, presentStamp, true, presentStamp)
             == editor::TextureThumbnailEnsureDecision::ReuseReady,
         "unchanged stamp reuses GPU texture");
+    Expect(
+        editor::ClassifyTextureThumbnailEnsure(false, false, missingStamp, true, presentStamp)
+            == editor::TextureThumbnailEnsureDecision::Reload,
+        "Terrain Materials thumbnail uses the shared TextureThumbnailStore path");
     std::vector<std::string> stale;
     editor::CollectStaleTextureThumbnailIdentities(
         {"textures/grass.png", "textures/gone.png"},

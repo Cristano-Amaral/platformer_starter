@@ -5,8 +5,10 @@
 #include "render/LightingEnvironment.h"
 #include "render/TerrainMesh.h"
 #include "render/WorldLighting.h"
+#include "assets/RuntimePngResolve.h"
 #include "world/LocalLight.h"
 #include "world/Terrain.h"
+#include "world/TerrainPaint.h"
 #include "world/TerrainSculpt.h"
 
 #include "raylib.h"
@@ -57,6 +59,131 @@ bool StageIdentity(std::string_view identity, const std::filesystem::path& sourc
     std::filesystem::copy_file(
         source, dest, std::filesystem::copy_options::overwrite_existing, error);
     return !error && std::filesystem::is_regular_file(dest);
+}
+
+bool StageSolidIdentity(std::string_view identity, Color color)
+{
+    const std::filesystem::path dest = platform::RuntimeAssetPath(identity);
+    if (dest.empty())
+    {
+        return false;
+    }
+    std::error_code error;
+    std::filesystem::create_directories(dest.parent_path(), error);
+    if (error)
+    {
+        return false;
+    }
+    Image image = GenImageColor(8, 8, color);
+    const bool ok = ExportImage(image, dest.string().c_str());
+    UnloadImage(image);
+    return ok && std::filesystem::is_regular_file(dest, error);
+}
+
+int ChannelDelta(unsigned char actual, unsigned char expected)
+{
+    return actual > expected ? actual - expected : expected - actual;
+}
+
+bool ColorChannelsClose(Color actual, Color expected, int slack)
+{
+    return ChannelDelta(actual.r, expected.r) <= slack && ChannelDelta(actual.g, expected.g) <= slack
+        && ChannelDelta(actual.b, expected.b) <= slack;
+}
+
+void FillTerrainDrawRequest(
+    render::TerrainLayerDrawRequest& request,
+    const render::TerrainGpuResources& terrainGpu)
+{
+    request = {};
+    request.layerCount = terrainGpu.LayerCount();
+    const world::TerrainSpec* spec = terrainGpu.LastSpec();
+    if (spec == nullptr)
+    {
+        return;
+    }
+    request.originX = spec->origin.x;
+    request.originZ = spec->origin.z;
+    for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
+    {
+        request.tiling[layer] = world::TerrainLayerTextureTiling(*spec, layer);
+        request.layers[layer] = terrainGpu.GetLayerTexture(layer);
+    }
+}
+
+bool SampleLitTerrainPixel(
+    render::WorldLightingResources& lighting,
+    const render::TerrainGpuResources& terrainGpu,
+    const render::LightingEnvironment& environment,
+    Color& outPixel)
+{
+    outPixel = {};
+    if (!terrainGpu.HasMesh() || terrainGpu.GetMesh() == nullptr)
+    {
+        return false;
+    }
+    RenderTexture2D target = LoadRenderTexture(64, 64);
+    if (target.id == 0)
+    {
+        return false;
+    }
+    BeginTextureMode(target);
+    ClearBackground(BLACK);
+    Camera3D camera{};
+    camera.position = Vector3{0.0f, 28.0f, 0.15f};
+    camera.target = Vector3{0.0f, 0.25f, 0.0f};
+    camera.up = Vector3{0.0f, 1.0f, 0.0f};
+    camera.fovy = 35.0f;
+    camera.projection = CAMERA_PERSPECTIVE;
+    BeginMode3D(camera);
+    lighting.BindLitPass(environment);
+    render::TerrainLayerDrawRequest request{};
+    FillTerrainDrawRequest(request, terrainGpu);
+    lighting.DrawWorldTerrain(*terrainGpu.GetMesh(), WHITE, request);
+    lighting.UnbindLitPass();
+    EndMode3D();
+    EndTextureMode();
+    Image image = LoadImageFromTexture(target.texture);
+    ImageFlipVertical(&image);
+    outPixel = GetImageColor(image, 32, 32);
+    UnloadImage(image);
+    UnloadRenderTexture(target);
+    return true;
+}
+
+bool FillAllSampleWeights(world::TerrainSpec& terrain, float layer0, float layer1, float layer2, float layer3)
+{
+    const float weights[world::kMaxTerrainMaterialLayers] = {layer0, layer1, layer2, layer3};
+    const int count = world::TerrainSampleCount(terrain);
+    if (count <= 0)
+    {
+        return false;
+    }
+    for (int sample = 0; sample < count; ++sample)
+    {
+        world::WriteTerrainSampleWeights(terrain, sample, weights);
+    }
+    return true;
+}
+
+bool ReadVertexWeightColor(
+    const render::TerrainGpuResources& terrainGpu,
+    int vertexIndex,
+    unsigned char& red,
+    unsigned char& green,
+    unsigned char& blue,
+    unsigned char& alpha)
+{
+    const Mesh* mesh = terrainGpu.GetMesh();
+    if (mesh == nullptr || mesh->colors == nullptr || vertexIndex < 0 || vertexIndex >= mesh->vertexCount)
+    {
+        return false;
+    }
+    red = mesh->colors[vertexIndex * 4];
+    green = mesh->colors[vertexIndex * 4 + 1];
+    blue = mesh->colors[vertexIndex * 4 + 2];
+    alpha = mesh->colors[vertexIndex * 4 + 3];
+    return true;
 }
 }
 
@@ -122,6 +249,73 @@ int main()
         StageIdentity(platform::kTestCheckerLogicalId, checkerPng),
         "stage textures/test_checker.png");
 
+    {
+        std::error_code error;
+        const std::filesystem::path resolveRoot =
+            (std::filesystem::temp_directory_path() / "platformer_m90_png_resolve").lexically_normal();
+        std::filesystem::remove_all(resolveRoot, error);
+        const std::filesystem::path stagedRoot = resolveRoot / "staged";
+        const std::filesystem::path cookedRoot = resolveRoot / "cooked";
+        std::filesystem::create_directories(stagedRoot / "textures", error);
+        std::filesystem::create_directories(cookedRoot / "textures", error);
+        std::filesystem::copy_file(
+            checkerPng,
+            cookedRoot / "textures" / "test_cooked_only.png",
+            std::filesystem::copy_options::overwrite_existing,
+            error);
+        std::filesystem::copy_file(
+            checkerPng,
+            stagedRoot / "textures" / "test_checker.png",
+            std::filesystem::copy_options::overwrite_existing,
+            error);
+        std::filesystem::copy_file(
+            checkerPng,
+            cookedRoot / "textures" / "test_checker.png",
+            std::filesystem::copy_options::overwrite_existing,
+            error);
+        const assets::RuntimePngLoadResolution cookedOnly = assets::ResolveRuntimePngLoadFile(
+            "textures/test_cooked_only.png", cookedRoot, stagedRoot);
+        Expect(
+            cookedOnly.source == assets::RuntimePngLoadSource::Cooked,
+            "cooked PNG resolves when staged is absent");
+        Expect(
+            cookedOnly.path.filename() == "test_cooked_only.png",
+            "cooked resolution uses the identity filename");
+        const assets::RuntimePngLoadResolution stagedWins = assets::ResolveRuntimePngLoadFile(
+            "textures/test_checker.png", cookedRoot, stagedRoot);
+        Expect(
+            stagedWins.source == assets::RuntimePngLoadSource::Staged,
+            "staged PNG wins over cooked");
+        const assets::RuntimePngLoadResolution releaseMissing = assets::ResolveRuntimePngLoadFile(
+            "textures/test_cooked_only.png", {}, stagedRoot);
+        Expect(
+            releaseMissing.source == assets::RuntimePngLoadSource::Missing,
+            "Release (no cooked root) does not use cooked PNGs");
+        const assets::RuntimePngLoadResolution missing = assets::ResolveRuntimePngLoadFile(
+            "textures/missing_layer.png", cookedRoot, stagedRoot);
+        Expect(missing.source == assets::RuntimePngLoadSource::Missing, "missing PNG stays missing");
+        std::filesystem::create_directories(resolveRoot / "source" / "textures", error);
+        std::filesystem::copy_file(
+            checkerPng,
+            resolveRoot / "source" / "textures" / "test_source_only.png",
+            std::filesystem::copy_options::overwrite_existing,
+            error);
+        const assets::RuntimePngLoadResolution sourceOnly = assets::ResolveRuntimePngLoadFile(
+            "textures/test_source_only.png",
+            cookedRoot,
+            stagedRoot,
+            resolveRoot / "source");
+        Expect(
+            sourceOnly.source == assets::RuntimePngLoadSource::Source,
+            "Development source last-resort resolves when staged and cooked are absent");
+        const assets::RuntimePngLoadResolution releaseIgnoresSource = assets::ResolveRuntimePngLoadFile(
+            "textures/test_source_only.png", {}, stagedRoot, {});
+        Expect(
+            releaseIgnoresSource.source == assets::RuntimePngLoadSource::Missing,
+            "Release does not use catalog source PNGs");
+        std::filesystem::remove_all(resolveRoot, error);
+    }
+
     const std::filesystem::path stagedVs =
         platform::RuntimeAssetPath(platform::kWorldLitVertexShaderLogicalId);
     Expect(stagedVs.is_absolute(), "runtime shader path is absolute");
@@ -139,6 +333,29 @@ int main()
     Expect(lighting.DepthShaderId() != 0, "depth shader id is valid");
     Expect(lighting.ShadowMapId() != 0, "shadow map id is valid");
     Expect(lighting.ShadowMapResolution() == 2048, "shadow map uses the default resolution");
+    Expect(
+        lighting.TerrainExtraAlbedoSamplerLocation(0) >= 0
+            && lighting.TerrainExtraAlbedoSamplerLocation(1) >= 0
+            && lighting.TerrainExtraAlbedoSamplerLocation(2) >= 0,
+        "terrain extra albedo samplers exist");
+    Expect(
+        render::kWorldLitDiffuseTextureUnit != render::kWorldLitShadowMapTextureUnit,
+        "layer 0 unit does not alias the shadow map");
+    Expect(
+        render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitShadowMapTextureUnit
+            && render::kWorldLitTerrainExtraTextureUnits[1] != render::kWorldLitShadowMapTextureUnit
+            && render::kWorldLitTerrainExtraTextureUnits[2] != render::kWorldLitShadowMapTextureUnit,
+        "extra Terrain albedo units do not alias the shadow map");
+    Expect(
+        render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitDiffuseTextureUnit
+            && render::kWorldLitTerrainExtraTextureUnits[1] != render::kWorldLitDiffuseTextureUnit
+            && render::kWorldLitTerrainExtraTextureUnits[2] != render::kWorldLitDiffuseTextureUnit,
+        "extra Terrain albedo units do not alias texture0");
+    Expect(
+        render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitTerrainExtraTextureUnits[1]
+            && render::kWorldLitTerrainExtraTextureUnits[1] != render::kWorldLitTerrainExtraTextureUnits[2]
+            && render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitTerrainExtraTextureUnits[2],
+        "extra Terrain albedo units are distinct");
 
     const std::size_t shaderLoads = lighting.ShaderLoadCount();
     const std::size_t shadowCreates = lighting.ShadowMapCreateCount();
@@ -335,6 +552,281 @@ int main()
         terrainGpu.Unload();
         terrainGpu.Unload();
         Expect(terrainGpu.HasTexture() == false, "repeated Unload is idempotent");
+
+        Expect(
+            StageIdentity("textures/test_textured_basecolor.png", checkerPng),
+            "stage second Terrain layer texture");
+        world::TerrainSpec layered = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(layered, "textures/test_checker.png"),
+            "GPU layer 0 fixture");
+        const std::size_t layerLoads = terrainGpu.TextureLoadCount();
+        terrainGpu.Sync(&layered);
+        Expect(terrainGpu.HasTexture(), "layer 0 loads");
+        Expect(terrainGpu.LayerCount() == 1, "single layer count");
+        Expect(terrainGpu.GetLayerTexture(0) != nullptr, "layer 0 texture present");
+        Expect(terrainGpu.GetLayerTexture(1) == nullptr, "unused layer 1 is empty");
+        Expect(
+            world::TryAddTerrainMaterialLayer(layered, "textures/test_textured_basecolor.png"),
+            "GPU add extra layer");
+        const std::size_t meshUploadsBeforeLayer = terrainGpu.UploadCount();
+        terrainGpu.Sync(&layered);
+        Expect(terrainGpu.LayerCount() == 2, "two GPU layers");
+        Expect(terrainGpu.GetLayerTexture(1) != nullptr, "extra layer texture loads");
+        Expect(
+            terrainGpu.TextureLoadCount() == layerLoads + 2,
+            "adding a layer loads one additional texture");
+        Expect(
+            terrainGpu.UploadCount() == meshUploadsBeforeLayer,
+            "unpainted extra layer does not rebuild mesh");
+        const core::Vec3 gpuPaint = world::TerrainSamplePosition(layered, 4, 2);
+        world::TerrainPaintStampRequest gpuStamp{};
+        gpuStamp.layer = 1;
+        gpuStamp.centerX = gpuPaint.x;
+        gpuStamp.centerZ = gpuPaint.z;
+        gpuStamp.radius = 4.0f;
+        gpuStamp.strength = 1.0f;
+        Expect(world::ApplyTerrainPaintStamp(layered, gpuStamp), "GPU paint fixture");
+        terrainGpu.Sync(&layered);
+        Expect(
+            terrainGpu.UploadCount() == meshUploadsBeforeLayer + 1,
+            "paint weights rebuild mesh colors");
+        Expect(terrainGpu.GetLayerTexture(0) != nullptr && terrainGpu.GetLayerTexture(1) != nullptr,
+            "both layer textures remain after paint");
+        BeginDrawing();
+        BeginMode3D(terrainCamera);
+        lighting.BindLitPass(environment);
+        render::TerrainLayerDrawRequest drawRequest{};
+        drawRequest.layerCount = terrainGpu.LayerCount();
+        drawRequest.originX = layered.origin.x;
+        drawRequest.originZ = layered.origin.z;
+        drawRequest.layers[0] = terrainGpu.GetLayerTexture(0);
+        drawRequest.layers[1] = terrainGpu.GetLayerTexture(1);
+        drawRequest.tiling[0] = world::TerrainLayerTextureTiling(layered, 0);
+        drawRequest.tiling[1] = world::TerrainLayerTextureTiling(layered, 1);
+        lighting.DrawWorldTerrain(*terrainGpu.GetMesh(), WHITE, drawRequest);
+        lighting.UnbindLitPass();
+        EndMode3D();
+        EndDrawing();
+        Expect(world::TryRemoveTerrainMaterialLayer(layered, 1), "GPU remove extra layer");
+        const std::size_t unloadsBeforeRemove = terrainGpu.TextureUnloadCount();
+        terrainGpu.Sync(&layered);
+        Expect(terrainGpu.LayerCount() == 1, "remove drops GPU layer count");
+        Expect(terrainGpu.GetLayerTexture(1) == nullptr, "removed layer texture is gone");
+        Expect(
+            terrainGpu.TextureUnloadCount() == unloadsBeforeRemove + 1,
+            "removing a layer unloads its texture");
+        terrainGpu.Sync(nullptr);
+        Expect(terrainGpu.GetLayerTexture(0) == nullptr, "Level transition unloads layer 0");
+        terrainGpu.Unload();
+        Expect(terrainGpu.GetLayerTexture(0) == nullptr, "F2 unload clears layer textures");
+
+        std::error_code cookedError;
+        const std::filesystem::path cookedPreviewRoot =
+            (std::filesystem::temp_directory_path() / "platformer_m90_terrain_cooked").lexically_normal();
+        std::filesystem::remove_all(cookedPreviewRoot, cookedError);
+        std::filesystem::create_directories(cookedPreviewRoot / "textures", cookedError);
+        const std::filesystem::path cookedRgb = cookedPreviewRoot / "textures" / "test_cooked_rgb.png";
+        Image rgbImage = GenImageColor(600, 400, Color{48, 96, 32, 255});
+        ImageResize(&rgbImage, 512, 341);
+        ExportImage(rgbImage, cookedRgb.string().c_str());
+        UnloadImage(rgbImage);
+        Expect(std::filesystem::is_regular_file(cookedRgb), "cooked RGB PNG was written");
+        world::TerrainSpec cookedLayer = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(cookedLayer, "textures/test_checker.png"),
+            "cooked-preview layer 0 is staged");
+        Expect(
+            world::TryAddTerrainMaterialLayer(cookedLayer, "textures/test_cooked_rgb.png"),
+            "cooked-preview extra layer identity");
+        terrainGpu.SetAuthoringCookedRoot({});
+        terrainGpu.Sync(&cookedLayer);
+        Expect(terrainGpu.GetLayerTexture(0) != nullptr, "layer 0 still loads from staged");
+        Expect(
+            terrainGpu.GetLayerTexture(1) == nullptr,
+            "Release semantics: unstaged extra layer does not load");
+        terrainGpu.SetAuthoringCookedRoot(cookedPreviewRoot);
+        terrainGpu.Sync(&cookedLayer);
+        Expect(
+            terrainGpu.GetLayerTexture(1) != nullptr,
+            "Development cooked root loads unstaged extra layer");
+        std::filesystem::copy_file(
+            cookedRgb,
+            cookedPreviewRoot / "textures" / "test_cooked_rgb_b.png",
+            std::filesystem::copy_options::overwrite_existing,
+            cookedError);
+        cookedLayer.extraLayers[0].textureIdentity = "textures/test_cooked_rgb_b.png";
+        const std::size_t loadsBeforeChange = terrainGpu.TextureLoadCount();
+        terrainGpu.Sync(&cookedLayer);
+        Expect(
+            terrainGpu.GetLayerTexture(1) != nullptr,
+            "changing extra-layer identity reloads from cooked root");
+        Expect(
+            terrainGpu.TextureLoadCount() == loadsBeforeChange + 1,
+            "identity change is one new load");
+        cookedLayer.extraLayers[0].textureIdentity = "textures/missing_extra.png";
+        terrainGpu.Sync(&cookedLayer);
+        Expect(
+            terrainGpu.GetLayerTexture(1) == nullptr,
+            "missing extra layer uses deterministic fallback (no GPU texture)");
+        cookedLayer.extraLayers[0].textureIdentity = "textures/test_cooked_rgb.png";
+        terrainGpu.Sync(&cookedLayer);
+        Expect(
+            terrainGpu.GetLayerTexture(1) != nullptr,
+            "missing then available extra layer reconciles");
+
+        Expect(
+            StageSolidIdentity("textures/m90_blend_green.png", Color{0, 255, 0, 255}),
+            "stage representative green layer 0");
+        Expect(
+            StageSolidIdentity("textures/m90_blend_blue.png", Color{0, 0, 255, 255}),
+            "stage representative blue layer 1");
+        Expect(
+            StageSolidIdentity("textures/m90_blend_yellow.png", Color{255, 255, 0, 255}),
+            "stage representative yellow layer 2");
+        terrainGpu.SetAuthoringCookedRoot({});
+        terrainGpu.SetAuthoringSourceRoot({});
+        world::TerrainSpec blend = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(blend, "textures/m90_blend_green.png"),
+            "blend layer 0 green");
+        Expect(
+            world::TryAddTerrainMaterialLayer(blend, "textures/m90_blend_blue.png"),
+            "blend layer 1 blue");
+        Expect(
+            world::TryAddTerrainMaterialLayer(blend, "textures/m90_blend_yellow.png"),
+            "blend layer 2 yellow");
+        terrainGpu.Sync(&blend);
+        Expect(
+            terrainGpu.GetLayerTexture(0) != nullptr && terrainGpu.GetLayerTexture(1) != nullptr
+                && terrainGpu.GetLayerTexture(2) != nullptr,
+            "representative layers load distinct GPU textures");
+        Expect(
+            terrainGpu.GetLayerTexture(0)->id != terrainGpu.GetLayerTexture(1)->id
+                && terrainGpu.GetLayerTexture(1)->id != terrainGpu.GetLayerTexture(2)->id,
+            "layer 0/1/2 map to distinct Texture2D ids");
+        unsigned char weightR = 0;
+        unsigned char weightG = 0;
+        unsigned char weightB = 0;
+        unsigned char weightA = 0;
+        Expect(
+            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+                && weightR == 255 && weightG == 0 && weightB == 0 && weightA == 0,
+            "default weights encode R=layer0 G=layer1 B=layer2 A=layer3");
+        render::LightingEnvironment albedoOnly{};
+        albedoOnly.ambient.color = {1.0f, 1.0f, 1.0f};
+        albedoOnly.ambient.intensity = 1.0f;
+        albedoOnly.directional.authoredEnabled = false;
+        albedoOnly.directional.shadowsEnabled = false;
+        Color pixel{};
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample unpainted Terrain");
+        Expect(
+            ColorChannelsClose(pixel, Color{0, 255, 0, 255}, 40),
+            "unpainted Terrain samples layer 0 green, not a tinted weight color");
+        Expect(pixel.r < 40, "unpainted Terrain is not shadow-red");
+
+        Expect(FillAllSampleWeights(blend, 0.0f, 1.0f, 0.0f, 0.0f), "set all samples to layer 1");
+        terrainGpu.Sync(&blend);
+        Expect(
+            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+                && weightR == 0 && weightG == 255 && weightB == 0 && weightA == 0,
+            "layer 1 weights encode G=255 without using it as visual tint");
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample layer 1 Terrain");
+        Expect(
+            ColorChannelsClose(pixel, Color{0, 0, 255, 255}, 40),
+            "painted extra layer samples blue albedo, not shadow-map red");
+        Expect(pixel.r < 40, "extra-layer paint is not shadow depth");
+        Expect(pixel.b > 180, "extra-layer paint is actually the blue Texture");
+
+        Expect(FillAllSampleWeights(blend, 0.0f, 0.0f, 1.0f, 0.0f), "set all samples to layer 2");
+        terrainGpu.Sync(&blend);
+        Expect(
+            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+                && weightB == 255 && weightR == 0 && weightG == 0,
+            "layer 2 weights encode B=255");
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample layer 2 Terrain");
+        Expect(
+            ColorChannelsClose(pixel, Color{255, 255, 0, 255}, 40),
+            "layer 2 samples yellow albedo");
+
+        world::TerrainSpec half = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(half, "textures/m90_blend_green.png"),
+            "half blend layer 0");
+        Expect(
+            world::TryAddTerrainMaterialLayer(half, "textures/m90_blend_blue.png"),
+            "half blend layer 1");
+        Expect(FillAllSampleWeights(half, 0.5f, 0.5f, 0.0f, 0.0f), "half-weight mixture");
+        terrainGpu.Sync(&half);
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample 0.5/0.5 blend");
+        Expect(pixel.r < 50, "50/50 blend is not shadow-red");
+        Expect(pixel.g > 80 && pixel.b > 80, "50/50 blend mixes green and blue albedos");
+
+        world::TerrainSpec swap = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(swap, "textures/m90_blend_green.png"),
+            "identity A Layer 0");
+        terrainGpu.Sync(&swap);
+        const std::size_t loadsBeforeSwap = terrainGpu.TextureLoadCount();
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample identity A");
+        Expect(ColorChannelsClose(pixel, Color{0, 255, 0, 255}, 40), "Layer 0 identity A is green");
+        Expect(
+            world::TryAssignTerrainTextureIdentity(swap, "textures/m90_blend_yellow.png"),
+            "identity A->B on layer 0");
+        terrainGpu.Sync(&swap);
+        Expect(terrainGpu.GetLayerTexture(0) != nullptr, "identity B loads");
+        Expect(
+            terrainGpu.TextureLoadCount() == loadsBeforeSwap + 1,
+            "A->B is one new Layer 0 load");
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample identity B");
+        Expect(ColorChannelsClose(pixel, Color{255, 255, 0, 255}, 40), "Layer 0 identity B is yellow");
+        Expect(
+            world::TryAssignTerrainTextureIdentity(swap, "textures/m90_blend_green.png"),
+            "identity B->A on layer 0");
+        const std::size_t loadsBeforeReturn = terrainGpu.TextureLoadCount();
+        terrainGpu.Sync(&swap);
+        Expect(
+            terrainGpu.TextureLoadCount() == loadsBeforeReturn + 1,
+            "B->A reloads Layer 0 instead of keeping a stale Texture");
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample identity A again");
+        Expect(
+            ColorChannelsClose(pixel, Color{0, 255, 0, 255}, 40),
+            "returning to identity A is not a stale yellow/fallback");
+
+        std::error_code sourceError;
+        const std::filesystem::path sourcePreviewRoot =
+            (std::filesystem::temp_directory_path() / "platformer_m90_terrain_source").lexically_normal();
+        std::filesystem::remove_all(sourcePreviewRoot, sourceError);
+        std::filesystem::create_directories(sourcePreviewRoot / "textures", sourceError);
+        Image sourceGreen = GenImageColor(8, 8, Color{0, 220, 40, 255});
+        const std::filesystem::path sourceOnlyPng =
+            sourcePreviewRoot / "textures" / "m90_source_only_layer0.png";
+        ExportImage(sourceGreen, sourceOnlyPng.string().c_str());
+        UnloadImage(sourceGreen);
+        world::TerrainSpec sourceLayer0 = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(
+                sourceLayer0, "textures/m90_source_only_layer0.png"),
+            "source-only Layer 0 identity");
+        terrainGpu.SetAuthoringCookedRoot({});
+        terrainGpu.SetAuthoringSourceRoot({});
+        terrainGpu.Sync(&sourceLayer0);
+        Expect(
+            terrainGpu.GetLayerTexture(0) == nullptr,
+            "Release semantics: unstaged uncooked Layer 0 does not load");
+        terrainGpu.SetAuthoringSourceRoot(sourcePreviewRoot);
+        terrainGpu.Sync(&sourceLayer0);
+        Expect(
+            terrainGpu.GetLayerTexture(0) != nullptr,
+            "Development source last-resort loads assigned Layer 0");
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample source Layer 0");
+        Expect(pixel.g > 150 && pixel.r < 80, "source-only Layer 0 shows the assigned Texture");
+        terrainGpu.SetAuthoringSourceRoot({});
+        std::filesystem::remove_all(sourcePreviewRoot, sourceError);
+
+        terrainGpu.SetAuthoringCookedRoot({});
+        terrainGpu.Unload();
+        std::filesystem::remove_all(cookedPreviewRoot, cookedError);
     }
 
     lighting.Unload();

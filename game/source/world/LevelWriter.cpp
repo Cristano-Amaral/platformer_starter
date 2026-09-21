@@ -412,6 +412,39 @@ std::string SerializeLevelText(const LevelDefinition& level)
             AppendFloat(out, level.terrain.textureTiling);
             out += '\n';
         }
+        for (std::size_t extra = 0; extra < level.terrain.extraLayers.size(); ++extra)
+        {
+            const TerrainMaterialLayer& layer = level.terrain.extraLayers[extra];
+            out += "terrain_layer ";
+            AppendInt(out, static_cast<int>(extra) + 1);
+            out += ' ';
+            out += layer.textureIdentity;
+            out += ' ';
+            AppendFloat(out, layer.textureTiling);
+            out += '\n';
+        }
+        if (TerrainPaintRecordsShouldWrite(level.terrain))
+        {
+            for (int row = 0; row < level.terrain.resolutionZ; ++row)
+            {
+                out += "terrain_paint ";
+                AppendInt(out, row);
+                for (int column = 0; column < level.terrain.resolutionX; ++column)
+                {
+                    const int sampleIndex = TerrainHeightIndex(level.terrain, column, row);
+                    float weights[kMaxTerrainMaterialLayers];
+                    ReadTerrainSampleWeights(level.terrain, sampleIndex, weights);
+                    int quantized[kMaxTerrainMaterialLayers]{};
+                    QuantizeTerrainSampleWeights(weights, quantized);
+                    for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+                    {
+                        out += ' ';
+                        AppendInt(out, quantized[layer]);
+                    }
+                }
+                out += '\n';
+            }
+        }
     }
 
     for (const PointLightSpec& light : level.pointLights)

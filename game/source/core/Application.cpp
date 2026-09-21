@@ -75,6 +75,7 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/SelectedModelHighlight.h"
 #include "editor/StaticPropPlacement.h"
 #include "editor/TerrainSculpt.h"
+#include "editor/TerrainPaint.h"
 #include "editor/TerrainTextureReference.h"
 #include "editor/StaticPropTransform.h"
 #include "editor/EditorToolCommands.h"
@@ -1434,6 +1435,10 @@ int Application::Run()
                         && !editor::TerrainSculptInteractionIsActive(
                             levelEditorState.terrainSculpt,
                             levelEditorState.workingCopy,
+                            levelEditorState.selection)
+                        && !editor::TerrainPaintInteractionIsActive(
+                            levelEditorState.terrainPaint,
+                            levelEditorState.workingCopy,
                             levelEditorState.selection))));
             editorViewport = MakeLiveEditorContentViewport(
                 static_cast<float>(window.Width()),
@@ -1854,6 +1859,10 @@ int Application::Run()
                 levelEditorState.terrainSculpt,
                 levelEditorState.workingCopy,
                 levelEditorState.selection);
+            editor::ReconcileTerrainPaintState(
+                levelEditorState.terrainPaint,
+                levelEditorState.workingCopy,
+                levelEditorState.selection);
             overlay.usePreviewTerrain = true;
             overlay.previewHasTerrain = levelEditorState.workingCopy.hasTerrain
                 && levelEditorState.workingCopy.terrain.enabled
@@ -1864,6 +1873,10 @@ int Application::Run()
             }
             if (editor::TerrainSculptInteractionIsActive(
                     levelEditorState.terrainSculpt,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection)
+                || editor::TerrainPaintInteractionIsActive(
+                    levelEditorState.terrainPaint,
                     levelEditorState.workingCopy,
                     levelEditorState.selection))
             {
@@ -1878,7 +1891,13 @@ int Application::Run()
                 if (overlay.drawTerrainSculptBrush)
                 {
                     overlay.terrainSculptBrushCenter = brushHit;
-                    overlay.terrainSculptBrushRadius = levelEditorState.terrainSculpt.radius;
+                    overlay.terrainSculptBrushRadius =
+                        editor::TerrainPaintInteractionIsActive(
+                            levelEditorState.terrainPaint,
+                            levelEditorState.workingCopy,
+                            levelEditorState.selection)
+                        ? levelEditorState.terrainPaint.radius
+                        : levelEditorState.terrainSculpt.radius;
                 }
             }
             overlay.drawDirectionalLightAuthoring = true;
@@ -1905,7 +1924,11 @@ int Application::Run()
             const bool sculptBlocksGizmo = editor::TerrainSculptInteractionIsActive(
                 levelEditorState.terrainSculpt,
                 levelEditorState.workingCopy,
-                levelEditorState.selection);
+                levelEditorState.selection)
+                || editor::TerrainPaintInteractionIsActive(
+                    levelEditorState.terrainPaint,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection);
             const bool multiSelected = editor::EditorSelectionSetIsMulti(
                 levelEditorState.selection, levelEditorState.additionalSelections);
             const bool groupTranslateOk =
@@ -2191,6 +2214,21 @@ int Application::Run()
                         levelEditorState.toolbarHeight,
                         EditorQuickToolbarVisible(levelEditorState)));
             }
+            else if (editor::TerrainPaintInteractionIsActive(
+                    levelEditorState.terrainPaint,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection))
+            {
+                renderer.DrawEditorTerrainPaintHud(
+                    true,
+                    editor::TerrainPaintHudName(levelEditorState.terrainPaint),
+                    overlay.drawTerrainSculptBrush,
+                    editor::OrientationWidgetLiveExtraTopInset(
+                        levelEditorState.active,
+                        levelEditorState.menuBarHeight,
+                        levelEditorState.toolbarHeight,
+                        EditorQuickToolbarVisible(levelEditorState)));
+            }
             else if (editor::TerrainSculptInteractionIsActive(
                     levelEditorState.terrainSculpt,
                     levelEditorState.workingCopy,
@@ -2305,12 +2343,17 @@ int Application::Run()
                 debugUi.WantsKeyboardCapture() || debugUi.WantsTextInput();
             if (editor::EditorViewportPlacementIsActive(
                     levelEditorState.placementMode, levelEditorState.staticPropPlacement)
-                && levelEditorState.terrainSculpt.mode)
+                && (levelEditorState.terrainSculpt.mode || levelEditorState.terrainPaint.mode))
             {
                 editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+                editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
             }
             editor::ReconcileTerrainSculptState(
                 levelEditorState.terrainSculpt,
+                levelEditorState.workingCopy,
+                levelEditorState.selection);
+            editor::ReconcileTerrainPaintState(
+                levelEditorState.terrainPaint,
                 levelEditorState.workingCopy,
                 levelEditorState.selection);
             const bool dragging = levelEditorState.gizmo.dragging;
@@ -2370,7 +2413,11 @@ int Application::Run()
             const bool sculptActive = editor::TerrainSculptInteractionIsActive(
                 levelEditorState.terrainSculpt,
                 levelEditorState.workingCopy,
-                levelEditorState.selection);
+                levelEditorState.selection)
+                || editor::TerrainPaintInteractionIsActive(
+                    levelEditorState.terrainPaint,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection);
             const bool multiSelected = editor::EditorSelectionSetIsMulti(
                 levelEditorState.selection, levelEditorState.additionalSelections);
             if (sculptActive)
@@ -2462,6 +2509,10 @@ int Application::Run()
                 || editor::ShouldCancelTerrainSculptMode(
                     levelEditorState.terrainSculpt,
                     editorInput.escapePressed,
+                    keyboardCaptured)
+                || editor::ShouldCancelTerrainPaintMode(
+                    levelEditorState.terrainPaint,
+                    editorInput.escapePressed,
                     keyboardCaptured))
             {
                 editor::CancelAllEditorPlacement(
@@ -2469,6 +2520,7 @@ int Application::Run()
                     levelEditorState.placementPointerBlocked,
                     levelEditorState.staticPropPlacement);
                 editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+                editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
                 window.SetEscapeClosesWindow(true);
             }
 
@@ -2583,10 +2635,26 @@ int Application::Run()
                 editorInput.lookHeld,
                 widgetConsumedPointer);
             (void)sculptTick;
+            const editor::TerrainPaintFrameResult paintTick = editor::TickTerrainPaint(
+                levelEditorState.terrainPaint,
+                levelEditorState.workingCopy,
+                levelEditorState.selection,
+                ray,
+                editorInput.selectPressed,
+                editorInput.selectHeld,
+                editorInput.selectReleased,
+                mouseCaptured,
+                editorInput.lookHeld,
+                widgetConsumedPointer);
+            (void)paintTick;
 
             if (!placing && !placingStaticProp
                 && !editor::TerrainSculptInteractionIsActive(
                     levelEditorState.terrainSculpt,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection)
+                && !editor::TerrainPaintInteractionIsActive(
+                    levelEditorState.terrainPaint,
                     levelEditorState.workingCopy,
                     levelEditorState.selection)
                 && editor::ShouldAttemptEditorViewportPick(
@@ -2786,6 +2854,10 @@ void Application::Initialize()
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
     renderer.LoadRuntimeAssets();
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    renderer.SetTerrainAuthoringCookedRoot(editor::CookedAssetsRoot(editor::RepositoryRoot()));
+    renderer.SetTerrainAuthoringSourceRoot(editor::AuthoringSourceRoot());
+#endif
     gameplayAudio.Load();
 
     if (!physicsWorld.Initialize(levelDefinition))
@@ -2977,6 +3049,7 @@ void Application::SetLevelEditorActive(bool active)
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         gameplay::CloseInventoryUi(inventoryUi);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         editor::RefreshContentBrowser(
@@ -2992,6 +3065,7 @@ void Application::SetLevelEditorActive(bool active)
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
         gameplay::CloseInventoryUi(inventoryUi);
@@ -3391,6 +3465,7 @@ bool Application::OpenAuthoredLevelFromEditor()
         levelEditorState.placementPointerBlocked,
         levelEditorState.staticPropPlacement);
     editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+    editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.authoredLevels.Refresh(editor::AuthoringSourceRoot());
     levelEditorState.pendingAuthoredLevelAction = editor::AuthoredLevelPendingAction::None;
@@ -3459,6 +3534,7 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         levelEditorState.selection =
             editor::ReconcileSelection(levelEditorState.workingCopy, levelEditorState.selection);
         editor::ReconcileEditorSelectionSet(
@@ -3551,6 +3627,7 @@ bool Application::ApplyLevelEditorPreview()
         levelEditorState.placementPointerBlocked,
         levelEditorState.staticPropPlacement);
     editor::EndTerrainSculptStroke(levelEditorState.terrainSculpt);
+    editor::EndTerrainPaintStroke(levelEditorState.terrainPaint);
     return true;
 }
 
@@ -3651,6 +3728,7 @@ bool Application::ReloadRuntimeLevelFromStaged()
         levelEditorState.placementPointerBlocked,
         levelEditorState.staticPropPlacement);
     editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+    editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastReloadStatus = editor::LevelEditorReloadStatus::Reloaded;
     levelEditorState.lastMessage =
@@ -3870,6 +3948,7 @@ void Application::TryFinishPendingLevelTransition()
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage =
             "Transitioned runtime level. Unapplied working-copy edits were kept.";
@@ -3894,6 +3973,7 @@ void Application::TryFinishPendingLevelTransition()
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage = "Transitioned to staged destination level.";
     }
@@ -4025,6 +4105,7 @@ void Application::TryFinishPendingFreshRun()
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage = menuPlay
             ? "Play loaded staged level_01. Unapplied working-copy edits were kept."
@@ -4050,6 +4131,7 @@ void Application::TryFinishPendingFreshRun()
             levelEditorState.placementPointerBlocked,
             levelEditorState.staticPropPlacement);
         editor::ResetTerrainSculptState(levelEditorState.terrainSculpt);
+        editor::ResetTerrainPaintState(levelEditorState.terrainPaint);
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastMessage = successMessage;
     }

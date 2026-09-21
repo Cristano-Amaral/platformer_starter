@@ -6,6 +6,7 @@
 #include "world/LevelFile.h"
 #include "world/LevelWriter.h"
 #include "world/RespawnWorld.h"
+#include "world/TerrainPaint.h"
 #include "world/TerrainSculpt.h"
 
 #include <array>
@@ -125,7 +126,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 29> allowed{
+    static constexpr std::array<std::string_view, 31> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -154,7 +155,9 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "spot_light",
         "terrain",
         "terrain_row",
-        "terrain_material"};
+        "terrain_material",
+        "terrain_layer",
+        "terrain_paint"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -2816,6 +2819,157 @@ int main()
             world::ParseLevelText(flatText + "terrain_material textures/test_checker.png 32\n").status
                 == world::LoadLevelFileStatus::Invalid,
             "out-of-bounds tiling rejected");
+
+        world::LevelDefinition layered = withFlat;
+        Expect(
+            world::TryAssignTerrainTextureIdentity(
+                layered.terrain, "textures/test_checker.png"),
+            "layer 0 fixture");
+        Expect(
+            world::TryAddTerrainMaterialLayer(layered.terrain, "textures/test_textured_basecolor.png"),
+            "extra layer fixture");
+        Expect(
+            world::TrySetTerrainLayerTextureTiling(layered.terrain, 1, 0.5f),
+            "extra layer tiling fixture");
+        const core::Vec3 paintCenter = world::TerrainSamplePosition(layered.terrain, 4, 2);
+        world::TerrainPaintStampRequest paint{};
+        paint.layer = 1;
+        paint.centerX = paintCenter.x;
+        paint.centerZ = paintCenter.z;
+        paint.radius = 4.0f;
+        paint.strength = 1.0f;
+        Expect(world::ApplyTerrainPaintStamp(layered.terrain, paint), "paint fixture");
+        const std::string layeredText = world::SerializeLevelText(layered);
+        Expect(layeredText == world::SerializeLevelText(layered), "layered writer is deterministic");
+        Expect(CountRecords(layeredText, "terrain_layer") == 1, "one extra terrain_layer record");
+        Expect(CountRecords(layeredText, "terrain_paint") == layered.terrain.resolutionZ,
+            "one terrain_paint row per Z sample");
+        Expect(OnlyAuthoredKeywords(layeredText), "terrain_layer and terrain_paint are authored");
+        const world::ParseLevelFileResult layeredParsed = world::ParseLevelText(layeredText);
+        Expect(layeredParsed.status == world::LoadLevelFileStatus::Loaded, "painted Terrain loads");
+        Expect(
+            layeredParsed.level.terrain.extraLayers.size() == 1
+                && layeredParsed.level.terrain.extraLayers[0].textureIdentity
+                    == "textures/test_textured_basecolor.png",
+            "extra layer identity roundtrips");
+        Expect(
+            !world::TerrainMaterialWeightsAreDefault(layeredParsed.level.terrain),
+            "painted weights persist");
+        Expect(
+            world::SerializeLevelText(layeredParsed.level) == layeredText,
+            "quantized paint writer roundtrip is deterministic");
+        Expect(
+            world::TerrainHeightsEqual(layered.terrain, layeredParsed.level.terrain),
+            "paint records do not change heights");
+
+        world::LevelDefinition unpaintedLayer = withFlat;
+        Expect(
+            world::TryAddTerrainMaterialLayer(
+                unpaintedLayer.terrain, "textures/test_textured_basecolor.png"),
+            "unpainted extra layer fixture");
+        const std::string unpaintedLayerText = world::SerializeLevelText(unpaintedLayer);
+        Expect(
+            CountRecords(unpaintedLayerText, "terrain_paint") == 0,
+            "unpainted extra layers omit terrain_paint");
+        const world::ParseLevelFileResult unpaintedParsed =
+            world::ParseLevelText(unpaintedLayerText);
+        Expect(unpaintedParsed.status == world::LoadLevelFileStatus::Loaded,
+            "unpainted extra layer Terrain loads");
+        Expect(
+            world::TerrainMaterialWeightsAreDefault(unpaintedParsed.level.terrain),
+            "omitted paint rows are default weights");
+
+        Expect(
+            world::ParseLevelText(flatText + "terrain_layer 1 textures/test_textured_basecolor.png 0.25\n"
+                + "terrain_layer 1 textures/test_checker.png 0.25\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate terrain_layer index rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_layer 2 textures/test_textured_basecolor.png 0.25\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "gapped terrain_layer index rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain_layer 1 textures/test_textured_basecolor.png 0.25\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "terrain_layer without header rejected");
+        Expect(
+            world::ParseLevelText(
+                    flatText + "terrain_layer 1 textures/test_textured_basecolor.png 0.25\n"
+                    + "terrain_paint 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 "
+                      "255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "missing terrain_paint rows rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_paint 0 nan 0 0 0\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "non-integer paint weight rejected");
+        Expect(
+            world::ParseLevelText(
+                    flatText + "terrain_layer 1 textures/test_textured_basecolor.png 0.25\n"
+                    + "terrain_paint 0 256 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 "
+                      "255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0\n"
+                    + "terrain_paint 1 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 "
+                      "255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0\n"
+                    + "terrain_paint 2 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 "
+                      "255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0\n"
+                    + "terrain_paint 3 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 "
+                      "255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0\n"
+                    + "terrain_paint 4 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0 "
+                      "255 0 0 0 255 0 0 0 255 0 0 0 255 0 0 0\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "out-of-range paint weight rejected");
+        Expect(
+            world::ParseLevelText(
+                    flatText + "terrain_material textures/test_checker.png 0.25\n"
+                    + "terrain_layer 1 textures/test_checker.png 0.25\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate identity across layers rejected");
+
+        world::LevelDefinition maxPaint = parsed.level;
+        maxPaint.hasTerrain = true;
+        maxPaint.terrain = world::MakeDefaultTerrain();
+        maxPaint.terrain.resolutionX = 17;
+        maxPaint.terrain.resolutionZ = 17;
+        world::ResizeTerrainHeights(maxPaint.terrain);
+        Expect(
+            world::TryAddTerrainMaterialLayer(maxPaint.terrain, "textures/test_textured_basecolor.png"),
+            "max paint extra layer");
+        world::EnsureTerrainMaterialWeights(maxPaint.terrain);
+        maxPaint.terrain.materialWeights[1] = 1.0f;
+        maxPaint.terrain.materialWeights[0] = 0.0f;
+        Expect(world::IsWritableLevelDefinition(maxPaint), "max painted Terrain is writable");
+        const std::string maxPaintText = world::SerializeLevelText(maxPaint);
+        Expect(
+            world::CountLevelV1RecordLines(maxPaint) <= static_cast<int>(world::kMaxLevelLines),
+            "painted max Terrain stays within Level v1 line limit");
+        std::size_t paintCursor = 0;
+        bool paintLineTooLong = false;
+        while (paintCursor <= maxPaintText.size())
+        {
+            const std::size_t newline = maxPaintText.find('\n', paintCursor);
+            const std::size_t end =
+                newline == std::string_view::npos ? maxPaintText.size() : newline;
+            if (end - paintCursor > world::kMaxLevelLineLength)
+            {
+                paintLineTooLong = true;
+            }
+            if (newline == std::string_view::npos)
+            {
+                break;
+            }
+            paintCursor = newline + 1;
+        }
+        Expect(!paintLineTooLong, "terrain_paint rows stay within 512-character lines");
+        Expect(maxPaintText.size() <= world::kMaxLevelFileBytes, "painted max Terrain stays within 64 KiB");
+        Expect(
+            world::ParseLevelText(maxPaintText).status == world::LoadLevelFileStatus::Loaded,
+            "maximum painted Terrain loads");
     }
 
     Expect(

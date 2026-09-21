@@ -39,6 +39,7 @@
 #include "world/ItemPickup.h"
 #include "world/LevelIdentity.h"
 #include "assets/RuntimePng.h"
+#include "assets/RuntimePngResolve.h"
 #include "assets/SourceTextureCatalog.h"
 #include "editor/ContentBrowserOrganization.h"
 #include "editor/TextureThumbnailLifecycle.h"
@@ -324,11 +325,206 @@ void DrawTextureStagingHint(std::string_view identity)
     {
         return;
     }
-    std::error_code error;
-    if (!std::filesystem::is_regular_file(platform::RuntimeAssetPath(identity), error))
+    const std::filesystem::path cookedRoot = CookedAssetsRoot(RepositoryRoot());
+    const assets::RuntimePngLoadResolution resolved =
+        assets::ResolveRuntimePngLoadFile(identity, cookedRoot, {}, AuthoringSourceRoot());
+    if (!assets::RuntimePngLoadFileIsAvailable(resolved))
     {
-        ImGui::TextWrapped(
-            "Staged runtime texture is missing. Cook & Stage to preview and ship this assignment.");
+        ImGui::TextWrapped("%s", assets::RuntimeTerrainTextureUnavailableTooltip());
+    }
+}
+
+constexpr float kTerrainCategoryIconSize = 28.0f;
+constexpr float kTerrainMaterialThumbSize = 36.0f;
+
+std::string TerrainLayerDisplayName(std::string_view identity)
+{
+    if (identity.empty())
+    {
+        return "Solid Terrain fallback";
+    }
+    const std::string fileName = assets::RuntimePngDisplayName(identity);
+    return fileName.empty() ? std::string(identity) : fileName;
+}
+
+std::string TerrainLayerTitle(int layer)
+{
+    if (layer == 0)
+    {
+        return "Layer 0 — Base";
+    }
+    return "Layer " + std::to_string(layer);
+}
+
+const char* TerrainInspectorCategoryTooltip(TerrainInspectorCategory category)
+{
+    switch (category)
+    {
+    case TerrainInspectorCategory::MaterialsPaint:
+        return "Terrain Materials & Paint";
+    case TerrainInspectorCategory::Sculpt:
+        return "Terrain Sculpt";
+    default:
+        return "Terrain";
+    }
+}
+
+void DrawTerrainCategoryGlyph(
+    ImDrawList* drawList,
+    TerrainInspectorCategory category,
+    ImVec2 min,
+    ImVec2 max,
+    ImU32 color)
+{
+    if (drawList == nullptr)
+    {
+        return;
+    }
+    const ImVec2 center((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
+    const float width = max.x - min.x;
+    const float height = max.y - min.y;
+    switch (category)
+    {
+    case TerrainInspectorCategory::MaterialsPaint:
+        drawList->AddCircleFilled(center, std::min(width, height) * 0.28f, color, 16);
+        drawList->AddCircle(center, std::min(width, height) * 0.28f, IM_COL32(20, 24, 32, 255), 16, 1.5f);
+        break;
+    case TerrainInspectorCategory::Sculpt:
+        drawList->AddLine(
+            ImVec2(center.x - width * 0.18f, center.y + height * 0.18f),
+            ImVec2(center.x + width * 0.16f, center.y - height * 0.20f),
+            color,
+            2.5f);
+        drawList->AddTriangleFilled(
+            ImVec2(center.x + width * 0.16f, center.y - height * 0.20f),
+            ImVec2(center.x + width * 0.28f, center.y - height * 0.04f),
+            ImVec2(center.x + width * 0.04f, center.y - height * 0.08f),
+            color);
+        break;
+    default:
+        drawList->AddTriangleFilled(
+            ImVec2(center.x - width * 0.28f, center.y + height * 0.16f),
+            ImVec2(center.x - width * 0.08f, center.y - height * 0.18f),
+            ImVec2(center.x + width * 0.06f, center.y + height * 0.16f),
+            color);
+        drawList->AddTriangleFilled(
+            ImVec2(center.x - width * 0.02f, center.y + height * 0.16f),
+            ImVec2(center.x + width * 0.14f, center.y - height * 0.10f),
+            ImVec2(center.x + width * 0.30f, center.y + height * 0.16f),
+            color);
+        drawList->AddLine(
+            ImVec2(center.x - width * 0.30f, center.y + height * 0.18f),
+            ImVec2(center.x + width * 0.30f, center.y + height * 0.18f),
+            color,
+            1.5f);
+        break;
+    }
+}
+
+bool DrawTerrainCategoryIcon(
+    TerrainInspectorCategory category,
+    TerrainInspectorCategory current)
+{
+    const ImVec2 size(kTerrainCategoryIconSize, kTerrainCategoryIconSize);
+    ImGui::PushID(static_cast<int>(category));
+    const bool pressed = ImGui::InvisibleButton("##terrainCategory", size);
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const ImVec2 max = ImGui::GetItemRectMax();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    const bool selected = category == current;
+    const bool hovered = ImGui::IsItemHovered();
+    const ImU32 background = selected ? IM_COL32(78, 96, 132, 255)
+        : (hovered ? IM_COL32(58, 64, 78, 255) : IM_COL32(40, 44, 54, 255));
+    const ImU32 border = selected ? IM_COL32(188, 206, 236, 255) : IM_COL32(96, 102, 118, 255);
+    drawList->AddRectFilled(min, max, background, 3.0f);
+    drawList->AddRect(min, max, border, 3.0f);
+    DrawTerrainCategoryGlyph(
+        drawList, category, min, max, selected ? IM_COL32(236, 240, 248, 255) : IM_COL32(176, 184, 198, 255));
+    if (hovered)
+    {
+        ImGui::SetTooltip("%s", TerrainInspectorCategoryTooltip(category));
+    }
+    ImGui::PopID();
+    return pressed;
+}
+
+void DrawTerrainRuntimeWarning(std::string_view identity)
+{
+    if (!assets::RuntimePngIdentityIsValid(identity))
+    {
+        return;
+    }
+    const std::filesystem::path cookedRoot = CookedAssetsRoot(RepositoryRoot());
+    const assets::RuntimePngLoadResolution resolved =
+        assets::ResolveRuntimePngLoadFile(identity, cookedRoot, {}, AuthoringSourceRoot());
+    if (assets::RuntimePngLoadFileIsAvailable(resolved))
+    {
+        return;
+    }
+    ImGui::SameLine();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    const float size = ImGui::GetTextLineHeight();
+    ImGui::InvisibleButton("##runtimeMissing", ImVec2(size, size));
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const ImVec2 max = ImGui::GetItemRectMax();
+    drawList->AddTriangleFilled(
+        ImVec2((min.x + max.x) * 0.5f, min.y + 1.0f),
+        ImVec2(min.x + 1.0f, max.y - 1.0f),
+        ImVec2(max.x - 1.0f, max.y - 1.0f),
+        IM_COL32(220, 170, 48, 255));
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", assets::RuntimeTerrainTextureUnavailableTooltip());
+    }
+}
+
+void DrawTerrainLayerThumbnail(
+    const LevelEditorViewContext& view,
+    std::string_view identity,
+    float thumbSize)
+{
+    unsigned int gpuId = 0;
+    int imageWidth = 0;
+    int imageHeight = 0;
+    bool failed = false;
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    if (assets::RuntimePngIdentityIsValid(identity) && view.textureThumbnails != nullptr)
+    {
+        const std::filesystem::path sourceRoot = AuthoringSourceRoot();
+        if (!sourceRoot.empty())
+        {
+            view.textureThumbnails->Ensure(identity, sourceRoot / std::string(identity));
+        }
+        gpuId = view.textureThumbnails->TextureGpuId(identity);
+        imageWidth = view.textureThumbnails->TextureWidth(identity);
+        imageHeight = view.textureThumbnails->TextureHeight(identity);
+        failed = view.textureThumbnails->IsFailed(identity);
+    }
+#else
+    (void)view;
+    (void)identity;
+#endif
+    const ImVec2 dummyMin = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(ImVec2(thumbSize, thumbSize));
+    const ImVec2 dummyMax = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        dummyMin,
+        dummyMax,
+        failed ? IM_COL32(88, 64, 64, 255) : IM_COL32(48, 52, 62, 255));
+    ImGui::GetWindowDrawList()->AddRect(dummyMin, dummyMax, IM_COL32(120, 126, 140, 255));
+    if (gpuId != 0)
+    {
+        float drawWidth = thumbSize;
+        float drawHeight = thumbSize;
+        ComputeTextureThumbnailDrawSize(
+            imageWidth, imageHeight, thumbSize - 4.0f, drawWidth, drawHeight);
+        const float offsetX = dummyMin.x + (thumbSize - drawWidth) * 0.5f;
+        const float offsetY = dummyMin.y + (thumbSize - drawHeight) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(offsetX, offsetY));
+        ImGui::Image(
+            ImTextureRef(static_cast<ImTextureID>(static_cast<intptr_t>(gpuId))),
+            ImVec2(drawWidth, drawHeight));
+        ImGui::SetCursorScreenPos(ImVec2(dummyMin.x, dummyMax.y));
     }
 }
 
@@ -946,120 +1142,303 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::TextUnformatted("No Terrain in this Level.");
             break;
         }
-        ImGui::TextWrapped(
-            "Singleton Level Terrain. Origin is the min-X / min-Z sample. "
-            "Heights are relative to Origin Y. Resolution is creation-time "
-            "and is not resampled here.");
-        ImGui::Checkbox("Enabled", &level.terrain.enabled);
-        EditVec3("Origin X Y Z", level.terrain.origin);
-        ImGui::InputFloat("Size X", &level.terrain.sizeX, 0.0f, 0.0f, kFloatFormat);
-        ImGui::InputFloat("Size Z", &level.terrain.sizeZ, 0.0f, 0.0f, kFloatFormat);
-        ImGui::BeginDisabled(true);
-        ImGui::InputInt("Resolution X", &level.terrain.resolutionX);
-        ImGui::InputInt("Resolution Z", &level.terrain.resolutionZ);
-        ImGui::EndDisabled();
-        ImGui::Text(
-            "Samples: %d",
-            world::TerrainSampleCount(level.terrain));
-        ImGui::Separator();
-        ImGui::TextUnformatted("Terrain Material");
-        ImGui::TextWrapped(
-            "One base surface texture. Assignment and tiling edit the working "
-            "copy. Empty assignment uses the solid Terrain fallback.");
-        const std::string currentIdentity = level.terrain.textureIdentity;
-        const char* assignmentPreview = currentIdentity.empty()
-            ? "(fallback)"
-            : currentIdentity.c_str();
-        ImGui::TextWrapped("Base Texture: %s", assignmentPreview);
-        if (!currentIdentity.empty())
+
+        ImGui::BeginGroup();
+        if (DrawTerrainCategoryIcon(
+                TerrainInspectorCategory::Terrain, state.terrainInspectorCategory))
         {
-            std::error_code stagedError;
-            const bool staged = std::filesystem::is_regular_file(
-                platform::RuntimeAssetPath(currentIdentity), stagedError);
-            if (!staged)
+            if (state.terrainInspectorCategory != TerrainInspectorCategory::Terrain)
             {
-                ImGui::TextWrapped(
-                    "Staged runtime texture is missing. Cook & Stage to preview "
-                    "and ship this assignment.");
+                editor::EndTerrainPaintStroke(state.terrainPaint);
+                editor::EndTerrainSculptStroke(state.terrainSculpt);
+                state.terrainInspectorCategory = TerrainInspectorCategory::Terrain;
             }
         }
+        if (DrawTerrainCategoryIcon(
+                TerrainInspectorCategory::MaterialsPaint, state.terrainInspectorCategory))
+        {
+            if (state.terrainInspectorCategory != TerrainInspectorCategory::MaterialsPaint)
+            {
+                editor::EndTerrainPaintStroke(state.terrainPaint);
+                editor::EndTerrainSculptStroke(state.terrainSculpt);
+                state.terrainInspectorCategory = TerrainInspectorCategory::MaterialsPaint;
+            }
+        }
+        if (DrawTerrainCategoryIcon(
+                TerrainInspectorCategory::Sculpt, state.terrainInspectorCategory))
+        {
+            if (state.terrainInspectorCategory != TerrainInspectorCategory::Sculpt)
+            {
+                editor::EndTerrainPaintStroke(state.terrainPaint);
+                editor::EndTerrainSculptStroke(state.terrainSculpt);
+                state.terrainInspectorCategory = TerrainInspectorCategory::Sculpt;
+            }
+        }
+        ImGui::EndGroup();
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+
         std::vector<std::string> textureChoices;
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         textureChoices = state.contentBrowser.textureCatalog.Identities();
 #endif
-        if (ImGui::BeginCombo("Assign Texture", assignmentPreview))
+        const int layerCount = world::TerrainMaterialLayerCount(level.terrain);
+        editor::SanitizeTerrainPaintState(state.terrainPaint, level.terrain);
+
+        if (state.terrainInspectorCategory == TerrainInspectorCategory::Terrain)
         {
-            if (ImGui::Selectable("(fallback)", currentIdentity.empty()))
+            ImGui::TextUnformatted("Terrain");
+            ImGui::TextWrapped(
+                "Singleton Level Terrain. Origin is the min-X / min-Z sample. "
+                "Heights are relative to Origin Y. Resolution is creation-time "
+                "and is not resampled here.");
+            ImGui::Checkbox("Enabled", &level.terrain.enabled);
+            EditVec3("Origin X Y Z", level.terrain.origin);
+            ImGui::InputFloat("Size X", &level.terrain.sizeX, 0.0f, 0.0f, kFloatFormat);
+            ImGui::InputFloat("Size Z", &level.terrain.sizeZ, 0.0f, 0.0f, kFloatFormat);
+            ImGui::BeginDisabled(true);
+            ImGui::InputInt("Resolution X", &level.terrain.resolutionX);
+            ImGui::InputInt("Resolution Z", &level.terrain.resolutionZ);
+            ImGui::EndDisabled();
+            ImGui::Text("Samples: %d", world::TerrainSampleCount(level.terrain));
+        }
+        else if (state.terrainInspectorCategory == TerrainInspectorCategory::MaterialsPaint)
+        {
+            ImGui::TextUnformatted("Terrain Materials");
+            ImGui::TextWrapped(
+                "Assigned materials. Layer 0 is the Base surface. Extra layers "
+                "stay invisible until painted.");
+            for (int layer = 0; layer < layerCount; ++layer)
             {
-                world::TryClearTerrainTextureIdentity(level.terrain);
-            }
-            for (const std::string& identity : textureChoices)
-            {
-                const bool selected = identity == currentIdentity;
-                if (ImGui::Selectable(identity.c_str(), selected))
+                ImGui::PushID(layer);
+                const std::string& identity = world::TerrainLayerTextureIdentity(level.terrain, layer);
+                const std::string display = TerrainLayerDisplayName(identity);
+                const std::string title = TerrainLayerTitle(layer);
+                ImGui::BeginGroup();
+                ImGui::TextUnformatted(title.c_str());
+                DrawTerrainLayerThumbnail(view, identity, kTerrainMaterialThumbSize);
+                if (!identity.empty() && ImGui::IsItemHovered())
                 {
-                    world::TryAssignTerrainTextureIdentity(level.terrain, identity);
+                    ImGui::SetTooltip("%s", identity.c_str());
                 }
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                ImGui::TextUnformatted(display.c_str());
+                if (!identity.empty() && ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", identity.c_str());
+                }
+                DrawTerrainRuntimeWarning(identity);
+                float tiling = world::TerrainLayerTextureTiling(level.terrain, layer);
+                ImGui::SetNextItemWidth(96.0f);
+                if (ImGui::InputFloat("Tiling", &tiling, 0.0f, 0.0f, kFloatFormat))
+                {
+                    world::TrySetTerrainLayerTextureTiling(level.terrain, layer, tiling);
+                }
+                if (layer == 0)
+                {
+                    const char* assignPreview = identity.empty() ? "Assign..." : "Change...";
+                    if (ImGui::BeginCombo("##assignLayer0", assignPreview))
+                    {
+                        if (ImGui::Selectable("Solid Terrain fallback", identity.empty()))
+                        {
+                            world::TryClearTerrainTextureIdentity(level.terrain);
+                        }
+                        for (const std::string& choice : textureChoices)
+                        {
+                            const bool selected = choice == identity;
+                            const std::string choiceName = TerrainLayerDisplayName(choice);
+                            if (ImGui::Selectable(choiceName.c_str(), selected))
+                            {
+                                world::TryAssignTerrainTextureIdentity(level.terrain, choice);
+                            }
+                            if (ImGui::IsItemHovered())
+                            {
+                                ImGui::SetTooltip("%s", choice.c_str());
+                            }
+                            if (selected)
+                            {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Clear"))
+                    {
+                        world::TryClearTerrainTextureIdentity(level.terrain);
+                    }
+                }
+                else if (ImGui::Button("Remove"))
+                {
+                    if (world::TryRemoveTerrainMaterialLayer(level.terrain, layer))
+                    {
+                        editor::RemapTerrainPaintLayerAfterRemove(state.terrainPaint, layer);
+                        editor::SanitizeTerrainPaintState(state.terrainPaint, level.terrain);
+                    }
+                }
+                ImGui::EndGroup();
+                ImGui::EndGroup();
+                ImGui::PopID();
+                ImGui::Spacing();
+            }
+            ImGui::TextWrapped(
+                "Tiling repeats per world unit. Range [%.2f, %.2f]. Default %.2f.",
+                world::kMinTerrainTextureTiling,
+                world::kMaxTerrainTextureTiling,
+                world::kDefaultTerrainTextureTiling);
+            if (layerCount < world::kMaxTerrainMaterialLayers)
+            {
+                if (ImGui::BeginCombo("Add Layer", "Select texture..."))
+                {
+                    for (const std::string& choice : textureChoices)
+                    {
+                        const bool alreadyAssigned =
+                            world::TerrainReferencesTextureIdentity(level.terrain, choice);
+                        if (alreadyAssigned)
+                        {
+                            ImGui::BeginDisabled();
+                        }
+                        const std::string choiceName = TerrainLayerDisplayName(choice);
+                        if (ImGui::Selectable(choiceName.c_str(), false) && !alreadyAssigned)
+                        {
+                            world::TryAddTerrainMaterialLayer(level.terrain, choice);
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("%s", choice.c_str());
+                        }
+                        if (alreadyAssigned)
+                        {
+                            ImGui::EndDisabled();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+            else
+            {
+                ImGui::TextWrapped("Maximum of four Terrain material layers.");
+            }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Terrain Paint");
+            ImGui::TextWrapped(
+                "Paint Tool. Select the assigned material the brush applies. "
+                "Paint edits working-copy weights only. Apply promotes render. "
+                "Brush settings are not saved with the Level.");
+            ImGui::TextUnformatted("Paint Layer");
+            for (int layer = 0; layer < layerCount; ++layer)
+            {
+                ImGui::PushID(100 + layer);
+                const std::string& identity = world::TerrainLayerTextureIdentity(level.terrain, layer);
+                const bool selected = state.terrainPaint.selectedLayer == layer;
+                const std::string display = TerrainLayerDisplayName(identity);
+                const std::string rowLabel = TerrainLayerTitle(layer) + "  " + display;
                 if (selected)
                 {
-                    ImGui::SetItemDefaultFocus();
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(70, 90, 130, 110));
+                }
+                ImGui::BeginChild(
+                    "##paintLayerRow",
+                    ImVec2(0.0f, kTerrainMaterialThumbSize + 10.0f),
+                    true,
+                    ImGuiWindowFlags_NoScrollbar);
+                const bool radioClicked = ImGui::RadioButton("##paintLayer", selected);
+                ImGui::SameLine();
+                DrawTerrainLayerThumbnail(view, identity, kTerrainMaterialThumbSize);
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                ImGui::TextUnformatted(rowLabel.c_str());
+                DrawTerrainRuntimeWarning(identity);
+                ImGui::EndGroup();
+                if (!identity.empty() && ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", identity.c_str());
+                }
+                ImGui::EndChild();
+                if (selected)
+                {
+                    ImGui::PopStyleColor();
+                }
+                if (radioClicked || (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)))
+                {
+                    editor::TrySelectTerrainPaintLayer(state.terrainPaint, layer, level.terrain);
+                }
+                ImGui::PopID();
+            }
+
+            const bool paintWasOn = state.terrainPaint.mode;
+            if (ImGui::Checkbox("Paint Mode", &state.terrainPaint.mode))
+            {
+                editor::EndTerrainPaintStroke(state.terrainPaint);
+                if (state.terrainPaint.mode && !paintWasOn)
+                {
+                    state.terrainSculpt.mode = false;
+                    editor::EndTerrainSculptStroke(state.terrainSculpt);
+                    CancelAllEditorPlacement(
+                        state.placementMode,
+                        state.placementPointerBlocked,
+                        state.staticPropPlacement);
                 }
             }
-            ImGui::EndCombo();
+            ImGui::SliderFloat(
+                "Paint Radius",
+                &state.terrainPaint.radius,
+                world::kMinTerrainPaintRadius,
+                world::kMaxTerrainPaintRadius,
+                "%.2f");
+            ImGui::SliderFloat(
+                "Paint Strength",
+                &state.terrainPaint.strength,
+                world::kMinTerrainPaintStrength,
+                world::kMaxTerrainPaintStrength,
+                "%.2f");
+            editor::SanitizeTerrainPaintState(state.terrainPaint, level.terrain);
         }
-        if (ImGui::Button("Clear Texture"))
+        else
         {
-            world::TryClearTerrainTextureIdentity(level.terrain);
-        }
-        ImGui::InputFloat(
-            "Texture Tiling",
-            &level.terrain.textureTiling,
-            0.0f,
-            0.0f,
-            kFloatFormat);
-        ImGui::TextWrapped(
-            "Repeats per world unit. Range [%.2f, %.2f]. Default %.2f.",
-            world::kMinTerrainTextureTiling,
-            world::kMaxTerrainTextureTiling,
-            world::kDefaultTerrainTextureTiling);
-        ImGui::Separator();
-        ImGui::TextUnformatted("Terrain Sculpt");
-        ImGui::TextWrapped(
-            "Sculpt edits working-copy heights only. Apply promotes render "
-            "and collision. Brush settings are not saved with the Level.");
-        const bool sculptWasOn = state.terrainSculpt.mode;
-        if (ImGui::Checkbox("Sculpt Mode", &state.terrainSculpt.mode))
-        {
-            editor::EndTerrainSculptStroke(state.terrainSculpt);
-            if (state.terrainSculpt.mode && !sculptWasOn)
+            ImGui::TextUnformatted("Terrain Sculpt");
+            ImGui::TextWrapped(
+                "Sculpt edits working-copy heights only. Apply promotes render "
+                "and collision. Brush settings are not saved with the Level.");
+            const bool sculptWasOn = state.terrainSculpt.mode;
+            if (ImGui::Checkbox("Sculpt Mode", &state.terrainSculpt.mode))
             {
-                CancelAllEditorPlacement(
-                    state.placementMode,
-                    state.placementPointerBlocked,
-                    state.staticPropPlacement);
+                editor::EndTerrainSculptStroke(state.terrainSculpt);
+                if (state.terrainSculpt.mode && !sculptWasOn)
+                {
+                    state.terrainPaint.mode = false;
+                    editor::EndTerrainPaintStroke(state.terrainPaint);
+                    CancelAllEditorPlacement(
+                        state.placementMode,
+                        state.placementPointerBlocked,
+                        state.staticPropPlacement);
+                }
             }
+            int operation = static_cast<int>(state.terrainSculpt.operation);
+            const char* operationNames[] = {"Raise", "Lower", "Smooth", "Flatten"};
+            if (ImGui::Combo("Brush", &operation, operationNames, 4))
+            {
+                state.terrainSculpt.operation =
+                    static_cast<world::TerrainSculptOperation>(operation);
+                editor::EndTerrainSculptStroke(state.terrainSculpt);
+            }
+            ImGui::SliderFloat(
+                "Radius",
+                &state.terrainSculpt.radius,
+                world::kMinTerrainSculptRadius,
+                world::kMaxTerrainSculptRadius,
+                "%.2f");
+            ImGui::SliderFloat(
+                "Strength",
+                &state.terrainSculpt.strength,
+                world::kMinTerrainSculptStrength,
+                world::kMaxTerrainSculptStrength,
+                "%.2f");
+            editor::SanitizeTerrainSculptState(state.terrainSculpt);
         }
-        int operation = static_cast<int>(state.terrainSculpt.operation);
-        const char* operationNames[] = {"Raise", "Lower", "Smooth", "Flatten"};
-        if (ImGui::Combo("Brush", &operation, operationNames, 4))
-        {
-            state.terrainSculpt.operation =
-                static_cast<world::TerrainSculptOperation>(operation);
-            editor::EndTerrainSculptStroke(state.terrainSculpt);
-        }
-        ImGui::SliderFloat(
-            "Radius",
-            &state.terrainSculpt.radius,
-            world::kMinTerrainSculptRadius,
-            world::kMaxTerrainSculptRadius,
-            "%.2f");
-        ImGui::SliderFloat(
-            "Strength",
-            &state.terrainSculpt.strength,
-            world::kMinTerrainSculptStrength,
-            world::kMaxTerrainSculptStrength,
-            "%.2f");
-        editor::SanitizeTerrainSculptState(state.terrainSculpt);
+        ImGui::EndGroup();
         break;
     }
     case EditorObjectKind::ElevatedPlatform:

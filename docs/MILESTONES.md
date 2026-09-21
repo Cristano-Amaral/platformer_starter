@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 89 — Content Browser Asset Library & Texture Import**
+**Milestone 90 — Terrain Material Painting**
 
-Canonical file: [`docs/milestones/MILESTONE_89.md`](milestones/MILESTONE_89.md)
+Canonical file: [`docs/milestones/MILESTONE_90.md`](milestones/MILESTONE_90.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -49,8 +49,9 @@ Milestone 85.4 is CLOSED.
 Milestone 86 is CLOSED.
 Milestone 87 is CLOSED.
 Milestone 88 is CLOSED.
-Milestone 89 is implemented, awaiting manual acceptance.
-Do not start Milestone 90.
+Milestone 89 is CLOSED.
+Milestone 90 is implemented, awaiting manual acceptance.
+Do not start Milestone 91.
 
 ## Cursor loading contract
 
@@ -179,7 +180,8 @@ Historical milestone files do not override current implemented behavior.
 | 86 | [Milestone 86 — Terrain Foundation](milestones/MILESTONE_86.md) | complete |
 | 87 | [Milestone 87 — Terrain Sculpting](milestones/MILESTONE_87.md) | complete |
 | 88 | [Milestone 88 — Terrain Materials Foundation](milestones/MILESTONE_88.md) | complete |
-| 89 | [Milestone 89 — Content Browser Asset Library & Texture Import](milestones/MILESTONE_89.md) | implemented, awaiting manual acceptance |
+| 89 | [Milestone 89 — Content Browser Asset Library & Texture Import](milestones/MILESTONE_89.md) | complete |
+| 90 | [Milestone 90 — Terrain Material Painting](milestones/MILESTONE_90.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

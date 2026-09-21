@@ -1,15 +1,16 @@
 #pragma once
 
-// Milestone 86/88: GPU mesh and optional base-color texture for the singleton
-// Terrain. Owned by Renderer. Mesh rebuilds when geometry/UVs change. Texture
-// loads only when the authored identity changes. Not a generic mesh or resource
-// manager.
+// Milestone 86/88/90: GPU mesh and bounded Terrain material-layer textures.
+// Owned by Renderer. Mesh rebuilds when geometry/UVs/weights change. Each
+// layer texture loads only when that authored identity changes. Not a generic
+// mesh or resource manager.
 
 #include "world/Terrain.h"
 
 #include "raylib.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 
 namespace render
@@ -23,15 +24,25 @@ public:
     TerrainGpuResources(const TerrainGpuResources&) = delete;
     TerrainGpuResources& operator=(const TerrainGpuResources&) = delete;
 
-    // spec == nullptr or disabled/invalid unloads mesh and texture. Unchanged
-    // mesh data does not upload again. Unchanged texture identity does not
-    // reload. Empty/invalid identity unloads the texture and uses fallback.
+    // Development authoring may resolve cooked PNGs when staged copies are
+    // absent, then catalog source PNGs as a last-resort preview. Release
+    // leaves both empty so only RuntimeAssetPath is used.
+    void SetAuthoringCookedRoot(const std::filesystem::path& cookedRoot);
+    void SetAuthoringSourceRoot(const std::filesystem::path& sourceRoot);
+
+    // spec == nullptr or disabled/invalid unloads mesh and textures. Unchanged
+    // mesh data does not upload again. Unchanged layer identities do not
+    // reload. Empty/invalid identities unload that layer slot.
     void Sync(const world::TerrainSpec* spec);
     void Unload();
     bool HasMesh() const;
     bool HasTexture() const;
+    int LayerCount() const;
     const Mesh* GetMesh() const;
     const Texture2D* GetTexture() const;
+    const Texture2D* GetLayerTexture(int layer) const;
+    const Texture2D* GetMissingLayerTexture() const;
+    const world::TerrainSpec* LastSpec() const;
     std::size_t UploadCount() const;
     std::size_t UnloadCount() const;
     std::size_t TextureLoadCount() const;
@@ -39,17 +50,24 @@ public:
 
 private:
     void UnloadMesh();
-    void UnloadTexture();
-    void SyncTexture(const world::TerrainSpec& spec);
+    void UnloadLayerTexture(int layer);
+    void UnloadTextures();
+    void EnsureMissingLayerTexture();
+    void SyncTextures(const world::TerrainSpec& spec);
 
     Mesh mesh{};
-    Texture2D texture{};
+    std::filesystem::path authoringCookedRoot{};
+    std::filesystem::path authoringSourceRoot{};
+    Texture2D textures[world::kMaxTerrainMaterialLayers]{};
+    bool textureLoaded[world::kMaxTerrainMaterialLayers]{};
+    std::string lastTextureIdentity[world::kMaxTerrainMaterialLayers]{};
+    Texture2D missingLayer{};
+    bool missingLayerLoaded = false;
     bool loaded = false;
-    bool textureLoaded = false;
+    int layerCount = 1;
     bool hasSpec = false;
     world::TerrainSpec lastSpec{};
-    std::string lastTextureIdentity{};
-    std::string loggedMissingIdentity{};
+    std::string loggedMissingIdentity[world::kMaxTerrainMaterialLayers]{};
     std::size_t uploadCount = 0;
     std::size_t unloadCount = 0;
     std::size_t textureLoadCount = 0;

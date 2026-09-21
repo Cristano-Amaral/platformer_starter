@@ -229,6 +229,8 @@ struct ParseState
     bool seenTerrainMaterial = false;
     TerrainSpec terrain{};
     std::vector<unsigned char> terrainRowsSeen;
+    std::vector<unsigned char> terrainPaintRowsSeen;
+    bool seenTerrainPaint = false;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
     std::vector<CheckpointSpec> checkpoints;
@@ -1069,6 +1071,9 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.terrain = std::move(terrain);
             state.terrainRowsSeen.assign(
                 static_cast<std::size_t>(state.terrain.resolutionZ), 0);
+            state.terrainPaintRowsSeen.assign(
+                static_cast<std::size_t>(state.terrain.resolutionZ), 0);
+            state.seenTerrainPaint = false;
             continue;
         }
         if (keyword == "terrain_material")
@@ -1108,6 +1113,108 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_material");
             }
             state.terrain.textureTiling = tiling;
+            continue;
+        }
+        if (keyword == "terrain_layer")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_layer without terrain");
+            }
+            if (!RequireTokenCount(tokens, 4, failure, lineNumber))
+            {
+                return failure;
+            }
+            int layerIndex = 0;
+            if (!ParseIntToken(tokens[1], layerIndex)
+                || layerIndex != TerrainMaterialLayerCount(state.terrain))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
+            if (layerIndex <= 0 || layerIndex >= kMaxTerrainMaterialLayers)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
+            const std::string_view identityToken = tokens[2];
+            if (!assets::RuntimePngIdentityIsValid(identityToken)
+                || TerrainReferencesTextureIdentity(state.terrain, identityToken))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
+            float tiling = 0.0f;
+            if (!ParseFloatToken(tokens[3], tiling) || !TerrainTextureTilingIsValid(tiling))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
+            if (!TryAddTerrainMaterialLayer(state.terrain, identityToken))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
+            state.terrain.extraLayers.back().textureTiling = tiling;
+            continue;
+        }
+        if (keyword == "terrain_paint")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_paint without terrain");
+            }
+            const std::size_t expected =
+                2 + static_cast<std::size_t>(state.terrain.resolutionX * kMaxTerrainMaterialLayers);
+            if (tokens.size() != expected)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "malformed terrain_paint");
+            }
+            int rowIndex = 0;
+            if (!ParseIntToken(tokens[1], rowIndex) || rowIndex < 0
+                || rowIndex >= state.terrain.resolutionZ)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_paint");
+            }
+            if (state.terrainPaintRowsSeen[static_cast<std::size_t>(rowIndex)] != 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "duplicate terrain_paint");
+            }
+            EnsureTerrainMaterialWeights(state.terrain);
+            for (int column = 0; column < state.terrain.resolutionX; ++column)
+            {
+                int quantized[kMaxTerrainMaterialLayers]{};
+                int sum = 0;
+                for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+                {
+                    const std::size_t tokenIndex = static_cast<std::size_t>(
+                        2 + column * kMaxTerrainMaterialLayers + layer);
+                    if (!ParseIntToken(tokens[tokenIndex], quantized[layer])
+                        || quantized[layer] < 0
+                        || quantized[layer] > kTerrainMaterialWeightQuantum)
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_paint");
+                    }
+                    sum += quantized[layer];
+                }
+                if (sum != kTerrainMaterialWeightQuantum)
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_paint");
+                }
+                float weights[kMaxTerrainMaterialLayers]{};
+                DequantizeTerrainSampleWeights(quantized, weights);
+                const int sampleIndex = TerrainHeightIndex(state.terrain, column, rowIndex);
+                WriteTerrainSampleWeights(state.terrain, sampleIndex, weights);
+            }
+            state.terrainPaintRowsSeen[static_cast<std::size_t>(rowIndex)] = 1;
+            state.seenTerrainPaint = true;
             continue;
         }
         if (keyword == "terrain_row")
@@ -1197,7 +1304,23 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "missing terrain_row");
             }
         }
-        if (!TerrainSpecIsValid(state.terrain))
+            if (state.seenTerrainPaint)
+            {
+                for (unsigned char seenPaint : state.terrainPaintRowsSeen)
+                {
+                    if (seenPaint == 0)
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "missing terrain_paint");
+                    }
+                }
+            }
+            else
+            {
+                state.terrain.materialWeights.clear();
+            }
+            CompactDefaultTerrainMaterialWeights(state.terrain);
+            if (!TerrainSpecIsValid(state.terrain))
         {
             return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain");
         }

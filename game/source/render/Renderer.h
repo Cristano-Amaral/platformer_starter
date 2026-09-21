@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -371,6 +372,15 @@ public:
         const char* operation,
         bool hasHit,
         float topInset);
+    void DrawEditorTerrainPaintHud(
+        bool visible,
+        const char* layerName,
+        bool hasHit,
+        float topInset);
+    // Development authoring cooked then source PNG fallbacks for Terrain layers.
+    // Both stay empty in Release so only RuntimeAssetPath is used.
+    void SetTerrainAuthoringCookedRoot(const std::filesystem::path& cookedRoot);
+    void SetTerrainAuthoringSourceRoot(const std::filesystem::path& sourceRoot);
     void EndFrame();
 
 private:

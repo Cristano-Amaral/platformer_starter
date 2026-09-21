@@ -11,6 +11,7 @@
 #include "editor/ItemIdInspectorEdit.h"
 #include "editor/StaticPropTransform.h"
 #include "editor/TerrainSculpt.h"
+#include "editor/TerrainPaint.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
@@ -80,6 +81,7 @@ void SeedEditor(editor::LevelEditorState& state, const world::LevelDefinition& a
     editor::ClearCategoryStructuralPending(state.structuralPending);
     editor::ResetStructuralIndexMap(state.structuralMap, active);
     editor::ResetTerrainSculptState(state.terrainSculpt);
+    editor::ResetTerrainPaintState(state.terrainPaint);
     editor::RefreshLevelEditorDerivedFlags(state, active);
 }
 
@@ -2804,6 +2806,125 @@ int main()
         Expect(!f2.terrainSculpt.mode, "Delete Terrain turns Sculpt off");
         Expect(!f2.workingCopy.hasTerrain, "Delete removes workingCopy Terrain");
         Expect(applied.hasTerrain, "Delete does not mutate active");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddTerrain, true),
+            "Add Terrain for paint");
+        state.selection = {EditorObjectKind::Terrain, 0};
+        const bool dirtyBeforePaint = state.dirty;
+        const bool modifiedBeforePaint = state.modified;
+        state.terrainPaint.mode = true;
+        state.terrainPaint.selectedLayer = 0;
+        state.terrainPaint.radius = 4.0f;
+        state.terrainPaint.strength = 0.5f;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.dirty == dirtyBeforePaint, "entering Paint mode does not Dirty");
+        Expect(state.modified == modifiedBeforePaint, "entering Paint mode does not Modified");
+        Expect(
+            world::TryAddTerrainMaterialLayer(
+                state.workingCopy.terrain, "textures/test_textured_basecolor.png"),
+            "workingCopy add paint layer");
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "Add Layer is Modified");
+        state.terrainPaint.selectedLayer = 1;
+        editor::SanitizeTerrainPaintState(state.terrainPaint, state.workingCopy.terrain);
+        state.terrainSculpt.mode = true;
+        state.terrainPaint.mode = false;
+        Expect(
+            !editor::TerrainPaintInteractionIsActive(
+                state.terrainPaint, state.workingCopy, state.selection)
+                && editor::TerrainSculptInteractionIsActive(
+                    state.terrainSculpt, state.workingCopy, state.selection),
+            "Sculpt and Paint are mutually exclusive when only Sculpt is on");
+        state.terrainPaint.mode = true;
+        state.terrainSculpt.mode = false;
+        Expect(
+            editor::TerrainPaintInteractionIsActive(
+                state.terrainPaint, state.workingCopy, state.selection)
+                && !editor::TerrainSculptInteractionIsActive(
+                    state.terrainSculpt, state.workingCopy, state.selection),
+            "Sculpt and Paint are mutually exclusive when only Paint is on");
+        const world::TerrainSpec activeBeforePaint = state.workingCopy.terrain;
+        const core::Vec3 sample = world::TerrainSamplePosition(state.workingCopy.terrain, 4, 2);
+        editor::Ray3 ray{{sample.x, sample.y + 8.0f, sample.z}, {0.0f, -1.0f, 0.0f}};
+        const editor::TerrainPaintFrameResult paintTick = editor::TickTerrainPaint(
+            state.terrainPaint,
+            state.workingCopy,
+            state.selection,
+            ray,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false);
+        Expect(paintTick.mutatedWorkingCopy, "Paint stamp mutates workingCopy");
+        Expect(
+            !world::TerrainSpecEqual(state.workingCopy.terrain, activeBeforePaint),
+            "workingCopy paint does not mutate the pre-paint snapshot");
+        Expect(
+            world::TerrainHeightsEqual(state.workingCopy.terrain, activeBeforePaint),
+            "Paint does not change heights");
+        Expect(state.terrainPaint.selectedLayer == 1, "painting does not change selected layer");
+        Expect(
+            editor::TrySelectTerrainPaintLayer(
+                state.terrainPaint, 0, state.workingCopy.terrain),
+            "can select layer 0 after painting layer 1");
+        Expect(state.terrainPaint.selectedLayer == 0, "selected layer switched after paint");
+        Expect(
+            editor::TrySelectTerrainPaintLayer(
+                state.terrainPaint, 1, state.workingCopy.terrain),
+            "can select layer 1 again after painting");
+        Expect(
+            !editor::TrySelectTerrainPaintLayer(
+                state.terrainPaint, 1, state.workingCopy.terrain),
+            "selecting the current layer is a no-op");
+        const bool dirtyBeforeCategory = state.dirty;
+        const bool modifiedBeforeCategory = state.modified;
+        state.terrainInspectorCategory = editor::TerrainInspectorCategory::MaterialsPaint;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.dirty == dirtyBeforeCategory, "Terrain Inspector category does not Dirty");
+        Expect(
+            state.modified == modifiedBeforeCategory,
+            "Terrain Inspector category does not Modified");
+        state.terrainInspectorCategory = editor::TerrainInspectorCategory::Sculpt;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.dirty == dirtyBeforeCategory, "switching to Sculpt category does not Dirty");
+        Expect(
+            world::TryAddTerrainMaterialLayer(
+                state.workingCopy.terrain, "textures/test_checker.png"),
+            "Add Layer after painting");
+        Expect(
+            editor::TrySelectTerrainPaintLayer(
+                state.terrainPaint, 2, state.workingCopy.terrain),
+            "Add Layer then select the new layer");
+        editor::RemapTerrainPaintLayerAfterRemove(state.terrainPaint, 1);
+        Expect(state.terrainPaint.selectedLayer == 1, "remove before selected remaps the index");
+        editor::RemapTerrainPaintLayerAfterRemove(state.terrainPaint, 1);
+        Expect(state.terrainPaint.selectedLayer == 0, "remove selected extra layer returns to layer 0");
+        state.selection = {EditorObjectKind::Ground, 0};
+        const int selectedAfterDeselect = state.terrainPaint.selectedLayer;
+        editor::ReconcileTerrainPaintState(
+            state.terrainPaint, state.workingCopy, state.selection);
+        Expect(!state.terrainPaint.mode, "Terrain selection loss exits Paint Mode");
+        Expect(
+            state.terrainPaint.selectedLayer == selectedAfterDeselect,
+            "Terrain selection loss preserves selected paint layer");
+        state.selection = {EditorObjectKind::Terrain, 0};
+        editor::ReconcileTerrainPaintState(
+            state.terrainPaint, state.workingCopy, state.selection);
+        Expect(
+            state.terrainPaint.selectedLayer == selectedAfterDeselect,
+            "reselecting Terrain keeps the paint layer");
+        editor::ResetTerrainPaintState(state.terrainPaint);
+        Expect(!state.terrainPaint.mode, "lifecycle reset clears Paint mode");
     }
 
     if (gFailures != 0)

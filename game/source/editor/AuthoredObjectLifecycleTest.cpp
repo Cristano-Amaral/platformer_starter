@@ -181,6 +181,17 @@ int main()
             "restored tiling is a no-op");
         Expect(!world::TryClearTerrainTextureIdentity(inspector.terrain),
             "clear empty assignment is a no-op");
+        Expect(
+            world::TryAddTerrainMaterialLayer(inspector.terrain, "textures/test_textured_basecolor.png"),
+            "Inspector add extra layer");
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "Add Layer is a semantic change");
+        Expect(
+            !world::TryAddTerrainMaterialLayer(inspector.terrain, "textures/test_textured_basecolor.png"),
+            "duplicate Add Layer is a no-op");
+        Expect(world::TryRemoveTerrainMaterialLayer(inspector.terrain, 1), "Inspector remove extra layer");
+        Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "removed unused extra layer restores equality");
     }
 
     {

@@ -147,7 +147,7 @@ names only the singleton Directional Light.
 
 The writer emits `point_light` records then `spot_light` records after
 `directional_light` (and after optional `terrain` / `terrain_row` /
-`terrain_material` when present), omitted when the collections are empty.
+`terrain_material` / `terrain_layer` / `terrain_paint` when present), omitted when the collections are empty.
 
 ### Optional Terrain singleton (Milestone 86 / 88)
 
@@ -155,6 +155,8 @@ The writer emits `point_light` records then `spot_light` records after
 terrain <enabled> <originX> <originY> <originZ> <sizeX> <sizeZ> <resolutionX> <resolutionZ>
 terrain_row <rowIndex> <h0> <h1> ... <hN>
 terrain_material <textureIdentity|-> <tiling>
+terrain_layer <layerIndex> <textureIdentity> <tiling>
+terrain_paint <rowIndex> <q00> <q01> <q02> <q03> ... <qN0> <qN1> <qN2> <qN3>
 ```
 
 At most one Terrain per Level. Omitted records mean the Level has no Terrain;
@@ -205,6 +207,26 @@ and non-finite/out-of-bounds tiling are `Invalid`. Old M86/M87 Terrain files
 without this record remain valid and use empty identity plus default tiling
 (solid fallback). The writer emits `terrain_material` after `terrain_row` when
 the assignment or tiling is non-default. The format version stays `1`.
+
+Milestone 90 adds optional extra Terrain material layers and per-sample painted
+weights. Layer 0 remains `terrain_material` (M88). Extra layers are compact
+`terrain_layer` records with `layerIndex` in `{1,2,3}` matching the next
+assigned extra (`1` first, then `2`, then `3`). Each extra identity is
+`textures/<file>.png` (never `-`, never a duplicate of layer 0 or another extra).
+Tiling is finite in `[0.01, 16]`. Duplicate indices, gaps, missing Terrain
+header, absolute paths, and invalid tiling are `Invalid`. Old M88 files without
+these records remain valid: one base material, default weights.
+
+Painted weights are independent of heights and tied to the same XZ sample rows.
+`terrain_paint` is omitted when every sample is the implicit default (layer 0
+weight 1, others 0). When any `terrain_paint` row is present, exactly
+`resolutionZ` unique rows are required, each with `resolutionX` groups of four
+integers. Each group is layer 0..3 quantized to `[0, 255]` and **must sum to
+255**. Parser reconstructs floats as `q / 255` and renormalizes. Non-integer
+tokens, out-of-range values, sums other than 255, duplicate rows, missing rows,
+and extra tokens are `Invalid`. The writer emits `terrain_layer` after
+`terrain_material` (when extras exist) and `terrain_paint` after that (when
+weights are non-default). The format version stays `1`.
 
 ### Required repeated records
 

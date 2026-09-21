@@ -203,11 +203,31 @@ void DrawAuthoredTerrain(const TerrainGpuResources* terrainGpu, Color fill)
     {
         return;
     }
-    const Texture2D* albedo = terrainGpu->GetTexture();
-    const Color surface = albedo != nullptr ? WHITE : fill;
+    const Color surface = terrainGpu->HasTexture() ? WHITE : fill;
     if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
     {
-        gWorldLighting->DrawWorldMesh(mesh, surface, albedo);
+        TerrainLayerDrawRequest request{};
+        request.layerCount = terrainGpu->LayerCount();
+        const world::TerrainSpec* spec = terrainGpu->LastSpec();
+        if (spec != nullptr)
+        {
+            request.originX = spec->origin.x;
+            request.originZ = spec->origin.z;
+            for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
+            {
+                request.tiling[layer] = world::TerrainLayerTextureTiling(*spec, layer);
+                const Texture2D* loaded = terrainGpu->GetLayerTexture(layer);
+                if (loaded != nullptr)
+                {
+                    request.layers[layer] = loaded;
+                }
+                else if (layer > 0 && layer < request.layerCount)
+                {
+                    request.layers[layer] = terrainGpu->GetMissingLayerTexture();
+                }
+            }
+        }
+        gWorldLighting->DrawWorldTerrain(mesh, surface, request);
         return;
     }
     if (mesh.vertices == nullptr || mesh.indices == nullptr)
@@ -1956,6 +1976,22 @@ const StaticModelSceneStore* Renderer::StaticPropModels() const
     return staticPropModels.get();
 }
 
+void Renderer::SetTerrainAuthoringCookedRoot(const std::filesystem::path& cookedRoot)
+{
+    if (terrainGpu)
+    {
+        terrainGpu->SetAuthoringCookedRoot(cookedRoot);
+    }
+}
+
+void Renderer::SetTerrainAuthoringSourceRoot(const std::filesystem::path& sourceRoot)
+{
+    if (terrainGpu)
+    {
+        terrainGpu->SetAuthoringSourceRoot(sourceRoot);
+    }
+}
+
 void Renderer::LoadRuntimeAssets()
 {
     if (worldLighting == nullptr)
@@ -2866,6 +2902,42 @@ void Renderer::DrawEditorTerrainSculptHud(
     const int font = 16;
     const char* line1 = TextFormat("Terrain Sculpt: %s", operation);
     const char* line2 = "LMB sculpt | Esc exit";
+    const char* line3 = hasHit ? nullptr : "No Terrain hit";
+    const int width1 = MeasureText(line1, font);
+    const int width2 = MeasureText(line2, font);
+    const int width3 = line3 != nullptr ? MeasureText(line3, font) : 0;
+    const int maxWidth = width1 > width2 ? width1 : width2;
+    const int boxWidth = (maxWidth > width3 ? maxWidth : width3) + 16;
+    const int lineCount = line3 != nullptr ? 3 : 2;
+    const int boxHeight = 8 + lineCount * (font + 2);
+    const int x = (GetScreenWidth() - boxWidth) / 2;
+    const int y = static_cast<int>(topInset > 0.0f ? topInset : 8.0f) + 6;
+    DrawRectangle(x, y, boxWidth, boxHeight, Color{18, 24, 32, 150});
+    const int textX1 = (GetScreenWidth() - width1) / 2;
+    const int textX2 = (GetScreenWidth() - width2) / 2;
+    DrawText(line1, textX1, y + 4, font, kPlacementHudText);
+    DrawText(line2, textX2, y + 4 + font + 2, font, kPlacementHudMuted);
+    if (line3 != nullptr)
+    {
+        const int textX3 = (GetScreenWidth() - width3) / 2;
+        DrawText(line3, textX3, y + 4 + 2 * (font + 2), font, kPlacementHudMuted);
+    }
+}
+
+void Renderer::DrawEditorTerrainPaintHud(
+    bool visible,
+    const char* layerName,
+    bool hasHit,
+    float topInset)
+{
+    if (!visible || layerName == nullptr || layerName[0] == '\0')
+    {
+        return;
+    }
+
+    const int font = 16;
+    const char* line1 = TextFormat("Terrain Paint: %s", layerName);
+    const char* line2 = "LMB paint | Esc exit";
     const char* line3 = hasHit ? nullptr : "No Terrain hit";
     const int width1 = MeasureText(line1, font);
     const int width2 = MeasureText(line2, font);

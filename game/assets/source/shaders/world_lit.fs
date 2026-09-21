@@ -9,8 +9,17 @@ in vec3 fragNormal;
 in vec4 fragColor;
 
 uniform sampler2D texture0;
+// Extra Terrain albedo layers must NOT use texture1..texture3. raylib
+// DrawMesh binds MATERIAL_MAP index i to texture unit i and writes those
+// sampler uniforms: texture1 becomes the shadow depth map on unit 1.
+uniform sampler2D terrainAlbedo1;
+uniform sampler2D terrainAlbedo2;
+uniform sampler2D terrainAlbedo3;
 uniform sampler2D shadowMap;
 uniform vec4 colDiffuse;
+uniform int terrainLayerCount;
+uniform vec2 terrainOriginXZ;
+uniform vec4 terrainLayerTiling;
 uniform vec3 ambientColor;
 uniform float ambientIntensity;
 uniform vec3 lightRayDirection;
@@ -59,10 +68,52 @@ float ShadowVisibility(vec3 worldPosition, float nDotL)
     return 1.0 - (shadowed / 9.0);
 }
 
+vec4 SampleTerrainAlbedo()
+{
+    vec2 delta = vec2(fragPosition.x - terrainOriginXZ.x, fragPosition.z - terrainOriginXZ.y);
+    vec4 weights = fragColor;
+    float weightSum = weights.r + weights.g + weights.b + weights.a;
+    if (weightSum > 1.0e-6)
+    {
+        weights /= weightSum;
+    }
+    else
+    {
+        weights = vec4(1.0, 0.0, 0.0, 0.0);
+    }
+
+    vec4 texel = texture(texture0, delta * terrainLayerTiling.x) * weights.r;
+    if (terrainLayerCount > 1)
+    {
+        texel += texture(terrainAlbedo1, delta * terrainLayerTiling.y) * weights.g;
+    }
+    if (terrainLayerCount > 2)
+    {
+        texel += texture(terrainAlbedo2, delta * terrainLayerTiling.z) * weights.b;
+    }
+    if (terrainLayerCount > 3)
+    {
+        texel += texture(terrainAlbedo3, delta * terrainLayerTiling.w) * weights.a;
+    }
+    return texel;
+}
+
 void main()
 {
-    vec4 texel = texture(texture0, fragTexCoord);
-    vec4 albedo = texel * colDiffuse * fragColor;
+    vec4 texel;
+    vec4 albedo;
+    if (terrainLayerCount > 0)
+    {
+        // fragColor is Terrain material weights (R,G,B,A -> layers 0..3),
+        // not an ordinary mesh tint.
+        texel = SampleTerrainAlbedo();
+        albedo = texel * colDiffuse;
+    }
+    else
+    {
+        texel = texture(texture0, fragTexCoord);
+        albedo = texel * colDiffuse * fragColor;
+    }
     vec3 normal = normalize(fragNormal);
     vec3 toLight = normalize(-lightRayDirection);
     float nDotL = max(dot(normal, toLight), 0.0);

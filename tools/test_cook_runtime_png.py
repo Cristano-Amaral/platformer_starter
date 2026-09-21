@@ -123,14 +123,18 @@ class RuntimePngCookTests(unittest.TestCase):
 
 
 class TerrainTextureDependencyTests(unittest.TestCase):
-    def test_extracts_valid_terrain_texture_identity(self) -> None:
+    def test_extracts_terrain_layer_identities(self) -> None:
         text = (
             "PLATFORMER_LEVEL 1\n"
             "terrain_material textures/test_checker.png 0.25\n"
-            "terrain_material - 1\n"
+            "terrain_layer 1 textures/terrain_detail.png 0.5\n"
+            "terrain_layer 2 C:/abs/grass.png 0.25\n"
         )
         identities = cooker.extract_terrain_texture_identities(text)
-        self.assertEqual(identities, ["textures/test_checker.png"])
+        self.assertEqual(
+            identities,
+            ["textures/test_checker.png", "textures/terrain_detail.png"],
+        )
 
     def test_rejects_absolute_and_model_identities(self) -> None:
         text = (

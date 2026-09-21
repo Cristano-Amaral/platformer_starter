@@ -771,9 +771,15 @@ def extract_terrain_texture_identities(level_text: str) -> list[str]:
         if not stripped:
             continue
         tokens = stripped.split()
-        if len(tokens) != 3 or tokens[0] != "terrain_material":
+        if not tokens:
             continue
-        identity = tokens[1]
+        identity = None
+        if tokens[0] == "terrain_material" and len(tokens) == 3:
+            identity = tokens[1]
+        elif tokens[0] == "terrain_layer" and len(tokens) == 4:
+            identity = tokens[2]
+        else:
+            continue
         if identity == RUNTIME_PNG_NONE_TOKEN:
             continue
         if is_valid_runtime_png_identity(identity):
@@ -782,7 +788,7 @@ def extract_terrain_texture_identities(level_text: str) -> list[str]:
 
 
 def discover_level_referenced_runtime_png_assets(sources: Path) -> list[dict[str, str]]:
-    """runtime_png identities referenced by Terrain material records.
+    """runtime_png identities referenced by Terrain material and layer records.
 
     Does not glob source/textures. Unrelated PNGs stay out of cooked output
     unless a Level names them. Explicit KNOWN_ASSETS entries still win.

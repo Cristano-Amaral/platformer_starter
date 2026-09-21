@@ -49,6 +49,7 @@ add_executable(Platformer3D
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
     game/source/assets/RuntimePng.h
+    game/source/assets/RuntimePngResolve.h
     game/source/assets/RuntimePngImport.cpp
     game/source/assets/RuntimePngImport.h
     game/source/assets/RuntimePngDelete.cpp
@@ -108,6 +109,7 @@ add_executable(Platformer3D
     game/source/editor/StaticPropPlacement.cpp
     game/source/editor/StaticPropPlacement.h
     game/source/editor/TerrainSculpt.h
+    game/source/editor/TerrainPaint.h
     game/source/editor/EditorBuildPreference.cpp
     game/source/editor/EditorBuildPreference.h
     game/source/editor/EditorSelection.cpp
@@ -215,6 +217,7 @@ add_executable(Platformer3D
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
     game/source/world/TerrainSculpt.h
+    game/source/world/TerrainPaint.h
     game/source/world/LevelGoal.h
     game/source/world/LevelIdentity.h
     game/source/world/LevelFile.cpp
@@ -701,6 +704,7 @@ add_executable(LevelFileTest
     game/source/world/LevelWriter.cpp
     game/source/world/LevelWriter.h
     game/source/world/TerrainSculpt.h
+    game/source/world/TerrainPaint.h
 )
 if(WIN32)
     target_sources(LevelFileTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
@@ -764,6 +768,22 @@ if(MSVC)
     target_compile_options(TerrainMaterialTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(TerrainMaterialTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 90: Terrain material painting weights/strokes. No window, Jolt, or raylib.
+add_executable(TerrainPaintTest
+    game/source/world/TerrainPaintTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
+    game/source/world/TerrainPaint.h
+    game/source/assets/RuntimePng.h
+)
+target_include_directories(TerrainPaintTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(TerrainPaintTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainPaintTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 
@@ -1462,6 +1482,7 @@ add_executable(EditorPickingTest
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPickingTest.cpp
     game/source/editor/TerrainSculpt.h
+    game/source/editor/TerrainPaint.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -1905,6 +1926,7 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/StaticPropPlacement.cpp
     game/source/editor/StaticPropPlacement.h
     game/source/editor/TerrainSculpt.h
+    game/source/editor/TerrainPaint.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -2279,6 +2301,9 @@ add_executable(WorldLightingResourcesTest
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
     game/source/world/TerrainSculpt.h
+    game/source/world/TerrainPaint.h
+    game/source/assets/RuntimePng.h
+    game/source/assets/RuntimePngResolve.h
 )
 if(WIN32)
     target_sources(WorldLightingResourcesTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)

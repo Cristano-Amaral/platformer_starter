@@ -119,6 +119,6 @@ inline bool LevelReferencesTerrainTextureIdentity(
     const LevelDefinition& level,
     std::string_view identity)
 {
-    return level.hasTerrain && !identity.empty() && level.terrain.textureIdentity == identity;
+    return level.hasTerrain && TerrainReferencesTextureIdentity(level.terrain, identity);
 }
 }

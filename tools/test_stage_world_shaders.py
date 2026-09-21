@@ -47,6 +47,8 @@ class WorldShaderStagingTests(unittest.TestCase):
         render_dir = REPO_ROOT / "game" / "source" / "render"
         blobs = []
         for path in render_dir.glob("WorldLighting*.cpp"):
+            if path.name.endswith("Test.cpp"):
+                continue
             blobs.append(path.read_text(encoding="utf-8"))
         combined = "\n".join(blobs)
         self.assertIn("RuntimeAssetPath", combined)
