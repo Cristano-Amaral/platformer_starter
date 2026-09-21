@@ -1,5 +1,6 @@
 #include "world/LevelWriter.h"
 
+#include "assets/RuntimePng.h"
 #include "platform/FileReplace.h"
 #include "world/LevelFile.h"
 
@@ -394,6 +395,21 @@ std::string SerializeLevelText(const LevelDefinition& level)
                     level.terrain.heights[static_cast<std::size_t>(
                         TerrainHeightIndex(level.terrain, column, row))]);
             }
+            out += '\n';
+        }
+        if (TerrainMaterialRecordShouldWrite(level.terrain))
+        {
+            out += "terrain_material ";
+            if (TerrainTextureIdentityIsNone(level.terrain.textureIdentity))
+            {
+                out += assets::kRuntimePngNoneToken;
+            }
+            else
+            {
+                out += level.terrain.textureIdentity;
+            }
+            out += ' ';
+            AppendFloat(out, level.terrain.textureTiling);
             out += '\n';
         }
     }

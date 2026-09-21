@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED — awaiting manual acceptance**
+**CLOSED**
 
 M87 begins only after M86 is CLOSED and `main` is clean and
 synchronized.

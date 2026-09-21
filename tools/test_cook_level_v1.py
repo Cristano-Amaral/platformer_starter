@@ -89,6 +89,15 @@ class LevelV1HeaderTests(unittest.TestCase):
         self.assertIn(b"door 4 1.5 0", payload)
         self.assertIn(b"card", payload)
 
+    def test_terrain_material_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"terrain_material textures/test_checker.png 0.25\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"terrain_material textures/test_checker.png 0.25", payload)
+
     def test_pressure_plate_mode_flags_do_not_fail_header_gate(self) -> None:
         payload = (
             b"PLATFORMER_LEVEL 1\n"

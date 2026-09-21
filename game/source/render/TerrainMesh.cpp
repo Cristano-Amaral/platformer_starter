@@ -1,10 +1,15 @@
 #include "render/TerrainMesh.h"
 
+#include "assets/RuntimePng.h"
+#include "platform/RuntimePaths.h"
 #include "world/TerrainGeometry.h"
 
 #include "raylib.h"
 
+#include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <system_error>
 
 namespace render
 {
@@ -20,7 +25,7 @@ bool FillTerrainMesh(const world::TerrainSpec& spec, Mesh& mesh)
 {
     world::TerrainGeometry geometry{};
     if (!world::GenerateTerrainGeometry(spec, geometry) || geometry.positions.empty()
-        || geometry.triangles.empty())
+        || geometry.triangles.empty() || geometry.texcoords.size() != geometry.positions.size())
     {
         return false;
     }
@@ -43,24 +48,19 @@ bool FillTerrainMesh(const world::TerrainSpec& spec, Mesh& mesh)
         return false;
     }
 
-    const float invX =
-        spec.resolutionX > 1 ? 1.0f / static_cast<float>(spec.resolutionX - 1) : 0.0f;
-    const float invZ =
-        spec.resolutionZ > 1 ? 1.0f / static_cast<float>(spec.resolutionZ - 1) : 0.0f;
     for (int index = 0; index < mesh.vertexCount; ++index)
     {
         const core::Vec3 position = geometry.positions[static_cast<std::size_t>(index)];
         const core::Vec3 normal = geometry.normals[static_cast<std::size_t>(index)];
+        const world::TerrainTexCoord texcoord = geometry.texcoords[static_cast<std::size_t>(index)];
         mesh.vertices[index * 3] = position.x;
         mesh.vertices[index * 3 + 1] = position.y;
         mesh.vertices[index * 3 + 2] = position.z;
         mesh.normals[index * 3] = normal.x;
         mesh.normals[index * 3 + 1] = normal.y;
         mesh.normals[index * 3 + 2] = normal.z;
-        const int ix = index % spec.resolutionX;
-        const int iz = index / spec.resolutionX;
-        mesh.texcoords[index * 2] = static_cast<float>(ix) * invX;
-        mesh.texcoords[index * 2 + 1] = static_cast<float>(iz) * invZ;
+        mesh.texcoords[index * 2] = texcoord.u;
+        mesh.texcoords[index * 2 + 1] = texcoord.v;
     }
     for (int triangle = 0; triangle < mesh.triangleCount; ++triangle)
     {
@@ -73,6 +73,13 @@ bool FillTerrainMesh(const world::TerrainSpec& spec, Mesh& mesh)
     UploadMesh(&mesh, false);
     return true;
 }
+
+bool RegularFileExists(const std::filesystem::path& path)
+{
+    std::error_code error;
+    return !path.empty() && path.is_absolute() && std::filesystem::is_regular_file(path, error)
+        && !error;
+}
 }
 
 TerrainGpuResources::~TerrainGpuResources()
@@ -80,7 +87,7 @@ TerrainGpuResources::~TerrainGpuResources()
     Unload();
 }
 
-void TerrainGpuResources::Unload()
+void TerrainGpuResources::UnloadMesh()
 {
     if (loaded)
     {
@@ -92,6 +99,75 @@ void TerrainGpuResources::Unload()
     lastSpec = {};
 }
 
+void TerrainGpuResources::UnloadTexture()
+{
+    if (textureLoaded)
+    {
+        ::UnloadTexture(texture);
+        texture = {};
+        textureLoaded = false;
+        ++textureUnloadCount;
+    }
+    lastTextureIdentity.clear();
+}
+
+void TerrainGpuResources::Unload()
+{
+    UnloadMesh();
+    UnloadTexture();
+    loggedMissingIdentity.clear();
+}
+
+void TerrainGpuResources::SyncTexture(const world::TerrainSpec& spec)
+{
+    if (world::TerrainTextureIdentityIsNone(spec.textureIdentity)
+        || !assets::RuntimePngIdentityIsValid(spec.textureIdentity))
+    {
+        UnloadTexture();
+        return;
+    }
+    if (textureLoaded && lastTextureIdentity == spec.textureIdentity)
+    {
+        return;
+    }
+
+    UnloadTexture();
+    const std::filesystem::path path = platform::RuntimeAssetPath(spec.textureIdentity);
+    if (!RegularFileExists(path))
+    {
+        if (loggedMissingIdentity != spec.textureIdentity)
+        {
+            std::fprintf(
+                stderr,
+                "TerrainMaterial: missing staged texture: %s\n",
+                spec.textureIdentity.c_str());
+            loggedMissingIdentity = spec.textureIdentity;
+        }
+        return;
+    }
+
+    const Texture2D loadedTexture = LoadTexture(path.string().c_str());
+    if (loadedTexture.id == 0)
+    {
+        if (loggedMissingIdentity != spec.textureIdentity)
+        {
+            std::fprintf(
+                stderr,
+                "TerrainMaterial: failed to load staged texture: %s\n",
+                spec.textureIdentity.c_str());
+            loggedMissingIdentity = spec.textureIdentity;
+        }
+        return;
+    }
+
+    texture = loadedTexture;
+    SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
+    textureLoaded = true;
+    lastTextureIdentity = spec.textureIdentity;
+    loggedMissingIdentity.clear();
+    ++textureLoadCount;
+}
+
 void TerrainGpuResources::Sync(const world::TerrainSpec* spec)
 {
     if (spec == nullptr || !spec->enabled || !world::TerrainSpecIsValid(*spec))
@@ -99,24 +175,32 @@ void TerrainGpuResources::Sync(const world::TerrainSpec* spec)
         Unload();
         return;
     }
-    if (hasSpec && loaded && world::TerrainSpecEqual(lastSpec, *spec))
+
+    const bool meshUnchanged = hasSpec && loaded && world::TerrainMeshDataEqual(lastSpec, *spec);
+    if (!meshUnchanged)
     {
-        return;
+        UnloadMesh();
+        if (!FillTerrainMesh(*spec, mesh))
+        {
+            mesh = {};
+            loaded = false;
+            hasSpec = false;
+            lastSpec = {};
+            UnloadTexture();
+            return;
+        }
+        loaded = true;
+        hasSpec = true;
+        lastSpec = *spec;
+        ++uploadCount;
+    }
+    else
+    {
+        lastSpec.textureIdentity = spec->textureIdentity;
+        lastSpec.enabled = spec->enabled;
     }
 
-    Unload();
-    if (!FillTerrainMesh(*spec, mesh))
-    {
-        mesh = {};
-        loaded = false;
-        hasSpec = false;
-        lastSpec = {};
-        return;
-    }
-    loaded = true;
-    hasSpec = true;
-    lastSpec = *spec;
-    ++uploadCount;
+    SyncTexture(*spec);
 }
 
 bool TerrainGpuResources::HasMesh() const
@@ -124,9 +208,19 @@ bool TerrainGpuResources::HasMesh() const
     return loaded && mesh.vertexCount > 0;
 }
 
+bool TerrainGpuResources::HasTexture() const
+{
+    return textureLoaded && texture.id != 0;
+}
+
 const Mesh* TerrainGpuResources::GetMesh() const
 {
     return HasMesh() ? &mesh : nullptr;
+}
+
+const Texture2D* TerrainGpuResources::GetTexture() const
+{
+    return HasTexture() ? &texture : nullptr;
 }
 
 std::size_t TerrainGpuResources::UploadCount() const
@@ -137,5 +231,15 @@ std::size_t TerrainGpuResources::UploadCount() const
 std::size_t TerrainGpuResources::UnloadCount() const
 {
     return unloadCount;
+}
+
+std::size_t TerrainGpuResources::TextureLoadCount() const
+{
+    return textureLoadCount;
+}
+
+std::size_t TerrainGpuResources::TextureUnloadCount() const
+{
+    return textureUnloadCount;
 }
 }

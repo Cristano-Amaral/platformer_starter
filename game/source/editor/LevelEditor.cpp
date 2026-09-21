@@ -37,6 +37,7 @@
 #include "world/Door.h"
 #include "world/ItemPickup.h"
 #include "world/LevelIdentity.h"
+#include "assets/RuntimePng.h"
 
 #include <algorithm>
 #include <cmath>
@@ -46,6 +47,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <system_error>
 #include <vector>
 #endif
 
@@ -857,6 +859,67 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         ImGui::Text(
             "Samples: %d",
             world::TerrainSampleCount(level.terrain));
+        ImGui::Separator();
+        ImGui::TextUnformatted("Terrain Material");
+        ImGui::TextWrapped(
+            "One base surface texture. Assignment and tiling edit the working "
+            "copy. Empty assignment uses the solid Terrain fallback.");
+        const std::string currentIdentity = level.terrain.textureIdentity;
+        const char* assignmentPreview = currentIdentity.empty()
+            ? "(fallback)"
+            : currentIdentity.c_str();
+        ImGui::TextWrapped("Base Texture: %s", assignmentPreview);
+        if (!currentIdentity.empty())
+        {
+            std::error_code stagedError;
+            const bool staged = std::filesystem::is_regular_file(
+                platform::RuntimeAssetPath(currentIdentity), stagedError);
+            if (!staged)
+            {
+                ImGui::TextWrapped(
+                    "Staged runtime texture is missing. Cook & Stage to preview "
+                    "and ship this assignment.");
+            }
+        }
+        std::vector<std::string> textureChoices;
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+        textureChoices = assets::CollectSourceRuntimePngIdentities(AuthoringSourceRoot());
+#endif
+        if (ImGui::BeginCombo("Assign Texture", assignmentPreview))
+        {
+            if (ImGui::Selectable("(fallback)", currentIdentity.empty()))
+            {
+                world::TryClearTerrainTextureIdentity(level.terrain);
+            }
+            for (const std::string& identity : textureChoices)
+            {
+                const bool selected = identity == currentIdentity;
+                if (ImGui::Selectable(identity.c_str(), selected))
+                {
+                    world::TryAssignTerrainTextureIdentity(level.terrain, identity);
+                }
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Clear Texture"))
+        {
+            world::TryClearTerrainTextureIdentity(level.terrain);
+        }
+        ImGui::InputFloat(
+            "Texture Tiling",
+            &level.terrain.textureTiling,
+            0.0f,
+            0.0f,
+            kFloatFormat);
+        ImGui::TextWrapped(
+            "Repeats per world unit. Range [%.2f, %.2f]. Default %.2f.",
+            world::kMinTerrainTextureTiling,
+            world::kMaxTerrainTextureTiling,
+            world::kDefaultTerrainTextureTiling);
         ImGui::Separator();
         ImGui::TextUnformatted("Terrain Sculpt");
         ImGui::TextWrapped(

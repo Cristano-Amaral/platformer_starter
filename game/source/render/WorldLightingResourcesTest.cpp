@@ -90,6 +90,13 @@ int main()
         ""
 #endif
     );
+    const std::filesystem::path checkerPng = FixturePath(
+#if defined(PLATFORMER_TEST_CHECKER_PNG)
+        PLATFORMER_TEST_CHECKER_PNG
+#else
+        ""
+#endif
+    );
 
     Expect(std::filesystem::is_regular_file(litVs), "world_lit.vs exists");
     Expect(std::filesystem::is_regular_file(litFs), "world_lit.fs exists");
@@ -110,6 +117,10 @@ int main()
     Expect(
         StageIdentity(platform::kShadowDepthFragmentShaderLogicalId, depthFs),
         "stage shadow_depth.fs");
+    Expect(std::filesystem::is_regular_file(checkerPng), "test_checker.png exists");
+    Expect(
+        StageIdentity(platform::kTestCheckerLogicalId, checkerPng),
+        "stage textures/test_checker.png");
 
     const std::filesystem::path stagedVs =
         platform::RuntimeAssetPath(platform::kWorldLitVertexShaderLogicalId);
@@ -254,6 +265,76 @@ int main()
         Expect(terrainGpu.UnloadCount() == sculptUnloads + 1, "removal unloads once");
         terrainGpu.Sync(nullptr);
         Expect(terrainGpu.UnloadCount() == sculptUnloads + 1, "second removal is idempotent");
+
+        world::TerrainSpec textured = world::MakeDefaultTerrain();
+        Expect(!terrainGpu.HasTexture(), "no assignment has no GPU texture");
+        Expect(terrainGpu.TextureLoadCount() == 0, "fallback does not load a texture");
+        Expect(
+            world::TryAssignTerrainTextureIdentity(textured, "textures/test_checker.png"),
+            "GPU texture assignment fixture");
+        const std::size_t meshUploadsBeforeTexture = terrainGpu.UploadCount();
+        terrainGpu.Sync(&textured);
+        Expect(terrainGpu.HasMesh(), "textured Terrain still has mesh");
+        Expect(terrainGpu.HasTexture(), "valid staged assignment loads GPU texture");
+        Expect(terrainGpu.TextureLoadCount() == 1, "first assignment loads once");
+        Expect(
+            terrainGpu.UploadCount() == meshUploadsBeforeTexture + 1,
+            "first textured Sync after unload uploads mesh");
+        const std::size_t textureLoads = terrainGpu.TextureLoadCount();
+        const std::size_t textureUnloads = terrainGpu.TextureUnloadCount();
+        const std::size_t meshUploads = terrainGpu.UploadCount();
+        terrainGpu.Sync(&textured);
+        Expect(terrainGpu.TextureLoadCount() == textureLoads, "same assignment does not reload");
+        Expect(terrainGpu.UploadCount() == meshUploads, "same assignment does not rebuild mesh");
+        world::TerrainSpec heightOnly = textured;
+        heightOnly.heights[0] = 1.0f;
+        terrainGpu.Sync(&heightOnly);
+        Expect(terrainGpu.UploadCount() == meshUploads + 1, "height change rebuilds mesh");
+        Expect(terrainGpu.TextureLoadCount() == textureLoads, "height change does not reload texture");
+        world::TerrainSpec tilingOnly = heightOnly;
+        Expect(world::TrySetTerrainTextureTiling(tilingOnly, 0.5f), "GPU tiling fixture");
+        terrainGpu.Sync(&tilingOnly);
+        Expect(terrainGpu.UploadCount() == meshUploads + 2, "tiling change rebuilds UVs");
+        Expect(terrainGpu.TextureLoadCount() == textureLoads, "tiling change does not reload texture");
+        BeginDrawing();
+        BeginMode3D(terrainCamera);
+        lighting.BindLitPass(environment);
+        lighting.DrawWorldMesh(*terrainGpu.GetMesh(), WHITE, terrainGpu.GetTexture());
+        lighting.UnbindLitPass();
+        EndMode3D();
+        EndDrawing();
+        Expect(terrainGpu.TextureLoadCount() == textureLoads, "drawing does not reload texture");
+        world::TerrainSpec cleared = tilingOnly;
+        Expect(world::TryClearTerrainTextureIdentity(cleared), "GPU clear fixture");
+        terrainGpu.Sync(&cleared);
+        Expect(!terrainGpu.HasTexture(), "cleared assignment unloads texture");
+        Expect(
+            terrainGpu.TextureUnloadCount() == textureUnloads + 1, "clear unloads the GPU texture");
+        Expect(terrainGpu.UploadCount() == meshUploads + 2, "clear does not rebuild mesh");
+        terrainGpu.Sync(&textured);
+        Expect(terrainGpu.HasTexture(), "reassign loads texture");
+        Expect(terrainGpu.TextureLoadCount() == textureLoads + 1, "reassign is one new load");
+        const std::size_t f2Loads = terrainGpu.TextureLoadCount();
+        const std::size_t f2Unloads = terrainGpu.TextureUnloadCount();
+        terrainGpu.Unload();
+        Expect(!terrainGpu.HasTexture() && !terrainGpu.HasMesh(), "F2 Unload releases mesh and texture");
+        Expect(terrainGpu.TextureUnloadCount() == f2Unloads + 1, "F2 unloads texture once");
+        terrainGpu.Sync(&textured);
+        Expect(terrainGpu.HasTexture(), "F2 restore reloads staged texture");
+        Expect(terrainGpu.TextureLoadCount() == f2Loads + 1, "F2 restore loads once, not a duplicate leftover");
+        terrainGpu.Sync(nullptr);
+        Expect(!terrainGpu.HasTexture(), "Level without Terrain releases texture");
+        world::TerrainSpec nextLevel = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(nextLevel, "textures/test_checker.png"),
+            "transition assignment fixture");
+        terrainGpu.Sync(&nextLevel);
+        Expect(terrainGpu.HasTexture(), "Terrain Level B loads its texture");
+        terrainGpu.Sync(nullptr);
+        Expect(!terrainGpu.HasTexture(), "none-Terrain transition does not leak texture");
+        terrainGpu.Unload();
+        terrainGpu.Unload();
+        Expect(terrainGpu.HasTexture() == false, "repeated Unload is idempotent");
     }
 
     lighting.Unload();

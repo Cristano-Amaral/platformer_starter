@@ -72,6 +72,25 @@ else()
     unset(_platformer_extra_cooked_levels)
     unset(_platformer_extra_level)
     unset(_platformer_extra_level_index)
+    # M88: Terrain-referenced runtime PNGs are extra cooked files, not required
+    # inventory. Do not glob source/textures; only already-cooked textures/.
+    file(GLOB _platformer_extra_cooked_textures
+        RELATIVE "${PLATFORMER_COOKED_DIR}"
+        "${PLATFORMER_COOKED_DIR}/textures/*.png")
+    list(SORT _platformer_extra_cooked_textures)
+    foreach(_platformer_extra_texture IN LISTS _platformer_extra_cooked_textures)
+        if(_platformer_extra_texture STREQUAL "")
+            continue()
+        endif()
+        file(TO_CMAKE_PATH "${_platformer_extra_texture}" _platformer_extra_texture)
+        list(FIND PLATFORMER_RUNTIME_ASSETS "${_platformer_extra_texture}" _platformer_extra_texture_index)
+        if(_platformer_extra_texture_index EQUAL -1)
+            list(APPEND PLATFORMER_RUNTIME_ASSETS "${_platformer_extra_texture}")
+        endif()
+    endforeach()
+    unset(_platformer_extra_cooked_textures)
+    unset(_platformer_extra_texture)
+    unset(_platformer_extra_texture_index)
 endif()
 
 message(STATUS "Staging runtime assets")

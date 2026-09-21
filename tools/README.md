@@ -40,8 +40,10 @@ The cooker copies known authored files from `game/assets/source/` to
 `sounds/pause_close.wav`, `sounds/inventory_open.wav`, `sounds/inventory_close.wav`,
 `shaders/world_lit.vs`, `shaders/world_lit.fs`, `shaders/shadow_depth.vs`,
 `shaders/shadow_depth.fs`) plus extra valid
-`source/models/*.glb` files discovered for Milestone 47 import and extra valid
-`source/levels/*.level` files discovered for Milestone 64.1 New Level. It does not
+`source/models/*.glb` files discovered for Milestone 47 import, extra valid
+`source/levels/*.level` files discovered for Milestone 64.1 New Level, and
+Milestone 88 Terrain textures referenced by those Levels (`textures/<file>.png`).
+Unrelated `source/textures/*.png` files are not globbed. It does not
 glob every PNG under `source/textures/`. It does not glob sounds. Skips a
 rewrite when the cooked bytes already match the current cook result, writes
 `game/assets/cooked/manifest.json`, and removes previously manifested cooked

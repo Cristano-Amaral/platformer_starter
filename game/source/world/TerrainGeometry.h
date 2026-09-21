@@ -23,6 +23,7 @@ struct TerrainGeometry
 {
     std::vector<core::Vec3> positions{};
     std::vector<core::Vec3> normals{};
+    std::vector<TerrainTexCoord> texcoords{};
     std::vector<TerrainTriangle> triangles{};
 };
 
@@ -95,14 +96,16 @@ inline bool GenerateTerrainGeometry(const TerrainSpec& terrain, TerrainGeometry&
     const int triangleCount = TerrainTriangleCount(terrain.resolutionX, terrain.resolutionZ);
     out.positions.resize(static_cast<std::size_t>(vertexCount));
     out.normals.assign(static_cast<std::size_t>(vertexCount), {0.0f, 0.0f, 0.0f});
+    out.texcoords.resize(static_cast<std::size_t>(vertexCount));
     out.triangles.resize(static_cast<std::size_t>(triangleCount));
 
     for (int iz = 0; iz < terrain.resolutionZ; ++iz)
     {
         for (int ix = 0; ix < terrain.resolutionX; ++ix)
         {
-            out.positions[static_cast<std::size_t>(TerrainHeightIndex(terrain, ix, iz))] =
-                TerrainSamplePosition(terrain, ix, iz);
+            const int index = TerrainHeightIndex(terrain, ix, iz);
+            out.positions[static_cast<std::size_t>(index)] = TerrainSamplePosition(terrain, ix, iz);
+            out.texcoords[static_cast<std::size_t>(index)] = TerrainSampleTexCoord(terrain, ix, iz);
         }
     }
 
@@ -155,6 +158,13 @@ inline bool GenerateTerrainGeometry(const TerrainSpec& terrain, TerrainGeometry&
             return false;
         }
     }
+    for (const TerrainTexCoord& texcoord : out.texcoords)
+    {
+        if (!TerrainComponentFinite(texcoord.u) || !TerrainComponentFinite(texcoord.v))
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -170,6 +180,13 @@ inline bool TerrainGeometryIsFinite(const TerrainGeometry& geometry)
     for (const core::Vec3& normal : geometry.normals)
     {
         if (!TerrainVecFinite(normal))
+        {
+            return false;
+        }
+    }
+    for (const TerrainTexCoord& texcoord : geometry.texcoords)
+    {
+        if (!TerrainComponentFinite(texcoord.u) || !TerrainComponentFinite(texcoord.v))
         {
             return false;
         }

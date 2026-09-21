@@ -203,9 +203,11 @@ void DrawAuthoredTerrain(const TerrainGpuResources* terrainGpu, Color fill)
     {
         return;
     }
+    const Texture2D* albedo = terrainGpu->GetTexture();
+    const Color surface = albedo != nullptr ? WHITE : fill;
     if (gWorldSolidMode == WorldSolidMode::Solid && gWorldLighting != nullptr)
     {
-        gWorldLighting->DrawWorldMesh(mesh, fill);
+        gWorldLighting->DrawWorldMesh(mesh, surface, albedo);
         return;
     }
     if (mesh.vertices == nullptr || mesh.indices == nullptr)
@@ -223,7 +225,7 @@ void DrawAuthoredTerrain(const TerrainGpuResources* terrainGpu, Color fill)
             mesh.vertices[i1 * 3], mesh.vertices[i1 * 3 + 1], mesh.vertices[i1 * 3 + 2]};
         const Vector3 c{
             mesh.vertices[i2 * 3], mesh.vertices[i2 * 3 + 1], mesh.vertices[i2 * 3 + 2]};
-        DrawTriangle3D(a, b, c, fill);
+        DrawTriangle3D(a, b, c, surface);
     }
 }
 

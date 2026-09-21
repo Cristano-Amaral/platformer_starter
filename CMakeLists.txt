@@ -48,6 +48,7 @@ add_executable(Platformer3D
     game/source/editor/AuthoredLevelCatalog.h
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/assets/RuntimePng.h
     game/source/assets/ModelMaterialPresentation.cpp
     game/source/assets/ModelMaterialPresentation.h
     game/source/assets/StaticGlbImport.cpp
@@ -611,6 +612,21 @@ if(MSVC)
     target_compile_options(TerrainSculptTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(TerrainSculptTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 88: Terrain base material identity/tiling/UV. No window, Jolt, or raylib.
+add_executable(TerrainMaterialTest
+    game/source/world/TerrainMaterialTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
+    game/source/assets/RuntimePng.h
+)
+target_include_directories(TerrainMaterialTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(TerrainMaterialTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainMaterialTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 
@@ -2109,6 +2125,9 @@ file(TO_CMAKE_PATH
 file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/shaders/shadow_depth.fs"
     PLATFORMER_SHADOW_DEPTH_FS)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/textures/test_checker.png"
+    PLATFORMER_TEST_CHECKER_PNG)
 add_executable(WorldLightingResourcesTest
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
@@ -2144,6 +2163,7 @@ target_compile_definitions(WorldLightingResourcesTest PRIVATE
     "PLATFORMER_WORLD_LIT_FS=\"${PLATFORMER_WORLD_LIT_FS}\""
     "PLATFORMER_SHADOW_DEPTH_VS=\"${PLATFORMER_SHADOW_DEPTH_VS}\""
     "PLATFORMER_SHADOW_DEPTH_FS=\"${PLATFORMER_SHADOW_DEPTH_FS}\""
+    "PLATFORMER_TEST_CHECKER_PNG=\"${PLATFORMER_TEST_CHECKER_PNG}\""
 )
 
 # Milestone 40 Phase A: Cook, Stage & Reload orchestration without ImGui or

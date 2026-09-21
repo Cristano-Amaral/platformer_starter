@@ -62,6 +62,7 @@ public:
         float degrees,
         Color color) const;
     void DrawWorldMesh(const Mesh& mesh, Color color) const;
+    void DrawWorldMesh(const Mesh& mesh, Color color, const Texture2D* albedo) const;
 
 private:
     void DrawSolidBoxTransform(const Matrix& transform, Color color) const;

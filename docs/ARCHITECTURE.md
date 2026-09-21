@@ -136,7 +136,7 @@ Cook from the repository root:
 
 The cooker uses the Python standard library plus cooker-only **Pillow 12.3.0** (`python -m pip install -r tools/requirements.txt`; not a CMake or game runtime dependency). Required assets remain the explicit `KNOWN_ASSETS` list. Milestone 47 additionally discovers valid `source/models/*.glb` files, cooks them as opaque `copy` after the same static-GLB compatibility checks used by Development import, and writes portable relative paths into `game/assets/cooked/manifest.json` (no absolute paths, timestamps, or machine names). PNGs under `source/textures/` stay explicit-list only. Blender authoring PNGs (for example `test_textured_basecolor.png`) stay out of the cooker.
 
-Standalone runtime PNGs (`kind: runtime_png`) use recipe `runtime_png.max512.lanczos.v1`: maximum dimension **512 px**, aspect ratio preserved, no upscale, no crop, Pillow `LANCZOS` when downscaling. Sources already within the limit are copied byte-for-byte. GLBs remain opaque byte copies; images embedded in `models/test_textured.glb` are not resized. Changing the recipe (max dimension, filter, or encoding) recooks even if source bytes are unchanged. See `tools/README.md`.
+Standalone runtime PNGs (`kind: runtime_png`) use recipe `runtime_png.max512.lanczos.v1`: maximum dimension **512 px**, aspect ratio preserved, no upscale, no crop, Pillow `LANCZOS` when downscaling. Sources already within the limit are copied byte-for-byte. Explicit known PNGs remain listed; M88 also cooks Terrain textures referenced by authored Levels. Unrelated `source/textures/*.png` files are not globbed. GLBs remain opaque byte copies; images embedded in `models/test_textured.glb` are not resized. Changing the recipe (max dimension, filter, or encoding) recooks even if source bytes are unchanged. See `tools/README.md`.
 
 Staged runtime files (POST_BUILD `copy_if_different` from cooked):
 
@@ -362,7 +362,7 @@ Pressure Plate
 
 ## Terrain Foundation (Milestone 86)
 
-M86 introduces one optional singleton authored **Terrain** per Level. It is a regular XZ heightfield, not a repeatable prop, tile set, GUID, or generic mesh editor. M87 sculpts the existing `heights[]` array in the Development Editor.
+M86 introduces one optional singleton authored **Terrain** per Level. It is a regular XZ heightfield, not a repeatable prop, tile set, GUID, or generic mesh editor. M87 sculpts the existing `heights[]` array in the Development Editor. M88 adds one optional base surface texture identity and tiling.
 
 ```
 LevelDefinition
@@ -371,7 +371,9 @@ LevelDefinition
     ├── origin (min-X / min-Z sample)
     ├── sizeX / sizeZ
     ├── resolutionX / resolutionZ
-    └── heights[resolutionX * resolutionZ]
+    ├── heights[resolutionX * resolutionZ]
+    ├── textureIdentity (textures/<file>.png, empty = fallback)
+    └── textureTiling (repeats per world unit, default 0.25)
 ```
 
 **Origin.** `sample(ix, iz)` maps to `(origin.x + ix * dx, origin.y + height, origin.z + iz * dz)` with `dx = sizeX / (resolutionX - 1)` and `dz = sizeZ / (resolutionZ - 1)`. Heights are relative to Origin Y. The same convention is used by parse/write, render vertices, Jolt collision, normals, picking, Inspector, and Translate.
@@ -380,19 +382,21 @@ LevelDefinition
 
 **Geometry.** Deterministic tessellation: vertex count `resolutionX * resolutionZ`, two CCW (from +Y) triangles per cell. Normals are accumulated triangle normals. Flat Terrain is +Y. Non-flat Terrain tilts with the slope.
 
-**Rendering.** `render::TerrainGpuResources` is owned by `Renderer`. Sync rebuilds only when authored Terrain changes. Terrain draws as world geometry in the existing lit/shadow path (`DrawWorldMesh`), so it receives Ambient, Directional, Point, and Spot lighting, casts and receives Directional shadows, and follows M85.4 effective local-light enablement. Default surface color `{118, 140, 96}`. No splatting, layers, or PBR expansion.
+**Rendering.** `render::TerrainGpuResources` is owned by `Renderer`. Sync rebuilds the mesh only when geometry/UVs change and loads the optional base-color texture only when the authored identity changes. Terrain draws as world geometry in the existing lit/shadow path (`DrawWorldMesh`), so it receives Ambient, Directional, Point, and Spot lighting, casts and receives Directional shadows, and follows M85.4 effective local-light enablement. Default surface color `{118, 140, 96}` is the no-assignment fallback. A valid `textures/<file>.png` assignment samples `texture0` in `world_lit.fs` with WHITE tint and REPEAT wrap. Planar XZ UVs: `u = (worldX - origin.x) * textureTiling`, `v = (worldZ - origin.z) * textureTiling`. Heights do not change UVs. No splatting, layers, triplanar, or PBR expansion.
 
 **Collision.** Jolt `MeshShape` from the same CPU triangles, not `HeightFieldShape`. Native heightfield requires a square grid and 8/16-bit quantization, which would break rectangular defaults and render/collision correspondence. Terrain is one extra static body; the authored leftover stays 59 (`kPhysicsMaxBodies` 65). Apply/transition/delete rebuild or remove the body. Player, Dynamic Boxes, and ground/ray queries use that surface.
 
-**Editor.** Hierarchy shows Terrain after Ground only when present. `Edit > Add > Terrain` is available only when absent. Dedicated `EditorObjectKind::Terrain`. Viewport picking uses actual triangle hits and nearest-hit wins, so objects above Terrain stay selectable. Inspector: Enabled, Origin, Size X/Z, read-only Resolution, sample count, and M87 Sculpt Mode / Brush / Radius / Strength. Resolution remains creation-time (no resampling). Translate edits origin with M76 snap. Rotate/Scale/Resize/Duplicate/Group are unavailable. Sculpt is a focused Terrain tool, not a generic object gizmo: while it is on, viewport LMB stamps working-copy heights and does not change selection.
+**Editor.** Hierarchy shows Terrain after Ground only when present. `Edit > Add > Terrain` is available only when absent. Dedicated `EditorObjectKind::Terrain`. Viewport picking uses actual triangle hits and nearest-hit wins, so objects above Terrain stay selectable. Inspector: Enabled, Origin, Size X/Z, read-only Resolution, sample count, M88 Terrain Material (current identity, source-texture combo, Clear, tiling), and M87 Sculpt Mode / Brush / Radius / Strength. Resolution remains creation-time (no resampling). Translate edits origin with M76 snap. Rotate/Scale/Resize/Duplicate/Group are unavailable. Sculpt is a focused Terrain tool, not a generic object gizmo: while it is on, viewport LMB stamps working-copy heights and does not change selection. Material assignment uses the M84 `textures/<file>.png` identity; the Inspector lists `source/textures/*.png` without creating a second generic catalog. Runtime preview/Release load staged assets only.
 
-**Sculpt (Milestone 87).** Brush operations Raise, Lower, Smooth, and Flatten mutate only `workingCopy.terrain.heights`. Linear XZ falloff is `1 - d/radius` for `d < radius`. Strokes stamp on press and then every `0.25 * radius` of cursor XZ travel; a stationary hold does not accumulate. Flatten captures one world-space hit Y at stroke begin. Brush parameters are transient editor state and are not serialized. Development preview syncs the existing `TerrainGpuResources` from working-copy Terrain so unapplied relief is visible; Jolt/runtime collision stay on active Terrain until Apply. Sculpt hit-testing uses working-copy triangles, not Jolt.
+**Sculpt (Milestone 87).** Brush operations Raise, Lower, Smooth, and Flatten mutate only `workingCopy.terrain.heights`. Linear XZ falloff is `1 - d/radius` for `d < radius`. Strokes stamp on press and then every `0.25 * radius` of cursor XZ travel; a stationary hold does not accumulate. Flatten captures one world-space hit Y at stroke begin. Brush parameters are transient editor state and are not serialized. Development preview syncs the existing `TerrainGpuResources` from working-copy Terrain so unapplied relief and material are visible; Jolt/runtime collision stay on active Terrain until Apply. Sculpt hit-testing uses working-copy triangles, not Jolt. Sculpt does not reset material; material edits do not reset heights.
 
-**Authority.** Inspector/gizmo/sculpt edit `workingCopy`. Apply validates and rebuilds render/collision from the promoted authored heights. Save writes `terrain` / `terrain_row`. Restart, death/checkpoint, F2, Play Again, and Main Menu → Play do not invent Terrain-specific authority. Release uses staged Level data only.
+**Authority.** Inspector/gizmo/sculpt/material edit `workingCopy`. Apply validates and rebuilds render/collision from the promoted authored data. Save writes `terrain` / `terrain_row` and optional `terrain_material`. Restart, death/checkpoint, F2, Play Again, and Main Menu → Play do not invent Terrain-specific authority. Release uses staged Level data and staged runtime PNGs only.
 
 **Out of scope for M86 itself.** Sculpt/paint, layers, LOD, tiles, streaming, holes/caves, navmesh, water, foliage, Undo/Redo, M87.
 
 **Out of scope for M87 itself.** Terrain materials/painting, vegetation, foliage, resampling, tiles/LOD/streaming, holes/caves, runtime deformation, Undo/Redo, M88.
+
+**Out of scope for M88 itself.** Terrain material painting, splat/weight maps, automatic slope/height materials, triplanar, PBR authoring expansion, vegetation/foliage, resampling, tiles/LOD/streaming, holes/caves, runtime deformation, Undo/Redo, M89.
 
 Development `Assets > Import Static GLB` copies a compatible self-contained static `.glb` into `game/assets/source/models/<filename>.glb`. Canonical identity is the project-relative path `models/<filename>.glb`. The original external absolute path is import input only. Collision never overwrites. Import does not cook, stage, or mutate `workingCopy` / `active` / `savedSourceBaseline`. A derived `assets::StaticModelCatalog` discovers valid `source/models/*.glb` files (non-recursive, sorted by identity). It is not persisted and is not a level/scene object list. After import, the existing Cook Assets then Stage Runtime Assets path processes extra cooked `models/*.glb` files. Staging's required inventory remains `cmake/RuntimeAssets.cmake`; extra cooked models are discovered at staging time. Extra cooked `levels/*.level` files are discovered the same way so a Level created in the Development Levels UI can enter Cook & Stage without a per-level CMake edit.
 

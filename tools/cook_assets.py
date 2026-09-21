@@ -9,10 +9,13 @@ Paths are resolved from this file's location so the cooker does not depend on
 the current working directory.
 
 Standalone runtime PNGs (`kind: runtime_png`) are listed explicitly and may be
-downscaled with cooker-only Pillow. Blender authoring PNGs and `.blend` files
-are not cooker inputs. Known GLBs plus extra valid `source/models/*.glb` files
-are opaque copies after static-GLB compatibility checks. Extra valid
-`source/levels/*.level` files are cooked as `level_v1` after the header
+downscaled with cooker-only Pillow. Milestone 88 additionally cooks Terrain
+textures referenced by authored Levels; unrelated `source/textures/*.png` files
+are not globbed. Blender authoring PNGs and `.blend` files are not cooker
+inputs unless a Level references a PNG. Known GLBs plus extra valid
+`source/models/*.glb` files are opaque copies after static-GLB compatibility
+checks. Extra valid `source/levels/*.level` files are cooked as `level_v1`
+after the header
 check so a newly created Level can enter cook/stage without a per-level
 hardcoded list. Cooked `levels/*.level` files that are no longer in the
 current required-plus-discovered Level inventory are removed; other cooked
@@ -37,9 +40,10 @@ SCHEMA_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 
 # Asset kinds are declarative. Do not glob/discover every PNG under source/textures.
-# Extra valid source/models/*.glb files are discovered (M47). PNGs stay explicit.
-# Extra valid source/levels/*.level files are discovered (M64.1). Canonical
-# level_01/level_02 remain required inventory.
+# Extra valid source/models/*.glb files are discovered (M47). Explicit runtime
+# PNGs remain listed; M88 additionally cooks Terrain textures referenced by
+# authored Levels. Extra valid source/levels/*.level files are discovered
+# (M64.1). Canonical level_01/level_02 remain required inventory.
 # Milestone 85 lighting shaders are explicit opaque `copy`.
 #   copy         = opaque byte copy (GLBs and the M61 collection WAV;
 #                  embedded GLB images are not inspected)
@@ -550,6 +554,9 @@ STATIC_GLB_SUFFIX = ".glb"
 LEVELS_DIRECTORY = "levels"
 LEVEL_SUFFIX = ".level"
 STATIC_GLB_IMPORT_TEMP_SUFFIX = ".importing.tmp"
+RUNTIME_TEXTURES_DIRECTORY = "textures"
+RUNTIME_PNG_SUFFIX = ".png"
+RUNTIME_PNG_NONE_TOKEN = "-"
 
 
 def _glb_u32(data: bytes, offset: int) -> int:
@@ -721,6 +728,88 @@ def discover_extra_level_v1_assets(sources: Path) -> list[dict[str, str]]:
     return extras
 
 
+def is_safe_runtime_png_file_name(name: str) -> bool:
+    if not name or not name.endswith(RUNTIME_PNG_SUFFIX) or name.startswith("."):
+        return False
+    stem = name[: -len(RUNTIME_PNG_SUFFIX)]
+    if not stem or stem in {".", ".."}:
+        return False
+    if any(ch in name for ch in '\\/:*?"<>| ') or any(ord(ch) < 32 for ch in name):
+        return False
+    if name[0] == " " or name[-1] == " " or stem[-1] in ". ":
+        return False
+    return True
+
+
+def is_valid_runtime_png_identity(identity: str) -> bool:
+    if not identity or "\\" in identity:
+        return False
+    prefix = f"{RUNTIME_TEXTURES_DIRECTORY}/"
+    if not identity.startswith(prefix):
+        return False
+    name = identity[len(prefix) :]
+    if not is_safe_runtime_png_file_name(name):
+        return False
+    return portable_relative(f"{RUNTIME_TEXTURES_DIRECTORY}/{name}") == identity
+
+
+def iter_level_source_files(sources: Path) -> list[Path]:
+    levels = sources / LEVELS_DIRECTORY
+    if not levels.is_dir():
+        return []
+    files: list[Path] = []
+    for path in sorted(levels.iterdir(), key=lambda item: item.name):
+        if path.is_file() and is_safe_level_file_name(path.name):
+            files.append(path)
+    return files
+
+
+def extract_terrain_texture_identities(level_text: str) -> list[str]:
+    identities: list[str] = []
+    for raw_line in level_text.splitlines():
+        stripped = raw_line.strip(" \t")
+        if not stripped:
+            continue
+        tokens = stripped.split()
+        if len(tokens) != 3 or tokens[0] != "terrain_material":
+            continue
+        identity = tokens[1]
+        if identity == RUNTIME_PNG_NONE_TOKEN:
+            continue
+        if is_valid_runtime_png_identity(identity):
+            identities.append(identity)
+    return identities
+
+
+def discover_level_referenced_runtime_png_assets(sources: Path) -> list[dict[str, str]]:
+    """runtime_png identities referenced by Terrain material records.
+
+    Does not glob source/textures. Unrelated PNGs stay out of cooked output
+    unless a Level names them. Explicit KNOWN_ASSETS entries still win.
+    """
+    extras: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for path in iter_level_source_files(sources):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for identity in extract_terrain_texture_identities(text):
+            if identity in seen:
+                continue
+            seen.add(identity)
+            extras.append(
+                {
+                    "id": identity,
+                    "source": identity,
+                    "cooked": identity,
+                    "kind": KIND_RUNTIME_PNG,
+                }
+            )
+    extras.sort(key=lambda item: item["id"])
+    return extras
+
+
 def collect_cook_assets(sources: Path) -> list[dict[str, str]]:
     merged: dict[str, dict[str, str]] = {
         portable_relative(asset["id"]): dict(asset) for asset in KNOWN_ASSETS
@@ -728,6 +817,8 @@ def collect_cook_assets(sources: Path) -> list[dict[str, str]]:
     for extra in discover_extra_static_glb_assets(sources):
         merged.setdefault(extra["id"], extra)
     for extra in discover_extra_level_v1_assets(sources):
+        merged.setdefault(extra["id"], extra)
+    for extra in discover_level_referenced_runtime_png_assets(sources):
         merged.setdefault(extra["id"], extra)
     return [merged[key] for key in sorted(merged)]
 

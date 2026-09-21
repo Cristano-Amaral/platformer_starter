@@ -663,6 +663,14 @@ void WorldLightingResources::DrawSolidBoxAxisAngle(
 
 void WorldLightingResources::DrawWorldMesh(const Mesh& mesh, Color color) const
 {
+    DrawWorldMesh(mesh, color, nullptr);
+}
+
+void WorldLightingResources::DrawWorldMesh(
+    const Mesh& mesh,
+    Color color,
+    const Texture2D* albedo) const
+{
     if (!IsReady() || mesh.vertexCount <= 0)
     {
         return;
@@ -672,7 +680,20 @@ void WorldLightingResources::DrawWorldMesh(const Mesh& mesh, Color color) const
         rlActiveTextureSlot(1);
         rlEnableTexture(gpu->shadowMap.depth.id);
     }
-    gpu->solidMaterial.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    Texture2D previousDiffuse{};
+    if (gpu->solidMaterial.maps != nullptr)
+    {
+        previousDiffuse = gpu->solidMaterial.maps[MATERIAL_MAP_DIFFUSE].texture;
+        if (albedo != nullptr && albedo->id != 0)
+        {
+            gpu->solidMaterial.maps[MATERIAL_MAP_DIFFUSE].texture = *albedo;
+        }
+        gpu->solidMaterial.maps[MATERIAL_MAP_DIFFUSE].color = color;
+    }
     DrawMesh(mesh, gpu->solidMaterial, MatrixIdentity());
+    if (gpu->solidMaterial.maps != nullptr)
+    {
+        gpu->solidMaterial.maps[MATERIAL_MAP_DIFFUSE].texture = previousDiffuse;
+    }
 }
 }

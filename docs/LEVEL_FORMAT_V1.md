@@ -146,13 +146,15 @@ and do not cast shadows. Pressure Plate `controlsDirectionalLight` still
 names only the singleton Directional Light.
 
 The writer emits `point_light` records then `spot_light` records after
-`directional_light` (and after optional `terrain` / `terrain_row` when present), omitted when the collections are empty.
+`directional_light` (and after optional `terrain` / `terrain_row` /
+`terrain_material` when present), omitted when the collections are empty.
 
-### Optional Terrain singleton (Milestone 86)
+### Optional Terrain singleton (Milestone 86 / 88)
 
 ```
 terrain <enabled> <originX> <originY> <originZ> <sizeX> <sizeZ> <resolutionX> <resolutionZ>
 terrain_row <rowIndex> <h0> <h1> ... <hN>
+terrain_material <textureIdentity|-> <tiling>
 ```
 
 At most one Terrain per Level. Omitted records mean the Level has no Terrain;
@@ -192,6 +194,17 @@ false.
 Milestone 87 sculpts those same height samples. Brush mode, operation, radius,
 and strength are Development Editor tool state and are **not** Level Format
 fields. Existing M86 Terrain files remain valid. The format version stays `1`.
+
+Milestone 88 adds one optional base surface material. `terrain_material` is
+omitted when the assignment is empty and tiling is the default `0.25`. When
+present it is a singleton after the Terrain header: `textureIdentity` is the
+portable M84 runtime PNG identity `textures/<file>.png`, or `-` for no
+assignment. Tiling is finite in `[0.01, 16]` (repeats per world unit). Duplicate
+`terrain_material`, missing Terrain header, absolute paths, non-PNG identities,
+and non-finite/out-of-bounds tiling are `Invalid`. Old M86/M87 Terrain files
+without this record remain valid and use empty identity plus default tiling
+(solid fallback). The writer emits `terrain_material` after `terrain_row` when
+the assignment or tiling is non-default. The format version stays `1`.
 
 ### Required repeated records
 

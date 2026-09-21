@@ -1,5 +1,6 @@
 #include "world/LevelFile.h"
 
+#include "assets/RuntimePng.h"
 #include "physics/PhysicsCapacity.h"
 
 #include <charconv>
@@ -225,6 +226,7 @@ struct ParseState
     bool seenEnvironment = false;
     bool seenDirectionalLight = false;
     bool seenTerrain = false;
+    bool seenTerrainMaterial = false;
     TerrainSpec terrain{};
     std::vector<unsigned char> terrainRowsSeen;
     std::vector<Box> platforms;
@@ -1067,6 +1069,45 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.terrain = std::move(terrain);
             state.terrainRowsSeen.assign(
                 static_cast<std::size_t>(state.terrain.resolutionZ), 0);
+            continue;
+        }
+        if (keyword == "terrain_material")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_material without terrain");
+            }
+            if (!RequireSingleton(
+                    state.seenTerrainMaterial,
+                    failure,
+                    lineNumber,
+                    "duplicate terrain_material")
+                || !RequireTokenCount(tokens, 3, failure, lineNumber))
+            {
+                return failure;
+            }
+            const std::string_view identityToken = tokens[1];
+            if (identityToken == assets::kRuntimePngNoneToken)
+            {
+                state.terrain.textureIdentity.clear();
+            }
+            else if (!assets::RuntimePngIdentityIsValid(identityToken))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_material");
+            }
+            else
+            {
+                state.terrain.textureIdentity = std::string(identityToken);
+            }
+            float tiling = 0.0f;
+            if (!ParseFloatToken(tokens[2], tiling) || !TerrainTextureTilingIsValid(tiling))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_material");
+            }
+            state.terrain.textureTiling = tiling;
             continue;
         }
         if (keyword == "terrain_row")

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +14,8 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import cook_assets as cooker  # noqa: E402
+from test_import_static_glb import copy_known_sources  # noqa: E402
+from test_stage_runtime_assets import run_stage  # noqa: E402
 
 
 def rgba_png_bytes(width: int, height: int, pixel) -> bytes:
@@ -117,6 +120,81 @@ class RuntimePngCookTests(unittest.TestCase):
         source_data = glb_path.read_bytes()
         self.assertEqual(source_data[:4], b"glTF")
         self.assertNotEqual(source_data[:8], cooker.PNG_SIGNATURE)
+
+
+class TerrainTextureDependencyTests(unittest.TestCase):
+    def test_extracts_valid_terrain_texture_identity(self) -> None:
+        text = (
+            "PLATFORMER_LEVEL 1\n"
+            "terrain_material textures/test_checker.png 0.25\n"
+            "terrain_material - 1\n"
+        )
+        identities = cooker.extract_terrain_texture_identities(text)
+        self.assertEqual(identities, ["textures/test_checker.png"])
+
+    def test_rejects_absolute_and_model_identities(self) -> None:
+        text = (
+            "terrain_material C:/abs/grass.png 0.25\n"
+            "terrain_material models/test_static.glb 0.25\n"
+            "terrain_material textures/../x.png 0.25\n"
+        )
+        self.assertEqual(cooker.extract_terrain_texture_identities(text), [])
+
+    def test_unrelated_source_png_is_not_discovered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            sources = cooker.source_root(root)
+            unrelated = sources / "textures" / "unrelated_dirt.png"
+            unrelated.write_bytes(
+                (cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png").read_bytes()
+            )
+            extras = cooker.discover_level_referenced_runtime_png_assets(sources)
+            ids = [item["id"] for item in extras]
+            self.assertNotIn("textures/unrelated_dirt.png", ids)
+            collected = cooker.collect_cook_assets(sources)
+            collected_ids = [item["id"] for item in collected]
+            self.assertNotIn("textures/unrelated_dirt.png", collected_ids)
+            self.assertIn("textures/test_checker.png", collected_ids)
+
+    def test_level_referenced_png_cooks_and_stages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            sources = cooker.source_root(root)
+            extra_png = sources / "textures" / "terrain_detail.png"
+            extra_png.write_bytes(
+                (cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png").read_bytes()
+            )
+            extra_level = sources / "levels" / "level_terrain_tex.level"
+            extra_level.write_text(
+                "PLATFORMER_LEVEL 1\n"
+                "id level_terrain_tex\n"
+                "terrain_material textures/terrain_detail.png 0.25\n",
+                encoding="utf-8",
+            )
+            collected = cooker.collect_cook_assets(sources)
+            ids = [item["id"] for item in collected]
+            self.assertIn("textures/terrain_detail.png", ids)
+            self.assertEqual(ids.count("textures/terrain_detail.png"), 1)
+            kinds = {item["id"]: item["kind"] for item in collected}
+            self.assertEqual(kinds["textures/terrain_detail.png"], cooker.KIND_RUNTIME_PNG)
+
+            self.assertEqual(cooker.cook(root), 0)
+            cooked_png = cooker.cooked_root(root) / "textures" / "terrain_detail.png"
+            self.assertTrue(cooked_png.is_file())
+            dest = root / "staged" / "assets"
+            stage = run_stage(cooker.cooked_root(root), dest, asset_list=None)
+            self.assertEqual(stage.returncode, 0, stage.stderr + stage.stdout)
+            self.assertTrue((dest / "textures" / "terrain_detail.png").is_file())
+            self.assertTrue((dest / "textures" / "test_checker.png").is_file())
+            self.assertFalse((dest / "textures" / "test_textured_basecolor.png").exists())
+
+    def test_canonical_collect_does_not_require_authoring_png(self) -> None:
+        collected = cooker.collect_cook_assets(cooker.source_root(cooker.repo_root()))
+        ids = [item["id"] for item in collected]
+        self.assertIn("textures/test_checker.png", ids)
+        self.assertNotIn("textures/test_textured_basecolor.png", ids)
 
 
 if __name__ == "__main__":

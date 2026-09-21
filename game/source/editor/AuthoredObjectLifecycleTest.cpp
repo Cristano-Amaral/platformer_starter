@@ -153,6 +153,34 @@ int main()
         inspector.terrain.heights[0] = inspectorBefore.terrain.heights[0];
         Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
             "restored heights are a no-op");
+        Expect(
+            world::TryAssignTerrainTextureIdentity(
+                inspector.terrain, "textures/test_checker.png"),
+            "Inspector texture assignment");
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "texture assignment is a semantic change");
+        Expect(world::TerrainHeightsEqual(inspectorBefore.terrain, inspector.terrain),
+            "texture assignment does not modify heights");
+        Expect(
+            !world::TryAssignTerrainTextureIdentity(
+                inspector.terrain, "textures/test_checker.png"),
+            "same texture assignment is a no-op");
+        inspector.terrain.textureIdentity = inspectorBefore.terrain.textureIdentity;
+        Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "cleared assignment restores equality");
+        Expect(world::TrySetTerrainTextureTiling(inspector.terrain, 0.5f),
+            "Inspector tiling edit");
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "tiling edit is a semantic change");
+        Expect(inspector.terrain.heights == inspectorBefore.terrain.heights,
+            "tiling does not modify heights");
+        Expect(!world::TrySetTerrainTextureTiling(inspector.terrain, 0.5f),
+            "same tiling is a no-op");
+        inspector.terrain.textureTiling = inspectorBefore.terrain.textureTiling;
+        Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "restored tiling is a no-op");
+        Expect(!world::TryClearTerrainTextureIdentity(inspector.terrain),
+            "clear empty assignment is a no-op");
     }
 
     {

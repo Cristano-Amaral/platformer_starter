@@ -125,7 +125,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 28> allowed{
+    static constexpr std::array<std::string_view, 29> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -153,7 +153,8 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "point_light",
         "spot_light",
         "terrain",
-        "terrain_row"};
+        "terrain_row",
+        "terrain_material"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -2566,6 +2567,13 @@ int main()
         Expect(
             world::AuthoredLevelDataEqual(withFlat, flatParsed.level),
             "flat Terrain semantic roundtrip");
+        Expect(
+            CountRecords(flatText, "terrain_material") == 0,
+            "old Terrain without material does not emit terrain_material");
+        Expect(
+            flatParsed.level.terrain.textureIdentity.empty()
+                && flatParsed.level.terrain.textureTiling == world::kDefaultTerrainTextureTiling,
+            "old Terrain syntax uses empty identity and default tiling");
 
         world::LevelDefinition withSloped = parsed.level;
         withSloped.hasTerrain = true;
@@ -2713,6 +2721,101 @@ int main()
         }
         Expect(!anyLineTooLong, "maximum Terrain rows stay within 512-character lines");
         Expect(maxRows.size() <= world::kMaxLevelFileBytes, "maximum Terrain stays within 64 KiB");
+
+        world::LevelDefinition withMaterial = withFlat;
+        Expect(
+            world::TryAssignTerrainTextureIdentity(
+                withMaterial.terrain, "textures/test_checker.png"),
+            "material assignment fixture");
+        Expect(world::TrySetTerrainTextureTiling(withMaterial.terrain, 0.5f), "tiling fixture");
+        const std::string materialText = world::SerializeLevelText(withMaterial);
+        Expect(materialText == world::SerializeLevelText(withMaterial), "material writer is deterministic");
+        Expect(CountRecords(materialText, "terrain_material") == 1, "one terrain_material record");
+        Expect(
+            materialText.find("terrain_material textures/test_checker.png 0.5\n") != std::string::npos,
+            "writer emits identity and tiling");
+        Expect(materialText.find("C:") == std::string::npos, "writer emits no absolute path");
+        Expect(OnlyAuthoredKeywords(materialText), "terrain_material is an authored keyword");
+        const world::ParseLevelFileResult materialParsed = world::ParseLevelText(materialText);
+        Expect(materialParsed.status == world::LoadLevelFileStatus::Loaded, "textured Terrain loads");
+        Expect(
+            world::AuthoredLevelDataEqual(withMaterial, materialParsed.level),
+            "texture and tiling semantic roundtrip");
+        Expect(
+            materialParsed.level.terrain.textureIdentity == "textures/test_checker.png",
+            "parsed identity matches");
+        Expect(materialParsed.level.terrain.textureTiling == 0.5f, "parsed tiling matches");
+        Expect(
+            world::TerrainHeightsEqual(withFlat.terrain, materialParsed.level.terrain),
+            "material roundtrip does not change heights");
+
+        world::LevelDefinition tilingOnly = withFlat;
+        Expect(world::TrySetTerrainTextureTiling(tilingOnly.terrain, 1.0f), "tiling-only fixture");
+        const std::string tilingOnlyText = world::SerializeLevelText(tilingOnly);
+        Expect(
+            tilingOnlyText.find("terrain_material - 1\n") != std::string::npos,
+            "empty identity writes none token with custom tiling");
+        const world::ParseLevelFileResult tilingOnlyParsed = world::ParseLevelText(tilingOnlyText);
+        Expect(tilingOnlyParsed.status == world::LoadLevelFileStatus::Loaded, "tiling-only Terrain loads");
+        Expect(
+            world::AuthoredLevelDataEqual(tilingOnly, tilingOnlyParsed.level),
+            "tiling-only roundtrip");
+
+        const std::string oldHeader = canonical + "terrain 1 -8 0.25 -4 16 8 9 5\n";
+        std::string oldRows;
+        for (int row = 0; row < 5; ++row)
+        {
+            oldRows += "terrain_row ";
+            oldRows += std::to_string(row);
+            for (int column = 0; column < 9; ++column)
+            {
+                oldRows += " 0";
+            }
+            oldRows += "\n";
+        }
+        const world::ParseLevelFileResult oldParsed = world::ParseLevelText(oldHeader + oldRows);
+        Expect(oldParsed.status == world::LoadLevelFileStatus::Loaded, "old M86/M87 Terrain syntax remains valid");
+        Expect(oldParsed.level.hasTerrain, "old Terrain still present");
+        Expect(
+            oldParsed.level.terrain.textureIdentity.empty()
+                && oldParsed.level.terrain.textureTiling == world::kDefaultTerrainTextureTiling,
+            "old syntax has deterministic material fallback defaults");
+
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material textures/test_checker.png 0.5\n"
+                + "terrain_material textures/test_checker.png 0.5\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate terrain_material rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain_material textures/test_checker.png 0.5\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "terrain_material without header rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material textures/test_checker.png\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "malformed terrain_material rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material C:/abs/grass.png 0.5\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "absolute texture path rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material models/test_static.glb 0.5\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "non-texture identity rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material textures/test_checker.png 0\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "zero tiling rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material textures/test_checker.png inf\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "non-finite tiling rejected");
+        Expect(
+            world::ParseLevelText(flatText + "terrain_material textures/test_checker.png 32\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "out-of-bounds tiling rejected");
     }
 
     Expect(
