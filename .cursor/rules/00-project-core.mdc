@@ -4,6 +4,7 @@ globs:
 alwaysApply: true
 ---
 - Read `AGENTS.md` before making architectural changes.
+- Read `DEVELOPMENT_WORKFLOW.md` before implementing a milestone. That file is the lifecycle authority.
 - Follow the active milestone file named by the prompt: `docs/milestones/MILESTONE_<N>.md`.
 - Use `docs/MILESTONES.md` only as a compact index. Do not load every historical milestone unless a specific dependency requires it.
 - Keep every change buildable and testable.
@@ -11,3 +12,4 @@ alwaysApply: true
 - Gameplay must stay independent from OS APIs and direct backend-specific calls.
 - Do not silently expand scope into later milestones.
 - When a requirement conflicts with portability, explain the conflict and implement the smallest clean platform boundary.
+- After the completion report, STOP. Do not commit, push, merge, close the milestone, or begin the next milestone as part of implementation.

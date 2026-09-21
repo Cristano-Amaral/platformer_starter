@@ -18,6 +18,8 @@ Source of truth:
 
 Normal implementation reads `docs/milestones/MILESTONE_<N>.md` for the named milestone. Other milestone files are read only when a specific dependency, historical decision, or ambiguity requires them.
 
+[`AGENTS.md`](../AGENTS.md) is the common coding-agent entry point. The detailed milestone lifecycle, validation commands, canonical Level safety, and STOP rules are in [`DEVELOPMENT_WORKFLOW.md`](../DEVELOPMENT_WORKFLOW.md). Files under `.cursor/` and `.agents/` are adapters and do not replace those documents.
+
 ## Dependency direction
 `gameplay -> core abstractions`
 `ui -> core/gameplay public state`

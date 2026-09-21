@@ -125,3 +125,9 @@ Milestone documentation path checks:
 ```
 python tools/test_milestone_docs.py
 ```
+
+Agent-instruction consistency checks (Milestone 91):
+
+```
+python tools/test_agent_instructions.py
+```

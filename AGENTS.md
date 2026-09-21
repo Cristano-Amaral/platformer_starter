@@ -3,6 +3,72 @@
 ## Project goal
 Build a C++ platform game with 3D visuals and a platformer-style camera. Windows is the first shipping target. Architecture must preserve a practical path to Linux/Raspberry Pi, Android, and iOS.
 
+## Authority
+The repository is authoritative. The coding agent is replaceable.
+
+This file is the common entry point for Cursor, OpenAI Codex, Google Antigravity, and any other coding agent. The detailed lifecycle is [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md). Read that file before implementing a milestone.
+
+Tool-specific files are adapters. They must not contradict this file or `DEVELOPMENT_WORKFLOW.md`, and they must not carry a second copy of the development workflow.
+
+## Source of truth
+1. Current repository code.
+2. Tests.
+3. Current architecture/docs.
+4. Active milestone file.
+5. Latest relevant checkpoint/current documentation.
+6. Older milestone files/history.
+
+Historical milestone files do not override current implemented behavior.
+
+Inspect the current repository before implementation. Do not assume chat history or an older milestone file matches the code.
+
+## Active milestone
+The user prompt names the single active milestone. Work on that milestone's branch only.
+
+Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use an underscore in the filename (`58.4` → `MILESTONE_58_4.md`).
+
+Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
+
+Current milestone: Milestone 91 — Agent-Agnostic Development Workflow.
+
+Canonical file: [`docs/milestones/MILESTONE_91.md`](docs/milestones/MILESTONE_91.md)
+
+Branch: `milestone/91-agent-agnostic-development-workflow`
+
+Status: implemented, awaiting manual acceptance. Do not start Milestone 92.
+
+Earlier milestone status, including Milestone 90 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
+
+Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+## Responsibilities
+- User: chooses direction, observes local behavior, performs manual acceptance, approves completion, and performs or authorizes Git closure.
+- ChatGPT: discusses architecture, defines milestones and prompts, reviews reports, and provides Git closure only after approval.
+- Coding agent: inspects, implements the active milestone, validates, reports, and stops.
+
+Repository access does not grant the coding agent project authority.
+
+## Milestone work
+1. Read the named `docs/milestones/MILESTONE_<N>.md`. Use `docs/MILESTONES.md` only as an index.
+2. Inspect current code, tests, and current docs. Read other milestone files only for a dependency, historical decision, or ambiguity.
+3. Implement only that milestone. Do not implement a future milestone while completing the current one.
+4. Run the validation required by the milestone and by [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md).
+5. Report and STOP.
+
+Do not mark a milestone complete if the build is broken. Do not close a milestone during implementation.
+
+## Canonical Level safety
+Do not modify `game/assets/source/levels/level_01.level` or `game/assets/source/levels/level_02.level` unless the active milestone explicitly requires it.
+
+Do not normalize line endings because Git reports CRLF/LF warnings. If either canonical Level already has a user change, stop and report it instead of overwriting it.
+
+## STOP
+After the completion report, STOP.
+
+Do not commit, push, merge, close the milestone, or begin the next milestone as part of implementation.
+
+Manual acceptance and Git closure are separate steps. They belong to the User. ChatGPT provides Git closure only after explicit approval.
+
 ## Non-negotiable engineering principles
 1. Work in small, testable, compilable milestones.
 2. Do not implement future milestones while completing the current one.
@@ -64,38 +130,3 @@ Avoid calling raylib directly from gameplay code. If a feature requires raylib, 
 - Release: shipping configuration; no editor/debug UI, assertions may be reduced, optimized.
 
 Performance conclusions must not be drawn from Debug builds.
-
-## Milestone workflow
-For each milestone:
-1. Identify the single active milestone from the user prompt (number or `docs/milestones/MILESTONE_<N>.md`).
-2. Read that specific canonical file. Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index if the prompt did not name a file.
-3. Inspect current repository code, tests, and architecture docs relevant to that milestone.
-4. Read other milestone files only when needed for a dependency, historical decision, or ambiguity.
-5. Do not load every historical milestone by default.
-6. State a short implementation plan.
-7. Implement only that milestone.
-8. Configure/build the project.
-9. Run available tests/smoke checks.
-10. Summarize changed files, architectural decisions, how to test, and remaining known limitations.
-11. Do not mark a milestone complete if the build is broken.
-
-## Current milestone
-Milestone 90 — Terrain Material Painting.
-
-Canonical file: [`docs/milestones/MILESTONE_90.md`](docs/milestones/MILESTONE_90.md)
-
-Compact index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
-
-Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-
-Milestone 73 is CLOSED. Milestone 74 is CLOSED. Milestone 75 is CLOSED. Milestone 76 is CLOSED. Milestone 77 is CLOSED. Milestone 78 is CLOSED. Milestone 79 is CLOSED. Milestone 80 is CLOSED. Milestone 81 is CLOSED. Milestone 82 is CLOSED. Milestone 83 is CLOSED. Milestone 84 is CLOSED. Milestone 85 is CLOSED. Milestone 85.1 is CLOSED. Milestone 85.2 is CLOSED. Milestone 85.3 is CLOSED. Milestone 85.4 is CLOSED. Milestone 86 is CLOSED. Milestone 87 is CLOSED. Milestone 88 is CLOSED. Milestone 89 is CLOSED. Milestone 90 is implemented, awaiting manual acceptance. Do not start Milestone 91.
-
-## Source of truth
-1. Current repository code.
-2. Tests.
-3. Current architecture/docs.
-4. Active milestone file.
-5. Latest relevant checkpoint/current documentation.
-6. Older milestone files/history.
-
-Historical milestone files do not override current implemented behavior.

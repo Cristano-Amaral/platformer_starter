@@ -151,6 +151,7 @@ python tools/test_stage_runtime_assets.py
 python tools/test_import_static_glb.py
 python tools/test_item_pickup_collect_sound.py
 python tools/test_milestone_docs.py
+python tools/test_agent_instructions.py
 ```
 
 ## Assets
@@ -172,3 +173,13 @@ If CMake configure reports a missing cooked asset, run the cooker command above.
 Open the repository root in Cursor. The agent will pick up `AGENTS.md`, `.cursor/rules/*.mdc`, and `.cursor/skills/*/SKILL.md`.
 
 Canonical milestone definitions live one-per-file in [`docs/milestones/`](docs/milestones/). [`docs/MILESTONES.md`](docs/MILESTONES.md) is a compact index. Implementation prompts should name `docs/milestones/MILESTONE_<N>.md` rather than requiring the full milestone history.
+
+## Coding agents
+Cursor, OpenAI Codex, and Google Antigravity share one repository workflow.
+
+- Common entry point: [`AGENTS.md`](AGENTS.md)
+- Detailed lifecycle: [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md)
+- Active milestone: `docs/milestones/MILESTONE_<N>.md`
+- Index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
+
+Codex reads `AGENTS.md` directly. Antigravity reads `AGENTS.md`, the thin [`GEMINI.md`](GEMINI.md) pointer, and `.agents/rules/repository-workflow.md`. Those adapters are not a second copy of the workflow. The short provider-neutral implementation prompt is in `DEVELOPMENT_WORKFLOW.md`.

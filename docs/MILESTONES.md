@@ -23,11 +23,13 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 90 — Terrain Material Painting**
+**Milestone 91 — Agent-Agnostic Development Workflow**
 
-Canonical file: [`docs/milestones/MILESTONE_90.md`](milestones/MILESTONE_90.md)
+Canonical file: [`docs/milestones/MILESTONE_91.md`](milestones/MILESTONE_91.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
+
+Detailed lifecycle: [`DEVELOPMENT_WORKFLOW.md`](../DEVELOPMENT_WORKFLOW.md). Common agent entry point: [`AGENTS.md`](../AGENTS.md).
 
 Milestone 73 is CLOSED.
 Milestone 74 is CLOSED.
@@ -51,15 +53,18 @@ Milestone 87 is CLOSED.
 Milestone 88 is CLOSED.
 Milestone 89 is CLOSED.
 Milestone 90 is implemented, awaiting manual acceptance.
-Do not start Milestone 91.
+Milestone 91 is implemented, awaiting manual acceptance.
+Do not start Milestone 92.
 
-## Cursor loading contract
+## Coding-agent loading contract
+
+The same contract applies to Cursor, Codex, Antigravity, and any other coding agent. `AGENTS.md` is the common entry point. Detailed lifecycle, validation, and STOP rules live in [`DEVELOPMENT_WORKFLOW.md`](../DEVELOPMENT_WORKFLOW.md).
 
 1. The user/prompt identifies the active milestone number or file.
-2. Cursor reads `docs/milestones/MILESTONE_<N>.md`.
-3. Cursor inspects current repository code, tests, and docs relevant to that milestone.
+2. The coding agent reads `docs/milestones/MILESTONE_<N>.md`.
+3. The coding agent inspects current repository code, tests, and docs relevant to that milestone.
 4. Other milestone files are read only when needed for a dependency, historical decision, or ambiguity.
-5. Cursor does not automatically load every historical milestone.
+5. The coding agent does not automatically load every historical milestone.
 
 Future milestone definitions are added directly as `docs/milestones/MILESTONE_<N>.md`.
 This index then receives a small navigation/status entry.
@@ -182,6 +187,7 @@ Historical milestone files do not override current implemented behavior.
 | 88 | [Milestone 88 — Terrain Materials Foundation](milestones/MILESTONE_88.md) | complete |
 | 89 | [Milestone 89 — Content Browser Asset Library & Texture Import](milestones/MILESTONE_89.md) | complete |
 | 90 | [Milestone 90 — Terrain Material Painting](milestones/MILESTONE_90.md) | implemented, awaiting manual acceptance |
+| 91 | [Milestone 91 — Agent-Agnostic Development Workflow](milestones/MILESTONE_91.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 
