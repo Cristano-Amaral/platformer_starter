@@ -39,6 +39,7 @@
 namespace render
 {
 class StaticModelThumbnailStore;
+class TextureThumbnailStore;
 class StaticModelPreviewRenderer;
 class StaticModelSceneStore;
 }
@@ -94,6 +95,7 @@ enum class LevelEditorRequest
     ReloadRuntimeLevel,
     CookStageAndReload,
     ImportStaticGlb,
+    ImportTexture,
     DeleteContentBrowserAsset,
     OpenAuthoredLevel,
     CreateAuthoredLevel,
@@ -135,6 +137,11 @@ inline LevelEditorRequest QuickToolbarSaveLevelSourceRequest()
 inline LevelEditorRequest ContentBrowserImportRequest()
 {
     return LevelEditorRequest::ImportStaticGlb;
+}
+
+inline LevelEditorRequest ContentBrowserImportTextureRequest()
+{
+    return LevelEditorRequest::ImportTexture;
 }
 
 // Content Browser toolbar Add Static Prop. Same request as Edit > Add > Static
@@ -256,6 +263,7 @@ struct LevelEditorViewContext
     bool forceDefaultLayout = false;
     bool recoverOffscreenLayout = false;
     render::StaticModelThumbnailStore* thumbnails = nullptr;
+    render::TextureThumbnailStore* textureThumbnails = nullptr;
     render::StaticModelPreviewRenderer* modelPreview = nullptr;
     render::StaticModelSceneStore* staticPropModels = nullptr;
     core::Vec3 gameplayCameraPosition{};

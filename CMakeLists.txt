@@ -49,6 +49,12 @@ add_executable(Platformer3D
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
     game/source/assets/RuntimePng.h
+    game/source/assets/RuntimePngImport.cpp
+    game/source/assets/RuntimePngImport.h
+    game/source/assets/RuntimePngDelete.cpp
+    game/source/assets/RuntimePngDelete.h
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
     game/source/assets/ModelMaterialPresentation.cpp
     game/source/assets/ModelMaterialPresentation.h
     game/source/assets/StaticGlbImport.cpp
@@ -69,8 +75,12 @@ add_executable(Platformer3D
     game/source/editor/EditorCamera.h
     game/source/editor/ContentBrowser.cpp
     game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserOrganization.cpp
+    game/source/editor/ContentBrowserOrganization.h
     game/source/editor/ContentBrowserView.cpp
     game/source/editor/ContentBrowserView.h
+    game/source/editor/TextureThumbnailLifecycle.h
+    game/source/editor/TerrainTextureReference.h
     game/source/editor/StaticModelThumbnailCache.cpp
     game/source/editor/StaticModelThumbnailCache.h
     game/source/editor/StaticModelFraming.cpp
@@ -175,6 +185,8 @@ add_executable(Platformer3D
     game/source/render/CameraView.h
     game/source/render/StaticModelThumbnail.cpp
     game/source/render/StaticModelThumbnail.h
+    game/source/render/TextureThumbnail.cpp
+    game/source/render/TextureThumbnail.h
     game/source/render/StaticModelPreview.cpp
     game/source/render/StaticModelPreview.h
     game/source/render/LoadedModelMaterials.cpp
@@ -372,6 +384,9 @@ file(TO_CMAKE_PATH
 file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/models/player.glb"
     PLATFORMER_PLAYER_GLB)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/textures/test_checker.png"
+    PLATFORMER_TEST_CHECKER_PNG)
 target_compile_definitions(StaticGlbImportTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
@@ -408,19 +423,42 @@ add_executable(ContentBrowserTest
     game/source/assets/StaticModelCatalog.h
     game/source/assets/StaticModelDelete.cpp
     game/source/assets/StaticModelDelete.h
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
     game/source/editor/ContentBrowser.cpp
     game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserOrganization.cpp
+    game/source/editor/ContentBrowserOrganization.h
+    game/source/editor/ContentBrowserView.cpp
+    game/source/editor/ContentBrowserView.h
     game/source/editor/ContentBrowserTest.cpp
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/platform/FileReplace.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
 )
+if(WIN32)
+    target_sources(ContentBrowserTest PRIVATE
+        game/source/platform/RuntimePathsWindows.cpp
+        game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(ContentBrowserTest PRIVATE
+        game/source/platform/RuntimePathsPosix.cpp
+        game/source/platform/FileReplacePosix.cpp)
+endif()
 target_include_directories(ContentBrowserTest PRIVATE game/source)
 if(MSVC)
     target_compile_options(ContentBrowserTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(ContentBrowserTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(ContentBrowserTest PRIVATE ole32 shell32 uuid)
 endif()
 target_compile_definitions(ContentBrowserTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
@@ -437,13 +475,18 @@ add_executable(ContentBrowserThumbnailTest
     game/source/assets/StaticModelCatalog.h
     game/source/assets/StaticModelDelete.cpp
     game/source/assets/StaticModelDelete.h
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
     game/source/editor/ContentBrowser.cpp
     game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserOrganization.cpp
+    game/source/editor/ContentBrowserOrganization.h
     game/source/editor/ContentBrowserView.cpp
     game/source/editor/ContentBrowserView.h
     game/source/editor/ContentBrowserThumbnailTest.cpp
     game/source/editor/EditorLayout.cpp
     game/source/editor/EditorLayout.h
+    game/source/platform/FileReplace.h
     game/source/editor/EditorMath.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
@@ -462,9 +505,13 @@ add_executable(ContentBrowserThumbnailTest
     game/source/world/StaticProp.h
 )
 if(WIN32)
-    target_sources(ContentBrowserThumbnailTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+    target_sources(ContentBrowserThumbnailTest PRIVATE
+        game/source/platform/RuntimePathsWindows.cpp
+        game/source/platform/FileReplaceWindows.cpp)
 else()
-    target_sources(ContentBrowserThumbnailTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+    target_sources(ContentBrowserThumbnailTest PRIVATE
+        game/source/platform/RuntimePathsPosix.cpp
+        game/source/platform/FileReplacePosix.cpp)
 endif()
 target_include_directories(ContentBrowserThumbnailTest PRIVATE game/source)
 if(MSVC)
@@ -479,6 +526,87 @@ target_compile_definitions(ContentBrowserThumbnailTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
 
+# Milestone 89: standalone PNG import, identity, collision, catalog, and recipe cook mapping.
+add_executable(RuntimePngImportTest
+    game/source/assets/RuntimePng.h
+    game/source/assets/RuntimePngImport.cpp
+    game/source/assets/RuntimePngImport.h
+    game/source/assets/RuntimePngDelete.cpp
+    game/source/assets/RuntimePngDelete.h
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
+    game/source/assets/RuntimePngImportTest.cpp
+)
+target_include_directories(RuntimePngImportTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(RuntimePngImportTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(RuntimePngImportTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(RuntimePngImportTest PRIVATE
+    "PLATFORMER_TEST_CHECKER_PNG=\"${PLATFORMER_TEST_CHECKER_PNG}\""
+)
+
+# Milestone 89: Content Browser collections, logical folders, Favorites, search,
+# layout persistence, thumbnail lifecycle, and Terrain delete protection.
+add_executable(ContentBrowserAssetLibraryTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticGlbImport.cpp
+    game/source/assets/StaticGlbImport.h
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
+    game/source/assets/RuntimePng.h
+    game/source/assets/RuntimePngImport.cpp
+    game/source/assets/RuntimePngImport.h
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
+    game/source/editor/ContentBrowser.cpp
+    game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserOrganization.cpp
+    game/source/editor/ContentBrowserOrganization.h
+    game/source/editor/ContentBrowserView.cpp
+    game/source/editor/ContentBrowserView.h
+    game/source/editor/ContentBrowserAssetLibraryTest.cpp
+    game/source/editor/EditorLayout.cpp
+    game/source/editor/EditorLayout.h
+    game/source/editor/StaticModelFraming.cpp
+    game/source/editor/StaticModelFraming.h
+    game/source/editor/StaticModelThumbnailCache.cpp
+    game/source/editor/StaticModelThumbnailCache.h
+    game/source/editor/TerrainTextureReference.h
+    game/source/editor/TextureThumbnailLifecycle.h
+    game/source/platform/FileReplace.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/platform/RuntimePaths.h
+    game/source/world/LevelDefinition.cpp
+    game/source/world/LevelDefinition.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+)
+if(WIN32)
+    target_sources(ContentBrowserAssetLibraryTest PRIVATE
+        game/source/platform/RuntimePathsWindows.cpp
+        game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(ContentBrowserAssetLibraryTest PRIVATE
+        game/source/platform/RuntimePathsPosix.cpp
+        game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(ContentBrowserAssetLibraryTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ContentBrowserAssetLibraryTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ContentBrowserAssetLibraryTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(WIN32)
+    target_link_libraries(ContentBrowserAssetLibraryTest PRIVATE ole32 shell32 uuid)
+endif()
+target_compile_definitions(ContentBrowserAssetLibraryTest PRIVATE
+    "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+    "PLATFORMER_TEST_CHECKER_PNG=\"${PLATFORMER_TEST_CHECKER_PNG}\""
+)
+
 # Milestone 48.2: Model Preview selection/load/orbit/framing math. Not ImGui/raylib.
 add_executable(StaticModelPreviewTest
     game/source/assets/StaticGlb.cpp
@@ -489,8 +617,12 @@ add_executable(StaticModelPreviewTest
     game/source/assets/StaticModelCatalog.h
     game/source/assets/StaticModelDelete.cpp
     game/source/assets/StaticModelDelete.h
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
     game/source/editor/ContentBrowser.cpp
     game/source/editor/ContentBrowser.h
+    game/source/editor/ContentBrowserOrganization.cpp
+    game/source/editor/ContentBrowserOrganization.h
     game/source/editor/ContentBrowserView.cpp
     game/source/editor/ContentBrowserView.h
     game/source/editor/EditorLayout.cpp
@@ -508,6 +640,7 @@ add_executable(StaticModelPreviewTest
     game/source/editor/StaticModelPreviewTest.cpp
     game/source/editor/StaticModelThumbnailCache.cpp
     game/source/editor/StaticModelThumbnailCache.h
+    game/source/platform/FileReplace.h
     game/source/platform/RuntimePaths.cpp
     game/source/platform/RuntimePaths.h
     game/source/render/CameraView.h
@@ -517,9 +650,13 @@ add_executable(StaticModelPreviewTest
     game/source/world/StaticProp.h
 )
 if(WIN32)
-    target_sources(StaticModelPreviewTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
+    target_sources(StaticModelPreviewTest PRIVATE
+        game/source/platform/RuntimePathsWindows.cpp
+        game/source/platform/FileReplaceWindows.cpp)
 else()
-    target_sources(StaticModelPreviewTest PRIVATE game/source/platform/RuntimePathsPosix.cpp)
+    target_sources(StaticModelPreviewTest PRIVATE
+        game/source/platform/RuntimePathsPosix.cpp
+        game/source/platform/FileReplacePosix.cpp)
 endif()
 target_include_directories(StaticModelPreviewTest PRIVATE game/source)
 if(MSVC)

@@ -21,7 +21,9 @@ enum class EditorToolKind
     BuildRelease,
     BuildAll,
     ImportStaticGlb,
+    ImportTexture,
     DeleteStaticModel,
+    DeleteRuntimePng,
 };
 
 enum class EditorSelfBuildPolicy

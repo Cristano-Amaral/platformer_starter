@@ -14,6 +14,7 @@ Milestone 15 test texture (standalone **runtime** PNG):
 - cooker kind: `runtime_png` (recipe `runtime_png.max512.lanczos.v1`; 16×16 is copied unchanged)
 - not every PNG under `source/textures/` is a runtime asset
 - cooker test fixture `tools/fixtures/textures/test_large_checker.png` is test-only; not cooked, not staged
+- Content Browser organization (`content_browser_organization.v1.txt`) is Development project metadata only; not cooked, not staged, not a runtime registry
 
 Milestone 83 player placeholder:
 - logical id: `models/player.glb`

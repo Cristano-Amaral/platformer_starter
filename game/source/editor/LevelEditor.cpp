@@ -32,12 +32,16 @@
 #include "editor/StaticModelFraming.h"
 #include "render/StaticModelScene.h"
 #include "render/StaticModelThumbnail.h"
+#include "render/TextureThumbnail.h"
 #include "render/StaticModelPreview.h"
 #endif
 #include "world/Door.h"
 #include "world/ItemPickup.h"
 #include "world/LevelIdentity.h"
 #include "assets/RuntimePng.h"
+#include "assets/SourceTextureCatalog.h"
+#include "editor/ContentBrowserOrganization.h"
+#include "editor/TextureThumbnailLifecycle.h"
 
 #include <algorithm>
 #include <cmath>
@@ -312,6 +316,104 @@ void DrawStaticModelStagingHint(std::string_view identity)
     {
         ImGui::TextWrapped("%s", message);
     }
+}
+
+void DrawTextureStagingHint(std::string_view identity)
+{
+    if (!assets::RuntimePngIdentityIsValid(identity))
+    {
+        return;
+    }
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(platform::RuntimeAssetPath(identity), error))
+    {
+        ImGui::TextWrapped(
+            "Staged runtime texture is missing. Cook & Stage to preview and ship this assignment.");
+    }
+}
+
+void DrawContentBrowserAssetDetails(const LevelEditorState& state)
+{
+    const std::string& identity = state.contentBrowser.selectedIdentity;
+    if (identity.empty())
+    {
+        ImGui::TextUnformatted("No asset selected.");
+        return;
+    }
+
+    const ContentBrowserAssetKind kind = ClassifyContentBrowserIdentity(identity);
+    const std::string folder =
+        ContentBrowserAssignedFolder(state.contentBrowser.organization, identity);
+    const bool favorite = ContentBrowserIsFavorite(state.contentBrowser.organization, identity);
+    const assets::StaticModelCatalogEntry* model = state.contentBrowser.catalog.Find(identity);
+    const assets::SourceTextureCatalogEntry* texture =
+        state.contentBrowser.textureCatalog.Find(identity);
+    const char* displayName = identity.c_str();
+    const char* assetType = kind == ContentBrowserAssetKind::Texture ? "runtime_png" : "static_glb";
+    if (texture != nullptr)
+    {
+        displayName = texture->displayName.c_str();
+        assetType = texture->assetType.c_str();
+    }
+    else if (model != nullptr)
+    {
+        displayName = model->displayName.c_str();
+        assetType = model->assetType.c_str();
+    }
+
+    ImGui::Text("Name: %s", displayName);
+    ImGui::Text("Kind: %s", ContentBrowserAssetKindName(kind));
+    ImGui::Text("Type: %s", assetType);
+    ImGui::Text("Identity: %s", identity.c_str());
+    ImGui::Text("Source: game/assets/source/%s", identity.c_str());
+    ImGui::Text("Folder: %s", folder.empty() ? "(unfiled)" : folder.c_str());
+    ImGui::Text("Favorite: %s", favorite ? "yes" : "no");
+
+    if (kind == ContentBrowserAssetKind::Texture)
+    {
+        ImGui::Text("Recipe: %s", assets::kRuntimePngRecipe.data());
+        const std::filesystem::path cookedRoot = CookedAssetsRoot(RepositoryRoot());
+        std::error_code cookedError;
+        const bool cooked = !cookedRoot.empty()
+            && std::filesystem::is_regular_file(cookedRoot / identity, cookedError);
+        ImGui::TextUnformatted(cooked ? "Cooked: present" : "Cooked: missing");
+        DrawTextureStagingHint(identity);
+        return;
+    }
+
+    DrawStaticModelStagingHint(identity);
+}
+
+const char* ContentBrowserCollectionLabel(ContentBrowserCollection collection)
+{
+    switch (collection)
+    {
+    case ContentBrowserCollection::AllAssets:
+        return "All Assets";
+    case ContentBrowserCollection::Favorites:
+        return "Favorites";
+    case ContentBrowserCollection::Models:
+        return "Models";
+    case ContentBrowserCollection::Textures:
+        return "Textures";
+    case ContentBrowserCollection::Folders:
+        return "Folders";
+    }
+    return "All Assets";
+}
+
+void PersistContentBrowserLayout(LevelEditorState& state)
+{
+    PersistContentBrowserViewState(state.contentBrowser);
+}
+
+void ApplyContentBrowserCollection(
+    LevelEditorState& state,
+    ContentBrowserCollection collection,
+    std::string_view folderPath = {})
+{
+    SetContentBrowserCollection(state.contentBrowser, collection, folderPath);
+    PersistContentBrowserLayout(state);
 }
 
 void ReadOnlyFloat(const char* label, float value)
@@ -883,7 +985,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         }
         std::vector<std::string> textureChoices;
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
-        textureChoices = assets::CollectSourceRuntimePngIdentities(AuthoringSourceRoot());
+        textureChoices = state.contentBrowser.textureCatalog.Identities();
 #endif
         if (ImGui::BeginCombo("Assign Texture", assignmentPreview))
         {
@@ -1607,13 +1709,20 @@ LevelEditorRequest DrawContentBrowser(
     const bool toolsBusy = toolRunner.IsRunning() || cookStageReloadPending;
     const std::filesystem::path sourceRoot = AuthoringSourceRoot();
 
-    ImGui::TextUnformatted("Registered static GLB assets. Selection is not a level object.");
-    ImGui::TextWrapped(
-        "Add Static Prop creates one authored instance immediately from the selected asset "
-        "(working copy only). Place Static Prop enters viewport placement and creates nothing "
-        "until a valid Ground/Platform/Slope click. Import copies canonical source only. Delete "
-        "removes source plus matching cooked/staged copies.");
-
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("(i)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+    {
+        ImGui::SetTooltip(
+            "Development asset library.\n"
+            "Content Browser selection is not a Level object.\n"
+            "Logical folders and Favorites do not move source or cooked files "
+            "and do not change runtime identity.\n"
+            "Import Model copies a static GLB into models/<file>.glb.\n"
+            "Import Texture copies a PNG into textures/<file>.png and reuses "
+            "runtime_png.max512.lanczos.v1.");
+    }
+    ImGui::SameLine();
     char query[256];
     std::snprintf(query, sizeof(query), "%s", state.contentBrowser.filterQuery.c_str());
     if (ImGui::InputText("Search", query, sizeof(query)))
@@ -1628,17 +1737,23 @@ LevelEditorRequest DrawContentBrowser(
         {
             view.thumbnails->AllowRetryAll();
         }
+        if (view.textureThumbnails != nullptr)
+        {
+            view.textureThumbnails->AllowRetryAll();
+            view.textureThumbnails->Reconcile(state.contentBrowser.textureCatalog.Identities());
+        }
         if (view.modelPreview != nullptr)
         {
             view.modelPreview->AllowRetry();
         }
-        state.contentBrowser.statusMessage = "Catalog refreshed from canonical source models.";
+        state.contentBrowser.statusMessage =
+            "Catalogs refreshed from canonical source models and textures.";
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!authoringAvailable || toolsBusy);
-    if (ImGui::Button("Import Static GLB"))
+    if (ImGui::Button("Import"))
     {
-        request = ContentBrowserImportRequest();
+        ImGui::OpenPopup("content-browser-import-menu");
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
@@ -1715,6 +1830,24 @@ LevelEditorRequest DrawContentBrowser(
         state.contentBrowser.deleteConfirmOpen = true;
     }
     ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!authoringAvailable || !hasSelection);
+    const bool isFavorite = ContentBrowserIsFavorite(
+        state.contentBrowser.organization, state.contentBrowser.selectedIdentity);
+    if (ImGui::Button(isFavorite ? "Unfavorite" : "Favorite"))
+    {
+        std::string favoriteMessage;
+        if (ContentBrowserOrganizationSucceeded(SetContentBrowserFavorite(
+                state.contentBrowser.organization,
+                state.contentBrowser.selectedIdentity,
+                !isFavorite,
+                favoriteMessage)))
+        {
+            PersistContentBrowserOrganization(state.contentBrowser, sourceRoot);
+        }
+        state.contentBrowser.statusMessage = favoriteMessage;
+    }
+    ImGui::EndDisabled();
 
     ImGui::SameLine();
     ImGui::TextUnformatted("View");
@@ -1723,183 +1856,412 @@ LevelEditorRequest DrawContentBrowser(
             "Thumbnails", state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails))
     {
         state.contentBrowser.viewMode = ContentBrowserViewMode::Thumbnails;
-        SaveContentBrowserViewMode(state.contentBrowser.viewMode);
+        PersistContentBrowserLayout(state);
     }
     ImGui::SameLine();
     if (ImGui::RadioButton("List", state.contentBrowser.viewMode == ContentBrowserViewMode::List))
     {
         state.contentBrowser.viewMode = ContentBrowserViewMode::List;
-        SaveContentBrowserViewMode(state.contentBrowser.viewMode);
+        PersistContentBrowserLayout(state);
     }
 
-    const std::vector<assets::StaticModelCatalogEntry> visible =
-        FilterContentBrowserEntries(state.contentBrowser.catalog, state.contentBrowser.filterQuery);
-    const std::filesystem::path cacheRoot = ThumbnailCacheRoot();
-    if (view.thumbnails != nullptr
-        && state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails)
+    if (hasSelection)
     {
-        for (const assets::StaticModelCatalogEntry& entry : visible)
+        const std::string assigned = ContentBrowserAssignedFolder(
+            state.contentBrowser.organization, state.contentBrowser.selectedIdentity);
+        const char* movePreview = assigned.empty() ? "(unfiled)" : assigned.c_str();
+        ImGui::SetNextItemWidth(220.0f);
+        ImGui::BeginDisabled(!authoringAvailable);
+        if (ImGui::BeginCombo("Move To", movePreview))
         {
-            view.thumbnails->Ensure(
-                entry.canonicalIdentity, sourceRoot / entry.canonicalIdentity, cacheRoot);
+            if (ImGui::Selectable("(unfiled)", assigned.empty()))
+            {
+                std::string moveMessage;
+                if (ContentBrowserOrganizationSucceeded(MoveContentBrowserAsset(
+                        state.contentBrowser.organization,
+                        state.contentBrowser.selectedIdentity,
+                        {},
+                        moveMessage)))
+                {
+                    PersistContentBrowserOrganization(state.contentBrowser, sourceRoot);
+                }
+                state.contentBrowser.statusMessage = moveMessage;
+            }
+            for (const std::string& folder : state.contentBrowser.organization.folders)
+            {
+                if (ImGui::Selectable(folder.c_str(), assigned == folder))
+                {
+                    std::string moveMessage;
+                    if (ContentBrowserOrganizationSucceeded(MoveContentBrowserAsset(
+                            state.contentBrowser.organization,
+                            state.contentBrowser.selectedIdentity,
+                            folder,
+                            moveMessage)))
+                    {
+                        PersistContentBrowserOrganization(state.contentBrowser, sourceRoot);
+                    }
+                    state.contentBrowser.statusMessage = moveMessage;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::EndDisabled();
+    }
+
+    const float statusBarHeight = ImGui::GetFrameHeightWithSpacing();
+    const float paneHeight = std::max(120.0f, ImGui::GetContentRegionAvail().y - statusBarHeight);
+    if (ImGui::BeginChild("content-browser-collections", ImVec2(220.0f, paneHeight), true))
+    {
+        const auto drawCollection = [&](ContentBrowserCollection collection, const char* label) {
+            const bool selected = state.contentBrowser.collection == collection
+                && (collection != ContentBrowserCollection::Folders
+                    || state.contentBrowser.currentFolderPath.empty());
+            if (ImGui::Selectable(label, selected))
+            {
+                ApplyContentBrowserCollection(state, collection);
+            }
+        };
+        drawCollection(ContentBrowserCollection::AllAssets, "All Assets");
+        drawCollection(ContentBrowserCollection::Favorites, "Favorites");
+        drawCollection(ContentBrowserCollection::Models, "Models");
+        drawCollection(ContentBrowserCollection::Textures, "Textures");
+        ImGui::Spacing();
+        ImGui::SeparatorText("Folders");
+        ImGui::Indent(12.0f);
+        if (ImGui::Selectable(
+                "(unfiled)##folders-root",
+                state.contentBrowser.collection == ContentBrowserCollection::Folders
+                    && state.contentBrowser.currentFolderPath.empty()))
+        {
+            ApplyContentBrowserCollection(state, ContentBrowserCollection::Folders);
+        }
+        ImGui::Unindent(12.0f);
+        for (const std::string& folder : state.contentBrowser.organization.folders)
+        {
+            int depth = 0;
+            for (char ch : folder)
+            {
+                if (ch == '/')
+                {
+                    ++depth;
+                }
+            }
+            const std::size_t slash = folder.rfind('/');
+            const std::string label =
+                slash == std::string::npos ? folder : folder.substr(slash + 1);
+            ImGui::PushID(folder.c_str());
+            ImGui::Indent(static_cast<float>(depth + 1) * 12.0f);
+            const bool selected = state.contentBrowser.collection == ContentBrowserCollection::Folders
+                && state.contentBrowser.currentFolderPath == folder;
+            if (ImGui::Selectable(label.c_str(), selected))
+            {
+                ApplyContentBrowserCollection(state, ContentBrowserCollection::Folders, folder);
+            }
+            ImGui::Unindent(static_cast<float>(depth + 1) * 12.0f);
+            ImGui::PopID();
+        }
+        ImGui::Spacing();
+        ImGui::BeginDisabled(!authoringAvailable);
+        if (ImGui::Button("Create Folder"))
+        {
+            state.contentBrowser.folderNameInput.clear();
+            state.contentBrowser.folderNameDialogOpen = true;
+            state.contentBrowser.folderRenameDialogOpen = false;
+            state.contentBrowser.folderCreateSubfolder = false;
+        }
+        ImGui::BeginDisabled(state.contentBrowser.currentFolderPath.empty());
+        if (ImGui::Button("Create Subfolder"))
+        {
+            state.contentBrowser.folderNameInput.clear();
+            state.contentBrowser.folderNameDialogOpen = true;
+            state.contentBrowser.folderRenameDialogOpen = false;
+            state.contentBrowser.folderCreateSubfolder = true;
+            state.contentBrowser.statusMessage.clear();
+        }
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(state.contentBrowser.currentFolderPath.empty());
+        if (ImGui::Button("Rename Folder"))
+        {
+            const std::string current = state.contentBrowser.currentFolderPath;
+            const std::size_t slash = current.rfind('/');
+            state.contentBrowser.folderNameInput =
+                slash == std::string::npos ? current : current.substr(slash + 1);
+            state.contentBrowser.folderRenameDialogOpen = true;
+            state.contentBrowser.folderNameDialogOpen = false;
+        }
+        if (ImGui::Button("Delete Folder"))
+        {
+            state.contentBrowser.folderDeleteConfirmOpen = true;
+        }
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+    }
+    ImGui::EndChild();
+    ImGui::SameLine();
+
+    const std::vector<ContentBrowserAssetEntry> visible = QueryContentBrowserAssets(state.contentBrowser);
+    const std::filesystem::path cacheRoot = ThumbnailCacheRoot();
+    if (state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails)
+    {
+        for (const ContentBrowserAssetEntry& entry : visible)
+        {
+            if (entry.kind == ContentBrowserAssetKind::Model && view.thumbnails != nullptr)
+            {
+                view.thumbnails->Ensure(
+                    entry.canonicalIdentity, sourceRoot / entry.canonicalIdentity, cacheRoot);
+            }
+            else if (entry.kind == ContentBrowserAssetKind::Texture && view.textureThumbnails != nullptr)
+            {
+                view.textureThumbnails->Ensure(
+                    entry.canonicalIdentity, sourceRoot / entry.canonicalIdentity);
+            }
         }
         std::string thumbnailFailure;
-        if (view.thumbnails->ConsumeLastFailure(thumbnailFailure))
+        if (view.thumbnails != nullptr && view.thumbnails->ConsumeLastFailure(thumbnailFailure))
+        {
+            state.contentBrowser.statusMessage = thumbnailFailure;
+        }
+        if (view.textureThumbnails != nullptr
+            && view.textureThumbnails->ConsumeLastFailure(thumbnailFailure))
         {
             state.contentBrowser.statusMessage = thumbnailFailure;
         }
     }
 
-    if (state.contentBrowser.catalog.Count() == 0)
+    const bool thumbnailView = state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails;
+    const ImGuiWindowFlags assetPaneFlags =
+        thumbnailView ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None;
+    if (ImGui::BeginChild(
+            "content-browser-assets-pane",
+            ImVec2(0.0f, paneHeight),
+            true,
+            assetPaneFlags))
     {
-        ImGui::Spacing();
-        ImGui::TextWrapped(
-            "No static models are registered. Use Import Static GLB to copy a compatible .glb "
-            "into game/assets/source/models/. Import does not place the asset in the level.");
-    }
-    else if (visible.empty())
-    {
-        ImGui::Spacing();
-        ImGui::TextWrapped("No static models match the current search.");
-    }
-    else if (state.contentBrowser.viewMode == ContentBrowserViewMode::Thumbnails)
-    {
-        constexpr float kThumbSize = 96.0f;
-        constexpr float kCellPad = 8.0f;
-        const float avail = ImGui::GetContentRegionAvail().x;
-        const int columns = std::max(1, static_cast<int>(avail / (kThumbSize + kCellPad * 2.0f)));
-        int column = 0;
-        if (ImGui::BeginChild("content-browser-thumbs", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None))
+        if (state.contentBrowser.catalog.Count() == 0 && state.contentBrowser.textureCatalog.Count() == 0)
         {
-            for (const assets::StaticModelCatalogEntry& entry : visible)
+            ImGui::TextWrapped(
+                "No Models or Textures are registered. Use Import > Import Model... or "
+                "Import > Import Texture... . Import does not place the asset in the level.");
+        }
+        else if (visible.empty())
+        {
+            ImGui::TextWrapped("No assets match the current collection, folder, and search.");
+        }
+        else if (thumbnailView)
+        {
+            constexpr float kThumbSize = 96.0f;
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float columnSpacing = std::max(style.ItemSpacing.x, style.CellPadding.x * 2.0f);
+            const int columns = ComputeContentBrowserThumbnailColumns(
+                ImGui::GetContentRegionAvail().x,
+                kThumbSize,
+                columnSpacing);
+            char tableId[48];
+            std::snprintf(tableId, sizeof(tableId), "content-browser-thumbs/%d", columns);
+            if (ImGui::BeginTable(
+                    tableId,
+                    columns,
+                    ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings
+                        | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoHostExtendX))
             {
-                if (column > 0)
+                for (int columnIndex = 0; columnIndex < columns; ++columnIndex)
                 {
-                    ImGui::SameLine();
+                    char columnId[16];
+                    std::snprintf(columnId, sizeof(columnId), "##c%d", columnIndex);
+                    ImGui::TableSetupColumn(
+                        columnId, ImGuiTableColumnFlags_WidthFixed, kThumbSize);
                 }
-                ImGui::PushID(entry.canonicalIdentity.c_str());
-                const bool selected =
-                    state.contentBrowser.selectedIdentity == entry.canonicalIdentity;
-                ImGui::BeginGroup();
-                if (ImGui::Selectable(
-                        "##thumb",
-                        selected,
-                        ImGuiSelectableFlags_AllowOverlap,
-                        ImVec2(kThumbSize, kThumbSize + ImGui::GetTextLineHeightWithSpacing())))
+                for (const ContentBrowserAssetEntry& entry : visible)
                 {
-                    SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
-                    SyncStaticPropPlacementIdentityFromBrowser(
-                        state.staticPropPlacement, state.contentBrowser.selectedIdentity);
-                }
-                const ImVec2 cellMin = ImGui::GetItemRectMin();
-                ImGui::SetCursorScreenPos(ImVec2(cellMin.x, cellMin.y));
-                const unsigned int gpuId = view.thumbnails != nullptr
-                    ? view.thumbnails->TextureGpuId(entry.canonicalIdentity)
-                    : 0;
-                if (gpuId != 0)
-                {
-                    ImGui::Image(
-                        ImTextureRef(static_cast<ImTextureID>(static_cast<intptr_t>(gpuId))),
-                        ImVec2(kThumbSize, kThumbSize));
-                }
-                else
-                {
+                    ImGui::TableNextColumn();
+                    ImGui::PushID(entry.canonicalIdentity.c_str());
+                    const bool selected =
+                        state.contentBrowser.selectedIdentity == entry.canonicalIdentity;
+                    ImGui::BeginGroup();
+                    if (ImGui::Selectable(
+                            "##thumb",
+                            selected,
+                            ImGuiSelectableFlags_AllowOverlap,
+                            ImVec2(kThumbSize, kThumbSize + ImGui::GetTextLineHeightWithSpacing())))
+                    {
+                        SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
+                        SyncStaticPropPlacementIdentityFromBrowser(
+                            state.staticPropPlacement, state.contentBrowser.selectedIdentity);
+                    }
+                    const ImVec2 cellMin = ImGui::GetItemRectMin();
+                    ImGui::SetCursorScreenPos(ImVec2(cellMin.x, cellMin.y));
+                    unsigned int gpuId = 0;
+                    int imageWidth = 0;
+                    int imageHeight = 0;
+                    bool failed = false;
+                    if (entry.kind == ContentBrowserAssetKind::Texture
+                        && view.textureThumbnails != nullptr)
+                    {
+                        gpuId = view.textureThumbnails->TextureGpuId(entry.canonicalIdentity);
+                        imageWidth = view.textureThumbnails->TextureWidth(entry.canonicalIdentity);
+                        imageHeight = view.textureThumbnails->TextureHeight(entry.canonicalIdentity);
+                        failed = view.textureThumbnails->IsFailed(entry.canonicalIdentity);
+                    }
+                    else if (view.thumbnails != nullptr)
+                    {
+                        gpuId = view.thumbnails->TextureGpuId(entry.canonicalIdentity);
+                        failed = view.thumbnails->IsFailed(entry.canonicalIdentity);
+                        imageWidth = static_cast<int>(kThumbSize);
+                        imageHeight = static_cast<int>(kThumbSize);
+                    }
                     ImVec2 dummyMin = ImGui::GetCursorScreenPos();
                     ImGui::Dummy(ImVec2(kThumbSize, kThumbSize));
                     ImVec2 dummyMax = ImGui::GetItemRectMax();
-                    const bool failed = view.thumbnails != nullptr
-                        && view.thumbnails->IsFailed(entry.canonicalIdentity);
                     ImGui::GetWindowDrawList()->AddRectFilled(
                         dummyMin,
                         dummyMax,
                         failed ? IM_COL32(88, 64, 64, 255) : IM_COL32(48, 52, 62, 255));
                     ImGui::GetWindowDrawList()->AddRect(
                         dummyMin, dummyMax, IM_COL32(120, 126, 140, 255));
-                    (void)dummyMin;
+                    if (gpuId != 0)
+                    {
+                        float drawWidth = kThumbSize;
+                        float drawHeight = kThumbSize;
+                        ComputeTextureThumbnailDrawSize(
+                            imageWidth, imageHeight, kThumbSize - 4.0f, drawWidth, drawHeight);
+                        const float offsetX = dummyMin.x + (kThumbSize - drawWidth) * 0.5f;
+                        const float offsetY = dummyMin.y + (kThumbSize - drawHeight) * 0.5f;
+                        ImGui::SetCursorScreenPos(ImVec2(offsetX, offsetY));
+                        ImGui::Image(
+                            ImTextureRef(static_cast<ImTextureID>(static_cast<intptr_t>(gpuId))),
+                            ImVec2(drawWidth, drawHeight));
+                    }
+                    ImGui::SetCursorScreenPos(ImVec2(dummyMin.x, dummyMax.y));
+                    ImGui::PushTextWrapPos(dummyMin.x + kThumbSize);
+                    ImGui::TextUnformatted(entry.displayName.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndGroup();
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip(
+                            "%s\n%s\n%s\n%s%s",
+                            entry.displayName.c_str(),
+                            ContentBrowserAssetKindName(entry.kind),
+                            entry.canonicalIdentity.c_str(),
+                            entry.logicalFolder.empty() ? "(unfiled)" : entry.logicalFolder.c_str(),
+                            entry.favorite ? "\nFavorite" : "");
+                    }
+                    ImGui::PopID();
                 }
-                ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + kThumbSize);
-                ImGui::TextUnformatted(entry.displayName.c_str());
-                ImGui::PopTextWrapPos();
-                ImGui::EndGroup();
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip(
-                        "%s\n%s\n%s",
-                        entry.displayName.c_str(),
-                        entry.assetType.c_str(),
-                        entry.canonicalIdentity.c_str());
-                }
-                ImGui::PopID();
-                column = (column + 1) % columns;
+                ImGui::EndTable();
             }
         }
-        ImGui::EndChild();
-    }
-    else if (ImGui::BeginTable(
-                 "content-browser-assets",
-                 3,
-                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY
-                     | ImGuiTableFlags_Resizable))
-    {
-        ImGui::TableSetupColumn("Name");
-        ImGui::TableSetupColumn("Type");
-        ImGui::TableSetupColumn("Path");
-        ImGui::TableHeadersRow();
-        for (const assets::StaticModelCatalogEntry& entry : visible)
+        else if (ImGui::BeginTable(
+                     "content-browser-assets",
+                     4,
+                     ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
+                         | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY
+                         | ImGuiTableFlags_NoSavedSettings,
+                     ImVec2(0.0f, ImGui::GetContentRegionAvail().y)))
         {
-            ImGui::PushID(entry.canonicalIdentity.c_str());
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            const bool selected = state.contentBrowser.selectedIdentity == entry.canonicalIdentity;
-            if (ImGui::Selectable(
-                    entry.displayName.c_str(),
-                    selected,
-                    ImGuiSelectableFlags_SpanAllColumns))
+            ImGui::TableSetupColumn("Name");
+            ImGui::TableSetupColumn("Kind");
+            ImGui::TableSetupColumn("Identity");
+            ImGui::TableSetupColumn("Folder");
+            ImGui::TableHeadersRow();
+            for (const ContentBrowserAssetEntry& entry : visible)
             {
-                SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
-                SyncStaticPropPlacementIdentityFromBrowser(
-                    state.staticPropPlacement, state.contentBrowser.selectedIdentity);
+                ImGui::PushID(entry.canonicalIdentity.c_str());
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                const bool selected = state.contentBrowser.selectedIdentity == entry.canonicalIdentity;
+                if (ImGui::Selectable(
+                        entry.displayName.c_str(),
+                        selected,
+                        ImGuiSelectableFlags_SpanAllColumns))
+                {
+                    SelectContentBrowserIdentity(state.contentBrowser, entry.canonicalIdentity);
+                    SyncStaticPropPlacementIdentityFromBrowser(
+                        state.staticPropPlacement, state.contentBrowser.selectedIdentity);
+                }
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(ContentBrowserAssetKindName(entry.kind));
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextUnformatted(entry.canonicalIdentity.c_str());
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextUnformatted(
+                    entry.logicalFolder.empty() ? "(unfiled)" : entry.logicalFolder.c_str());
+                ImGui::PopID();
             }
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(entry.assetType.c_str());
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted(entry.canonicalIdentity.c_str());
-            ImGui::PopID();
+            ImGui::EndTable();
         }
-        ImGui::EndTable();
+    }
+    ImGui::EndChild();
+
+    {
+        std::string displayName;
+        std::string kindName;
+        if (hasSelection)
+        {
+            kindName = ContentBrowserAssetKindName(
+                ClassifyContentBrowserIdentity(state.contentBrowser.selectedIdentity));
+            if (const assets::StaticModelCatalogEntry* model =
+                    state.contentBrowser.catalog.Find(state.contentBrowser.selectedIdentity))
+            {
+                displayName = model->displayName;
+            }
+            else if (
+                const assets::SourceTextureCatalogEntry* texture =
+                    state.contentBrowser.textureCatalog.Find(state.contentBrowser.selectedIdentity))
+            {
+                displayName = texture->displayName;
+            }
+            else
+            {
+                displayName = state.contentBrowser.selectedIdentity;
+            }
+        }
+        std::string statusLine;
+        if (StaticPropPlacementIsActive(state.staticPropPlacement)
+            && state.contentBrowser.statusMessage.empty())
+        {
+            statusLine = "Placing Static Prop | ";
+            statusLine += state.staticPropPlacement.modelIdentity;
+        }
+        else
+        {
+            statusLine = MakeContentBrowserStatusBarText(
+                state.contentBrowser.statusMessage, kindName, displayName, hasSelection);
+        }
+        ImGui::Separator();
+        ImGui::TextUnformatted(statusLine.c_str());
     }
 
-    if (!state.contentBrowser.selectedIdentity.empty())
+    if (ImGui::BeginPopup("content-browser-import-menu"))
     {
-        ImGui::Text("Selected asset: %s", state.contentBrowser.selectedIdentity.c_str());
-        DrawStaticModelStagingHint(state.contentBrowser.selectedIdentity);
-    }
-    else
-    {
-        ImGui::TextUnformatted("Selected asset: none");
-    }
-    if (StaticPropPlacementIsActive(state.staticPropPlacement))
-    {
-        ImGui::Text(
-            "Placing Static Prop: %s", state.staticPropPlacement.modelIdentity.c_str());
-        ImGui::TextUnformatted(PlacementViewportActionHintText());
-    }
-    if (!state.contentBrowser.statusMessage.empty())
-    {
-        ImGui::TextWrapped("%s", state.contentBrowser.statusMessage.c_str());
+        if (ImGui::MenuItem("Import Model..."))
+        {
+            request = ContentBrowserImportRequest();
+        }
+        if (ImGui::MenuItem("Import Texture..."))
+        {
+            request = ContentBrowserImportTextureRequest();
+        }
+        ImGui::EndPopup();
     }
 
     if (state.contentBrowser.deleteConfirmOpen)
     {
-        ImGui::OpenPopup("Delete Static Model");
+        ImGui::OpenPopup("Delete Content Browser Asset");
     }
-    if (ImGui::BeginPopupModal("Delete Static Model", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if (ImGui::BeginPopupModal(
+            "Delete Content Browser Asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
-        ImGui::TextUnformatted("Delete this registered static model?");
+        const bool deletingTexture =
+            ContentBrowserIdentityIsTexture(state.contentBrowser.selectedIdentity);
+        ImGui::TextUnformatted(
+            deletingTexture ? "Delete this registered texture?"
+                            : "Delete this registered static model?");
         ImGui::TextUnformatted(state.contentBrowser.selectedIdentity.c_str());
         ImGui::TextWrapped(
             "This removes the canonical source file and any matching cooked/staged copies. "
-            "It does not edit the level. Cancel makes no filesystem changes.");
+            "It does not edit the level. Logical folder membership is editor organization only. "
+            "Cancel makes no filesystem changes.");
         if (ImGui::Button("Delete"))
         {
             if (ContentBrowserDeleteConfirmed(true))
@@ -1914,6 +2276,131 @@ LevelEditorRequest DrawContentBrowser(
         {
             (void)ContentBrowserDeleteConfirmed(false);
             state.contentBrowser.deleteConfirmOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (state.contentBrowser.folderNameDialogOpen)
+    {
+        ImGui::OpenPopup("Content Browser Folder Name");
+    }
+    if (ImGui::BeginPopupModal(
+            "Content Browser Folder Name", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        const bool creatingSubfolder = state.contentBrowser.folderCreateSubfolder;
+        ImGui::TextUnformatted(creatingSubfolder ? "Subfolder name" : "Folder name");
+        char nameBuffer[80];
+        std::snprintf(
+            nameBuffer, sizeof(nameBuffer), "%s", state.contentBrowser.folderNameInput.c_str());
+        if (ImGui::InputText("##folder-name", nameBuffer, sizeof(nameBuffer)))
+        {
+            state.contentBrowser.folderNameInput = nameBuffer;
+        }
+        if (ImGui::Button("Create"))
+        {
+            std::string createdPath;
+            std::string createMessage;
+            const std::string parent = creatingSubfolder ? state.contentBrowser.currentFolderPath
+                                                         : std::string();
+            if (ContentBrowserOrganizationSucceeded(CreateContentBrowserFolder(
+                    state.contentBrowser.organization,
+                    parent,
+                    state.contentBrowser.folderNameInput,
+                    createdPath,
+                    createMessage)))
+            {
+                PersistContentBrowserOrganization(state.contentBrowser, sourceRoot);
+                ApplyContentBrowserCollection(
+                    state, ContentBrowserCollection::Folders, createdPath);
+            }
+            state.contentBrowser.statusMessage = createMessage;
+            state.contentBrowser.folderNameDialogOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            state.contentBrowser.folderNameDialogOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (state.contentBrowser.folderRenameDialogOpen)
+    {
+        ImGui::OpenPopup("Rename Content Browser Folder");
+    }
+    if (ImGui::BeginPopupModal(
+            "Rename Content Browser Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        char nameBuffer[80];
+        std::snprintf(
+            nameBuffer, sizeof(nameBuffer), "%s", state.contentBrowser.folderNameInput.c_str());
+        if (ImGui::InputText("##rename-folder", nameBuffer, sizeof(nameBuffer)))
+        {
+            state.contentBrowser.folderNameInput = nameBuffer;
+        }
+        if (ImGui::Button("Rename"))
+        {
+            std::string renamedPath;
+            std::string renameMessage;
+            if (ContentBrowserOrganizationSucceeded(RenameContentBrowserFolder(
+                    state.contentBrowser.organization,
+                    state.contentBrowser.currentFolderPath,
+                    state.contentBrowser.folderNameInput,
+                    renamedPath,
+                    renameMessage)))
+            {
+                PersistContentBrowserOrganization(state.contentBrowser, sourceRoot);
+                ApplyContentBrowserCollection(
+                    state, ContentBrowserCollection::Folders, renamedPath);
+            }
+            state.contentBrowser.statusMessage = renameMessage;
+            state.contentBrowser.folderRenameDialogOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            state.contentBrowser.folderRenameDialogOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (state.contentBrowser.folderDeleteConfirmOpen)
+    {
+        ImGui::OpenPopup("Delete Logical Folder");
+    }
+    if (ImGui::BeginPopupModal("Delete Logical Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextUnformatted("Delete this logical folder?");
+        ImGui::TextUnformatted(state.contentBrowser.currentFolderPath.c_str());
+        ImGui::TextWrapped(
+            "Physical Models and Textures are never deleted. Contained assets and subfolders "
+            "are reparented to the parent folder or (unfiled).");
+        if (ImGui::Button("Delete Folder"))
+        {
+            std::string deleteMessage;
+            const std::string parent =
+                ContentBrowserFolderParentPath(state.contentBrowser.currentFolderPath);
+            if (ContentBrowserOrganizationSucceeded(DeleteContentBrowserFolder(
+                    state.contentBrowser.organization,
+                    state.contentBrowser.currentFolderPath,
+                    deleteMessage)))
+            {
+                PersistContentBrowserOrganization(state.contentBrowser, sourceRoot);
+                ApplyContentBrowserCollection(state, ContentBrowserCollection::Folders, parent);
+            }
+            state.contentBrowser.statusMessage = deleteMessage;
+            state.contentBrowser.folderDeleteConfirmOpen = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            state.contentBrowser.folderDeleteConfirmOpen = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -2115,6 +2602,8 @@ void DrawModelPreview(LevelEditorState& state, const LevelEditorViewContext& vie
     ImGui::TextUnformatted("Interactive view of the Content Browser selection. Not a level object.");
     render::StaticModelPreviewRenderer* preview = view.modelPreview;
     const std::string& identity = state.contentBrowser.selectedIdentity;
+    const bool selectedModel = !identity.empty() && ContentBrowserIdentityIsModel(identity);
+    const bool selectedTexture = !identity.empty() && ContentBrowserIdentityIsTexture(identity);
     if (preview != nullptr && preview->HasModel()
         && state.modelPreviewFramedIdentity != preview->LoadedIdentity())
     {
@@ -2130,7 +2619,7 @@ void DrawModelPreview(LevelEditorState& state, const LevelEditorViewContext& vie
         state.modelPreviewFramedIdentity.clear();
     }
 
-    const bool canFrame = preview != nullptr && preview->HasModel();
+    const bool canFrame = selectedModel && preview != nullptr && preview->HasModel();
     ImGui::BeginDisabled(!canFrame);
     if (ImGui::Button("Reset View"))
     {
@@ -2146,18 +2635,20 @@ void DrawModelPreview(LevelEditorState& state, const LevelEditorViewContext& vie
     if (identity.empty())
     {
         ImGui::Spacing();
-        ImGui::TextWrapped("No static model is selected. Choose an asset in the Content Browser.");
-        ImGui::End();
-        return;
+        ImGui::TextWrapped("No asset is selected. Choose a Model or Texture in the Content Browser.");
     }
-
-    const assets::StaticModelCatalogEntry* entry =
-        state.contentBrowser.catalog.Find(identity);
-    if (preview != nullptr && preview->IsFailed())
+    else if (selectedTexture)
+    {
+        ImGui::Spacing();
+        ImGui::TextWrapped(
+            "Texture selected. The Content Browser thumbnail is the preview. "
+            "This is not a Static Model.");
+    }
+    else if (preview != nullptr && preview->IsFailed())
     {
         ImGui::TextWrapped("Preview failed to load this model. Refresh or reselect to retry.");
     }
-    else
+    else if (selectedModel)
     {
         // Reserve one collapsed header row so details stay below the canvas
         // without permanently shrinking the Preview for the expanded body.
@@ -2212,10 +2703,8 @@ void DrawModelPreview(LevelEditorState& state, const LevelEditorViewContext& vie
     // existing ImGui ini; no dedicated preferences file.
     if (ImGui::CollapsingHeader("Asset Details"))
     {
-        ImGui::Text("Name: %s", entry != nullptr ? entry->displayName.c_str() : identity.c_str());
-        ImGui::Text("Type: %s", entry != nullptr ? entry->assetType.c_str() : "static_glb");
-        ImGui::TextUnformatted(identity.c_str());
-        if (preview != nullptr && preview->HasModel())
+        DrawContentBrowserAssetDetails(state);
+        if (selectedModel && preview != nullptr && preview->HasModel())
         {
             const editor::ThumbnailModelBounds bounds = preview->Bounds();
             ImGui::Text(
@@ -2502,7 +2991,9 @@ void ResetEditorWorkspaceLayout(
 {
     ResetEditorWorkspaceVisibility(state.workspace);
     state.contentBrowser.viewMode = kDefaultContentBrowserViewMode;
-    SaveContentBrowserViewMode(state.contentBrowser.viewMode);
+    state.contentBrowser.collection = kDefaultContentBrowserCollection;
+    state.contentBrowser.currentFolderPath.clear();
+    PersistContentBrowserViewState(state.contentBrowser);
     SnapKnownEditorWindowsToDefaults(viewportWidth, viewportHeight);
     state.forceDefaultLayoutFrames = 2;
 }
@@ -2913,9 +3404,17 @@ LevelEditorRequest DrawEditorMenuBar(
     {
         const bool toolsBusy = toolRunner.IsRunning() || cookStageReloadPending;
         ImGui::BeginDisabled(!IsLevelAuthoringAvailable() || toolsBusy);
-        if (ImGui::MenuItem("Import Static GLB"))
+        if (ImGui::BeginMenu("Import"))
         {
-            request = LevelEditorRequest::ImportStaticGlb;
+            if (ImGui::MenuItem("Import Model..."))
+            {
+                request = LevelEditorRequest::ImportStaticGlb;
+            }
+            if (ImGui::MenuItem("Import Texture..."))
+            {
+                request = LevelEditorRequest::ImportTexture;
+            }
+            ImGui::EndMenu();
         }
         ImGui::EndDisabled();
         ImGui::EndMenu();

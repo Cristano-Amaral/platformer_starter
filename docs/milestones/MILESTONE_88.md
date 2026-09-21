@@ -2,10 +2,11 @@
 
 ## Status
 
-**IMPLEMENTED — awaiting manual acceptance**
+**CLOSED**
 
-Milestone 87 — Terrain Sculpting is CLOSED. `main` is clean and
-synchronized.
+Milestone 87 — Terrain Sculpting is CLOSED. `main` was clean and
+synchronized before M88. Milestone 89 is the next Development asset-library
+milestone.
 
 ## Branch
 

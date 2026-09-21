@@ -234,8 +234,12 @@ const char* EditorToolKindName(EditorToolKind kind)
         return "Build All";
     case EditorToolKind::ImportStaticGlb:
         return "Import Static GLB";
+    case EditorToolKind::ImportTexture:
+        return "Import Texture";
     case EditorToolKind::DeleteStaticModel:
         return "Delete Static Model";
+    case EditorToolKind::DeleteRuntimePng:
+        return "Delete Texture";
     }
     return "Cook Assets";
 }

@@ -114,4 +114,11 @@ void RemapAuthoringGroupsAfterDelete(
 // explicitly so a new v1 record cannot silently escape writer round-trip proof
 // or editor change detection. Not a reflection/equality framework.
 bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b);
+
+inline bool LevelReferencesTerrainTextureIdentity(
+    const LevelDefinition& level,
+    std::string_view identity)
+{
+    return level.hasTerrain && !identity.empty() && level.terrain.textureIdentity == identity;
+}
 }

@@ -71,6 +71,46 @@ ContentBrowserViewMode ParseContentBrowserViewMode(std::string_view text)
     return kDefaultContentBrowserViewMode;
 }
 
+const char* ContentBrowserCollectionName(ContentBrowserCollection collection)
+{
+    switch (collection)
+    {
+    case ContentBrowserCollection::AllAssets:
+        return "AllAssets";
+    case ContentBrowserCollection::Favorites:
+        return "Favorites";
+    case ContentBrowserCollection::Models:
+        return "Models";
+    case ContentBrowserCollection::Textures:
+        return "Textures";
+    case ContentBrowserCollection::Folders:
+        return "Folders";
+    }
+    return "AllAssets";
+}
+
+ContentBrowserCollection ParseContentBrowserCollection(std::string_view text)
+{
+    const std::string trimmed = TrimCopy(text);
+    if (NamesEqualIgnoreCase(trimmed, "Favorites"))
+    {
+        return ContentBrowserCollection::Favorites;
+    }
+    if (NamesEqualIgnoreCase(trimmed, "Models"))
+    {
+        return ContentBrowserCollection::Models;
+    }
+    if (NamesEqualIgnoreCase(trimmed, "Textures"))
+    {
+        return ContentBrowserCollection::Textures;
+    }
+    if (NamesEqualIgnoreCase(trimmed, "Folders"))
+    {
+        return ContentBrowserCollection::Folders;
+    }
+    return kDefaultContentBrowserCollection;
+}
+
 std::filesystem::path MakeContentBrowserViewPath(const std::filesystem::path& userDataDirectory)
 {
     if (userDataDirectory.empty() || !userDataDirectory.is_absolute())
@@ -89,31 +129,58 @@ std::filesystem::path ContentBrowserViewPath()
 
 ContentBrowserViewMode LoadContentBrowserViewModeFromPath(const std::filesystem::path& path)
 {
+    return LoadContentBrowserViewStateFromPath(path).viewMode;
+}
+
+ContentBrowserViewState LoadContentBrowserViewStateFromPath(const std::filesystem::path& path)
+{
+    ContentBrowserViewState state{};
     if (path.empty())
     {
-        return kDefaultContentBrowserViewMode;
+        return state;
     }
     std::error_code error;
     if (!std::filesystem::exists(path, error) || error)
     {
-        return kDefaultContentBrowserViewMode;
+        return state;
     }
     std::ifstream in(path);
     if (!in)
     {
-        return kDefaultContentBrowserViewMode;
+        return state;
     }
     std::string line;
-    if (!std::getline(in, line))
+    if (std::getline(in, line))
     {
-        return kDefaultContentBrowserViewMode;
+        state.viewMode = ParseContentBrowserViewMode(line);
     }
-    return ParseContentBrowserViewMode(line);
+    if (std::getline(in, line))
+    {
+        state.collection = ParseContentBrowserCollection(line);
+    }
+    if (std::getline(in, line))
+    {
+        state.folderPath = TrimCopy(line);
+        if (state.folderPath == "(unfiled)")
+        {
+            state.folderPath.clear();
+        }
+    }
+    return state;
 }
 
 bool SaveContentBrowserViewModeToPath(
     const std::filesystem::path& path,
     ContentBrowserViewMode mode)
+{
+    ContentBrowserViewState state{};
+    state.viewMode = mode;
+    return SaveContentBrowserViewStateToPath(path, state);
+}
+
+bool SaveContentBrowserViewStateToPath(
+    const std::filesystem::path& path,
+    const ContentBrowserViewState& state)
 {
     if (path.empty())
     {
@@ -130,21 +197,35 @@ bool SaveContentBrowserViewModeToPath(
     {
         return false;
     }
-    out << ContentBrowserViewModeName(mode) << '\n';
+    out << ContentBrowserViewModeName(state.viewMode) << '\n';
+    out << ContentBrowserCollectionName(state.collection) << '\n';
+    out << (state.folderPath.empty() ? std::string("(unfiled)") : state.folderPath) << '\n';
     return static_cast<bool>(out);
 }
 
 ContentBrowserViewMode LoadContentBrowserViewMode()
 {
-    return LoadContentBrowserViewModeFromPath(ContentBrowserViewPath());
+    return LoadContentBrowserViewState().viewMode;
 }
 
 bool SaveContentBrowserViewMode(ContentBrowserViewMode mode)
+{
+    ContentBrowserViewState state = LoadContentBrowserViewState();
+    state.viewMode = mode;
+    return SaveContentBrowserViewState(state);
+}
+
+ContentBrowserViewState LoadContentBrowserViewState()
+{
+    return LoadContentBrowserViewStateFromPath(ContentBrowserViewPath());
+}
+
+bool SaveContentBrowserViewState(const ContentBrowserViewState& state)
 {
     if (!EnsureEditorLayoutDirectory())
     {
         return false;
     }
-    return SaveContentBrowserViewModeToPath(ContentBrowserViewPath(), mode);
+    return SaveContentBrowserViewStateToPath(ContentBrowserViewPath(), state);
 }
 }

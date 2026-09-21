@@ -52,6 +52,8 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #endif
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
+#include "assets/RuntimePngImport.h"
+#include "assets/RuntimePngDelete.h"
 #include "assets/StaticGlbImport.h"
 #include "assets/StaticModelDelete.h"
 #include "editor/AuthoringPaths.h"
@@ -73,20 +75,25 @@ static_assert(!gameplay::kInventoryDevelopmentHarnessEnabled);
 #include "editor/SelectedModelHighlight.h"
 #include "editor/StaticPropPlacement.h"
 #include "editor/TerrainSculpt.h"
+#include "editor/TerrainTextureReference.h"
 #include "editor/StaticPropTransform.h"
 #include "editor/EditorToolCommands.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/LevelEditor.h"
 #include "editor/AuthoredLifecycleCommands.h"
 #include "editor/RuntimeLevelReload.h"
+#include "platform/HostProcess.h"
 #include "platform/OpenFileDialog.h"
 #include "render/StaticModelThumbnail.h"
 #include "render/StaticModelPreview.h"
 #include "render/StaticModelScene.h"
+#include "render/TextureThumbnail.h"
 #include "ui/debug/DebugMetrics.h"
 #include "world/LevelWriter.h"
 
+#include <chrono>
 #include <string>
+#include <thread>
 #endif
 
 namespace core
@@ -2208,16 +2215,19 @@ int Application::Run()
             false};
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
         thumbnailStore.BeginFrame();
+        textureThumbnailStore.BeginFrame();
         levelEditorView.thumbnails = &thumbnailStore;
+        levelEditorView.textureThumbnails = &textureThumbnailStore;
         {
             const std::string& identity = levelEditorState.contentBrowser.selectedIdentity;
             const std::filesystem::path sourceRoot = editor::AuthoringSourceRoot();
+            const bool isModel = editor::ContentBrowserIdentityIsModel(identity);
             const std::filesystem::path sourcePath =
-                identity.empty() || sourceRoot.empty()
+                identity.empty() || sourceRoot.empty() || !isModel
                 ? std::filesystem::path{}
                 : sourceRoot / identity;
-            modelPreview.Sync(identity, sourcePath);
-            if (identity.empty())
+            modelPreview.Sync(isModel ? identity : std::string{}, sourcePath);
+            if (identity.empty() || !isModel)
             {
                 levelEditorState.modelPreviewFramedIdentity.clear();
             }
@@ -2846,7 +2856,12 @@ void Application::Initialize()
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     debugUi.Initialize();
     levelEditorState.selectedBuildTarget = editor::LoadEditorBuildSelection();
-    levelEditorState.contentBrowser.viewMode = editor::LoadContentBrowserViewMode();
+    {
+        const editor::ContentBrowserViewState viewState = editor::LoadContentBrowserViewState();
+        levelEditorState.contentBrowser.viewMode = viewState.viewMode;
+        levelEditorState.contentBrowser.collection = viewState.collection;
+        levelEditorState.contentBrowser.currentFolderPath = viewState.folderPath;
+    }
     levelEditorState.snap = editor::LoadEditorSnapPreferencesFromLayoutPath(editor::EditorLayoutPath());
     editor::BindEditorSnapPreferences(&levelEditorState.snap);
     levelEditorState.viewportGrid =
@@ -3060,6 +3075,153 @@ void Application::ImportStaticGlbAsset()
 #endif
 }
 
+bool CookImportedRuntimePngWithPython(
+    const std::filesystem::path& repositoryRoot,
+    const std::filesystem::path& sourcePng,
+    const std::filesystem::path& cookedPng,
+    std::string& message)
+{
+    message.clear();
+    const std::filesystem::path python = platform::FindHostExecutable(
+        std::string(editor::kPythonExecutableName));
+    if (python.empty())
+    {
+        message =
+            "python was not found. Source was imported. Cook with: python tools/cook_assets.py "
+            "--cook-runtime-png <source> <cooked>";
+        return false;
+    }
+    platform::HostProcess process;
+    platform::HostProcessSpec spec{};
+    spec.executable = python;
+    spec.arguments = {
+        std::string(editor::kCookAssetsScriptRelative),
+        "--cook-runtime-png",
+        sourcePng.generic_string(),
+        cookedPng.generic_string(),
+    };
+    spec.workingDirectory = repositoryRoot;
+    if (!process.Start(spec))
+    {
+        message = process.DrainOutput();
+        if (message.empty())
+        {
+            message = "failed to start python cooker for imported texture";
+        }
+        return false;
+    }
+    while (process.IsRunning())
+    {
+        process.Poll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    process.Poll();
+    message = process.DrainOutput();
+    return process.HasExitCode() && process.ExitCode() == 0;
+}
+
+void Application::ImportTextureAsset()
+{
+    if (editorToolRunner.IsRunning() || cookStageReload.IsPending())
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportTexture,
+            false,
+            "error: a tool job is already running.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+#if !defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    editorToolRunner.ReportLocalResult(
+        editor::EditorToolKind::ImportTexture,
+        false,
+        "error: texture import is unavailable in this configuration.");
+    levelEditorState.workspace.showToolOutput = true;
+#else
+    const std::filesystem::path sourceRoot = editor::AuthoringSourceRoot();
+    const std::filesystem::path repositoryRoot = editor::RepositoryRoot();
+    if (sourceRoot.empty())
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportTexture,
+            false,
+            "error: authoring source root is unavailable.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+    platform::OpenFileDialogRequest dialogRequest{};
+    dialogRequest.title = "Import Texture";
+    dialogRequest.filters.push_back({"PNG Texture", "*.png"});
+    const platform::OpenFileDialogResult selected = platform::OpenSingleFileDialog(dialogRequest);
+    if (selected.status == platform::OpenFileDialogStatus::Cancelled)
+    {
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportTexture,
+            true,
+            "Import Texture cancelled. Canonical source was not changed.");
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+    if (selected.status != platform::OpenFileDialogStatus::Succeeded)
+    {
+        std::string message = "error: file selection failed.";
+        if (!selected.message.empty())
+        {
+            message += " ";
+            message += selected.message;
+        }
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::ImportTexture, false, message);
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
+    const std::filesystem::path cookedRoot = editor::CookedAssetsRoot(repositoryRoot);
+    assets::RuntimePngImportResult imported = assets::ImportRuntimePng(
+        selected.path,
+        sourceRoot,
+        &levelEditorState.contentBrowser.textureCatalog,
+        cookedRoot);
+    if (assets::RuntimePngImportSucceeded(imported.status)
+        && imported.cookStatus == assets::RuntimePngCookWriteStatus::NeedsExternalRecipeCook)
+    {
+        std::string cookMessage;
+        if (CookImportedRuntimePngWithPython(
+                repositoryRoot, imported.destinationPath, imported.cookedPath, cookMessage))
+        {
+            imported.cookStatus = assets::RuntimePngCookWriteStatus::CopiedUnchanged;
+            imported.message += "\nCooked with python tools/cook_assets.py --cook-runtime-png (";
+            imported.message += assets::kRuntimePngRecipe;
+            imported.message += ").";
+        }
+        else
+        {
+            imported.message += "\n";
+            imported.message += cookMessage;
+        }
+    }
+    editor::RefreshContentBrowser(levelEditorState.contentBrowser, sourceRoot);
+    if (assets::RuntimePngImportSucceeded(imported.status))
+    {
+        editor::SelectContentBrowserIdentity(
+            levelEditorState.contentBrowser, imported.canonicalIdentity);
+        levelEditorState.contentBrowser.statusMessage = imported.message;
+        if (textureThumbnailStore.HasReadyTexture(imported.canonicalIdentity)
+            || textureThumbnailStore.IsFailed(imported.canonicalIdentity))
+        {
+            textureThumbnailStore.Forget(imported.canonicalIdentity);
+        }
+    }
+    editorToolRunner.ReportLocalResult(
+        editor::EditorToolKind::ImportTexture,
+        assets::RuntimePngImportSucceeded(imported.status),
+        imported.message);
+    levelEditorState.workspace.showToolOutput = true;
+#endif
+}
+
 void Application::DeleteContentBrowserAsset()
 {
     if (editorToolRunner.IsRunning() || cookStageReload.IsPending())
@@ -3091,11 +3253,47 @@ void Application::DeleteContentBrowserAsset()
         return;
     }
 
+    const std::string identity = levelEditorState.contentBrowser.selectedIdentity;
+    if (editor::ContentBrowserIdentityIsTexture(identity))
+    {
+        if (editor::AuthoredLevelsProtectTerrainTextureIdentity(
+                levelEditorState.workingCopy,
+                levelDefinition,
+                levelEditorState.savedSourceBaseline,
+                identity))
+        {
+            const std::string message = editor::TerrainTextureReferencedDeleteMessage(identity);
+            levelEditorState.contentBrowser.statusMessage = message;
+            editorToolRunner.ReportLocalResult(
+                editor::EditorToolKind::DeleteRuntimePng, false, message);
+            levelEditorState.workspace.showToolOutput = true;
+            return;
+        }
+        assets::RuntimePngDeleteRoots textureRoots{};
+        textureRoots.sourceRoot = sourceRoot;
+        textureRoots.cookedRoot = editor::CookedAssetsRoot(repositoryRoot);
+        textureRoots.stagedRoots = editor::AuthorizedStaticModelStagedRoots(repositoryRoot);
+        const assets::RuntimePngDeleteResult deleted = assets::DeleteRuntimePng(
+            identity, textureRoots, &levelEditorState.contentBrowser.textureCatalog);
+        editor::RefreshContentBrowser(levelEditorState.contentBrowser, sourceRoot);
+        if (assets::RuntimePngDeleteSucceeded(deleted.status))
+        {
+            editor::ClearContentBrowserSelection(levelEditorState.contentBrowser);
+            textureThumbnailStore.Forget(identity);
+        }
+        levelEditorState.contentBrowser.statusMessage = deleted.message;
+        editorToolRunner.ReportLocalResult(
+            editor::EditorToolKind::DeleteRuntimePng,
+            assets::RuntimePngDeleteSucceeded(deleted.status),
+            deleted.message);
+        levelEditorState.workspace.showToolOutput = true;
+        return;
+    }
+
     assets::StaticModelDeleteRoots roots{};
     roots.sourceRoot = sourceRoot;
     roots.cookedRoot = editor::CookedAssetsRoot(repositoryRoot);
     roots.stagedRoots = editor::AuthorizedStaticModelStagedRoots(repositoryRoot);
-    const std::string identity = levelEditorState.contentBrowser.selectedIdentity;
     if (levelEditorState.staticPropPlacement.modelIdentity == identity)
     {
         editor::CancelStaticPropPlacement(levelEditorState.staticPropPlacement);
@@ -3281,6 +3479,9 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
         return StartCookStageAndReload();
     case editor::LevelEditorRequest::ImportStaticGlb:
         ImportStaticGlbAsset();
+        return true;
+    case editor::LevelEditorRequest::ImportTexture:
+        ImportTextureAsset();
         return true;
     case editor::LevelEditorRequest::DeleteContentBrowserAsset:
         DeleteContentBrowserAsset();
@@ -4002,6 +4203,7 @@ void Application::Shutdown()
     editorToolRunner.Shutdown();
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
     thumbnailStore.Shutdown();
+    textureThumbnailStore.Shutdown();
     modelPreview.Shutdown();
 #endif
     debugUi.Shutdown();

@@ -36,6 +36,7 @@
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "render/StaticModelThumbnail.h"
 #include "render/StaticModelPreview.h"
+#include "render/TextureThumbnail.h"
 #endif
 
 #include <string>
@@ -67,6 +68,7 @@ private:
     bool StartCookStageAndReload();
     void FinishCookStageAndReloadIfReady();
     void ImportStaticGlbAsset();
+    void ImportTextureAsset();
     void DeleteContentBrowserAsset();
     bool OpenAuthoredLevelFromEditor();
     void CreateAuthoredLevelFromEditor();
@@ -125,6 +127,7 @@ private:
 #endif
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
     render::StaticModelThumbnailStore thumbnailStore;
+    render::TextureThumbnailStore textureThumbnailStore;
     render::StaticModelPreviewRenderer modelPreview;
 #endif
     bool initialized = false;

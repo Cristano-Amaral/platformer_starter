@@ -1,0 +1,4 @@
+schema 1
+folder Itens
+assign models/Barrel by HFJAKI92 - wrYrHLVtxg.glb Itens
+assign models/Chest by Quaternius - O72u4Drp8k.glb Itens

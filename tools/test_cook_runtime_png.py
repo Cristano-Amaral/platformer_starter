@@ -196,6 +196,33 @@ class TerrainTextureDependencyTests(unittest.TestCase):
         self.assertIn("textures/test_checker.png", ids)
         self.assertNotIn("textures/test_textured_basecolor.png", ids)
 
+    def test_cook_imported_runtime_png_reuses_recipe(self) -> None:
+        source = cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png"
+        with tempfile.TemporaryDirectory() as tmp:
+            cooked = Path(tmp) / "textures" / "imported_checker.png"
+            result = cooker.cook_imported_runtime_png(source, cooked)
+            self.assertEqual(result.recipe, "runtime_png.max512.lanczos.v1")
+            self.assertFalse(result.resized)
+            self.assertTrue(cooked.is_file())
+            self.assertEqual(cooked.read_bytes(), source.read_bytes())
+
+    def test_cook_runtime_png_cli_does_not_glob_source_textures(self) -> None:
+        source = cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png"
+        with tempfile.TemporaryDirectory() as tmp:
+            cooked = Path(tmp) / "out.png"
+            code = cooker.main(["--cook-runtime-png", str(source), str(cooked)])
+            self.assertEqual(code, 0)
+            self.assertTrue(cooked.is_file())
+            self.assertEqual(cooker.main(["--cook-runtime-png"]), 2)
+
+    def test_organization_metadata_is_not_cooked_or_staged(self) -> None:
+        collected = cooker.collect_cook_assets(cooker.source_root(cooker.repo_root()))
+        ids = [item["id"] for item in collected]
+        self.assertNotIn("content_browser_organization.v1.txt", ids)
+        self.assertTrue(
+            (cooker.repo_root() / "game" / "assets" / "source" / "content_browser_organization.v1.txt").is_file()
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

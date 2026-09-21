@@ -117,6 +117,9 @@ int main()
         !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ImportStaticGlb),
         "Import Static GLB is not lifecycle");
     Expect(
+        !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::ImportTexture),
+        "Import Texture is not lifecycle");
+    Expect(
         !editor::IsAuthoredLifecycleRequest(LevelEditorRequest::DeleteContentBrowserAsset),
         "Content Browser delete is not lifecycle");
     Expect(

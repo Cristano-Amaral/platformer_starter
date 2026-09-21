@@ -959,5 +959,43 @@ def cook(root: Path | None = None) -> int:
     return 0
 
 
+def cook_imported_runtime_png(source_path: Path, cooked_path: Path) -> RuntimePngCookResult:
+    """Cook one imported runtime PNG using runtime_png.max512.lanczos.v1.
+
+    This is the focused Import Texture cook path. It does not glob
+    source/textures and does not implement a second recipe.
+    """
+    source_data = read_bytes(source_path, label="imported runtime PNG")
+    result = cook_runtime_png_bytes(source_data)
+    write_bytes_if_changed(cooked_path, result.cooked_data)
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else list(argv)
+    if args and args[0] == "--cook-runtime-png":
+        if len(args) != 3:
+            print(
+                "usage: python tools/cook_assets.py --cook-runtime-png <source.png> <cooked.png>",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            result = cook_imported_runtime_png(Path(args[1]), Path(args[2]))
+        except CookError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"[cooked] {Path(args[2]).as_posix()}")
+        print(
+            "  "
+            f"recipe {result.recipe}; "
+            f"{result.source_width}x{result.source_height} -> "
+            f"{result.cooked_width}x{result.cooked_height}"
+            + ("; resized" if result.resized else "; copy unchanged")
+        )
+        return 0
+    return cook()
+
+
 if __name__ == "__main__":
-    sys.exit(cook())
+    sys.exit(main())

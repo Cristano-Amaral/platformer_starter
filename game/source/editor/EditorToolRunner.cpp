@@ -238,11 +238,23 @@ bool EditorToolRunner::TryStart(
             requestedKind,
             "error: Import Static GLB is a local file copy, not an external tool job.\n");
     }
+    else if (requestedKind == EditorToolKind::ImportTexture)
+    {
+        return BeginFailed(
+            requestedKind,
+            "error: Import Texture is a local file copy, not an external tool job.\n");
+    }
     else if (requestedKind == EditorToolKind::DeleteStaticModel)
     {
         return BeginFailed(
             requestedKind,
             "error: Delete Static Model is a local filesystem operation, not an external tool job.\n");
+    }
+    else if (requestedKind == EditorToolKind::DeleteRuntimePng)
+    {
+        return BeginFailed(
+            requestedKind,
+            "error: Delete Texture is a local filesystem operation, not an external tool job.\n");
     }
     else
     {
