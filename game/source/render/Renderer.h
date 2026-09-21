@@ -148,6 +148,14 @@ struct DebugWorldOverlay
     bool drawLocalLightAuthoring = false;
     std::size_t selectedPointLightIndex = static_cast<std::size_t>(-1);
     std::size_t selectedSpotLightIndex = static_cast<std::size_t>(-1);
+    // M87 Development working-copy Terrain preview. Reuses the same GPU mesh
+    // as active Terrain. Gameplay/Release leave this false.
+    bool usePreviewTerrain = false;
+    bool previewHasTerrain = false;
+    world::TerrainSpec previewTerrain{};
+    bool drawTerrainSculptBrush = false;
+    core::Vec3 terrainSculptBrushCenter{};
+    float terrainSculptBrushRadius = 0.0f;
     // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
     // authored, not a Jolt body, and never a Gameplay/Release world grid.
     int editorViewportGridLineCount = 0;
@@ -357,6 +365,11 @@ public:
         bool visible,
         const char* category,
         bool fallback,
+        float topInset);
+    void DrawEditorTerrainSculptHud(
+        bool visible,
+        const char* operation,
+        bool hasHit,
         float topInset);
     void EndFrame();
 

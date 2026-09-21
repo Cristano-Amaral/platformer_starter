@@ -56,6 +56,8 @@ namespace
 constexpr Color kBackgroundColor{32, 36, 48, 255};
 constexpr Color kGroundColor{78, 84, 96, 255};
 constexpr Color kTerrainColor{118, 140, 96, 255};
+constexpr Color kTerrainSculptBrushColor{255, 214, 70, 255};
+constexpr Color kTerrainSculptBrushMuted{255, 214, 70, 120};
 constexpr Color kPlatformColor{110, 118, 132, 255};
 constexpr Color kPlatformAccentColor{96, 104, 118, 255};
 constexpr Color kPlayerColor{216, 96, 72, 255};
@@ -1724,6 +1726,30 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     }
     DrawDirectionalLightAuthoring(overlay);
     DrawLocalLightAuthoring(overlay);
+    if (overlay.drawTerrainSculptBrush && overlay.terrainSculptBrushRadius > 0.0f)
+    {
+        const Vector3 center = ToRaylib(overlay.terrainSculptBrushCenter);
+        const Vector3 lifted{
+            center.x, center.y + 0.03f, center.z};
+        DrawCircle3D(lifted, overlay.terrainSculptBrushRadius, {1.0f, 0.0f, 0.0f}, 90.0f,
+            kTerrainSculptBrushColor);
+        DrawCircle3D(
+            lifted,
+            overlay.terrainSculptBrushRadius * 0.15f,
+            {1.0f, 0.0f, 0.0f},
+            90.0f,
+            kTerrainSculptBrushColor);
+        DrawLine3D(
+            lifted,
+            Vector3{lifted.x, lifted.y + 0.35f, lifted.z},
+            kTerrainSculptBrushColor);
+        rlDrawRenderBatchActive();
+        rlDisableDepthTest();
+        DrawCircle3D(lifted, overlay.terrainSculptBrushRadius, {1.0f, 0.0f, 0.0f}, 90.0f,
+            kTerrainSculptBrushMuted);
+        rlDrawRenderBatchActive();
+        rlEnableDepthTest();
+    }
     DrawTranslationGizmo(overlay);
     DrawResizeGizmo(overlay);
     DrawRotateGizmo(overlay);
@@ -2155,8 +2181,15 @@ void Renderer::DrawWorld(
 
     if (terrainGpu)
     {
-        const world::TerrainSpec* spec =
-            (level.hasTerrain && level.terrain.enabled) ? &level.terrain : nullptr;
+        const world::TerrainSpec* spec = nullptr;
+        if (overlay.usePreviewTerrain)
+        {
+            spec = overlay.previewHasTerrain ? &overlay.previewTerrain : nullptr;
+        }
+        else if (level.hasTerrain && level.terrain.enabled)
+        {
+            spec = &level.terrain;
+        }
         terrainGpu->Sync(spec);
     }
 
@@ -2796,6 +2829,42 @@ void Renderer::DrawEditorPlacementHud(
     const char* line1 = TextFormat("Placing: %s", category);
     const char* line2 = "LMB place | Esc cancel";
     const char* line3 = fallback ? "No surface hit" : nullptr;
+    const int width1 = MeasureText(line1, font);
+    const int width2 = MeasureText(line2, font);
+    const int width3 = line3 != nullptr ? MeasureText(line3, font) : 0;
+    const int maxWidth = width1 > width2 ? width1 : width2;
+    const int boxWidth = (maxWidth > width3 ? maxWidth : width3) + 16;
+    const int lineCount = line3 != nullptr ? 3 : 2;
+    const int boxHeight = 8 + lineCount * (font + 2);
+    const int x = (GetScreenWidth() - boxWidth) / 2;
+    const int y = static_cast<int>(topInset > 0.0f ? topInset : 8.0f) + 6;
+    DrawRectangle(x, y, boxWidth, boxHeight, Color{18, 24, 32, 150});
+    const int textX1 = (GetScreenWidth() - width1) / 2;
+    const int textX2 = (GetScreenWidth() - width2) / 2;
+    DrawText(line1, textX1, y + 4, font, kPlacementHudText);
+    DrawText(line2, textX2, y + 4 + font + 2, font, kPlacementHudMuted);
+    if (line3 != nullptr)
+    {
+        const int textX3 = (GetScreenWidth() - width3) / 2;
+        DrawText(line3, textX3, y + 4 + 2 * (font + 2), font, kPlacementHudMuted);
+    }
+}
+
+void Renderer::DrawEditorTerrainSculptHud(
+    bool visible,
+    const char* operation,
+    bool hasHit,
+    float topInset)
+{
+    if (!visible || operation == nullptr || operation[0] == '\0')
+    {
+        return;
+    }
+
+    const int font = 16;
+    const char* line1 = TextFormat("Terrain Sculpt: %s", operation);
+    const char* line2 = "LMB sculpt | Esc exit";
+    const char* line3 = hasHit ? nullptr : "No Terrain hit";
     const int width1 = MeasureText(line1, font);
     const int width2 = MeasureText(line2, font);
     const int width3 = line3 != nullptr ? MeasureText(line3, font) : 0;

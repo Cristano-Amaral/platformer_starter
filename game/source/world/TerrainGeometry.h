@@ -254,7 +254,8 @@ inline bool IntersectRayTerrain(
     const TerrainSpec& terrain,
     core::Vec3 origin,
     core::Vec3 direction,
-    float& outDistance)
+    float& outDistance,
+    core::Vec3& outPoint)
 {
     TerrainGeometry geometry{};
     if (!GenerateTerrainGeometry(terrain, geometry))
@@ -286,7 +287,21 @@ inline bool IntersectRayTerrain(
     if (hit)
     {
         outDistance = best;
+        outPoint = {
+            origin.x + direction.x * best,
+            origin.y + direction.y * best,
+            origin.z + direction.z * best};
     }
     return hit;
+}
+
+inline bool IntersectRayTerrain(
+    const TerrainSpec& terrain,
+    core::Vec3 origin,
+    core::Vec3 direction,
+    float& outDistance)
+{
+    core::Vec3 ignored{};
+    return IntersectRayTerrain(terrain, origin, direction, outDistance, ignored);
 }
 }

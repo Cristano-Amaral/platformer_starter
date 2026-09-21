@@ -3,6 +3,7 @@
 #include "world/LevelFile.h"
 #include "world/Terrain.h"
 #include "world/TerrainGeometry.h"
+#include "world/TerrainSculpt.h"
 
 #include <cmath>
 #include <cstdio>
@@ -197,6 +198,31 @@ int main()
     Expect(world.StaticBodyCount() == baseStatic + 1, "Restart/respawn does not duplicate Terrain");
     Expect(terrainA.hasTerrain && world::TerrainSpecEqual(terrainA.terrain, world::MakeDefaultTerrain()),
         "Restart does not mutate authored Terrain");
+
+    world::LevelDefinition sculpted = none;
+    sculpted.hasTerrain = true;
+    sculpted.terrain = world::MakeDefaultTerrain();
+    const core::Vec3 sculptSample = world::TerrainSamplePosition(sculpted.terrain, 1, 1);
+    world::TerrainSculptStampRequest raise{};
+    raise.operation = world::TerrainSculptOperation::Raise;
+    raise.centerX = sculptSample.x;
+    raise.centerZ = sculptSample.z;
+    raise.radius = 2.0f;
+    raise.strength = 1.0f;
+    Expect(world::ApplyTerrainSculptStamp(sculpted.terrain, raise), "sculpted collision fixture");
+    Expect(
+        world.TryRebuild(sculpted, sculpted.initialSpawnVisualCenter, world::kPlayerVisualSize),
+        "Apply sculpted Terrain rebuilds collision");
+    Expect(world.StaticBodyCount() == baseStatic + 1, "sculpted Terrain keeps one body");
+    const core::Vec3 hill = world::TerrainSamplePosition(sculpted.terrain, 1, 1);
+    Expect(
+        HitY(world, {hill.x, hill.y + 8.0f, hill.z}, {hill.x, hill.y - 8.0f, hill.z}, hitY),
+        "ground/ray sees sculpted Terrain");
+    Expect(NearlyEqual(hitY, hill.y), "Jolt after Apply reflects sculpted heights");
+    Expect(
+        world.TryRebuild(sculpted, sculpted.initialSpawnVisualCenter, world::kPlayerVisualSize),
+        "repeated Apply of sculpted Terrain");
+    Expect(world.StaticBodyCount() == baseStatic + 1, "repeated Apply does not duplicate Terrain");
 
     world.Shutdown();
     Expect(!world.IsInitialized(), "shutdown clears world");

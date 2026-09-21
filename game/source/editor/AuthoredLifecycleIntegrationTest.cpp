@@ -10,6 +10,7 @@
 #include "editor/EditorGroupRotate.h"
 #include "editor/ItemIdInspectorEdit.h"
 #include "editor/StaticPropTransform.h"
+#include "editor/TerrainSculpt.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
@@ -78,6 +79,7 @@ void SeedEditor(editor::LevelEditorState& state, const world::LevelDefinition& a
     state.savedSourceBaseline = active;
     editor::ClearCategoryStructuralPending(state.structuralPending);
     editor::ResetStructuralIndexMap(state.structuralMap, active);
+    editor::ResetTerrainSculptState(state.terrainSculpt);
     editor::RefreshLevelEditorDerivedFlags(state, active);
 }
 
@@ -2666,6 +2668,139 @@ int main()
         world::LevelDefinition none = deleted.workingCopy;
         SeedEditor(deleted, none);
         Expect(!deleted.workingCopy.hasTerrain, "Apply Terrain -> no Terrain");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddTerrain, true),
+            "Add Terrain for sculpt");
+        Expect(!state.dirty, "Add Terrain is Modified, not Dirty until Apply");
+        const bool dirtyBeforeMode = state.dirty;
+        const bool modifiedBeforeMode = state.modified;
+        state.selection = {EditorObjectKind::Terrain, 0};
+        state.terrainSculpt.mode = true;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.dirty == dirtyBeforeMode, "entering Sculpt mode does not Dirty");
+        Expect(state.modified == modifiedBeforeMode, "entering Sculpt mode does not Modified");
+        state.terrainSculpt.operation = world::TerrainSculptOperation::Lower;
+        state.terrainSculpt.radius = 4.0f;
+        state.terrainSculpt.strength = 0.5f;
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.dirty == dirtyBeforeMode, "brush parameter edits do not Dirty");
+        Expect(state.modified == modifiedBeforeMode, "brush parameter edits do not Modified");
+
+        world::LevelDefinition applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply pending Terrain clears Modified");
+        state.terrainSculpt.operation = world::TerrainSculptOperation::Raise;
+        state.terrainSculpt.radius = 2.0f;
+        state.terrainSculpt.strength = 0.5f;
+        const world::TerrainSpec activeBeforeSculpt = applied.terrain;
+        const core::Vec3 sample = world::TerrainSamplePosition(state.workingCopy.terrain, 4, 2);
+        editor::Ray3 ray{{sample.x, sample.y + 8.0f, sample.z}, {0.0f, -1.0f, 0.0f}};
+        const editor::TerrainSculptFrameResult preview = editor::TickTerrainSculpt(
+            state.terrainSculpt,
+            state.workingCopy,
+            state.selection,
+            ray,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false);
+        Expect(!preview.mutatedWorkingCopy, "preview movement does not sculpt");
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "brush preview does not Modified");
+        Expect(world::TerrainSpecEqual(applied.terrain, activeBeforeSculpt),
+            "preview does not mutate active Terrain");
+
+        const editor::TerrainSculptFrameResult stamped = editor::TickTerrainSculpt(
+            state.terrainSculpt,
+            state.workingCopy,
+            state.selection,
+            ray,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false);
+        Expect(stamped.mutatedWorkingCopy, "Raise/click sculpts workingCopy");
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(state.modified, "real sculpt marks Modified");
+        Expect(!world::TerrainSpecEqual(state.workingCopy.terrain, applied.terrain),
+            "workingCopy sculpt does not mutate active before Apply");
+        Expect(world::TerrainSpecEqual(applied.terrain, activeBeforeSculpt),
+            "active Terrain unchanged until Apply");
+
+        const editor::TerrainSculptFrameResult held = editor::TickTerrainSculpt(
+            state.terrainSculpt,
+            state.workingCopy,
+            state.selection,
+            ray,
+            false,
+            true,
+            false,
+            false,
+            false,
+            false);
+        Expect(!held.mutatedWorkingCopy, "stationary held cursor does not accumulate");
+        const world::LevelDefinition afterHold = state.workingCopy;
+        const editor::TerrainSculptFrameResult released = editor::TickTerrainSculpt(
+            state.terrainSculpt,
+            state.workingCopy,
+            state.selection,
+            ray,
+            false,
+            false,
+            true,
+            false,
+            false,
+            false);
+        Expect(!released.mutatedWorkingCopy, "release ends the stroke without extra stamps");
+        Expect(world::AuthoredLevelDataEqual(afterHold, state.workingCopy),
+            "stroke end is not an authored change");
+
+        applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply promotes sculpted heights");
+        Expect(state.dirty, "Apply of unsaved sculpted Terrain is Dirty");
+        Expect(world::TerrainSpecEqual(applied.terrain, state.workingCopy.terrain),
+            "Apply copies workingCopy sculpted Terrain into active");
+
+        const std::string saved = world::SerializeLevelText(applied);
+        Expect(saved.find("radius") == std::string::npos
+                && saved.find("strength") == std::string::npos,
+            "brush parameters are not authored");
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload sculpted Terrain");
+        Expect(world::AuthoredLevelDataEqual(applied, reloaded.level),
+            "reload preserves sculpted samples");
+
+        editor::LevelEditorState f2 = state;
+        SeedEditor(f2, applied);
+        Expect(f2.workingCopy.hasTerrain
+                && world::TerrainSpecEqual(f2.workingCopy.terrain, applied.terrain),
+            "F2 re-seed keeps sculpted Terrain");
+        Expect(!f2.terrainSculpt.mode && !f2.terrainSculpt.stroke.active,
+            "F2 does not leak sculpt stroke state");
+
+        f2.terrainSculpt.mode = true;
+        f2.selection = {EditorObjectKind::Terrain, 0};
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                f2, applied, LevelEditorRequest::DeleteSelected, true),
+            "Delete Terrain while Sculpt mode");
+        editor::ReconcileTerrainSculptState(f2.terrainSculpt, f2.workingCopy, f2.selection);
+        Expect(!f2.terrainSculpt.mode, "Delete Terrain turns Sculpt off");
+        Expect(!f2.workingCopy.hasTerrain, "Delete removes workingCopy Terrain");
+        Expect(applied.hasTerrain, "Delete does not mutate active");
     }
 
     if (gFailures != 0)

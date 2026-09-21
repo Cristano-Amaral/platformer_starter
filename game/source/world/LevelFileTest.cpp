@@ -6,6 +6,7 @@
 #include "world/LevelFile.h"
 #include "world/LevelWriter.h"
 #include "world/RespawnWorld.h"
+#include "world/TerrainSculpt.h"
 
 #include <array>
 #include <cstddef>
@@ -2583,6 +2584,25 @@ int main()
             slopedParsed.level.terrain.heights[world::TerrainHeightIndex(slopedParsed.level.terrain, 2, 2)]
                 == 2.0f,
             "exact sample count and last height round-trip");
+
+        world::LevelDefinition sculpted = withFlat;
+        const core::Vec3 sculptSample = world::TerrainSamplePosition(sculpted.terrain, 4, 2);
+        world::TerrainSculptStampRequest raise{};
+        raise.operation = world::TerrainSculptOperation::Raise;
+        raise.centerX = sculptSample.x;
+        raise.centerZ = sculptSample.z;
+        raise.radius = 4.0f;
+        raise.strength = 0.75f;
+        Expect(world::ApplyTerrainSculptStamp(sculpted.terrain, raise), "sculpted save fixture");
+        const std::string sculptedText = world::SerializeLevelText(sculpted);
+        Expect(sculptedText.find("sculpt") == std::string::npos, "brush parameters are not persisted");
+        Expect(CountRecords(sculptedText, "terrain") == 1, "sculpted Terrain still one header");
+        const world::ParseLevelFileResult sculptedParsed = world::ParseLevelText(sculptedText);
+        Expect(sculptedParsed.status == world::LoadLevelFileStatus::Loaded, "sculpted Terrain loads");
+        Expect(
+            world::AuthoredLevelDataEqual(sculpted, sculptedParsed.level),
+            "Save/parse roundtrip preserves sculpted samples");
+        Expect(OnlyAuthoredKeywords(sculptedText), "sculpted writer uses existing Terrain keywords");
 
         Expect(
             world::ParseLevelText(canonical + "terrain 1 0 0 0 16 8 9 5\nterrain 1 0 0 0 16 8 9 5\n")

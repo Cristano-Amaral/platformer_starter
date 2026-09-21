@@ -362,7 +362,7 @@ Pressure Plate
 
 ## Terrain Foundation (Milestone 86)
 
-M86 introduces one optional singleton authored **Terrain** per Level. It is a regular XZ heightfield, not a repeatable prop, tile set, GUID, or sculpting editor.
+M86 introduces one optional singleton authored **Terrain** per Level. It is a regular XZ heightfield, not a repeatable prop, tile set, GUID, or generic mesh editor. M87 sculpts the existing `heights[]` array in the Development Editor.
 
 ```
 LevelDefinition
@@ -384,11 +384,15 @@ LevelDefinition
 
 **Collision.** Jolt `MeshShape` from the same CPU triangles, not `HeightFieldShape`. Native heightfield requires a square grid and 8/16-bit quantization, which would break rectangular defaults and render/collision correspondence. Terrain is one extra static body; the authored leftover stays 59 (`kPhysicsMaxBodies` 65). Apply/transition/delete rebuild or remove the body. Player, Dynamic Boxes, and ground/ray queries use that surface.
 
-**Editor.** Hierarchy shows Terrain after Ground only when present. `Edit > Add > Terrain` is available only when absent. Dedicated `EditorObjectKind::Terrain`. Viewport picking uses actual triangle hits and nearest-hit wins, so objects above Terrain stay selectable. Inspector: Enabled, Origin, Size X/Z, read-only Resolution, sample count. Resolution is creation-time in M86 (no resampling). Translate edits origin with M76 snap. Rotate/Scale/Resize/Duplicate/Group are unavailable.
+**Editor.** Hierarchy shows Terrain after Ground only when present. `Edit > Add > Terrain` is available only when absent. Dedicated `EditorObjectKind::Terrain`. Viewport picking uses actual triangle hits and nearest-hit wins, so objects above Terrain stay selectable. Inspector: Enabled, Origin, Size X/Z, read-only Resolution, sample count, and M87 Sculpt Mode / Brush / Radius / Strength. Resolution remains creation-time (no resampling). Translate edits origin with M76 snap. Rotate/Scale/Resize/Duplicate/Group are unavailable. Sculpt is a focused Terrain tool, not a generic object gizmo: while it is on, viewport LMB stamps working-copy heights and does not change selection.
 
-**Authority.** Inspector/gizmo edit `workingCopy`. Apply validates and rebuilds render/collision. Save writes `terrain` / `terrain_row`. Restart, death/checkpoint, F2, Play Again, and Main Menu → Play do not invent Terrain-specific authority. Release uses staged Level data only.
+**Sculpt (Milestone 87).** Brush operations Raise, Lower, Smooth, and Flatten mutate only `workingCopy.terrain.heights`. Linear XZ falloff is `1 - d/radius` for `d < radius`. Strokes stamp on press and then every `0.25 * radius` of cursor XZ travel; a stationary hold does not accumulate. Flatten captures one world-space hit Y at stroke begin. Brush parameters are transient editor state and are not serialized. Development preview syncs the existing `TerrainGpuResources` from working-copy Terrain so unapplied relief is visible; Jolt/runtime collision stay on active Terrain until Apply. Sculpt hit-testing uses working-copy triangles, not Jolt.
+
+**Authority.** Inspector/gizmo/sculpt edit `workingCopy`. Apply validates and rebuilds render/collision from the promoted authored heights. Save writes `terrain` / `terrain_row`. Restart, death/checkpoint, F2, Play Again, and Main Menu → Play do not invent Terrain-specific authority. Release uses staged Level data only.
 
 **Out of scope for M86 itself.** Sculpt/paint, layers, LOD, tiles, streaming, holes/caves, navmesh, water, foliage, Undo/Redo, M87.
+
+**Out of scope for M87 itself.** Terrain materials/painting, vegetation, foliage, resampling, tiles/LOD/streaming, holes/caves, runtime deformation, Undo/Redo, M88.
 
 Development `Assets > Import Static GLB` copies a compatible self-contained static `.glb` into `game/assets/source/models/<filename>.glb`. Canonical identity is the project-relative path `models/<filename>.glb`. The original external absolute path is import input only. Collision never overwrites. Import does not cook, stage, or mutate `workingCopy` / `active` / `savedSourceBaseline`. A derived `assets::StaticModelCatalog` discovers valid `source/models/*.glb` files (non-recursive, sorted by identity). It is not persisted and is not a level/scene object list. After import, the existing Cook Assets then Stage Runtime Assets path processes extra cooked `models/*.glb` files. Staging's required inventory remains `cmake/RuntimeAssets.cmake`; extra cooked models are discovered at staging time. Extra cooked `levels/*.level` files are discovered the same way so a Level created in the Development Levels UI can enter Cook & Stage without a per-level CMake edit.
 

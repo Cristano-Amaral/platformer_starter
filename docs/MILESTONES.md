@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 86 — Terrain Foundation**
+**Milestone 87 — Terrain Sculpting**
 
-Canonical file: [`docs/milestones/MILESTONE_86.md`](milestones/MILESTONE_86.md)
+Canonical file: [`docs/milestones/MILESTONE_87.md`](milestones/MILESTONE_87.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -46,8 +46,9 @@ Milestone 85.1 is CLOSED.
 Milestone 85.2 is CLOSED.
 Milestone 85.3 is CLOSED.
 Milestone 85.4 is CLOSED.
-Milestone 86 is implemented, awaiting manual acceptance.
-Do not start Milestone 87.
+Milestone 86 is CLOSED.
+Milestone 87 is implemented, awaiting manual acceptance.
+Do not start Milestone 88.
 
 ## Cursor loading contract
 
@@ -173,7 +174,8 @@ Historical milestone files do not override current implemented behavior.
 | 85.2 | [Milestone 85.2 — Directional Light Gameplay Activation & Authoring Polish](milestones/MILESTONE_85_2.md) | complete |
 | 85.3 | [Milestone 85.3 — Local Lights Foundation](milestones/MILESTONE_85_3.md) | complete |
 | 85.4 | [Milestone 85.4 — Local Light Gameplay Linking](milestones/MILESTONE_85_4.md) | complete |
-| 86 | [Milestone 86 — Terrain Foundation](milestones/MILESTONE_86.md) | implemented, awaiting manual acceptance |
+| 86 | [Milestone 86 — Terrain Foundation](milestones/MILESTONE_86.md) | complete |
+| 87 | [Milestone 87 — Terrain Sculpting](milestones/MILESTONE_87.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

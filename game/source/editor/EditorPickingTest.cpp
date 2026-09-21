@@ -9,6 +9,7 @@
 #include "editor/EditorViewportGrid.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/StaticPropTransform.h"
+#include "editor/TerrainSculpt.h"
 #include "gameplay/CollectibleRunState.h"
 #include "world/LevelDefinition.h"
 
@@ -1597,6 +1598,33 @@ int main()
         const editor::Ray3 ontoTerrain{{-7.0f, 10.0f, 0.0f}, {0.0f, -1.0f, 0.0f}};
         const editor::EditorSelection exposed = editor::PickNearest(ontoTerrain, set);
         Expect(exposed.kind == editor::EditorObjectKind::Terrain, "exposed Terrain can be selected");
+
+        world::LevelDefinition working = level;
+        const core::Vec3 sample = world::TerrainSamplePosition(working.terrain, 4, 2);
+        world::TerrainSculptStampRequest raise{};
+        raise.operation = world::TerrainSculptOperation::Raise;
+        raise.centerX = sample.x;
+        raise.centerZ = sample.z;
+        raise.radius = 2.0f;
+        raise.strength = 1.0f;
+        Expect(world::ApplyTerrainSculptStamp(working.terrain, raise), "workingCopy sculpt for pick");
+        const editor::Ray3 ontoHill{
+            {sample.x, sample.y + 8.0f, sample.z}, {0.0f, -1.0f, 0.0f}};
+        core::Vec3 workingHit{};
+        Expect(
+            editor::PickWorkingCopyTerrainSculptHit(working, ontoHill, workingHit),
+            "sculpt hit uses working-copy Terrain");
+        Expect(workingHit.y > sample.y, "brush follows unapplied sculpted relief");
+        core::Vec3 activeHit{};
+        Expect(
+            editor::PickWorkingCopyTerrainSculptHit(level, ontoHill, activeHit),
+            "active Terrain remains pickable");
+        Expect(activeHit.y < workingHit.y, "unapplied sculpt does not change active pick surface");
+        const editor::EditorPickingSet activeSet =
+            editor::BuildPickingSet(level, editor::AuthoredPickingWorldState(level));
+        Expect(
+            editor::PickNearest(ontoProp, activeSet).kind == editor::EditorObjectKind::StaticProp,
+            "outside Sculpt mode nearest-hit picking is unchanged");
     }
 
     if (gFailures != 0)

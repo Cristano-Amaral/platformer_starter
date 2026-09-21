@@ -7,6 +7,7 @@
 #include "render/WorldLighting.h"
 #include "world/LocalLight.h"
 #include "world/Terrain.h"
+#include "world/TerrainSculpt.h"
 
 #include "raylib.h"
 
@@ -232,11 +233,27 @@ int main()
         EndMode3D();
         EndDrawing();
         Expect(terrainGpu.UploadCount() == uploads + 1, "drawing does not rebuild Terrain");
+        world::TerrainSpec sculpted = moved;
+        const core::Vec3 sample = world::TerrainSamplePosition(sculpted, 4, 2);
+        world::TerrainSculptStampRequest raise{};
+        raise.operation = world::TerrainSculptOperation::Raise;
+        raise.centerX = sample.x;
+        raise.centerZ = sample.z;
+        raise.radius = 2.0f;
+        raise.strength = 0.5f;
+        Expect(world::ApplyTerrainSculptStamp(sculpted, raise), "GPU sculpt fixture");
+        terrainGpu.Sync(&sculpted);
+        Expect(terrainGpu.HasMesh(), "sculpted Terrain uploads");
+        Expect(terrainGpu.UploadCount() == uploads + 2, "sculpted heights rebuild Terrain mesh");
+        const std::size_t sculptUploads = terrainGpu.UploadCount();
+        terrainGpu.Sync(&sculpted);
+        Expect(terrainGpu.UploadCount() == sculptUploads, "unchanged sculpted Terrain does not reupload");
+        const std::size_t sculptUnloads = terrainGpu.UnloadCount();
         terrainGpu.Sync(nullptr);
         Expect(!terrainGpu.HasMesh(), "removing Terrain unloads the mesh");
-        Expect(terrainGpu.UnloadCount() == unloads + 2, "removal unloads once");
+        Expect(terrainGpu.UnloadCount() == sculptUnloads + 1, "removal unloads once");
         terrainGpu.Sync(nullptr);
-        Expect(terrainGpu.UnloadCount() == unloads + 2, "second removal is idempotent");
+        Expect(terrainGpu.UnloadCount() == sculptUnloads + 1, "second removal is idempotent");
     }
 
     lighting.Unload();

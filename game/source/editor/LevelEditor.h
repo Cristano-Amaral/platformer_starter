@@ -25,6 +25,7 @@
 #include "editor/ContentBrowser.h"
 #include "editor/EditorPlacement.h"
 #include "editor/StaticPropPlacement.h"
+#include "editor/TerrainSculpt.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemIdInspectorEdit.h"
@@ -212,6 +213,8 @@ struct LevelEditorState
     PlacementMode placementMode = PlacementMode::None;
     // M50 transient Static Prop placement. Not authored LevelDefinition data.
     StaticPropPlacementState staticPropPlacement{};
+    // M87 transient Terrain Sculpt tool. Not authored, not serialized, not Dirty.
+    TerrainSculptState terrainSculpt{};
     // True from a claimed LMB press (gizmo/widget/ImGui/look) until release.
     // Prevents gizmo drag-release from confirming placement.
     bool placementPointerBlocked = false;

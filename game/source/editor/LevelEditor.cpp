@@ -836,6 +836,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         EditVec3("Size X Y Z", level.ground.size);
         break;
     case EditorObjectKind::Terrain:
+    {
         if (!level.hasTerrain)
         {
             ImGui::TextUnformatted("No Terrain in this Level.");
@@ -844,7 +845,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         ImGui::TextWrapped(
             "Singleton Level Terrain. Origin is the min-X / min-Z sample. "
             "Heights are relative to Origin Y. Resolution is creation-time "
-            "in M86 and is not resampled here.");
+            "and is not resampled here.");
         ImGui::Checkbox("Enabled", &level.terrain.enabled);
         EditVec3("Origin X Y Z", level.terrain.origin);
         ImGui::InputFloat("Size X", &level.terrain.sizeX, 0.0f, 0.0f, kFloatFormat);
@@ -856,7 +857,46 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
         ImGui::Text(
             "Samples: %d",
             world::TerrainSampleCount(level.terrain));
+        ImGui::Separator();
+        ImGui::TextUnformatted("Terrain Sculpt");
+        ImGui::TextWrapped(
+            "Sculpt edits working-copy heights only. Apply promotes render "
+            "and collision. Brush settings are not saved with the Level.");
+        const bool sculptWasOn = state.terrainSculpt.mode;
+        if (ImGui::Checkbox("Sculpt Mode", &state.terrainSculpt.mode))
+        {
+            editor::EndTerrainSculptStroke(state.terrainSculpt);
+            if (state.terrainSculpt.mode && !sculptWasOn)
+            {
+                CancelAllEditorPlacement(
+                    state.placementMode,
+                    state.placementPointerBlocked,
+                    state.staticPropPlacement);
+            }
+        }
+        int operation = static_cast<int>(state.terrainSculpt.operation);
+        const char* operationNames[] = {"Raise", "Lower", "Smooth", "Flatten"};
+        if (ImGui::Combo("Brush", &operation, operationNames, 4))
+        {
+            state.terrainSculpt.operation =
+                static_cast<world::TerrainSculptOperation>(operation);
+            editor::EndTerrainSculptStroke(state.terrainSculpt);
+        }
+        ImGui::SliderFloat(
+            "Radius",
+            &state.terrainSculpt.radius,
+            world::kMinTerrainSculptRadius,
+            world::kMaxTerrainSculptRadius,
+            "%.2f");
+        ImGui::SliderFloat(
+            "Strength",
+            &state.terrainSculpt.strength,
+            world::kMinTerrainSculptStrength,
+            world::kMaxTerrainSculptStrength,
+            "%.2f");
+        editor::SanitizeTerrainSculptState(state.terrainSculpt);
         break;
+    }
     case EditorObjectKind::ElevatedPlatform:
         if (state.selection.index < level.elevatedPlatforms.size())
         {

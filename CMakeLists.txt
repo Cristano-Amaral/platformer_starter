@@ -96,6 +96,7 @@ add_executable(Platformer3D
     game/source/editor/EditorPlacement.h
     game/source/editor/StaticPropPlacement.cpp
     game/source/editor/StaticPropPlacement.h
+    game/source/editor/TerrainSculpt.h
     game/source/editor/EditorBuildPreference.cpp
     game/source/editor/EditorBuildPreference.h
     game/source/editor/EditorSelection.cpp
@@ -200,6 +201,7 @@ add_executable(Platformer3D
     game/source/world/StaticProp.cpp
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
     game/source/world/LevelGoal.h
     game/source/world/LevelIdentity.h
     game/source/world/LevelFile.cpp
@@ -560,6 +562,7 @@ add_executable(LevelFileTest
     game/source/world/StaticProp.h
     game/source/world/LevelWriter.cpp
     game/source/world/LevelWriter.h
+    game/source/world/TerrainSculpt.h
 )
 if(WIN32)
     target_sources(LevelFileTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
@@ -594,6 +597,20 @@ if(MSVC)
     target_compile_options(TerrainGeometryTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(TerrainGeometryTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 87: deterministic Terrain sculpt math/stroke. No window, Jolt, or raylib.
+add_executable(TerrainSculptTest
+    game/source/world/TerrainSculptTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
+)
+target_include_directories(TerrainSculptTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(TerrainSculptTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainSculptTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 
@@ -729,6 +746,7 @@ add_executable(TerrainCollisionTest
     game/source/world/LevelFile.h
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
 )
 target_include_directories(TerrainCollisionTest PRIVATE game/source)
 target_link_libraries(TerrainCollisionTest PRIVATE Jolt)
@@ -1290,6 +1308,7 @@ add_executable(EditorPickingTest
     game/source/editor/EditorPicking.cpp
     game/source/editor/EditorPicking.h
     game/source/editor/EditorPickingTest.cpp
+    game/source/editor/TerrainSculpt.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -1732,6 +1751,7 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/editor/EditorPlacement.h
     game/source/editor/StaticPropPlacement.cpp
     game/source/editor/StaticPropPlacement.h
+    game/source/editor/TerrainSculpt.h
     game/source/editor/EditorSelection.cpp
     game/source/editor/EditorSelection.h
     game/source/editor/EditorSelectionSet.h
@@ -2102,6 +2122,7 @@ add_executable(WorldLightingResourcesTest
     game/source/render/WorldLightingResourcesTest.cpp
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
 )
 if(WIN32)
     target_sources(WorldLightingResourcesTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)

@@ -147,6 +147,12 @@ int main()
         inspector.terrain.enabled = inspectorBefore.terrain.enabled;
         Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
             "restored Enabled is a no-op");
+        inspector.terrain.heights[0] = 0.5f;
+        Expect(!world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "Terrain height sculpt is a semantic change");
+        inspector.terrain.heights[0] = inspectorBefore.terrain.heights[0];
+        Expect(world::AuthoredLevelDataEqual(inspectorBefore, inspector),
+            "restored heights are a no-op");
     }
 
     {

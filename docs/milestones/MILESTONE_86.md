@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED — awaiting manual acceptance, not CLOSED**
+**CLOSED**
 
 M85.4 is CLOSED.
 

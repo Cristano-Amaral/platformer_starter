@@ -1,7 +1,8 @@
 #pragma once
 
-// Milestone 86: optional singleton authored Terrain. Regular XZ heightfield.
-// Not a repeatable prop category, tile set, GUID, or sculpting editor.
+// Milestone 86/87: optional singleton authored Terrain. Regular XZ heightfield.
+// Not a repeatable prop category, tile set, GUID, or generic mesh editor.
+// M87 sculpts these authored heights[] only; brush parameters are not Level data.
 //
 // Origin convention (used by parse/write, render, Jolt, normals, picking,
 // Inspector, and Translate):
