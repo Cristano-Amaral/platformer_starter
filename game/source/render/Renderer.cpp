@@ -2228,10 +2228,24 @@ void Renderer::DrawWorld(
         }
         terrainGpu->Sync(spec);
     }
+    const world::TerrainSpec* vegetationTerrain = nullptr;
+    if (overlay.usePreviewTerrain)
+    {
+        vegetationTerrain = overlay.previewHasTerrain ? &overlay.previewTerrain : nullptr;
+    }
+    else if (level.hasTerrain && level.terrain.enabled)
+    {
+        vegetationTerrain = &level.terrain;
+    }
 
     auto drawWorldGeometry = [&]() {
         DrawGreyboxBox(level.ground.center, level.ground.size, kGroundColor);
         DrawAuthoredTerrain(terrainGpu.get(), kTerrainColor);
+        if (gWorldSolidMode != WorldSolidMode::Wires && vegetationTerrain != nullptr
+            && staticPropModels != nullptr)
+        {
+            staticPropModels->DrawTerrainVegetation(*vegetationTerrain, gWorldModelOverride);
+        }
 
         const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
         int platformIndex = 0;
@@ -2926,7 +2940,9 @@ void Renderer::DrawEditorTerrainPaintHud(
     bool visible,
     const char* layerName,
     bool hasHit,
-    float topInset)
+    float topInset,
+    const char* title,
+    const char* hint)
 {
     if (!visible || layerName == nullptr || layerName[0] == '\0')
     {
@@ -2934,8 +2950,9 @@ void Renderer::DrawEditorTerrainPaintHud(
     }
 
     const int font = 16;
-    const char* line1 = TextFormat("Terrain Paint: %s", layerName);
-    const char* line2 = "LMB paint | Esc exit";
+    const char* line1 = TextFormat(
+        "%s: %s", title != nullptr && title[0] != '\0' ? title : "Terrain Paint", layerName);
+    const char* line2 = hint != nullptr && hint[0] != '\0' ? hint : "LMB paint | Esc exit";
     const char* line3 = hasHit ? nullptr : "No Terrain hit";
     const int width1 = MeasureText(line1, font);
     const int width2 = MeasureText(line2, font);

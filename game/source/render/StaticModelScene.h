@@ -47,6 +47,12 @@ public:
 
     void DrawProp(const world::StaticPropSpec& spec) const;
     void DrawProp(const world::StaticPropSpec& spec, const ModelDrawOverride& override) const;
+    // Repeated instances of palette models already cached by Sync. One Model
+    // per identity. world_lit.vs binds one matModel, so this is a CPU batch
+    // of DrawModel calls, not a GPU instance attribute.
+    void DrawTerrainVegetation(
+        const world::TerrainSpec& terrain,
+        const ModelDrawOverride* override) const;
     void DrawPlacementPreview(const world::StaticPropSpec& spec) const;
     // Editor-only second pass of the same cached model. Does not LoadModel,
     // permanently mutate imported materials, or add a persistent scene object.

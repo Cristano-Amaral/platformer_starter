@@ -764,6 +764,62 @@ def iter_level_source_files(sources: Path) -> list[Path]:
     return files
 
 
+def is_valid_static_model_identity(identity: str) -> bool:
+    """models/<file>.glb, matching the cooker file-name rules. Spaces allowed."""
+    if not identity or "\\" in identity:
+        return False
+    prefix = f"{STATIC_MODELS_DIRECTORY}/"
+    if not identity.startswith(prefix):
+        return False
+    name = identity[len(prefix) :]
+    if "/" in name or not is_safe_static_glb_file_name(name):
+        return False
+    return portable_relative(f"{STATIC_MODELS_DIRECTORY}/{name}") == identity
+
+
+def extract_terrain_vegetation_model_identities(level_text: str) -> list[str]:
+    """Model identities named by terrain_veg_entry. Not static_prop records."""
+    identities: list[str] = []
+    for raw_line in level_text.splitlines():
+        stripped = raw_line.strip(" \t")
+        if not stripped:
+            continue
+        tokens = stripped.split()
+        if not tokens or tokens[0] != "terrain_veg_entry" or len(tokens) < 8:
+            continue
+        identity = " ".join(tokens[7:])
+        if is_valid_static_model_identity(identity):
+            identities.append(identity)
+    return identities
+
+
+def discover_level_referenced_static_glb_assets(sources: Path) -> list[dict[str, str]]:
+    """GLBs named only by Terrain vegetation. Missing source files are skipped."""
+    extras: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for path in iter_level_source_files(sources):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for identity in extract_terrain_vegetation_model_identities(text):
+            if identity in seen:
+                continue
+            if not (sources / identity).is_file():
+                continue
+            seen.add(identity)
+            extras.append(
+                {
+                    "id": identity,
+                    "source": identity,
+                    "cooked": identity,
+                    "kind": KIND_COPY,
+                }
+            )
+    extras.sort(key=lambda item: item["id"])
+    return extras
+
+
 def extract_terrain_texture_identities(level_text: str) -> list[str]:
     identities: list[str] = []
     for raw_line in level_text.splitlines():
@@ -821,6 +877,8 @@ def collect_cook_assets(sources: Path) -> list[dict[str, str]]:
         portable_relative(asset["id"]): dict(asset) for asset in KNOWN_ASSETS
     }
     for extra in discover_extra_static_glb_assets(sources):
+        merged.setdefault(extra["id"], extra)
+    for extra in discover_level_referenced_static_glb_assets(sources):
         merged.setdefault(extra["id"], extra)
     for extra in discover_extra_level_v1_assets(sources):
         merged.setdefault(extra["id"], extra)

@@ -786,6 +786,26 @@ else()
     target_compile_options(TerrainPaintTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 93: Terrain vegetation palette, occupancy, and derived instances.
+add_executable(TerrainVegetationTest
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/world/StaticProp.cpp
+    game/source/world/StaticProp.h
+    game/source/world/TerrainVegetationTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
+    game/source/world/TerrainVegetation.h
+    game/source/editor/TerrainVegetation.h
+)
+target_include_directories(TerrainVegetationTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(TerrainVegetationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainVegetationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 
 # Milestone 54: player runtime Inventory API and lifecycle policy. Not shipped.
 # No window, raylib, Jolt, or ImGui.

@@ -27,6 +27,7 @@
 #include "editor/StaticPropPlacement.h"
 #include "editor/TerrainSculpt.h"
 #include "editor/TerrainPaint.h"
+#include "editor/TerrainVegetation.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemIdInspectorEdit.h"
@@ -161,6 +162,7 @@ enum class TerrainInspectorCategory
     Terrain = 0,
     MaterialsPaint = 1,
     Sculpt = 2,
+    Vegetation = 3,
 };
 
 struct LevelEditorState
@@ -228,9 +230,11 @@ struct LevelEditorState
     PlacementMode placementMode = PlacementMode::None;
     // M50 transient Static Prop placement. Not authored LevelDefinition data.
     StaticPropPlacementState staticPropPlacement{};
-    // M87/M90 transient Terrain Sculpt/Paint tools. Not authored, not serialized, not Dirty.
+    // M87/M90/M93 transient Terrain Sculpt/Paint/Vegetation tools. Not authored,
+    // not serialized, not Dirty.
     TerrainSculptState terrainSculpt{};
     TerrainPaintState terrainPaint{};
+    TerrainVegetationState terrainVegetation{};
     // Session-local Terrain Inspector category. Not authored, not Dirty, not Level Format.
     TerrainInspectorCategory terrainInspectorCategory = TerrainInspectorCategory::Terrain;
     // True from a claimed LMB press (gizmo/widget/ImGui/look) until release.

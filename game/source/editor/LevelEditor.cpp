@@ -364,6 +364,8 @@ const char* TerrainInspectorCategoryTooltip(TerrainInspectorCategory category)
         return "Terrain Materials & Paint";
     case TerrainInspectorCategory::Sculpt:
         return "Terrain Sculpt";
+    case TerrainInspectorCategory::Vegetation:
+        return "Terrain Vegetation";
     default:
         return "Terrain";
     }
@@ -388,6 +390,18 @@ void DrawTerrainCategoryGlyph(
     case TerrainInspectorCategory::MaterialsPaint:
         drawList->AddCircleFilled(center, std::min(width, height) * 0.28f, color, 16);
         drawList->AddCircle(center, std::min(width, height) * 0.28f, IM_COL32(20, 24, 32, 255), 16, 1.5f);
+        break;
+    case TerrainInspectorCategory::Vegetation:
+        drawList->AddTriangleFilled(
+            ImVec2(center.x, center.y - height * 0.22f),
+            ImVec2(center.x - width * 0.16f, center.y + height * 0.02f),
+            ImVec2(center.x + width * 0.16f, center.y + height * 0.02f),
+            color);
+        drawList->AddLine(
+            ImVec2(center.x, center.y + height * 0.02f),
+            ImVec2(center.x, center.y + height * 0.22f),
+            color,
+            2.0f);
         break;
     case TerrainInspectorCategory::Sculpt:
         drawList->AddLine(
@@ -1151,6 +1165,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             {
                 editor::EndTerrainPaintStroke(state.terrainPaint);
                 editor::EndTerrainSculptStroke(state.terrainSculpt);
+                editor::EndTerrainVegetationStroke(state.terrainVegetation);
                 state.terrainInspectorCategory = TerrainInspectorCategory::Terrain;
             }
         }
@@ -1161,6 +1176,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             {
                 editor::EndTerrainPaintStroke(state.terrainPaint);
                 editor::EndTerrainSculptStroke(state.terrainSculpt);
+                editor::EndTerrainVegetationStroke(state.terrainVegetation);
                 state.terrainInspectorCategory = TerrainInspectorCategory::MaterialsPaint;
             }
         }
@@ -1171,7 +1187,19 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             {
                 editor::EndTerrainPaintStroke(state.terrainPaint);
                 editor::EndTerrainSculptStroke(state.terrainSculpt);
+                editor::EndTerrainVegetationStroke(state.terrainVegetation);
                 state.terrainInspectorCategory = TerrainInspectorCategory::Sculpt;
+            }
+        }
+        if (DrawTerrainCategoryIcon(
+                TerrainInspectorCategory::Vegetation, state.terrainInspectorCategory))
+        {
+            if (state.terrainInspectorCategory != TerrainInspectorCategory::Vegetation)
+            {
+                editor::EndTerrainPaintStroke(state.terrainPaint);
+                editor::EndTerrainSculptStroke(state.terrainSculpt);
+                editor::EndTerrainVegetationStroke(state.terrainVegetation);
+                state.terrainInspectorCategory = TerrainInspectorCategory::Vegetation;
             }
         }
         ImGui::EndGroup();
@@ -1380,6 +1408,8 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 {
                     state.terrainSculpt.mode = false;
                     editor::EndTerrainSculptStroke(state.terrainSculpt);
+                    state.terrainVegetation.mode = false;
+                    editor::EndTerrainVegetationStroke(state.terrainVegetation);
                     CancelAllEditorPlacement(
                         state.placementMode,
                         state.placementPointerBlocked,
@@ -1400,7 +1430,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 "%.2f");
             editor::SanitizeTerrainPaintState(state.terrainPaint, level.terrain);
         }
-        else
+        else if (state.terrainInspectorCategory == TerrainInspectorCategory::Sculpt)
         {
             ImGui::TextUnformatted("Terrain Sculpt");
             ImGui::TextWrapped(
@@ -1414,6 +1444,8 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 {
                     state.terrainPaint.mode = false;
                     editor::EndTerrainPaintStroke(state.terrainPaint);
+                    state.terrainVegetation.mode = false;
+                    editor::EndTerrainVegetationStroke(state.terrainVegetation);
                     CancelAllEditorPlacement(
                         state.placementMode,
                         state.placementPointerBlocked,
@@ -1441,6 +1473,157 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 world::kMaxTerrainSculptStrength,
                 "%.2f");
             editor::SanitizeTerrainSculptState(state.terrainSculpt);
+        }
+        else
+        {
+            ImGui::TextUnformatted("Terrain Vegetation");
+            ImGui::TextWrapped(
+                "Paint adds the selected entry on Terrain and leaves other entries. "
+                "Erase removes only the selected entry. Instances follow the current "
+                "Terrain surface. Apply promotes; Save writes the palette and occupancy.");
+            editor::SanitizeTerrainVegetationState(state.terrainVegetation, level.terrain);
+            const int entryCount = static_cast<int>(level.terrain.vegetationEntries.size());
+            ImGui::BeginChild("##terrainVegetationPalette", ImVec2(0.0f, 160.0f), true);
+            for (int entryIndex = 0; entryIndex < entryCount; ++entryIndex)
+            {
+                ImGui::PushID(entryIndex);
+                world::TerrainVegetationEntry& entry =
+                    level.terrain.vegetationEntries[static_cast<std::size_t>(entryIndex)];
+                const bool selected = state.terrainVegetation.selectedEntry == entryIndex;
+                if (ImGui::RadioButton("##vegEntry", selected))
+                {
+                    state.terrainVegetation.selectedEntry = entryIndex;
+                    editor::EndTerrainVegetationStroke(state.terrainVegetation);
+                }
+                ImGui::SameLine();
+                const std::string label = std::to_string(entryIndex) + "  " + entry.modelIdentity;
+                ImGui::TextUnformatted(label.c_str());
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", entry.modelIdentity.c_str());
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove"))
+                {
+                    if (world::TryRemoveTerrainVegetationEntry(level.terrain, entryIndex))
+                    {
+                        editor::RemapTerrainVegetationSelectionAfterRemove(
+                            state.terrainVegetation, entryIndex);
+                        editor::EndTerrainVegetationStroke(state.terrainVegetation);
+                    }
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+            if (entryCount < world::kMaxTerrainVegetationEntries)
+            {
+                if (ImGui::BeginCombo("Add Model", "Select model..."))
+                {
+                    for (const assets::StaticModelCatalogEntry& model :
+                         state.contentBrowser.catalog.Entries())
+                    {
+                        if (ImGui::Selectable(model.displayName.c_str(), false))
+                        {
+                            if (world::TryAddTerrainVegetationEntry(
+                                    level.terrain, model.canonicalIdentity))
+                            {
+                                state.terrainVegetation.selectedEntry =
+                                    static_cast<int>(level.terrain.vegetationEntries.size()) - 1;
+                            }
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("%s", model.canonicalIdentity.c_str());
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+            else
+            {
+                ImGui::TextWrapped("Palette limit reached (8 models).");
+            }
+#else
+            ImGui::TextWrapped("Model selection requires the Development authoring tools.");
+#endif
+            if (entryCount > 0
+                && state.terrainVegetation.selectedEntry >= 0
+                && state.terrainVegetation.selectedEntry < entryCount)
+            {
+                world::TerrainVegetationEntry& entry = level.terrain.vegetationEntries[static_cast<
+                    std::size_t>(state.terrainVegetation.selectedEntry)];
+                ImGui::SliderFloat(
+                    "Density",
+                    &entry.density,
+                    world::kMinTerrainVegetationDensity,
+                    world::kMaxTerrainVegetationDensity,
+                    "%.2f");
+                ImGui::SliderFloat(
+                    "Min Scale",
+                    &entry.minScale,
+                    world::kMinTerrainVegetationScale,
+                    world::kMaxTerrainVegetationScale,
+                    "%.2f");
+                ImGui::SliderFloat(
+                    "Max Scale",
+                    &entry.maxScale,
+                    world::kMinTerrainVegetationScale,
+                    world::kMaxTerrainVegetationScale,
+                    "%.2f");
+                if (entry.minScale > entry.maxScale)
+                {
+                    entry.maxScale = entry.minScale;
+                }
+                ImGui::Checkbox("Random Yaw", &entry.randomYaw);
+                ImGui::Checkbox("Align To Terrain Normal", &entry.alignToNormal);
+                ImGui::TextDisabled(
+                    "Next Paint only. Painted vegetation keeps Density, Scale, Yaw, and Align.");
+                ImGui::InputScalar("Seed", ImGuiDataType_U32, &level.terrain.vegetationSeed);
+            }
+            const bool vegetationWasOn = state.terrainVegetation.mode;
+            if (ImGui::Checkbox("Vegetation Mode", &state.terrainVegetation.mode))
+            {
+                editor::EndTerrainVegetationStroke(state.terrainVegetation);
+                if (state.terrainVegetation.mode && !vegetationWasOn)
+                {
+                    state.terrainPaint.mode = false;
+                    editor::EndTerrainPaintStroke(state.terrainPaint);
+                    state.terrainSculpt.mode = false;
+                    editor::EndTerrainSculptStroke(state.terrainSculpt);
+                    CancelAllEditorPlacement(
+                        state.placementMode,
+                        state.placementPointerBlocked,
+                        state.staticPropPlacement);
+                }
+            }
+            int vegetationOperation = static_cast<int>(state.terrainVegetation.operation);
+            const char* vegetationOperations[] = {"Paint", "Erase"};
+            if (ImGui::Combo("Brush", &vegetationOperation, vegetationOperations, 2))
+            {
+                state.terrainVegetation.operation =
+                    static_cast<world::TerrainVegetationBrushOperation>(vegetationOperation);
+                editor::EndTerrainVegetationStroke(state.terrainVegetation);
+            }
+            if (state.terrainVegetation.operation == world::TerrainVegetationBrushOperation::Erase)
+            {
+                ImGui::Text(
+                    "Erases entry %d and leaves the other vegetation.",
+                    state.terrainVegetation.selectedEntry);
+            }
+            else
+            {
+                ImGui::Text(
+                    "Adds entry %d without removing other vegetation.",
+                    state.terrainVegetation.selectedEntry);
+            }
+            ImGui::SliderFloat(
+                "Radius",
+                &state.terrainVegetation.radius,
+                world::kMinTerrainVegetationRadius,
+                world::kMaxTerrainVegetationRadius,
+                "%.2f");
+            editor::SanitizeTerrainVegetationState(state.terrainVegetation, level.terrain);
         }
         ImGui::EndGroup();
         break;

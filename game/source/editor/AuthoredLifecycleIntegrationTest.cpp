@@ -82,6 +82,7 @@ void SeedEditor(editor::LevelEditorState& state, const world::LevelDefinition& a
     editor::ResetStructuralIndexMap(state.structuralMap, active);
     editor::ResetTerrainSculptState(state.terrainSculpt);
     editor::ResetTerrainPaintState(state.terrainPaint);
+    editor::ResetTerrainVegetationState(state.terrainVegetation);
     editor::RefreshLevelEditorDerivedFlags(state, active);
 }
 

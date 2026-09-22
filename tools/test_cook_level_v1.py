@@ -14,7 +14,11 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import cook_assets as cooker  # noqa: E402
-from test_import_static_glb import copy_known_sources  # noqa: E402
+from test_import_static_glb import (  # noqa: E402
+    MINIMAL_STATIC_JSON,
+    copy_known_sources,
+    pack_glb,
+)
 from test_stage_runtime_assets import run_stage  # noqa: E402
 
 
@@ -88,6 +92,17 @@ class LevelV1HeaderTests(unittest.TestCase):
         cooker.validate_level_v1_header(payload)
         self.assertIn(b"door 4 1.5 0", payload)
         self.assertIn(b"card", payload)
+
+    def test_terrain_vegetation_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"terrain_veg 16 16 1\n"
+            b"terrain_veg_entry 0 1 0.8 1.2 1 0 models/test_static.glb\n"
+            b"terrain_veg_row 3 0001000\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"terrain_veg_entry 0 1", payload)
 
     def test_terrain_material_record_does_not_fail_header_gate(self) -> None:
         payload = (
@@ -221,6 +236,45 @@ class ExtraLevelDiscoveryTests(unittest.TestCase):
         self.assertEqual(ids.count("levels/level_01.level"), 1)
         self.assertEqual(ids.count("levels/level_02.level"), 1)
         self.assertEqual(ids.count("models/player.glb"), 1)
+
+    def test_vegetation_only_glb_is_extracted_cooked_and_staged(self) -> None:
+        text = (
+            "PLATFORMER_LEVEL 1\n"
+            "id level_03\n"
+            "# terrain_veg_entry 0 1 0.8 1.2 1 0 models/commented.glb\n"
+            "static_prop 0 0 0 0 0 0 1 1 1 models/test_static.glb\n"
+            "terrain_veg 16 16 1\n"
+            "terrain_veg_entry 0 1 0.8 1.2 1 0 models/veg_only.glb\n"
+            "terrain_veg_entry 1 1 0.8 1.2 1 0 models/missing_veg.glb\n"
+            "terrain_veg_row 0 1\n"
+        )
+        self.assertEqual(
+            cooker.extract_terrain_vegetation_model_identities(text),
+            ["models/veg_only.glb", "models/missing_veg.glb"],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            sources = cooker.source_root(root)
+            (sources / "models" / "veg_only.glb").write_bytes(pack_glb(MINIMAL_STATIC_JSON))
+            level_path = sources / "levels" / "level_03.level"
+            level_path.write_text(text, encoding="utf-8")
+            discovered = cooker.discover_level_referenced_static_glb_assets(sources)
+            ids = [item["id"] for item in discovered]
+            self.assertIn("models/veg_only.glb", ids)
+            self.assertNotIn("models/missing_veg.glb", ids)
+            self.assertNotIn("models/commented.glb", ids)
+            self.assertNotIn("models/test_static.glb", ids)
+            collected = [item["id"] for item in cooker.collect_cook_assets(sources)]
+            self.assertIn("models/veg_only.glb", collected)
+            self.assertNotIn("models/missing_veg.glb", collected)
+            self.assertEqual(cooker.cook(root), 0)
+            cooked = cooker.cooked_root(root) / "models" / "veg_only.glb"
+            self.assertTrue(cooked.is_file())
+            dest = root / "staged" / "assets"
+            stage = run_stage(cooker.cooked_root(root), dest, asset_list=None)
+            self.assertEqual(stage.returncode, 0, stage.stderr + stage.stdout)
+            self.assertTrue((dest / "models" / "veg_only.glb").is_file())
 
     def test_created_level_cooks_and_stages_without_hardcoded_enumeration(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,6 +8,7 @@
 #include "world/RespawnWorld.h"
 #include "world/TerrainPaint.h"
 #include "world/TerrainSculpt.h"
+#include "world/TerrainVegetation.h"
 
 #include <array>
 #include <cstddef>
@@ -126,7 +127,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 33> allowed{
+    static constexpr std::array<std::string_view, 37> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -159,7 +160,11 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "terrain_layer",
         "terrain_paint",
         "terrain_weights",
-        "terrain_weight"};
+        "terrain_weight",
+        "terrain_veg",
+        "terrain_veg_entry",
+        "terrain_veg_row",
+        "terrain_veg_style"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -2078,7 +2083,12 @@ int main()
                     && world::ParseLevelText(canonical).level.staticProps.empty(),
                 "old levels with zero static_prop remain valid");
 
-            const world::ParseLevelFileResult missingEnvironment = world::ParseLevelText(canonical);
+            const std::string withoutEnvironment =
+                ReplaceFirstLineStartingWith(canonical, "environment ", "");
+            const std::string withoutDirectional =
+                ReplaceFirstLineStartingWith(canonical, "directional_light ", "");
+            const world::ParseLevelFileResult missingEnvironment =
+                world::ParseLevelText(withoutEnvironment);
             Expect(
                 missingEnvironment.status == world::LoadLevelFileStatus::Loaded,
                 "old Level without Environment syntax remains valid");
@@ -2119,52 +2129,52 @@ int main()
                 "shadows false roundtrips");
 
             Expect(
-                world::ParseLevelText(canonical + "environment 1 1 1 0.34\n").status
+                world::ParseLevelText(withoutEnvironment + "environment 1 1 1 0.34\n").status
                     == world::LoadLevelFileStatus::Loaded,
                 "explicit default environment is valid");
             Expect(
                 world::ParseLevelText(
-                    canonical + "environment 1 1 1 0.34\nenvironment 1 1 1 0.2\n")
+                    withoutEnvironment + "environment 1 1 1 0.34\nenvironment 1 1 1 0.2\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "duplicate environment is invalid");
             Expect(
                 world::ParseLevelText(
-                    canonical
+                    withoutDirectional
                     + "directional_light 1 0 -1 0 1 0.96 0.88 0.88 1\n"
                       "directional_light 1 0 -1 0 1 0.96 0.88 0.88 1\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "duplicate directional_light is invalid");
             Expect(
-                world::ParseLevelText(canonical + "environment 2 0 0 0.34\n").status
+                world::ParseLevelText(withoutEnvironment + "environment 2 0 0 0.34\n").status
                     == world::LoadLevelFileStatus::Invalid,
                 "ambient color above 1 is invalid");
             Expect(
-                world::ParseLevelText(canonical + "environment 1 1 1 -0.1\n").status
+                world::ParseLevelText(withoutEnvironment + "environment 1 1 1 -0.1\n").status
                     == world::LoadLevelFileStatus::Invalid,
                 "negative ambient intensity is invalid");
             Expect(
                 world::ParseLevelText(
-                    canonical + "directional_light 1 0 -1 0 2 0 0 0.88 1\n")
+                    withoutDirectional + "directional_light 1 0 -1 0 2 0 0 0.88 1\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "directional color above 1 is invalid");
             Expect(
                 world::ParseLevelText(
-                    canonical + "directional_light 1 0 -1 0 1 0.96 0.88 -1 1\n")
+                    withoutDirectional + "directional_light 1 0 -1 0 1 0.96 0.88 -1 1\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "negative directional intensity is invalid");
             Expect(
                 world::ParseLevelText(
-                    canonical + "directional_light 1 0 0 0 1 0.96 0.88 0.88 1\n")
+                    withoutDirectional + "directional_light 1 0 0 0 1 0.96 0.88 0.88 1\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "zero directional ray is invalid");
             Expect(
                 world::ParseLevelText(
-                    canonical + "directional_light true 0 -1 0 1 0.96 0.88 0.88 1\n")
+                    withoutDirectional + "directional_light true 0 -1 0 1 0.96 0.88 0.88 1\n")
                     .status
                     == world::LoadLevelFileStatus::Invalid,
                 "malformed bool is invalid");
@@ -2177,7 +2187,7 @@ int main()
                     == world::LoadLevelFileStatus::Invalid,
                 "ambient_light remains unrecognized");
             const world::ParseLevelFileResult directionalLight =
-                world::ParseLevelText(canonical + "directional_light 0 -1 0 1 1 1 1\n");
+                world::ParseLevelText(withoutDirectional + "directional_light 0 -1 0 1 1 1 1\n");
             Expect(
                 directionalLight.status == world::LoadLevelFileStatus::Invalid,
                 "short directional_light record is invalid");
@@ -3065,6 +3075,643 @@ int main()
             remapped.extraLayers[3].textureIdentity == "textures/c.png",
             "high-index removal remaps the following layer");
         Expect(world::TerrainSpecIsValid(remapped), "remapped palette stays valid");
+    }
+
+    {
+        world::LevelDefinition compatible = parsed.level;
+        Expect(!compatible.hasTerrain, "levels without vegetation stay without Terrain");
+        Expect(world::TerrainVegetationIsAbsent(compatible.terrain), "absent vegetation is the default");
+        const std::string compatibleText = world::SerializeLevelText(compatible);
+        Expect(CountRecords(compatibleText, "terrain_veg") == 0, "old levels omit vegetation records");
+        Expect(
+            world::ParseLevelText(compatibleText).status == world::LoadLevelFileStatus::Loaded,
+            "levels without vegetation still load");
+
+        world::LevelDefinition authored = parsed.level;
+        authored.hasTerrain = true;
+        authored.terrain = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAddTerrainVegetationEntry(authored.terrain, "models/test_static.glb"),
+            "vegetation palette accepts a static model identity");
+        authored.terrain.vegetationEntries[0].density = 4.0f;
+        authored.terrain.vegetationEntries[0].minScale = 0.5f;
+        authored.terrain.vegetationEntries[0].maxScale = 1.5f;
+        authored.terrain.vegetationEntries[0].randomYaw = false;
+        authored.terrain.vegetationEntries[0].alignToNormal = true;
+        authored.terrain.vegetationSeed = 17u;
+        world::TerrainVegetationStampRequest paint{};
+        paint.operation = world::TerrainVegetationBrushOperation::Paint;
+        paint.entryIndex = 0;
+        paint.radius = 3.0f;
+        paint.centerX = authored.terrain.origin.x + authored.terrain.sizeX * 0.5f;
+        paint.centerZ = authored.terrain.origin.z + authored.terrain.sizeZ * 0.5f;
+        Expect(world::ApplyTerrainVegetationStamp(authored.terrain, paint), "stamp paints occupancy");
+        Expect(world::IsWritableLevelDefinition(authored), "painted vegetation level is writable");
+        const std::string vegText = world::SerializeLevelText(authored);
+        Expect(vegText == world::SerializeLevelText(authored), "vegetation Save output is deterministic");
+        Expect(CountRecords(vegText, "terrain_veg") == 1, "one vegetation header");
+        Expect(CountRecords(vegText, "terrain_veg_entry") == 1, "one vegetation palette entry");
+        Expect(CountRecords(vegText, "terrain_veg_row") > 0, "occupied vegetation rows are written");
+        Expect(CountRecords(vegText, "terrain_veg_style") > 0, "occupied vegetation writes style records");
+        Expect(OnlyAuthoredKeywords(vegText), "vegetation keywords are authored");
+        const world::ParseLevelFileResult vegParsed = world::ParseLevelText(vegText);
+        Expect(vegParsed.status == world::LoadLevelFileStatus::Loaded, "vegetation round trip loads");
+        Expect(
+            world::AuthoredLevelDataEqual(authored, vegParsed.level),
+            "vegetation round trip preserves authored data");
+        std::vector<world::TerrainVegetationInstance> first;
+        std::vector<world::TerrainVegetationInstance> second;
+        world::BuildTerrainVegetationInstances(vegParsed.level.terrain, first);
+        world::BuildTerrainVegetationInstances(vegParsed.level.terrain, second);
+        Expect(first.size() == second.size() && !first.empty(), "reloaded vegetation derives instances");
+        bool sameDerived = first.size() == second.size();
+        for (std::size_t index = 0; sameDerived && index < first.size(); ++index)
+        {
+            sameDerived = first[index].entryIndex == second[index].entryIndex
+                && first[index].position.x == second[index].position.x
+                && first[index].position.y == second[index].position.y
+                && first[index].position.z == second[index].position.z
+                && first[index].uniformScale == second[index].uniformScale;
+        }
+        Expect(sameDerived, "derived vegetation is deterministic after reload");
+
+        std::string maskText;
+        std::string nibbleText;
+        bool rewroteLegacyRow = false;
+        {
+            std::size_t cursor = 0;
+            while (cursor <= vegText.size())
+            {
+                const std::size_t newline = vegText.find('\n', cursor);
+                const std::size_t end = newline == std::string::npos ? vegText.size() : newline;
+                const std::string line = vegText.substr(cursor, end - cursor);
+                std::string maskLine = line;
+                std::string nibbleLine = line;
+                if (line.rfind("terrain_veg_style ", 0) == 0)
+                {
+                    if (newline == std::string::npos)
+                    {
+                        break;
+                    }
+                    cursor = newline + 1;
+                    continue;
+                }
+                if (line.rfind("terrain_veg_row ", 0) == 0)
+                {
+                    const std::size_t space = line.rfind(' ');
+                    const std::string hex = line.substr(space + 1);
+                    std::string masks;
+                    std::string nibbles;
+                    std::size_t hexCursor = 0;
+                    bool singleEntry = true;
+                    bool rowOk = true;
+                    while (hexCursor < hex.size() && rowOk)
+                    {
+                        int high = 0;
+                        int low = 0;
+                        if (hexCursor + 1 >= hex.size()
+                            || !world::ParseTerrainWeightHexNibble(hex[hexCursor], high)
+                            || !world::ParseTerrainWeightHexNibble(hex[hexCursor + 1], low))
+                        {
+                            rowOk = false;
+                            break;
+                        }
+                        const unsigned char mask = static_cast<unsigned char>((high << 4) | low);
+                        masks.push_back(hex[hexCursor]);
+                        masks.push_back(hex[hexCursor + 1]);
+                        hexCursor += 2;
+                        int setCount = 0;
+                        int selector = 0;
+                        for (int entry = 0; entry < world::kMaxTerrainVegetationEntries; ++entry)
+                        {
+                            if ((mask & static_cast<unsigned char>(1u << entry)) == 0)
+                            {
+                                continue;
+                            }
+                            if (hexCursor + 1 >= hex.size())
+                            {
+                                rowOk = false;
+                                break;
+                            }
+                            hexCursor += 2;
+                            ++setCount;
+                            selector = entry + 1;
+                        }
+                        if (setCount > 1)
+                        {
+                            singleEntry = false;
+                        }
+                        nibbles.push_back(
+                            setCount == 0 ? '0' : world::TerrainVegetationHexDigit(selector));
+                    }
+                    Expect(
+                        rowOk && hexCursor == hex.size(),
+                        "canonical vegetation rows carry a density byte per occupied entry");
+                    Expect(hex.size() > masks.size(), "occupied rows store density after the mask");
+                    Expect(singleEntry, "the one-entry fixture fits both legacy vegetation encodings");
+                    maskLine = line.substr(0, space + 1) + masks;
+                    nibbleLine = line.substr(0, space + 1) + nibbles;
+                    rewroteLegacyRow = true;
+                }
+                maskText += maskLine;
+                nibbleText += nibbleLine;
+                if (newline == std::string::npos)
+                {
+                    break;
+                }
+                maskText.push_back('\n');
+                nibbleText.push_back('\n');
+                cursor = newline + 1;
+            }
+        }
+        Expect(rewroteLegacyRow, "legacy vegetation fixture rewrites an occupied row");
+        const world::ParseLevelFileResult maskParsed = world::ParseLevelText(maskText);
+        Expect(
+            maskParsed.status == world::LoadLevelFileStatus::Loaded,
+            "mask-only vegetation rows still load");
+        Expect(
+            world::AuthoredLevelDataEqual(authored, maskParsed.level),
+            "mask-only rows migrate using the palette density");
+        Expect(
+            world::SerializeLevelText(maskParsed.level) == vegText,
+            "saving a mask-only vegetation level emits density bytes");
+        const world::ParseLevelFileResult legacyParsed = world::ParseLevelText(nibbleText);
+        Expect(
+            legacyParsed.status == world::LoadLevelFileStatus::Loaded,
+            "first vegetation occupancy rows still load");
+        Expect(
+            world::AuthoredLevelDataEqual(authored, legacyParsed.level),
+            "legacy occupancy migrates to the entry bitmask and palette density");
+        Expect(
+            world::SerializeLevelText(legacyParsed.level) == vegText,
+            "saving a legacy vegetation level emits density bytes");
+        std::string densityOnlyText;
+        {
+            std::size_t cursor = 0;
+            while (cursor <= vegText.size())
+            {
+                const std::size_t newline = vegText.find('\n', cursor);
+                const std::size_t end = newline == std::string::npos ? vegText.size() : newline;
+                const std::string line = vegText.substr(cursor, end - cursor);
+                if (line.rfind("terrain_veg_style ", 0) != 0)
+                {
+                    densityOnlyText += line;
+                    if (newline != std::string::npos)
+                    {
+                        densityOnlyText.push_back('\n');
+                    }
+                }
+                if (newline == std::string::npos)
+                {
+                    break;
+                }
+                cursor = newline + 1;
+            }
+        }
+        const world::ParseLevelFileResult densityOnlyParsed = world::ParseLevelText(densityOnlyText);
+        Expect(
+            densityOnlyParsed.status == world::LoadLevelFileStatus::Loaded,
+            "occupancy-plus-density vegetation rows still load");
+        Expect(
+            world::AuthoredLevelDataEqual(authored, densityOnlyParsed.level),
+            "density-only rows migrate scale, yaw, and align from the palette");
+        Expect(
+            world::SerializeLevelText(densityOnlyParsed.level) == vegText,
+            "saving a density-only vegetation level emits style records");
+        Expect(
+            world::ParseLevelText(vegText + "terrain_veg 16 16 1\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate terrain_veg is rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain_veg 16 16 1\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "terrain_veg without terrain is rejected");
+        Expect(
+            world::ParseLevelText(
+                vegText + "terrain_veg_entry 0 1 0.8 1.2 1 0 models/../secret.glb\n")
+                .status
+                == world::LoadLevelFileStatus::Invalid,
+            "malformed vegetation model identity is rejected");
+
+        world::LevelDefinition busy = authored;
+        busy.terrain.resolutionX = world::kMaxTerrainResolution;
+        busy.terrain.resolutionZ = world::kMaxTerrainResolution;
+        world::ResizeTerrainHeights(busy.terrain);
+        busy.terrain.vegetationResolutionX = world::kMaxTerrainVegetationResolution;
+        busy.terrain.vegetationResolutionZ = world::kMaxTerrainVegetationResolution;
+        const int busyCells =
+            busy.terrain.vegetationResolutionX * busy.terrain.vegetationResolutionZ;
+        busy.terrain.vegetationCells.assign(static_cast<std::size_t>(busyCells), 1);
+        busy.terrain.vegetationDensityQuanta.assign(
+            static_cast<std::size_t>(busyCells * world::kMaxTerrainVegetationEntries), 0);
+        busy.terrain.vegetationPaintParams.assign(
+            static_cast<std::size_t>(busyCells * world::kMaxTerrainVegetationEntries), 0);
+        Expect(world::TerrainSpecIsValid(busy.terrain), "full vegetation grid stays valid");
+        Expect(world::IsWritableLevelDefinition(busy), "full vegetation grid stays writable");
+        const std::string busyText = world::SerializeLevelText(busy);
+        Expect(
+            world::CountLevelV1RecordLines(busy) <= static_cast<int>(world::kMaxLevelLines),
+            "vegetation plus maximum Terrain stays within 256 lines");
+        Expect(busyText.size() <= world::kMaxLevelFileBytes, "vegetation level stays within 64 KiB");
+        bool vegetationLineTooLong = false;
+        std::size_t cursor = 0;
+        while (cursor <= busyText.size())
+        {
+            const std::size_t newline = busyText.find('\n', cursor);
+            const std::size_t end = newline == std::string::npos ? busyText.size() : newline;
+            if (end - cursor > world::kMaxLevelLineLength)
+            {
+                vegetationLineTooLong = true;
+            }
+            if (newline == std::string::npos)
+            {
+                break;
+            }
+            cursor = newline + 1;
+        }
+        Expect(!vegetationLineTooLong, "vegetation rows stay within 512-character lines");
+
+        world::LevelDefinition packed = busy;
+        world::ClearTerrainVegetation(packed.terrain);
+        for (int entry = 0; entry < world::kMaxTerrainVegetationEntries; ++entry)
+        {
+            const std::string identity = "models/veg" + std::to_string(entry) + ".glb";
+            Expect(
+                world::TryAddTerrainVegetationEntry(packed.terrain, identity),
+                "full vegetation palette stays valid");
+        }
+        packed.terrain.vegetationResolutionX = world::kMaxTerrainVegetationResolution;
+        packed.terrain.vegetationResolutionZ = world::kMaxTerrainVegetationResolution;
+        const int packedCells =
+            packed.terrain.vegetationResolutionX * packed.terrain.vegetationResolutionZ;
+        packed.terrain.vegetationCells.assign(static_cast<std::size_t>(packedCells), 0xFF);
+        packed.terrain.vegetationDensityQuanta.assign(
+            static_cast<std::size_t>(packedCells * world::kMaxTerrainVegetationEntries), 255);
+        packed.terrain.vegetationPaintParams.assign(
+            static_cast<std::size_t>(packedCells * world::kMaxTerrainVegetationEntries), 0xFFF);
+        Expect(world::TerrainSpecIsValid(packed.terrain), "eight-entry vegetation grid stays valid");
+        Expect(world::IsWritableLevelDefinition(packed), "eight-entry vegetation grid stays writable");
+        const std::string packedText = world::SerializeLevelText(packed);
+        Expect(
+            world::CountLevelV1RecordLines(packed) <= static_cast<int>(world::kMaxLevelLines),
+            "eight-entry vegetation stays within 256 lines");
+        Expect(packedText.size() <= world::kMaxLevelFileBytes, "dense vegetation level stays within 64 KiB");
+        bool packedLineTooLong = false;
+        cursor = 0;
+        while (cursor <= packedText.size())
+        {
+            const std::size_t newline = packedText.find('\n', cursor);
+            const std::size_t end = newline == std::string::npos ? packedText.size() : newline;
+            if (end - cursor > world::kMaxLevelLineLength)
+            {
+                packedLineTooLong = true;
+            }
+            if (newline == std::string::npos)
+            {
+                break;
+            }
+            cursor = newline + 1;
+        }
+        Expect(!packedLineTooLong, "eight-entry vegetation rows stay within 512-character lines");
+        Expect(
+            world::ParseLevelText(packedText).status == world::LoadLevelFileStatus::Loaded,
+            "dense spatial vegetation reloads");
+    }
+
+    {
+        world::LevelDefinition overlap = parsed.level;
+        overlap.hasTerrain = true;
+        overlap.terrain = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAddTerrainVegetationEntry(overlap.terrain, "models/test_static.glb"),
+            "coexistence palette entry A");
+        Expect(
+            world::TryAddTerrainVegetationEntry(overlap.terrain, "models/test_authored.glb"),
+            "coexistence palette entry B");
+        overlap.terrain.vegetationEntries[0].density = 1.0f;
+        overlap.terrain.vegetationEntries[1].density = 8.0f;
+        world::TerrainVegetationStampRequest paintA{};
+        paintA.operation = world::TerrainVegetationBrushOperation::Paint;
+        paintA.entryIndex = 0;
+        paintA.radius = 3.0f;
+        paintA.centerX = overlap.terrain.origin.x + overlap.terrain.sizeX * 0.5f;
+        paintA.centerZ = overlap.terrain.origin.z + overlap.terrain.sizeZ * 0.5f;
+        world::TerrainVegetationStampRequest paintB = paintA;
+        paintB.entryIndex = 1;
+        Expect(world::ApplyTerrainVegetationStamp(overlap.terrain, paintA), "coexistence paints A");
+        Expect(world::ApplyTerrainVegetationStamp(overlap.terrain, paintB), "coexistence paints B over A");
+        int cellsA = 0;
+        int cellsB = 0;
+        int shared = 0;
+        for (unsigned char cell : overlap.terrain.vegetationCells)
+        {
+            const bool hasA = world::TerrainVegetationCellHasEntry(cell, 0);
+            const bool hasB = world::TerrainVegetationCellHasEntry(cell, 1);
+            cellsA += hasA ? 1 : 0;
+            cellsB += hasB ? 1 : 0;
+            shared += (hasA && hasB) ? 1 : 0;
+        }
+        Expect(cellsA > 0 && cellsB > 0 && shared > 0, "A and B coexist in the painted region");
+        const unsigned char quantumA = world::QuantizeTerrainVegetationDensity(1.0f);
+        const unsigned char quantumB = world::QuantizeTerrainVegetationDensity(8.0f);
+        bool independentDensity = false;
+        for (int cellIndex = 0; cellIndex < static_cast<int>(overlap.terrain.vegetationCells.size()); ++cellIndex)
+        {
+            const unsigned char cell = overlap.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+            if (!world::TerrainVegetationCellHasEntry(cell, 0)
+                || !world::TerrainVegetationCellHasEntry(cell, 1))
+            {
+                continue;
+            }
+            const unsigned char densityA = overlap.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 0))];
+            const unsigned char densityB = overlap.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 1))];
+            independentDensity = densityA == quantumA && densityB == quantumB;
+            if (independentDensity)
+            {
+                break;
+            }
+        }
+        Expect(independentDensity, "coexisting entries keep independent authored densities");
+        const std::string overlapText = world::SerializeLevelText(overlap);
+        Expect(overlapText == world::SerializeLevelText(overlap), "coexistence Save is deterministic");
+        const world::ParseLevelFileResult overlapParsed = world::ParseLevelText(overlapText);
+        Expect(
+            overlapParsed.status == world::LoadLevelFileStatus::Loaded,
+            "coexistence level reloads");
+        Expect(
+            world::AuthoredLevelDataEqual(overlap, overlapParsed.level),
+            "coexistence occupancy survives Save/reload");
+        world::LevelDefinition erased = overlapParsed.level;
+        world::TerrainVegetationStampRequest eraseB = paintB;
+        eraseB.operation = world::TerrainVegetationBrushOperation::Erase;
+        eraseB.radius = 64.0f;
+        Expect(world::ApplyTerrainVegetationStamp(erased.terrain, eraseB), "erase selected entry B");
+        int cellsAAfter = 0;
+        int cellsBAfter = 0;
+        for (unsigned char cell : erased.terrain.vegetationCells)
+        {
+            cellsAAfter += world::TerrainVegetationCellHasEntry(cell, 0) ? 1 : 0;
+            cellsBAfter += world::TerrainVegetationCellHasEntry(cell, 1) ? 1 : 0;
+        }
+        Expect(cellsBAfter == 0, "erasing B removes B from the affected region");
+        Expect(cellsAAfter == cellsA, "erasing B leaves A unchanged");
+        std::vector<world::TerrainVegetationInstance> beforeErase;
+        std::vector<world::TerrainVegetationInstance> afterReload;
+        world::BuildTerrainVegetationInstances(overlap.terrain, beforeErase);
+        world::BuildTerrainVegetationInstances(overlapParsed.level.terrain, afterReload);
+        bool derivedA = false;
+        bool derivedB = false;
+        for (const world::TerrainVegetationInstance& instance : afterReload)
+        {
+            derivedA = derivedA || instance.entryIndex == 0;
+            derivedB = derivedB || instance.entryIndex == 1;
+        }
+        Expect(
+            beforeErase.size() == afterReload.size() && derivedA && derivedB,
+            "reloaded overlap derives both entries");
+        bool erasedOnlyB = cellsAAfter == cellsA && cellsBAfter == 0;
+        for (int cellIndex = 0; cellIndex < static_cast<int>(erased.terrain.vegetationCells.size()); ++cellIndex)
+        {
+            const unsigned char cell = erased.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+            const unsigned char densityA = erased.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 0))];
+            const unsigned char densityB = erased.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 1))];
+            const bool hasA = world::TerrainVegetationCellHasEntry(cell, 0);
+            if (hasA != (densityA == quantumA) || densityB != 0
+                || world::TerrainVegetationCellHasEntry(cell, 1))
+            {
+                erasedOnlyB = false;
+            }
+        }
+        Expect(erasedOnlyB, "erasing B drops only B's density and leaves A's density");
+        const std::string erasedText = world::SerializeLevelText(erased);
+        const world::ParseLevelFileResult erasedParsed = world::ParseLevelText(erasedText);
+        Expect(
+            erasedParsed.status == world::LoadLevelFileStatus::Loaded
+                && world::AuthoredLevelDataEqual(erased, erasedParsed.level),
+            "erased coexistence density survives Save/reload");
+    }
+
+    {
+        world::LevelDefinition regions = parsed.level;
+        regions.hasTerrain = true;
+        regions.terrain = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAddTerrainVegetationEntry(regions.terrain, "models/test_static.glb"),
+            "spatial-density palette entry");
+        regions.terrain.vegetationEntries[0].density = 1.0f;
+        const auto cellStamp = [](const world::TerrainSpec& terrain, int ix, int iz, float radius) {
+            world::TerrainVegetationStampRequest request{};
+            request.operation = world::TerrainVegetationBrushOperation::Paint;
+            request.entryIndex = 0;
+            request.radius = radius;
+            request.centerX = terrain.origin.x
+                + (static_cast<float>(ix) + 0.5f) * world::TerrainVegetationCellSizeX(terrain);
+            request.centerZ = terrain.origin.z
+                + (static_cast<float>(iz) + 0.5f) * world::TerrainVegetationCellSizeZ(terrain);
+            return request;
+        };
+        const auto sameInstances = [](
+                                       const std::vector<world::TerrainVegetationInstance>& first,
+                                       const std::vector<world::TerrainVegetationInstance>& second) {
+            if (first.size() != second.size())
+            {
+                return false;
+            }
+            for (std::size_t index = 0; index < first.size(); ++index)
+            {
+                const world::TerrainVegetationInstance& a = first[index];
+                const world::TerrainVegetationInstance& b = second[index];
+                if (a.entryIndex != b.entryIndex || a.position.x != b.position.x || a.position.y != b.position.y
+                    || a.position.z != b.position.z || a.uniformScale != b.uniformScale)
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+        Expect(
+            world::ApplyTerrainVegetationStamp(regions.terrain, cellStamp(regions.terrain, 4, 8, 1.5f)),
+            "paint low-density region A1");
+        const unsigned char lowQuantum = world::QuantizeTerrainVegetationDensity(1.0f);
+        const unsigned char highQuantum = world::QuantizeTerrainVegetationDensity(8.0f);
+        const int a1Cell = world::TerrainVegetationCellIndex(regions.terrain, 4, 8);
+        const int a2Cell = world::TerrainVegetationCellIndex(regions.terrain, 12, 8);
+        Expect(
+            regions.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(a1Cell, 0))]
+                == lowQuantum,
+            "A1 records the low density");
+        std::vector<world::TerrainVegetationInstance> paintedA1;
+        world::BuildTerrainVegetationInstances(regions.terrain, paintedA1);
+        regions.terrain.vegetationEntries[0].density = 8.0f;
+        std::vector<world::TerrainVegetationInstance> afterSlider;
+        world::BuildTerrainVegetationInstances(regions.terrain, afterSlider);
+        Expect(
+            sameInstances(paintedA1, afterSlider) && !paintedA1.empty(),
+            "Density without a new Paint leaves A1 unchanged");
+        Expect(
+            world::ApplyTerrainVegetationStamp(regions.terrain, cellStamp(regions.terrain, 12, 8, 1.0f)),
+            "paint high-density region A2");
+        Expect(
+            regions.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(a1Cell, 0))]
+                    == lowQuantum
+                && regions.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                       world::TerrainVegetationDensitySlot(a2Cell, 0))]
+                    == highQuantum,
+            "A2 uses the higher density and A1 stays low");
+        const std::string regionText = world::SerializeLevelText(regions);
+        const world::ParseLevelFileResult regionParsed = world::ParseLevelText(regionText);
+        Expect(
+            regionParsed.status == world::LoadLevelFileStatus::Loaded
+                && world::AuthoredLevelDataEqual(regions, regionParsed.level),
+            "Save/reload keeps the low and high regions");
+        std::vector<world::TerrainVegetationInstance> reloaded;
+        world::BuildTerrainVegetationInstances(regionParsed.level.terrain, reloaded);
+        std::vector<world::TerrainVegetationInstance> beforeReload;
+        world::BuildTerrainVegetationInstances(regions.terrain, beforeReload);
+        Expect(sameInstances(beforeReload, reloaded), "reloaded regions derive the same vegetation");
+        regions = regionParsed.level;
+        regions.terrain.vegetationEntries[0].density = 4.0f;
+        std::vector<world::TerrainVegetationInstance> afterSecondSlider;
+        world::BuildTerrainVegetationInstances(regions.terrain, afterSecondSlider);
+        Expect(sameInstances(reloaded, afterSecondSlider), "another Density change paints nothing new");
+        const std::vector<unsigned char> beforePartial = regions.terrain.vegetationDensityQuanta;
+        Expect(
+            world::ApplyTerrainVegetationStamp(regions.terrain, cellStamp(regions.terrain, 4, 8, 0.25f)),
+            "repaint part of A1");
+        int changedCells = 0;
+        for (int cellIndex = 0; cellIndex < static_cast<int>(regions.terrain.vegetationCells.size()); ++cellIndex)
+        {
+            const unsigned char before = beforePartial[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 0))];
+            const unsigned char after = regions.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 0))];
+            if (before != after)
+            {
+                ++changedCells;
+                Expect(cellIndex == a1Cell, "only the repainted portion of A1 changes");
+            }
+        }
+        Expect(changedCells == 1, "partial repaint changes one cell");
+        Expect(
+            regions.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(a1Cell, 0))]
+                    == world::QuantizeTerrainVegetationDensity(4.0f)
+                && regions.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                       world::TerrainVegetationDensitySlot(a2Cell, 0))]
+                    == highQuantum,
+            "the repainted cell is updated and A2 stays high");
+        const world::ParseLevelFileResult partialParsed = world::ParseLevelText(world::SerializeLevelText(regions));
+        Expect(
+            partialParsed.status == world::LoadLevelFileStatus::Loaded
+                && world::AuthoredLevelDataEqual(regions, partialParsed.level),
+            "partial repaint survives Save/reload");
+    }
+
+    {
+        world::LevelDefinition regions = parsed.level;
+        regions.hasTerrain = true;
+        regions.terrain = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAddTerrainVegetationEntry(regions.terrain, "models/test_static.glb"),
+            "spatial-scale palette entry");
+        regions.terrain.vegetationEntries[0].minScale = 0.5f;
+        regions.terrain.vegetationEntries[0].maxScale = 0.8f;
+        regions.terrain.vegetationEntries[0].randomYaw = true;
+        regions.terrain.vegetationEntries[0].alignToNormal = false;
+        const auto cellStamp = [](const world::TerrainSpec& terrain, int ix, int iz, float radius) {
+            world::TerrainVegetationStampRequest request{};
+            request.operation = world::TerrainVegetationBrushOperation::Paint;
+            request.entryIndex = 0;
+            request.radius = radius;
+            request.centerX = terrain.origin.x
+                + (static_cast<float>(ix) + 0.5f) * world::TerrainVegetationCellSizeX(terrain);
+            request.centerZ = terrain.origin.z
+                + (static_cast<float>(iz) + 0.5f) * world::TerrainVegetationCellSizeZ(terrain);
+            return request;
+        };
+        Expect(
+            world::ApplyTerrainVegetationStamp(regions.terrain, cellStamp(regions.terrain, 4, 8, 1.5f)),
+            "paint small-scale yaw-on region A");
+        const int aCell = world::TerrainVegetationCellIndex(regions.terrain, 4, 8);
+        const int bCell = world::TerrainVegetationCellIndex(regions.terrain, 12, 8);
+        const std::uint16_t smallPaint =
+            world::PackTerrainVegetationPaintFromEntry(regions.terrain.vegetationEntries[0]);
+        std::vector<world::TerrainVegetationInstance> paintedA;
+        world::BuildTerrainVegetationInstances(regions.terrain, paintedA);
+        regions.terrain.vegetationEntries[0].minScale = 1.2f;
+        regions.terrain.vegetationEntries[0].maxScale = 1.8f;
+        regions.terrain.vegetationEntries[0].randomYaw = false;
+        regions.terrain.vegetationEntries[0].alignToNormal = true;
+        std::vector<world::TerrainVegetationInstance> afterSlider;
+        world::BuildTerrainVegetationInstances(regions.terrain, afterSlider);
+        Expect(
+            paintedA.size() == afterSlider.size() && !paintedA.empty(),
+            "scale/yaw/align without Paint leave instance count unchanged");
+        bool sameAfterSlider = paintedA.size() == afterSlider.size();
+        for (std::size_t index = 0; sameAfterSlider && index < paintedA.size(); ++index)
+        {
+            sameAfterSlider = paintedA[index].uniformScale == afterSlider[index].uniformScale
+                && paintedA[index].axisX.x == afterSlider[index].axisX.x
+                && paintedA[index].axisY.y == afterSlider[index].axisY.y;
+        }
+        Expect(sameAfterSlider, "changing Scale, Yaw, and Align without painting leaves A unchanged");
+        Expect(
+            world::ApplyTerrainVegetationStamp(regions.terrain, cellStamp(regions.terrain, 12, 8, 1.0f)),
+            "paint large-scale yaw-off region B");
+        const std::uint16_t largePaint =
+            world::PackTerrainVegetationPaintFromEntry(regions.terrain.vegetationEntries[0]);
+        Expect(smallPaint != largePaint, "the two paint parameter sets quantize apart");
+        Expect(
+            regions.terrain.vegetationPaintParams[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(aCell, 0))]
+                    == smallPaint
+                && regions.terrain.vegetationPaintParams[static_cast<std::size_t>(
+                       world::TerrainVegetationDensitySlot(bCell, 0))]
+                    == largePaint,
+            "A keeps the first paint set and B records the second");
+        const std::string regionText = world::SerializeLevelText(regions);
+        Expect(CountRecords(regionText, "terrain_veg_style") > 0, "style records are written");
+        const world::ParseLevelFileResult regionParsed = world::ParseLevelText(regionText);
+        Expect(
+            regionParsed.status == world::LoadLevelFileStatus::Loaded
+                && world::AuthoredLevelDataEqual(regions, regionParsed.level),
+            "Save/reload keeps both scale and yaw regions");
+        std::vector<world::TerrainVegetationInstance> beforeReload;
+        std::vector<world::TerrainVegetationInstance> reloaded;
+        world::BuildTerrainVegetationInstances(regions.terrain, beforeReload);
+        world::BuildTerrainVegetationInstances(regionParsed.level.terrain, reloaded);
+        bool sameReload = beforeReload.size() == reloaded.size();
+        for (std::size_t index = 0; sameReload && index < beforeReload.size(); ++index)
+        {
+            sameReload = beforeReload[index].uniformScale == reloaded[index].uniformScale
+                && beforeReload[index].axisX.x == reloaded[index].axisX.x
+                && beforeReload[index].axisY.y == reloaded[index].axisY.y
+                && beforeReload[index].position.x == reloaded[index].position.x;
+        }
+        Expect(sameReload, "reloaded scale and yaw regions derive the same vegetation");
+        Expect(
+            world::ApplyTerrainVegetationStamp(regions.terrain, cellStamp(regions.terrain, 4, 8, 0.25f)),
+            "repaint part of A with the new parameters");
+        Expect(
+            regions.terrain.vegetationPaintParams[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(aCell, 0))]
+                    == largePaint
+                && regions.terrain.vegetationPaintParams[static_cast<std::size_t>(
+                       world::TerrainVegetationDensitySlot(bCell, 0))]
+                    == largePaint,
+            "only the repainted A cell takes the new scale/yaw/align");
+        const world::ParseLevelFileResult partialParsed =
+            world::ParseLevelText(world::SerializeLevelText(regions));
+        Expect(
+            partialParsed.status == world::LoadLevelFileStatus::Loaded
+                && world::AuthoredLevelDataEqual(regions, partialParsed.level),
+            "partial scale repaint survives Save/reload");
     }
 
     Expect(

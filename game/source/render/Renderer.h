@@ -376,7 +376,9 @@ public:
         bool visible,
         const char* layerName,
         bool hasHit,
-        float topInset);
+        float topInset,
+        const char* title = nullptr,
+        const char* hint = nullptr);
     // Development authoring cooked then source PNG fallbacks for Terrain layers.
     // Both stay empty in Release so only RuntimeAssetPath is used.
     void SetTerrainAuthoringCookedRoot(const std::filesystem::path& cookedRoot);

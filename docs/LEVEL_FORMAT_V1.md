@@ -147,7 +147,8 @@ names only the singleton Directional Light.
 
 The writer emits `point_light` records then `spot_light` records after
 `directional_light` (and after optional `terrain` / `terrain_row` /
-`terrain_material` / `terrain_layer` / `terrain_weights` / `terrain_weight`
+`terrain_material` / `terrain_layer` / `terrain_weights` / `terrain_weight` /
+`terrain_veg` / `terrain_veg_entry` / `terrain_veg_row` / `terrain_veg_style`
 when present; legacy `terrain_paint` is read but not written), omitted when the collections are empty.
 
 ### Optional Terrain singleton (Milestone 86 / 88)
@@ -160,6 +161,10 @@ terrain_layer <layerIndex> <textureIdentity> <tiling>
 terrain_paint <rowIndex> <q00> <q01> <q02> <q03> ... <qN0> <qN1> <qN2> <qN3>
 terrain_weights <resolutionX> <resolutionZ>
 terrain_weight <mapIndex> <rowIndex> <hex>
+terrain_veg <resolutionX> <resolutionZ> <seed>
+terrain_veg_entry <index> <density> <minScale> <maxScale> <yaw 0|1> <align 0|1> <modelIdentity...>
+terrain_veg_row <rowIndex> <hex>
+terrain_veg_style <hex>
 ```
 
 At most one Terrain per Level. Omitted records mean the Level has no Terrain;
@@ -270,6 +275,68 @@ under 512 characters). The 64 KiB / 256-line guards are unchanged; a Level
 that cannot fit the weight rows is `Invalid` rather than a reason to raise
 those guards. The writer emits `terrain_weights` then `terrain_weight` in
 map-major, row-major order after `terrain_layer`.
+
+Milestone 93 keeps format version `1`. Vegetation is omitted entirely when the
+palette is empty. It is not a Static Prop and it does not store instance
+transforms:
+
+```
+terrain_veg <resolutionX> <resolutionZ> <seed>
+terrain_veg_entry <index> <density> <minScale> <maxScale> <yaw 0|1> <align 0|1> <modelIdentity...>
+terrain_veg_row <rowIndex> <hex>
+terrain_veg_style <hex>
+```
+
+`terrain_veg` is an optional singleton and requires `terrain`. Resolution on
+each axis is an integer in `[4, 24]`. The default grid is `16 16` and is
+independent of both the heightfield and the weight-map resolution. `seed` is
+a `uint32`. At most 8 `terrain_veg_entry` records, indices contiguous from 0.
+Density is in `[0.05, 8]`. Scales are in `[0.05, 8]` with `minScale <= maxScale`.
+`yaw` and `align` are exact `0`/`1`. `modelIdentity` is the remainder of the
+line and must be `models/<file>.glb`. Palette `density`, `minScale`,
+`maxScale`, `yaw`, and `align` are Next-Paint values. Changing them does not
+rewrite vegetation already painted.
+
+`terrain_veg_row` hex starts with two lowercase digits per cell. That byte is
+a bitmask: bit `i` set means palette entry `i` occupies that cell. Each set
+bit is followed, in ascending entry index, by two more lowercase hex digits:
+an 8-bit density quantum. Quantum 0 is density 0.05 and quantum 255 is
+density 8, linearly. `00` with no density digits is empty. Empty occupancy
+rows are omitted.
+
+Paint also captures per occupied entry: Min Scale, Max Scale, Random Yaw, and
+Align to Terrain Normal. Those four values are not appended to
+`terrain_veg_row`. A full 24-cell row with eight occupied entries is already
+432 occupancy/density hex digits (about 451 characters with the prefix), so
+extra scale/yaw/align bytes would exceed 512. They are a concatenated stream
+of 12-bit triples, 3 lowercase hex digits per occupied slot, in raster order
+`(cellIndex, entryIndex)` matching the occupancy bits. Each triple packs
+5-bit min scale, 5-bit max scale, Random Yaw, and Align Normal:
+
+- scale range `[0.05, 8]`, 32 levels (`quantum 0..31`);
+- step `7.95 / 31 ≈ 0.2565`;
+- maximum quantization error `≈ 0.128`;
+- bit 10 is Random Yaw, bit 11 is Align Normal.
+
+The writer splits the stream into `terrain_veg_style` records of at most 492
+hex digits (`164` triples) so each line stays under 512 characters
+(`terrain_veg_style ` is 19 characters). Occupied-slot worst case is
+`24×24×8 = 4608` triples → 29 style records. Together with 24 occupancy rows,
+8 entries, and the vegetation header that is 62 vegetation lines. A maximum
+16-layer weight map plus a 24×24 vegetation grid plus canonical authored
+objects stays within 256 lines and 64 KiB. Derived Y, yaw, scale, and the
+current Terrain normal are not written.
+
+The first M93 writer used one nibble per cell, where `N` selected entry
+`N - 1`. Correction 1 used exactly `resolutionX * 2` hex digits and no
+density bytes. Correction 2 used occupancy plus density bytes and no style
+records. All three still load. Missing spatial density or style is filled
+from the palette entry that previously generated those instances. Save
+writes occupancy/density rows plus style records only. A second header, a
+row without the header, a bit above the palette, a density byte on an empty
+entry, a style stream whose length does not match occupancy, or vegetation
+without Terrain is `Invalid`. The writer emits `terrain_veg`, then entries,
+then occupied rows, then style records after `terrain_weight`.
 
 ### Required repeated records
 
@@ -570,6 +637,14 @@ environment
 directional_light
 terrain             omitted when absent
 terrain_row         resolutionZ rows, row index order
+terrain_material    omitted when layer 0 is the solid fallback at default tiling
+terrain_layer       extra layers, index order
+terrain_weights     omitted when the weight grid is the implicit default
+terrain_weight      non-empty packed rows, map-major then row-major
+terrain_veg         omitted when the vegetation palette is empty
+terrain_veg_entry   palette index order
+terrain_veg_row     occupied rows only, row index order
+terrain_veg_style   occupied-slot style stream, 492 hex digits per record
 point_light         variable, pointLights index order
 spot_light          variable, spotLights index order
 ```

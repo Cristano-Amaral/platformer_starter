@@ -1,4 +1,5 @@
 #include "world/LevelWriter.h"
+#include "world/TerrainVegetation.h"
 
 #include "assets/RuntimePng.h"
 #include "platform/FileReplace.h"
@@ -455,6 +456,105 @@ std::string SerializeLevelText(const LevelDefinition& level)
                     }
                     out += '\n';
                 }
+            }
+        }
+        if (TerrainVegetationShouldWrite(level.terrain))
+        {
+            out += "terrain_veg ";
+            AppendInt(out, level.terrain.vegetationResolutionX);
+            out += ' ';
+            AppendInt(out, level.terrain.vegetationResolutionZ);
+            out += ' ';
+            out += std::to_string(level.terrain.vegetationSeed);
+            out += '\n';
+            for (std::size_t index = 0; index < level.terrain.vegetationEntries.size(); ++index)
+            {
+                const TerrainVegetationEntry& entry = level.terrain.vegetationEntries[index];
+                out += "terrain_veg_entry ";
+                AppendInt(out, static_cast<int>(index));
+                out += ' ';
+                AppendFloat(out, entry.density);
+                out += ' ';
+                AppendFloat(out, entry.minScale);
+                out += ' ';
+                AppendFloat(out, entry.maxScale);
+                out += ' ';
+                AppendInt(out, entry.randomYaw ? 1 : 0);
+                out += ' ';
+                AppendInt(out, entry.alignToNormal ? 1 : 0);
+                out += ' ';
+                out += entry.modelIdentity;
+                out += '\n';
+            }
+            for (int row = 0; row < level.terrain.vegetationResolutionZ; ++row)
+            {
+                if (!TerrainVegetationRowIsOccupied(level.terrain, row))
+                {
+                    continue;
+                }
+                out += "terrain_veg_row ";
+                AppendInt(out, row);
+                out += ' ';
+                for (int column = 0; column < level.terrain.vegetationResolutionX; ++column)
+                {
+                    const int cellIndex = TerrainVegetationCellIndex(level.terrain, column, row);
+                    const unsigned char cell =
+                        level.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+                    out.push_back(TerrainVegetationHexDigit((static_cast<int>(cell) >> 4) & 0xF));
+                    out.push_back(TerrainVegetationHexDigit(static_cast<int>(cell) & 0xF));
+                    for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+                    {
+                        if (!TerrainVegetationCellHasEntry(cell, entryIndex))
+                        {
+                            continue;
+                        }
+                        const int slot = TerrainVegetationDensitySlot(cellIndex, entryIndex);
+                        const unsigned char quantum =
+                            slot >= 0
+                                && slot < static_cast<int>(level.terrain.vegetationDensityQuanta.size())
+                            ? level.terrain.vegetationDensityQuanta[static_cast<std::size_t>(slot)]
+                            : 0;
+                        out.push_back(TerrainVegetationHexDigit((static_cast<int>(quantum) >> 4) & 0xF));
+                        out.push_back(TerrainVegetationHexDigit(static_cast<int>(quantum) & 0xF));
+                    }
+                }
+                out += '\n';
+            }
+            std::string styleHex;
+            const int cells = level.terrain.vegetationResolutionX * level.terrain.vegetationResolutionZ;
+            for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+            {
+                const unsigned char cell =
+                    level.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+                for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+                {
+                    if (!TerrainVegetationCellHasEntry(cell, entryIndex))
+                    {
+                        continue;
+                    }
+                    const int slot = TerrainVegetationDensitySlot(cellIndex, entryIndex);
+                    const std::uint16_t packed =
+                        slot >= 0 && slot < static_cast<int>(level.terrain.vegetationPaintParams.size())
+                        ? level.terrain.vegetationPaintParams[static_cast<std::size_t>(slot)]
+                        : 0;
+                    const int value = static_cast<int>(packed) & 0xFFF;
+                    styleHex.push_back(TerrainVegetationHexDigit((value >> 8) & 0xF));
+                    styleHex.push_back(TerrainVegetationHexDigit((value >> 4) & 0xF));
+                    styleHex.push_back(TerrainVegetationHexDigit(value & 0xF));
+                }
+            }
+            std::size_t styleCursor = 0;
+            while (styleCursor < styleHex.size())
+            {
+                std::size_t take = styleHex.size() - styleCursor;
+                if (take > static_cast<std::size_t>(kTerrainVegetationStyleHexPerRecord))
+                {
+                    take = static_cast<std::size_t>(kTerrainVegetationStyleHexPerRecord);
+                }
+                out += "terrain_veg_style ";
+                out.append(styleHex, styleCursor, take);
+                out += '\n';
+                styleCursor += take;
             }
         }
     }

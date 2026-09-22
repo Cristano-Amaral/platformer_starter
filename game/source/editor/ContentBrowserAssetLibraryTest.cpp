@@ -7,6 +7,8 @@
 #include "editor/ContentBrowserOrganization.h"
 #include "editor/ContentBrowserView.h"
 #include "editor/TerrainTextureReference.h"
+#include "editor/TerrainVegetationReference.h"
+#include "world/TerrainVegetation.h"
 #include "editor/TextureThumbnailLifecycle.h"
 #include "world/LevelDefinition.h"
 
@@ -349,6 +351,24 @@ int main()
     Expect(
         editor::AuthoredLevelsProtectTerrainTextureIdentity(working, active, active, "textures/mud.png"),
         "delete guard checks a layer above index 3");
+    world::ResizeTerrainHeights(working.terrain);
+    Expect(
+        world::TryAddTerrainVegetationEntry(working.terrain, "models/crate.glb"),
+        "vegetation palette can reference a catalog model");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainVegetationIdentity(
+            working, active, active, "models/crate.glb"),
+        "vegetation model reference blocks delete");
+    Expect(
+        !editor::AuthoredLevelsProtectTerrainVegetationIdentity(
+            active, active, active, "models/crate.glb"),
+        "unreferenced vegetation model is not protected");
+    const std::string vegetationDelete =
+        editor::TerrainVegetationReferencedDeleteMessage("models/crate.glb");
+    Expect(
+        vegetationDelete.find("models/crate.glb") != std::string::npos
+            && vegetationDelete.find("Terrain vegetation") != std::string::npos,
+        "vegetation delete diagnostic names the model");
 
     editor::ThumbnailSourceStamp missingStamp{};
     editor::ThumbnailSourceStamp presentStamp{};

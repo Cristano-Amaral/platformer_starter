@@ -212,6 +212,30 @@ bool ParseBoundedIntensity(std::string_view token, float maxIntensity, float& in
         && LevelEnvironmentIntensityIsValid(intensity, maxIntensity);
 }
 
+bool ParseUint32Token(std::string_view token, std::uint32_t& value)
+{
+    if (token.empty())
+    {
+        return false;
+    }
+    for (char ch : token)
+    {
+        if (ch < '0' || ch > '9')
+        {
+            return false;
+        }
+    }
+    std::uint32_t parsed = 0;
+    const std::from_chars_result result =
+        std::from_chars(token.data(), token.data() + token.size(), parsed);
+    if (result.ec != std::errc{} || result.ptr != token.data() + token.size())
+    {
+        return false;
+    }
+    value = parsed;
+    return true;
+}
+
 struct ParseState
 {
     bool seenId = false;
@@ -236,6 +260,11 @@ struct ParseState
     bool seenTerrainWeightRow = false;
     int declaredWeightMaps = 0;
     std::vector<unsigned char> terrainWeightRowsSeen;
+    bool seenTerrainVegetation = false;
+    int nextVegetationEntry = 0;
+    std::vector<unsigned char> vegetationRowsSeen;
+    std::vector<unsigned char> vegetationLegacyDensity;
+    std::string vegetationStyleHex;
     std::vector<int> quantizedWeights;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
@@ -252,6 +281,130 @@ struct ParseState
     std::vector<SpotLightSpec> spotLights;
     std::vector<AuthoringGroup> authoringGroups;
 };
+
+bool ReadVegetationHexByte(std::string_view hex, std::size_t& cursor, unsigned char& out)
+{
+    if (cursor + 1 >= hex.size())
+    {
+        return false;
+    }
+    int high = 0;
+    int low = 0;
+    if (!ParseTerrainWeightHexNibble(hex[cursor], high)
+        || !ParseTerrainWeightHexNibble(hex[cursor + 1], low))
+    {
+        return false;
+    }
+    out = static_cast<unsigned char>((high << 4) | low);
+    cursor += 2;
+    return true;
+}
+
+void MigrateLegacyVegetationDensity(ParseState& state)
+{
+    if (!state.seenTerrainVegetation)
+    {
+        return;
+    }
+    const int cells = state.terrain.vegetationResolutionX * state.terrain.vegetationResolutionZ;
+    if (cells <= 0 || static_cast<int>(state.vegetationLegacyDensity.size()) != cells
+        || static_cast<int>(state.terrain.vegetationCells.size()) != cells
+        || static_cast<int>(state.terrain.vegetationDensityQuanta.size())
+            != cells * kMaxTerrainVegetationEntries)
+    {
+        return;
+    }
+    const int entryCount = static_cast<int>(state.terrain.vegetationEntries.size());
+    for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+    {
+        if (state.vegetationLegacyDensity[static_cast<std::size_t>(cellIndex)] == 0)
+        {
+            continue;
+        }
+        const unsigned char mask = state.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+        for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+        {
+            unsigned char quantum = 0;
+            if (entryIndex < entryCount && TerrainVegetationCellHasEntry(mask, entryIndex))
+            {
+                quantum = QuantizeTerrainVegetationDensity(
+                    state.terrain.vegetationEntries[static_cast<std::size_t>(entryIndex)].density);
+            }
+            state.terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                TerrainVegetationDensitySlot(cellIndex, entryIndex))] = quantum;
+        }
+    }
+}
+
+bool ApplyVegetationPaintParams(ParseState& state)
+{
+    if (!state.seenTerrainVegetation)
+    {
+        return true;
+    }
+    const int cells = state.terrain.vegetationResolutionX * state.terrain.vegetationResolutionZ;
+    if (cells <= 0
+        || static_cast<int>(state.terrain.vegetationPaintParams.size())
+            != cells * kMaxTerrainVegetationEntries)
+    {
+        return false;
+    }
+    const int entryCount = static_cast<int>(state.terrain.vegetationEntries.size());
+    if (state.vegetationStyleHex.empty())
+    {
+        for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+        {
+            const unsigned char mask = state.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+            for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+            {
+                std::uint16_t packed = 0;
+                if (entryIndex < entryCount && TerrainVegetationCellHasEntry(mask, entryIndex))
+                {
+                    packed = PackTerrainVegetationPaintFromEntry(
+                        state.terrain.vegetationEntries[static_cast<std::size_t>(entryIndex)]);
+                }
+                state.terrain.vegetationPaintParams[static_cast<std::size_t>(
+                    TerrainVegetationDensitySlot(cellIndex, entryIndex))] = packed;
+            }
+        }
+        return true;
+    }
+    if (state.vegetationStyleHex.size() % static_cast<std::size_t>(kTerrainVegetationStyleHexDigits)
+        != 0)
+    {
+        return false;
+    }
+    std::size_t cursor = 0;
+    for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+    {
+        const unsigned char mask = state.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+        for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+        {
+            std::uint16_t packed = 0;
+            if (TerrainVegetationCellHasEntry(mask, entryIndex))
+            {
+                if (cursor + 2 >= state.vegetationStyleHex.size())
+                {
+                    return false;
+                }
+                int high = 0;
+                int mid = 0;
+                int low = 0;
+                if (!ParseTerrainWeightHexNibble(state.vegetationStyleHex[cursor], high)
+                    || !ParseTerrainWeightHexNibble(state.vegetationStyleHex[cursor + 1], mid)
+                    || !ParseTerrainWeightHexNibble(state.vegetationStyleHex[cursor + 2], low))
+                {
+                    return false;
+                }
+                packed = static_cast<std::uint16_t>((high << 8) | (mid << 4) | low);
+                cursor += static_cast<std::size_t>(kTerrainVegetationStyleHexDigits);
+            }
+            state.terrain.vegetationPaintParams[static_cast<std::size_t>(
+                TerrainVegetationDensitySlot(cellIndex, entryIndex))] = packed;
+        }
+    }
+    return cursor == state.vegetationStyleHex.size();
+}
 
 bool RequireTokenCount(
     const std::vector<std::string_view>& tokens,
@@ -1351,6 +1504,235 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.seenTerrainWeightRow = true;
             continue;
         }
+        if (keyword == "terrain_veg")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_veg without terrain");
+            }
+            if (!RequireSingleton(
+                    state.seenTerrainVegetation, failure, lineNumber, "duplicate terrain_veg")
+                || !RequireTokenCount(tokens, 4, failure, lineNumber))
+            {
+                return failure;
+            }
+            int resolutionX = 0;
+            int resolutionZ = 0;
+            std::uint32_t seed = 0;
+            if (!ParseIntToken(tokens[1], resolutionX) || !ParseIntToken(tokens[2], resolutionZ)
+                || !ParseUint32Token(tokens[3], seed)
+                || !TerrainVegetationResolutionIsValid(resolutionX)
+                || !TerrainVegetationResolutionIsValid(resolutionZ))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg");
+            }
+            state.terrain.vegetationResolutionX = resolutionX;
+            state.terrain.vegetationResolutionZ = resolutionZ;
+            state.terrain.vegetationSeed = seed;
+            state.terrain.vegetationEntries.clear();
+            const int vegetationCells = resolutionX * resolutionZ;
+            state.terrain.vegetationCells.assign(static_cast<std::size_t>(vegetationCells), 0);
+            state.terrain.vegetationDensityQuanta.assign(
+                static_cast<std::size_t>(vegetationCells * kMaxTerrainVegetationEntries), 0);
+            state.terrain.vegetationPaintParams.assign(
+                static_cast<std::size_t>(vegetationCells * kMaxTerrainVegetationEntries), 0);
+            state.vegetationLegacyDensity.assign(static_cast<std::size_t>(vegetationCells), 0);
+            state.vegetationStyleHex.clear();
+            state.vegetationRowsSeen.assign(static_cast<std::size_t>(resolutionZ), 0);
+            state.nextVegetationEntry = 0;
+            continue;
+        }
+        if (keyword == "terrain_veg_entry")
+        {
+            if (!state.seenTerrain || !state.seenTerrainVegetation)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_veg_entry without terrain_veg");
+            }
+            if (tokens.size() < 8)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_entry");
+            }
+            int index = 0;
+            TerrainVegetationEntry entry{};
+            if (!ParseIntToken(tokens[1], index) || index != state.nextVegetationEntry
+                || index >= kMaxTerrainVegetationEntries
+                || !ParseFloatToken(tokens[2], entry.density)
+                || !ParseFloatToken(tokens[3], entry.minScale)
+                || !ParseFloatToken(tokens[4], entry.maxScale)
+                || !ParseBool01Token(tokens[5], entry.randomYaw)
+                || !ParseBool01Token(tokens[6], entry.alignToNormal))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_entry");
+            }
+            entry.modelIdentity = std::string(tokens[7]);
+            for (std::size_t tokenIndex = 8; tokenIndex < tokens.size(); ++tokenIndex)
+            {
+                entry.modelIdentity.push_back(' ');
+                entry.modelIdentity.append(tokens[tokenIndex]);
+            }
+            if (!TerrainVegetationEntryIsValid(entry))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_entry");
+            }
+            state.terrain.vegetationEntries.push_back(std::move(entry));
+            ++state.nextVegetationEntry;
+            continue;
+        }
+        if (keyword == "terrain_veg_row")
+        {
+            if (!state.seenTerrain || !state.seenTerrainVegetation)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_veg_row without terrain_veg");
+            }
+            if (tokens.size() != 3)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+            }
+            int rowIndex = 0;
+            if (!ParseIntToken(tokens[1], rowIndex) || rowIndex < 0
+                || rowIndex >= state.terrain.vegetationResolutionZ)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+            }
+            if (state.vegetationRowsSeen[static_cast<std::size_t>(rowIndex)] != 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "duplicate terrain_veg_row");
+            }
+            const std::string_view hex = tokens[2];
+            const std::size_t cellCount =
+                static_cast<std::size_t>(state.terrain.vegetationResolutionX);
+            const bool legacySelector = hex.size() == cellCount;
+            const bool occupancyMask = hex.size() == cellCount * 2;
+            if (legacySelector || occupancyMask)
+            {
+                for (int column = 0; column < state.terrain.vegetationResolutionX; ++column)
+                {
+                    unsigned char cell = 0;
+                    if (legacySelector)
+                    {
+                        int selector = 0;
+                        if (!ParseTerrainWeightHexNibble(hex[static_cast<std::size_t>(column)], selector)
+                            || selector > kMaxTerrainVegetationEntries)
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                        }
+                        if (selector > 0)
+                        {
+                            cell = TerrainVegetationEntryBit(selector - 1);
+                        }
+                    }
+                    else
+                    {
+                        int high = 0;
+                        int low = 0;
+                        if (!ParseTerrainWeightHexNibble(
+                                hex[static_cast<std::size_t>(column * 2)], high)
+                            || !ParseTerrainWeightHexNibble(
+                                hex[static_cast<std::size_t>(column * 2 + 1)], low))
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                        }
+                        cell = static_cast<unsigned char>((high << 4) | low);
+                    }
+                    const int cellIndex = TerrainVegetationCellIndex(state.terrain, column, rowIndex);
+                    state.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)] = cell;
+                    if (cellIndex >= 0
+                        && cellIndex < static_cast<int>(state.vegetationLegacyDensity.size()))
+                    {
+                        state.vegetationLegacyDensity[static_cast<std::size_t>(cellIndex)] = 1;
+                    }
+                }
+            }
+            else
+            {
+                std::size_t cursor = 0;
+                for (int column = 0; column < state.terrain.vegetationResolutionX; ++column)
+                {
+                    unsigned char cell = 0;
+                    if (!ReadVegetationHexByte(hex, cursor, cell))
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                    }
+                    const int cellIndex = TerrainVegetationCellIndex(state.terrain, column, rowIndex);
+                    if (cellIndex < 0
+                        || cellIndex >= static_cast<int>(state.terrain.vegetationCells.size()))
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                    }
+                    state.terrain.vegetationCells[static_cast<std::size_t>(cellIndex)] = cell;
+                    for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+                    {
+                        unsigned char quantum = 0;
+                        if (TerrainVegetationCellHasEntry(cell, entryIndex)
+                            && !ReadVegetationHexByte(hex, cursor, quantum))
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                        }
+                        const int slot = TerrainVegetationDensitySlot(cellIndex, entryIndex);
+                        if (slot < 0
+                            || slot >= static_cast<int>(state.terrain.vegetationDensityQuanta.size()))
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                        }
+                        state.terrain.vegetationDensityQuanta[static_cast<std::size_t>(slot)] = quantum;
+                    }
+                    state.vegetationLegacyDensity[static_cast<std::size_t>(cellIndex)] = 0;
+                }
+                if (cursor != hex.size())
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_row");
+                }
+            }
+            state.vegetationRowsSeen[static_cast<std::size_t>(rowIndex)] = 1;
+            continue;
+        }
+        if (keyword == "terrain_veg_style")
+        {
+            if (!state.seenTerrain || !state.seenTerrainVegetation)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_veg_style without terrain_veg");
+            }
+            if (tokens.size() != 2)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_style");
+            }
+            const std::string_view hex = tokens[1];
+            if (hex.empty()
+                || hex.size() % static_cast<std::size_t>(kTerrainVegetationStyleHexDigits) != 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_style");
+            }
+            for (char digit : hex)
+            {
+                int value = 0;
+                if (!ParseTerrainWeightHexNibble(digit, value))
+                {
+                    return MakeStatus(
+                        LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg_style");
+                }
+            }
+            state.vegetationStyleHex.append(hex.data(), hex.size());
+            continue;
+        }
         if (keyword == "terrain_row")
         {
             if (!state.seenTerrain)
@@ -1516,6 +1898,12 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 state.terrain.materialWeights.clear();
             }
             CompactDefaultTerrainMaterialWeights(state.terrain);
+            MigrateLegacyVegetationDensity(state);
+            if (!ApplyVegetationPaintParams(state)
+                || (state.seenTerrainVegetation && !TerrainVegetationDataIsValid(state.terrain)))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_veg");
+            }
             if (!TerrainSpecIsValid(state.terrain))
         {
             return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain");

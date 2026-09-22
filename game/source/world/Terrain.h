@@ -1,13 +1,15 @@
 #pragma once
 
-// Milestone 86/87/88/90/92: optional singleton authored Terrain. Regular XZ
+// Milestone 86/87/88/90/92/93: optional singleton authored Terrain. Regular XZ
 // heightfield. Not a repeatable prop category, tile set, GUID, or generic
 // mesh editor. M87 sculpts these authored heights[] only; brush parameters
 // are not Level data. M88 adds one optional base surface texture identity
 // plus planar XZ tiling. M90 painted up to three extra layers as per-sample
 // RGBA weights. M92 replaces that with an ordered palette (practical cap 16)
 // and dedicated RGBA weight maps whose resolution is independent of the
-// heightfield. Four layers share one packed map. Not a generic Material
+// heightfield. Four layers share one packed map. M93 adds a vegetation
+// palette and a separate occupancy grid; derived transforms are not stored.
+// Not a generic Material
 // asset, PBR authoring, or external splat editor.
 //
 // Origin convention (used by parse/write, render, Jolt, normals, picking,
@@ -38,6 +40,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -73,10 +76,38 @@ inline constexpr int kDefaultTerrainWeightResolutionZ = 32;
 inline constexpr int kMinTerrainWeightResolution = 2;
 inline constexpr int kMaxTerrainWeightResolution = 32;
 
+// Vegetation placement is its own grid. It is not the heightfield and not
+// the M92 weight-map resolution. 24x24 keeps a fully painted map inside the
+// 256-line Level guard beside a maximum material palette.
+inline constexpr int kMinTerrainVegetationResolution = 4;
+inline constexpr int kMaxTerrainVegetationResolution = 24;
+inline constexpr int kDefaultTerrainVegetationResolutionX = 16;
+inline constexpr int kDefaultTerrainVegetationResolutionZ = 16;
+inline constexpr int kMaxTerrainVegetationEntries = 8;
+inline constexpr int kMaxTerrainVegetationInstancesPerCell = 4;
+inline constexpr float kDefaultTerrainVegetationDensity = 1.0f;
+inline constexpr float kMinTerrainVegetationDensity = 0.05f;
+inline constexpr float kMaxTerrainVegetationDensity = 8.0f;
+inline constexpr float kDefaultTerrainVegetationMinScale = 0.8f;
+inline constexpr float kDefaultTerrainVegetationMaxScale = 1.2f;
+inline constexpr float kMinTerrainVegetationScale = 0.05f;
+inline constexpr float kMaxTerrainVegetationScale = 8.0f;
+inline constexpr std::uint32_t kDefaultTerrainVegetationSeed = 1u;
+
 struct TerrainMaterialLayer
 {
     std::string textureIdentity{};
     float textureTiling = kDefaultTerrainTextureTiling;
+};
+
+struct TerrainVegetationEntry
+{
+    std::string modelIdentity{};
+    float density = kDefaultTerrainVegetationDensity;
+    float minScale = kDefaultTerrainVegetationMinScale;
+    float maxScale = kDefaultTerrainVegetationMaxScale;
+    bool randomYaw = true;
+    bool alignToNormal = false;
 };
 
 struct TerrainSpec
@@ -97,6 +128,19 @@ struct TerrainSpec
     // Empty means implicit defaults: layer 0 = 1, others = 0 per weight texel.
     // Non-empty size is weightTexelCount * kMaxTerrainMaterialLayers.
     std::vector<float> materialWeights{};
+    // M93. Resolution 0 and empty entries/cells mean no authored vegetation.
+    // Each cell is a bitmask. Bit i set means vegetationEntries[i] occupies that cell.
+    // Slot (cell, entry) stores Paint-captured parameters:
+    // vegetationDensityQuanta is 8-bit density across [0.05, 8];
+    // vegetationPaintParams packs 5-bit min scale, 5-bit max scale, Random Yaw,
+    // and Align Normal. Palette entry fields are Next-Paint only.
+    int vegetationResolutionX = 0;
+    int vegetationResolutionZ = 0;
+    std::uint32_t vegetationSeed = kDefaultTerrainVegetationSeed;
+    std::vector<TerrainVegetationEntry> vegetationEntries{};
+    std::vector<unsigned char> vegetationCells{};
+    std::vector<unsigned char> vegetationDensityQuanta{};
+    std::vector<std::uint16_t> vegetationPaintParams{};
 };
 
 inline int TerrainSampleCount(int resolutionX, int resolutionZ)
@@ -288,6 +332,427 @@ inline bool TerrainWeightHeaderShouldWrite(const TerrainSpec& terrain)
         || terrain.weightResolutionZ != kDefaultTerrainWeightResolutionZ;
 }
 
+inline bool TerrainVegetationResolutionIsValid(int resolution)
+{
+    return resolution >= kMinTerrainVegetationResolution
+        && resolution <= kMaxTerrainVegetationResolution;
+}
+
+inline bool TerrainVegetationDensityIsValid(float density)
+{
+    return std::isfinite(density) && density >= kMinTerrainVegetationDensity
+        && density <= kMaxTerrainVegetationDensity;
+}
+
+inline bool TerrainVegetationScaleIsValid(float scale)
+{
+    return std::isfinite(scale) && scale >= kMinTerrainVegetationScale
+        && scale <= kMaxTerrainVegetationScale;
+}
+
+inline bool TerrainVegetationStemIsReservedDevice(std::string_view stem)
+{
+    std::string upper;
+    upper.reserve(stem.size());
+    for (char ch : stem)
+    {
+        const unsigned char byte = static_cast<unsigned char>(ch);
+        upper.push_back(static_cast<char>(byte >= 'a' && byte <= 'z' ? byte - 32 : byte));
+    }
+    const auto isDevice = [&](std::string_view name) {
+        if (upper == name)
+        {
+            return true;
+        }
+        if (upper.size() == name.size() + 1 && upper.starts_with(name) && upper.back() >= '1'
+            && upper.back() <= '9')
+        {
+            return name == "COM" || name == "LPT";
+        }
+        return false;
+    };
+    return isDevice("CON") || isDevice("PRN") || isDevice("AUX") || isDevice("NUL")
+        || isDevice("COM") || isDevice("LPT");
+}
+
+// Same structural rules as assets::TryParseStaticModelIdentity. Inlined so
+// TerrainSpecIsValid stays header-only for the existing terrain test targets.
+inline bool TerrainVegetationModelIdentityIsValid(std::string_view identity)
+{
+    constexpr std::string_view kPrefix = "models/";
+    if (!identity.starts_with(kPrefix) || identity.find('\\') != std::string_view::npos)
+    {
+        return false;
+    }
+    const std::string_view fileName = identity.substr(kPrefix.size());
+    constexpr std::string_view kExtension = ".glb";
+    if (fileName.size() <= kExtension.size() || !fileName.ends_with(kExtension)
+        || fileName.find('/') != std::string_view::npos)
+    {
+        return false;
+    }
+    const std::string_view stem = fileName.substr(0, fileName.size() - kExtension.size());
+    if (stem.empty() || stem.front() == '.' || stem.front() == ' ' || stem.back() == ' '
+        || stem.back() == '.' || fileName.find(".importing.tmp") != std::string_view::npos)
+    {
+        return false;
+    }
+    for (char ch : fileName)
+    {
+        const unsigned char byte = static_cast<unsigned char>(ch);
+        if (byte < 32 || ch == ':' || ch == '*' || ch == '?' || ch == '"' || ch == '<' || ch == '>'
+            || ch == '|')
+        {
+            return false;
+        }
+    }
+    return !TerrainVegetationStemIsReservedDevice(stem);
+}
+
+inline bool TerrainVegetationEntryIsValid(const TerrainVegetationEntry& entry)
+{
+    return TerrainVegetationModelIdentityIsValid(entry.modelIdentity)
+        && TerrainVegetationDensityIsValid(entry.density)
+        && TerrainVegetationScaleIsValid(entry.minScale)
+        && TerrainVegetationScaleIsValid(entry.maxScale) && entry.minScale <= entry.maxScale;
+}
+
+inline bool TerrainVegetationIsAbsent(const TerrainSpec& terrain)
+{
+    return terrain.vegetationEntries.empty() && terrain.vegetationCells.empty()
+        && terrain.vegetationDensityQuanta.empty() && terrain.vegetationPaintParams.empty()
+        && terrain.vegetationResolutionX == 0 && terrain.vegetationResolutionZ == 0;
+}
+
+inline int TerrainVegetationDensitySlot(int cellIndex, int entryIndex)
+{
+    return cellIndex * kMaxTerrainVegetationEntries + entryIndex;
+}
+
+inline unsigned char QuantizeTerrainVegetationDensity(float density)
+{
+    if (!TerrainVegetationDensityIsValid(density))
+    {
+        return 0;
+    }
+    const float span = kMaxTerrainVegetationDensity - kMinTerrainVegetationDensity;
+    const float normalized = (density - kMinTerrainVegetationDensity) / span;
+    const int quantum = static_cast<int>(std::lround(normalized * 255.0f));
+    if (quantum <= 0)
+    {
+        return 0;
+    }
+    if (quantum >= 255)
+    {
+        return 255;
+    }
+    return static_cast<unsigned char>(quantum);
+}
+
+inline float DequantizeTerrainVegetationDensity(unsigned char quantum)
+{
+    const float span = kMaxTerrainVegetationDensity - kMinTerrainVegetationDensity;
+    return kMinTerrainVegetationDensity + (static_cast<float>(quantum) / 255.0f) * span;
+}
+
+inline constexpr int kTerrainVegetationStyleScaleMaxQuantum = 31;
+inline constexpr int kTerrainVegetationStyleHexDigits = 3;
+inline constexpr std::string_view kTerrainVegetationStyleKeyword = "terrain_veg_style";
+inline constexpr int kTerrainVegetationStyleHexPerRecord = 492;
+
+inline unsigned char QuantizeTerrainVegetationScale(float scale)
+{
+    if (!TerrainVegetationScaleIsValid(scale))
+    {
+        return 0;
+    }
+    const float span = kMaxTerrainVegetationScale - kMinTerrainVegetationScale;
+    const float normalized = (scale - kMinTerrainVegetationScale) / span;
+    const int quantum = static_cast<int>(
+        std::lround(normalized * static_cast<float>(kTerrainVegetationStyleScaleMaxQuantum)));
+    if (quantum <= 0)
+    {
+        return 0;
+    }
+    if (quantum >= kTerrainVegetationStyleScaleMaxQuantum)
+    {
+        return static_cast<unsigned char>(kTerrainVegetationStyleScaleMaxQuantum);
+    }
+    return static_cast<unsigned char>(quantum);
+}
+
+inline float DequantizeTerrainVegetationScale(unsigned char quantum)
+{
+    const float span = kMaxTerrainVegetationScale - kMinTerrainVegetationScale;
+    const float t = static_cast<float>(quantum) / static_cast<float>(kTerrainVegetationStyleScaleMaxQuantum);
+    return kMinTerrainVegetationScale + t * span;
+}
+
+inline std::uint16_t PackTerrainVegetationPaint(
+    unsigned char minScaleQuantum,
+    unsigned char maxScaleQuantum,
+    bool randomYaw,
+    bool alignToNormal)
+{
+    unsigned char minQ = minScaleQuantum;
+    unsigned char maxQ = maxScaleQuantum;
+    if (minQ > kTerrainVegetationStyleScaleMaxQuantum)
+    {
+        minQ = static_cast<unsigned char>(kTerrainVegetationStyleScaleMaxQuantum);
+    }
+    if (maxQ > kTerrainVegetationStyleScaleMaxQuantum)
+    {
+        maxQ = static_cast<unsigned char>(kTerrainVegetationStyleScaleMaxQuantum);
+    }
+    if (minQ > maxQ)
+    {
+        maxQ = minQ;
+    }
+    return static_cast<std::uint16_t>(
+        (minQ & 31) | ((maxQ & 31) << 5) | ((randomYaw ? 1 : 0) << 10) | ((alignToNormal ? 1 : 0) << 11));
+}
+
+inline std::uint16_t PackTerrainVegetationPaintFromEntry(const TerrainVegetationEntry& entry)
+{
+    return PackTerrainVegetationPaint(
+        QuantizeTerrainVegetationScale(entry.minScale),
+        QuantizeTerrainVegetationScale(entry.maxScale),
+        entry.randomYaw,
+        entry.alignToNormal);
+}
+
+inline unsigned char TerrainVegetationPaintMinScaleQuantum(std::uint16_t packed)
+{
+    return static_cast<unsigned char>(packed & 31u);
+}
+
+inline unsigned char TerrainVegetationPaintMaxScaleQuantum(std::uint16_t packed)
+{
+    return static_cast<unsigned char>((packed >> 5) & 31u);
+}
+
+inline bool TerrainVegetationPaintRandomYaw(std::uint16_t packed)
+{
+    return (packed & (1u << 10)) != 0;
+}
+
+inline bool TerrainVegetationPaintAlignToNormal(std::uint16_t packed)
+{
+    return (packed & (1u << 11)) != 0;
+}
+
+inline int TerrainVegetationCellIndex(const TerrainSpec& terrain, int ix, int iz)
+{
+    return iz * terrain.vegetationResolutionX + ix;
+}
+
+inline unsigned char TerrainVegetationEntryBit(int entryIndex)
+{
+    if (entryIndex < 0 || entryIndex >= kMaxTerrainVegetationEntries)
+    {
+        return 0;
+    }
+    return static_cast<unsigned char>(1u << entryIndex);
+}
+
+inline bool TerrainVegetationCellHasEntry(unsigned char cell, int entryIndex)
+{
+    const unsigned char bit = TerrainVegetationEntryBit(entryIndex);
+    return bit != 0 && (cell & bit) != 0;
+}
+
+inline unsigned char TerrainVegetationAllowedCellMask(int entryCount)
+{
+    if (entryCount <= 0)
+    {
+        return 0;
+    }
+    if (entryCount >= kMaxTerrainVegetationEntries)
+    {
+        return 0xFFu;
+    }
+    return static_cast<unsigned char>((1u << entryCount) - 1u);
+}
+
+inline bool TerrainVegetationDataIsValid(const TerrainSpec& terrain)
+{
+    if (TerrainVegetationIsAbsent(terrain))
+    {
+        return true;
+    }
+    const int entryCount = static_cast<int>(terrain.vegetationEntries.size());
+    if (entryCount < 1 || entryCount > kMaxTerrainVegetationEntries
+        || !TerrainVegetationResolutionIsValid(terrain.vegetationResolutionX)
+        || !TerrainVegetationResolutionIsValid(terrain.vegetationResolutionZ))
+    {
+        return false;
+    }
+    const int cells = terrain.vegetationResolutionX * terrain.vegetationResolutionZ;
+    if (static_cast<int>(terrain.vegetationCells.size()) != cells
+        || static_cast<int>(terrain.vegetationDensityQuanta.size())
+            != cells * kMaxTerrainVegetationEntries
+        || static_cast<int>(terrain.vegetationPaintParams.size())
+            != cells * kMaxTerrainVegetationEntries)
+    {
+        return false;
+    }
+    for (const TerrainVegetationEntry& entry : terrain.vegetationEntries)
+    {
+        if (!TerrainVegetationEntryIsValid(entry))
+        {
+            return false;
+        }
+    }
+    const unsigned char allowed = TerrainVegetationAllowedCellMask(entryCount);
+    for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+    {
+        const unsigned char cell = terrain.vegetationCells[static_cast<std::size_t>(cellIndex)];
+        if ((cell & static_cast<unsigned char>(~allowed)) != 0)
+        {
+            return false;
+        }
+        for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+        {
+            const unsigned char quantum = terrain.vegetationDensityQuanta[static_cast<std::size_t>(
+                TerrainVegetationDensitySlot(cellIndex, entryIndex))];
+            const std::uint16_t paint = terrain.vegetationPaintParams[static_cast<std::size_t>(
+                TerrainVegetationDensitySlot(cellIndex, entryIndex))];
+            const bool occupied = TerrainVegetationCellHasEntry(cell, entryIndex);
+            if (!occupied && (quantum != 0 || paint != 0))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+inline bool TerrainVegetationShouldWrite(const TerrainSpec& terrain)
+{
+    return !terrain.vegetationEntries.empty();
+}
+
+inline bool TerrainVegetationRowIsOccupied(const TerrainSpec& terrain, int row)
+{
+    if (!TerrainVegetationShouldWrite(terrain) || row < 0 || row >= terrain.vegetationResolutionZ
+        || static_cast<int>(terrain.vegetationCells.size())
+            != terrain.vegetationResolutionX * terrain.vegetationResolutionZ)
+    {
+        return false;
+    }
+    for (int column = 0; column < terrain.vegetationResolutionX; ++column)
+    {
+        if (terrain.vegetationCells[static_cast<std::size_t>(
+                TerrainVegetationCellIndex(terrain, column, row))]
+            != 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline int TerrainVegetationOccupiedSlotCount(const TerrainSpec& terrain)
+{
+    if (!TerrainVegetationShouldWrite(terrain))
+    {
+        return 0;
+    }
+    int slots = 0;
+    for (unsigned char cell : terrain.vegetationCells)
+    {
+        for (int entryIndex = 0; entryIndex < kMaxTerrainVegetationEntries; ++entryIndex)
+        {
+            if (TerrainVegetationCellHasEntry(cell, entryIndex))
+            {
+                ++slots;
+            }
+        }
+    }
+    return slots;
+}
+
+inline int TerrainVegetationStyleRecordCount(const TerrainSpec& terrain)
+{
+    const int slots = TerrainVegetationOccupiedSlotCount(terrain);
+    if (slots <= 0)
+    {
+        return 0;
+    }
+    const int slotsPerRecord = kTerrainVegetationStyleHexPerRecord / kTerrainVegetationStyleHexDigits;
+    return (slots + slotsPerRecord - 1) / slotsPerRecord;
+}
+
+inline int TerrainVegetationOccupiedRowCount(const TerrainSpec& terrain)
+{
+    if (!TerrainVegetationShouldWrite(terrain))
+    {
+        return 0;
+    }
+    int rows = 0;
+    for (int row = 0; row < terrain.vegetationResolutionZ; ++row)
+    {
+        if (TerrainVegetationRowIsOccupied(terrain, row))
+        {
+            ++rows;
+        }
+    }
+    return rows;
+}
+
+inline int TerrainVegetationRecordLineCount(const TerrainSpec& terrain)
+{
+    if (!TerrainVegetationShouldWrite(terrain))
+    {
+        return 0;
+    }
+    return 1 + static_cast<int>(terrain.vegetationEntries.size())
+        + TerrainVegetationOccupiedRowCount(terrain) + TerrainVegetationStyleRecordCount(terrain);
+}
+
+inline bool TerrainVegetationEqual(const TerrainSpec& a, const TerrainSpec& b)
+{
+    if (a.vegetationResolutionX != b.vegetationResolutionX
+        || a.vegetationResolutionZ != b.vegetationResolutionZ || a.vegetationSeed != b.vegetationSeed
+        || a.vegetationEntries.size() != b.vegetationEntries.size()
+        || a.vegetationCells.size() != b.vegetationCells.size())
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < a.vegetationEntries.size(); ++index)
+    {
+        const TerrainVegetationEntry& left = a.vegetationEntries[index];
+        const TerrainVegetationEntry& right = b.vegetationEntries[index];
+        if (left.modelIdentity != right.modelIdentity || left.density != right.density
+            || left.minScale != right.minScale || left.maxScale != right.maxScale
+            || left.randomYaw != right.randomYaw || left.alignToNormal != right.alignToNormal)
+        {
+            return false;
+        }
+    }
+    return a.vegetationCells == b.vegetationCells
+        && a.vegetationDensityQuanta == b.vegetationDensityQuanta
+        && a.vegetationPaintParams == b.vegetationPaintParams;
+}
+
+inline bool TerrainReferencesVegetationModel(
+    const TerrainSpec& terrain,
+    std::string_view identity)
+{
+    if (identity.empty())
+    {
+        return false;
+    }
+    for (const TerrainVegetationEntry& entry : terrain.vegetationEntries)
+    {
+        if (entry.modelIdentity == identity)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 inline int TerrainRecordLineCount(const TerrainSpec& terrain)
 {
     if (terrain.resolutionZ < kMinTerrainResolution)
@@ -305,6 +770,7 @@ inline int TerrainRecordLineCount(const TerrainSpec& terrain)
     {
         lines += TerrainPackedWeightMapCount(terrain) * terrain.weightResolutionZ;
     }
+    lines += TerrainVegetationRecordLineCount(terrain);
     return lines;
 }
 
@@ -387,7 +853,8 @@ inline bool TerrainSpecIsValid(const TerrainSpec& terrain)
         || !TerrainTextureTilingIsValid(terrain.textureTiling)
         || !TerrainExtraLayersAreValid(terrain)
         || !TerrainWeightResolutionIsValid(terrain.weightResolutionX)
-        || !TerrainWeightResolutionIsValid(terrain.weightResolutionZ))
+        || !TerrainWeightResolutionIsValid(terrain.weightResolutionZ)
+        || !TerrainVegetationDataIsValid(terrain))
     {
         return false;
     }
@@ -498,7 +965,7 @@ inline bool TerrainSpecEqual(const TerrainSpec& a, const TerrainSpec& b)
 {
     return a.enabled == b.enabled && TerrainMeshDataEqual(a, b)
         && a.textureIdentity == b.textureIdentity && TerrainExtraLayersEqual(a, b)
-        && TerrainMaterialWeightsEqual(a, b);
+        && TerrainMaterialWeightsEqual(a, b) && TerrainVegetationEqual(a, b);
 }
 
 inline float TerrainSampleSpacingX(const TerrainSpec& terrain)

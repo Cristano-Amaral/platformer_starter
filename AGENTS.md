@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 92 — Scalable Terrain Material Palette & Weight Maps.
+Current milestone: Milestone 93 — Terrain Vegetation Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_92.md`](docs/milestones/MILESTONE_92.md)
+Canonical file: [`docs/milestones/MILESTONE_93.md`](docs/milestones/MILESTONE_93.md)
 
-Branch: `milestone/92-scalable-terrain-material-palette`
+Branch: `milestone/93-terrain-vegetation-foundation`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 93.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 94.
 
 Earlier milestone status, including Milestone 90 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
