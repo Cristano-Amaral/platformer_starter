@@ -1208,6 +1208,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             ImGui::TextWrapped(
                 "Assigned materials. Layer 0 is the Base surface. Extra layers "
                 "stay invisible until painted.");
+            ImGui::BeginChild("##terrainPalette", ImVec2(0.0f, 220.0f), true);
             for (int layer = 0; layer < layerCount; ++layer)
             {
                 ImGui::PushID(layer);
@@ -1282,6 +1283,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 ImGui::PopID();
                 ImGui::Spacing();
             }
+            ImGui::EndChild();
             ImGui::TextWrapped(
                 "Tiling repeats per world unit. Range [%.2f, %.2f]. Default %.2f.",
                 world::kMinTerrainTextureTiling,
@@ -1318,7 +1320,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             }
             else
             {
-                ImGui::TextWrapped("Maximum of four Terrain material layers.");
+                ImGui::TextWrapped("Palette limit reached (16 layers).");
             }
 
             ImGui::Separator();
@@ -1328,6 +1330,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 "Paint edits working-copy weights only. Apply promotes render. "
                 "Brush settings are not saved with the Level.");
             ImGui::TextUnformatted("Paint Layer");
+            ImGui::BeginChild("##terrainPaintLayers", ImVec2(0.0f, 180.0f), true);
             for (int layer = 0; layer < layerCount; ++layer)
             {
                 ImGui::PushID(100 + layer);
@@ -1367,6 +1370,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 }
                 ImGui::PopID();
             }
+            ImGui::EndChild();
 
             const bool paintWasOn = state.terrainPaint.mode;
             if (ImGui::Checkbox("Paint Mode", &state.terrainPaint.mode))

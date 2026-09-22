@@ -7,6 +7,8 @@
 #include "render/LightingEnvironment.h"
 #include "render/LoadedModelMaterials.h"
 
+#include "world/Terrain.h"
+
 #include "raylib.h"
 
 #include <cstddef>
@@ -14,21 +16,28 @@
 
 namespace render
 {
-// raylib DrawMesh binds MATERIAL_MAP index i to texture unit i and writes
-// sampler uniforms texture0..textureN. maps[1] holds the directional shadow
-// depth texture, so extra Terrain albedo layers use dedicated sampler names
-// on units DrawMesh does not claim.
+// raylib DrawMesh binds MATERIAL_MAP index i (0..11) to texture unit i.
+// maps[1] is the directional shadow depth texture, so texture1 cannot be a
+// Terrain sampler. Palette albedo and packed weight maps are sampler2DArray
+// textures on units outside that material-map range.
 inline constexpr int kWorldLitDiffuseTextureUnit = 0;
 inline constexpr int kWorldLitShadowMapTextureUnit = 1;
-inline constexpr int kWorldLitTerrainExtraTextureUnits[3] = {5, 6, 7};
+inline constexpr int kWorldLitTerrainAlbedoArrayUnit = 12;
+inline constexpr int kWorldLitTerrainWeightArrayUnit = 13;
 
 struct TerrainLayerDrawRequest
 {
     int layerCount = 0;
-    const Texture2D* layers[4]{};
-    float tiling[4]{0.25f, 0.25f, 0.25f, 0.25f};
+    unsigned int albedoArrayId = 0;
+    unsigned int weightArrayId = 0;
+    int weightMapCount = 1;
+    int weightResolutionX = 2;
+    int weightResolutionZ = 2;
+    float tiling[world::kMaxTerrainMaterialLayers]{};
     float originX = 0.0f;
     float originZ = 0.0f;
+    float sizeX = 1.0f;
+    float sizeZ = 1.0f;
 };
 
 class WorldLightingResources
@@ -50,7 +59,8 @@ public:
     unsigned int ShadowMapId() const;
     int ShadowMapResolution() const;
     bool FailureLogged() const;
-    int TerrainExtraAlbedoSamplerLocation(int extraLayer) const;
+    int TerrainAlbedoArraySamplerLocation() const;
+    int TerrainWeightArraySamplerLocation() const;
 
     ModelDrawOverride ShadowModelOverride() const;
     ModelDrawOverride LitModelOverride() const;

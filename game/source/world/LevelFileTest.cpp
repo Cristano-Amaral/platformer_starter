@@ -126,7 +126,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 31> allowed{
+    static constexpr std::array<std::string_view, 33> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -157,7 +157,9 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "terrain_row",
         "terrain_material",
         "terrain_layer",
-        "terrain_paint"};
+        "terrain_paint",
+        "terrain_weights",
+        "terrain_weight"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -2842,9 +2844,13 @@ int main()
         const std::string layeredText = world::SerializeLevelText(layered);
         Expect(layeredText == world::SerializeLevelText(layered), "layered writer is deterministic");
         Expect(CountRecords(layeredText, "terrain_layer") == 1, "one extra terrain_layer record");
-        Expect(CountRecords(layeredText, "terrain_paint") == layered.terrain.resolutionZ,
-            "one terrain_paint row per Z sample");
-        Expect(OnlyAuthoredKeywords(layeredText), "terrain_layer and terrain_paint are authored");
+        Expect(CountRecords(layeredText, "terrain_paint") == 0, "M92 writer does not emit terrain_paint");
+        Expect(CountRecords(layeredText, "terrain_weights") == 1, "weight-map header is written");
+        Expect(
+            CountRecords(layeredText, "terrain_weight")
+                == layered.terrain.weightResolutionZ * world::TerrainPackedWeightMapCount(layered.terrain),
+            "one terrain_weight row per packed-map row");
+        Expect(OnlyAuthoredKeywords(layeredText), "terrain_layer and terrain_weight are authored");
         const world::ParseLevelFileResult layeredParsed = world::ParseLevelText(layeredText);
         Expect(layeredParsed.status == world::LoadLevelFileStatus::Loaded, "painted Terrain loads");
         Expect(
@@ -2869,8 +2875,10 @@ int main()
             "unpainted extra layer fixture");
         const std::string unpaintedLayerText = world::SerializeLevelText(unpaintedLayer);
         Expect(
-            CountRecords(unpaintedLayerText, "terrain_paint") == 0,
-            "unpainted extra layers omit terrain_paint");
+            CountRecords(unpaintedLayerText, "terrain_paint") == 0
+                && CountRecords(unpaintedLayerText, "terrain_weight") == 0
+                && CountRecords(unpaintedLayerText, "terrain_weights") == 0,
+            "unpainted extra layers omit weight maps");
         const world::ParseLevelFileResult unpaintedParsed =
             world::ParseLevelText(unpaintedLayerText);
         Expect(unpaintedParsed.status == world::LoadLevelFileStatus::Loaded,
@@ -2965,11 +2973,98 @@ int main()
             }
             paintCursor = newline + 1;
         }
-        Expect(!paintLineTooLong, "terrain_paint rows stay within 512-character lines");
+        Expect(!paintLineTooLong, "terrain_weight rows stay within 512-character lines");
         Expect(maxPaintText.size() <= world::kMaxLevelFileBytes, "painted max Terrain stays within 64 KiB");
         Expect(
             world::ParseLevelText(maxPaintText).status == world::LoadLevelFileStatus::Loaded,
             "maximum painted Terrain loads");
+
+        const world::ParseLevelFileResult m88 = world::ParseLevelText(flatText);
+        Expect(m88.status == world::LoadLevelFileStatus::Loaded, "M88 Terrain loads");
+        Expect(world::TerrainMaterialLayerCount(m88.level.terrain) == 1, "M88 Terrain is layer 0 only");
+        Expect(
+            world::TerrainMaterialWeightsAreDefault(m88.level.terrain),
+            "M88 Terrain is 100 percent layer 0");
+
+        std::string legacy = flatText;
+        legacy += "terrain_layer 1 textures/test_textured_basecolor.png 0.25\n";
+        for (int row = 0; row < 5; ++row)
+        {
+            legacy += "terrain_paint ";
+            legacy += std::to_string(row);
+            for (int column = 0; column < 9; ++column)
+            {
+                legacy += row == 0 && column == 0 ? " 0 255 0 0" : " 255 0 0 0";
+            }
+            legacy += '\n';
+        }
+        const world::ParseLevelFileResult migrated = world::ParseLevelText(legacy);
+        Expect(migrated.status == world::LoadLevelFileStatus::Loaded, "M90 four-layer Terrain migrates");
+        Expect(
+            migrated.level.terrain.weightResolutionX == world::kDefaultTerrainWeightResolutionX
+                && migrated.level.terrain.weightResolutionZ == world::kDefaultTerrainWeightResolutionZ,
+            "migration uses the M92 weight resolution");
+        const int corner = world::TerrainWeightTexelIndex(migrated.level.terrain, 0, 0);
+        Expect(
+            world::TerrainTexelLayerWeight(migrated.level.terrain, corner, 1) > 0.99f,
+            "migrated corner keeps the M90 layer-1 sample");
+        const int farTexel = world::TerrainWeightTexelIndex(
+            migrated.level.terrain,
+            migrated.level.terrain.weightResolutionX - 1,
+            migrated.level.terrain.weightResolutionZ - 1);
+        Expect(
+            world::TerrainTexelLayerWeight(migrated.level.terrain, farTexel, 0) > 0.99f,
+            "migrated far texel keeps layer 0");
+        const std::string migratedText = world::SerializeLevelText(migrated.level);
+        Expect(CountRecords(migratedText, "terrain_paint") == 0, "save migrates off terrain_paint");
+        Expect(CountRecords(migratedText, "terrain_weight") > 0, "save writes terrain_weight");
+        const world::ParseLevelFileResult migratedAgain = world::ParseLevelText(migratedText);
+        Expect(
+            migratedAgain.status == world::LoadLevelFileStatus::Loaded
+                && world::SerializeLevelText(migratedAgain.level) == migratedText,
+            "migrated weight maps round-trip deterministically");
+
+        world::LevelDefinition many = withFlat;
+        const char* palette[] = {
+            "textures/test_textured_basecolor.png",
+            "textures/test_checker.png",
+            "textures/a.png",
+            "textures/b.png",
+            "textures/c.png"};
+        Expect(
+            world::TryAssignTerrainTextureIdentity(many.terrain, "textures/base.png"),
+            "many-layer base");
+        for (const char* identity : palette)
+        {
+            Expect(world::TryAddTerrainMaterialLayer(many.terrain, identity), "author more than four layers");
+        }
+        Expect(world::TerrainMaterialLayerCount(many.terrain) == 6, "six layers serialize");
+        world::TerrainPaintStampRequest layerFour{};
+        layerFour.layer = 4;
+        layerFour.centerX = world::TerrainSamplePosition(many.terrain, 4, 2).x;
+        layerFour.centerZ = world::TerrainSamplePosition(many.terrain, 4, 2).z;
+        layerFour.radius = 3.0f;
+        layerFour.strength = 1.0f;
+        Expect(world::ApplyTerrainPaintStamp(many.terrain, layerFour), "serialize layer >= 4 paint");
+        const std::string manyText = world::SerializeLevelText(many);
+        Expect(CountRecords(manyText, "terrain_layer") == 5, "five extra layer records");
+        Expect(
+            CountRecords(manyText, "terrain_weight")
+                == many.terrain.weightResolutionZ * world::TerrainPackedWeightMapCount(many.terrain),
+            "two packed maps are written for six layers");
+        const world::ParseLevelFileResult manyParsed = world::ParseLevelText(manyText);
+        Expect(manyParsed.status == world::LoadLevelFileStatus::Loaded, "more than four layers load");
+        Expect(
+            world::SerializeLevelText(manyParsed.level) == manyText,
+            "multi-map weight serialization is deterministic");
+        world::TerrainSpec remapped = manyParsed.level.terrain;
+        Expect(
+            world::TryRemoveTerrainMaterialLayer(remapped, 4),
+            "remove serialized high-index layer");
+        Expect(
+            remapped.extraLayers[3].textureIdentity == "textures/c.png",
+            "high-index removal remaps the following layer");
+        Expect(world::TerrainSpecIsValid(remapped), "remapped palette stays valid");
     }
 
     Expect(

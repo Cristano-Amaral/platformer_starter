@@ -208,23 +208,21 @@ void DrawAuthoredTerrain(const TerrainGpuResources* terrainGpu, Color fill)
     {
         TerrainLayerDrawRequest request{};
         request.layerCount = terrainGpu->LayerCount();
+        request.albedoArrayId = terrainGpu->AlbedoArrayId();
+        request.weightArrayId = terrainGpu->WeightArrayId();
+        request.weightMapCount = terrainGpu->WeightMapCount();
         const world::TerrainSpec* spec = terrainGpu->LastSpec();
         if (spec != nullptr)
         {
             request.originX = spec->origin.x;
             request.originZ = spec->origin.z;
+            request.sizeX = spec->sizeX;
+            request.sizeZ = spec->sizeZ;
+            request.weightResolutionX = spec->weightResolutionX;
+            request.weightResolutionZ = spec->weightResolutionZ;
             for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
             {
                 request.tiling[layer] = world::TerrainLayerTextureTiling(*spec, layer);
-                const Texture2D* loaded = terrainGpu->GetLayerTexture(layer);
-                if (loaded != nullptr)
-                {
-                    request.layers[layer] = loaded;
-                }
-                else if (layer > 0 && layer < request.layerCount)
-                {
-                    request.layers[layer] = terrainGpu->GetMissingLayerTexture();
-                }
             }
         }
         gWorldLighting->DrawWorldTerrain(mesh, surface, request);

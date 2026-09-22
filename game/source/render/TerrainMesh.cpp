@@ -5,12 +5,14 @@
 #include "platform/RuntimePaths.h"
 #include "world/TerrainGeometry.h"
 
+#include "external/glad.h"
 #include "raylib.h"
 
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <system_error>
+#include <vector>
 
 namespace render
 {
@@ -22,7 +24,7 @@ void FreeTerrainMesh(Mesh& mesh)
     mesh = {};
 }
 
-void FillTerrainVertexColors(const world::TerrainSpec& spec, Mesh& mesh)
+void FillTerrainVertexColors(Mesh& mesh)
 {
     if (mesh.colors == nullptr || mesh.vertexCount <= 0)
     {
@@ -30,14 +32,10 @@ void FillTerrainVertexColors(const world::TerrainSpec& spec, Mesh& mesh)
     }
     for (int index = 0; index < mesh.vertexCount; ++index)
     {
-        float weights[world::kMaxTerrainMaterialLayers];
-        world::ReadTerrainSampleWeights(spec, index, weights);
-        int quantized[world::kMaxTerrainMaterialLayers]{};
-        world::QuantizeTerrainSampleWeights(weights, quantized);
-        mesh.colors[index * 4] = static_cast<unsigned char>(quantized[0]);
-        mesh.colors[index * 4 + 1] = static_cast<unsigned char>(quantized[1]);
-        mesh.colors[index * 4 + 2] = static_cast<unsigned char>(quantized[2]);
-        mesh.colors[index * 4 + 3] = static_cast<unsigned char>(quantized[3]);
+        mesh.colors[index * 4] = 255;
+        mesh.colors[index * 4 + 1] = 255;
+        mesh.colors[index * 4 + 2] = 255;
+        mesh.colors[index * 4 + 3] = 255;
     }
 }
 
@@ -84,7 +82,7 @@ bool FillTerrainMesh(const world::TerrainSpec& spec, Mesh& mesh)
         mesh.texcoords[index * 2] = texcoord.u;
         mesh.texcoords[index * 2 + 1] = texcoord.v;
     }
-    FillTerrainVertexColors(spec, mesh);
+    FillTerrainVertexColors(mesh);
     for (int triangle = 0; triangle < mesh.triangleCount; ++triangle)
     {
         const world::TerrainTriangle& indexed = geometry.triangles[static_cast<std::size_t>(triangle)];
@@ -152,10 +150,29 @@ void TerrainGpuResources::UnloadTextures()
     }
 }
 
+void TerrainGpuResources::UnloadArrays()
+{
+    if (albedoArrayId != 0)
+    {
+        glDeleteTextures(1, &albedoArrayId);
+        albedoArrayId = 0;
+    }
+    if (weightArrayId != 0)
+    {
+        glDeleteTextures(1, &weightArrayId);
+        weightArrayId = 0;
+    }
+    albedoArrayWidth = 0;
+    albedoArrayHeight = 0;
+    weightMapCount = 1;
+    weightMapBytes.clear();
+}
+
 void TerrainGpuResources::Unload()
 {
     UnloadMesh();
     UnloadTextures();
+    UnloadArrays();
     if (missingLayerLoaded)
     {
         ::UnloadTexture(missingLayer);
@@ -178,11 +195,17 @@ void TerrainGpuResources::EnsureMissingLayerTexture()
 
 void TerrainGpuResources::SyncTextures(const world::TerrainSpec& spec)
 {
+    const int previousLayerCount = layerCount;
     layerCount = world::TerrainMaterialLayerCount(spec);
+    bool albedoDirty = previousLayerCount != layerCount || albedoArrayId == 0;
     for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
     {
         if (layer >= layerCount)
         {
+            if (textureLoaded[layer])
+            {
+                albedoDirty = true;
+            }
             UnloadLayerTexture(layer);
             loggedMissingIdentity[layer].clear();
             continue;
@@ -192,6 +215,10 @@ void TerrainGpuResources::SyncTextures(const world::TerrainSpec& spec)
         if (world::TerrainTextureIdentityIsNone(identity)
             || !assets::RuntimePngIdentityIsValid(identity))
         {
+            if (textureLoaded[layer])
+            {
+                albedoDirty = true;
+            }
             UnloadLayerTexture(layer);
             continue;
         }
@@ -200,6 +227,7 @@ void TerrainGpuResources::SyncTextures(const world::TerrainSpec& spec)
             continue;
         }
 
+        albedoDirty = true;
         UnloadLayerTexture(layer);
         const assets::RuntimePngLoadResolution resolved =
             assets::ResolveRuntimePngLoadFile(identity, authoringCookedRoot, {}, authoringSourceRoot);
@@ -237,6 +265,10 @@ void TerrainGpuResources::SyncTextures(const world::TerrainSpec& spec)
         loggedMissingIdentity[layer].clear();
         ++textureLoadCount;
     }
+    if (albedoDirty)
+    {
+        RebuildAlbedoArray(spec);
+    }
 }
 
 void TerrainGpuResources::Sync(const world::TerrainSpec* spec)
@@ -270,9 +302,13 @@ void TerrainGpuResources::Sync(const world::TerrainSpec* spec)
         lastSpec.textureIdentity = spec->textureIdentity;
         lastSpec.enabled = spec->enabled;
         lastSpec.extraLayers = spec->extraLayers;
+        lastSpec.materialWeights = spec->materialWeights;
+        lastSpec.weightResolutionX = spec->weightResolutionX;
+        lastSpec.weightResolutionZ = spec->weightResolutionZ;
     }
 
     SyncTextures(*spec);
+    SyncWeightArray(*spec);
     EnsureMissingLayerTexture();
 }
 
@@ -342,5 +378,236 @@ std::size_t TerrainGpuResources::TextureLoadCount() const
 std::size_t TerrainGpuResources::TextureUnloadCount() const
 {
     return textureUnloadCount;
+}
+
+std::size_t TerrainGpuResources::WeightUploadCount() const
+{
+    return weightUploadCount;
+}
+
+unsigned int TerrainGpuResources::AlbedoArrayId() const
+{
+    return albedoArrayId;
+}
+
+unsigned int TerrainGpuResources::WeightArrayId() const
+{
+    return weightArrayId;
+}
+
+int TerrainGpuResources::WeightMapCount() const
+{
+    return weightMapCount;
+}
+
+bool TerrainGpuResources::CopyWeightMapTexel(
+    int map,
+    int x,
+    int z,
+    unsigned char& red,
+    unsigned char& green,
+    unsigned char& blue,
+    unsigned char& alpha) const
+{
+    if (map < 0 || map >= weightMapCount || weightMapBytes.empty() || !hasSpec)
+    {
+        return false;
+    }
+    const int width = lastSpec.weightResolutionX;
+    const int height = lastSpec.weightResolutionZ;
+    if (x < 0 || z < 0 || x >= width || z >= height)
+    {
+        return false;
+    }
+    const std::size_t offset = static_cast<std::size_t>(
+        ((map * height + z) * width + x) * world::kTerrainWeightsPerMap);
+    if (offset + 3 >= weightMapBytes.size())
+    {
+        return false;
+    }
+    red = weightMapBytes[offset];
+    green = weightMapBytes[offset + 1];
+    blue = weightMapBytes[offset + 2];
+    alpha = weightMapBytes[offset + 3];
+    return true;
+}
+
+void TerrainGpuResources::RebuildAlbedoArray(const world::TerrainSpec& spec)
+{
+    if (albedoArrayId != 0)
+    {
+        glDeleteTextures(1, &albedoArrayId);
+        albedoArrayId = 0;
+    }
+    albedoArrayWidth = 0;
+    albedoArrayHeight = 0;
+    const int layers = layerCount > 0 ? layerCount : 1;
+    std::vector<Image> images(static_cast<std::size_t>(layers));
+    std::vector<unsigned char> owns(static_cast<std::size_t>(layers), 0);
+    int width = 1;
+    int height = 1;
+    for (int layer = 0; layer < layers; ++layer)
+    {
+        images[static_cast<std::size_t>(layer)] = {};
+        if (!textureLoaded[layer])
+        {
+            continue;
+        }
+        const std::string& identity = world::TerrainLayerTextureIdentity(spec, layer);
+        const assets::RuntimePngLoadResolution resolved =
+            assets::ResolveRuntimePngLoadFile(identity, authoringCookedRoot, {}, authoringSourceRoot);
+        if (!assets::RuntimePngLoadFileIsAvailable(resolved))
+        {
+            continue;
+        }
+        Image image = LoadImage(resolved.path.string().c_str());
+        if (image.data == nullptr || image.width <= 0 || image.height <= 0)
+        {
+            UnloadImage(image);
+            continue;
+        }
+        if (image.width > width)
+        {
+            width = image.width;
+        }
+        if (image.height > height)
+        {
+            height = image.height;
+        }
+        images[static_cast<std::size_t>(layer)] = image;
+        owns[static_cast<std::size_t>(layer)] = 1;
+    }
+    if (width > 512)
+    {
+        width = 512;
+    }
+    if (height > 512)
+    {
+        height = 512;
+    }
+    unsigned int id = 0;
+    glGenTextures(1, &id);
+    if (id == 0)
+    {
+        for (int layer = 0; layer < layers; ++layer)
+        {
+            if (owns[static_cast<std::size_t>(layer)] != 0)
+            {
+                UnloadImage(images[static_cast<std::size_t>(layer)]);
+            }
+        }
+        return;
+    }
+    glBindTexture(GL_TEXTURE_2D_ARRAY, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage3D(
+        GL_TEXTURE_2D_ARRAY,
+        0,
+        GL_RGBA8,
+        width,
+        height,
+        layers,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        nullptr);
+    for (int layer = 0; layer < layers; ++layer)
+    {
+        Image slice{};
+        if (owns[static_cast<std::size_t>(layer)] != 0)
+        {
+            slice = images[static_cast<std::size_t>(layer)];
+            images[static_cast<std::size_t>(layer)] = {};
+            owns[static_cast<std::size_t>(layer)] = 0;
+            ImageFormat(&slice, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+            if (slice.width != width || slice.height != height)
+            {
+                ImageResize(&slice, width, height);
+            }
+        }
+        else
+        {
+            const Color fill = layer == 0 ? Color{255, 255, 255, 255} : Color{255, 0, 255, 255};
+            slice = GenImageColor(width, height, fill);
+        }
+        if (slice.data != nullptr)
+        {
+            glTexSubImage3D(
+                GL_TEXTURE_2D_ARRAY,
+                0,
+                0,
+                0,
+                layer,
+                width,
+                height,
+                1,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                slice.data);
+        }
+        UnloadImage(slice);
+    }
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    albedoArrayId = id;
+    albedoArrayWidth = width;
+    albedoArrayHeight = height;
+}
+
+void TerrainGpuResources::SyncWeightArray(const world::TerrainSpec& spec)
+{
+    std::vector<unsigned char> bytes;
+    world::BuildTerrainWeightMapRgba(spec, bytes);
+    const int maps = world::TerrainPackedWeightMapCount(spec);
+    if (weightArrayId != 0 && bytes == weightMapBytes && maps == weightMapCount)
+    {
+        return;
+    }
+    if (weightArrayId != 0)
+    {
+        glDeleteTextures(1, &weightArrayId);
+        weightArrayId = 0;
+    }
+    const int width = spec.weightResolutionX;
+    const int height = spec.weightResolutionZ;
+    if (width <= 0 || height <= 0 || maps <= 0 || bytes.empty())
+    {
+        weightMapBytes.clear();
+        weightMapCount = 1;
+        return;
+    }
+    unsigned int id = 0;
+    glGenTextures(1, &id);
+    if (id == 0)
+    {
+        return;
+    }
+    glBindTexture(GL_TEXTURE_2D_ARRAY, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage3D(
+        GL_TEXTURE_2D_ARRAY,
+        0,
+        GL_RGBA8,
+        width,
+        height,
+        maps,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        bytes.data());
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    weightArrayId = id;
+    weightMapCount = maps;
+    weightMapBytes = std::move(bytes);
+    ++weightUploadCount;
 }
 }

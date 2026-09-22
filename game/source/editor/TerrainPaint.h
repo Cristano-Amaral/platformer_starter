@@ -9,6 +9,8 @@
 #include "world/LevelDefinition.h"
 #include "world/TerrainPaint.h"
 
+#include <string>
+
 namespace editor
 {
 struct TerrainPaintState
@@ -206,19 +208,9 @@ inline bool ShouldCancelTerrainPaintMode(
     return paint.mode && escapePressed && !imguiWantsKeyboard;
 }
 
-inline const char* TerrainPaintHudName(const TerrainPaintState& paint)
+inline std::string FormatTerrainPaintHudName(const TerrainPaintState& paint)
 {
-    switch (paint.selectedLayer)
-    {
-    case 1:
-        return "Layer 1";
-    case 2:
-        return "Layer 2";
-    case 3:
-        return "Layer 3";
-    default:
-        return "Layer 0";
-    }
+    return "Layer " + std::to_string(paint.selectedLayer);
 }
 
 inline const char* TerrainPaintViewportHintText()

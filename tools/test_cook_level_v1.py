@@ -104,10 +104,13 @@ class LevelV1HeaderTests(unittest.TestCase):
             b"id level_01\n"
             b"terrain_layer 1 textures/test_textured_basecolor.png 0.25\n"
             b"terrain_paint 0 255 0 0 0 0 255 0 0\n"
+            b"terrain_weights 32 32\n"
+            b"terrain_weight 1 0 ff000000\n"
         )
         cooker.validate_level_v1_header(payload)
         self.assertIn(b"terrain_layer 1 textures/test_textured_basecolor.png 0.25", payload)
         self.assertIn(b"terrain_paint 0", payload)
+        self.assertIn(b"terrain_weight 1 0", payload)
 
     def test_pressure_plate_mode_flags_do_not_fail_header_gate(self) -> None:
         payload = (

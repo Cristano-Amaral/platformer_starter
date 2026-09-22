@@ -1,10 +1,11 @@
 #pragma once
 
-// Milestone 90: deterministic Terrain material-weight painting. Mutates only
-// TerrainSpec extra-layer palette consumption via materialWeights. Reuses M87
-// linear falloff and spatial stamp spacing. Brush parameters, stroke state,
-// and GPU synchronization live elsewhere. Not a command framework, eraser
-// tool, or Undo stack.
+// Milestone 90/92: deterministic Terrain material-weight painting. Mutates
+// dedicated weight-map texels, not heightfield samples. A stamp mixes the
+// full palette, including layers stored in different packed RGBA maps.
+// Reuses M87 linear falloff and spatial stamp spacing. Brush parameters,
+// stroke state, and GPU synchronization live elsewhere. Not a command
+// framework, eraser tool, or Undo stack.
 
 #include "world/Terrain.h"
 #include "world/TerrainSculpt.h"
@@ -50,12 +51,17 @@ struct TerrainPaintStampRequest
     float strength = kDefaultTerrainPaintStrength;
 };
 
-// Mixes the local 4-weight mixture toward a one-hot target for `layer`:
+// Mixes the full palette toward a one-hot target for `layer`:
 //   next = current * (1 - influence) + target * influence
 //   influence = clamp(strength * falloff, 0, 1)
-// Then renormalizes. Repeated stamps converge to layer L. A zero influence
+// Then renormalizes across every active layer, including weights stored in
+// other packed maps. Repeated stamps converge to layer L. A zero influence
 // leaves weights unchanged.
-inline void MixTerrainSampleWeightsTowardLayer(float* weights, int layer, float influence)
+inline void MixTerrainTexelWeightsTowardLayer(
+    float* weights,
+    int layer,
+    int layerCount,
+    float influence)
 {
     if (weights == nullptr)
     {
@@ -70,7 +76,7 @@ inline void MixTerrainSampleWeightsTowardLayer(float* weights, int layer, float 
     {
         mix = 1.0f;
     }
-    if (layer < 0 || layer >= kMaxTerrainMaterialLayers)
+    if (layer < 0 || layer >= layerCount || layer >= kMaxTerrainMaterialLayers)
     {
         return;
     }
@@ -80,7 +86,7 @@ inline void MixTerrainSampleWeightsTowardLayer(float* weights, int layer, float 
     {
         weights[index] = weights[index] * (1.0f - mix) + target[index] * mix;
     }
-    NormalizeTerrainSampleWeights(weights);
+    NormalizeTerrainWeights(weights, layerCount);
 }
 
 inline bool ApplyTerrainPaintStamp(TerrainSpec& terrain, const TerrainPaintStampRequest& request)
@@ -102,41 +108,42 @@ inline bool ApplyTerrainPaintStamp(TerrainSpec& terrain, const TerrainPaintStamp
     }
 
     EnsureTerrainMaterialWeights(terrain);
+    const int layerCount = TerrainMaterialLayerCount(terrain);
     bool changed = false;
-    for (int iz = 0; iz < terrain.resolutionZ; ++iz)
+    for (int iz = 0; iz < terrain.weightResolutionZ; ++iz)
     {
-        for (int ix = 0; ix < terrain.resolutionX; ++ix)
+        for (int ix = 0; ix < terrain.weightResolutionX; ++ix)
         {
-            const core::Vec3 sample = TerrainSamplePosition(terrain, ix, iz);
+            const core::Vec3 texel = TerrainWeightTexelPosition(terrain, ix, iz);
             const float falloff = TerrainPaintFalloff(
-                TerrainSculptDistanceXZ(sample.x, sample.z, request.centerX, request.centerZ),
+                TerrainSculptDistanceXZ(texel.x, texel.z, request.centerX, request.centerZ),
                 radius);
             if (!(falloff > 0.0f))
             {
                 continue;
             }
 
-            const int sampleIndex = TerrainHeightIndex(terrain, ix, iz);
+            const int texelIndex = TerrainWeightTexelIndex(terrain, ix, iz);
             float current[kMaxTerrainMaterialLayers];
-            ReadTerrainSampleWeights(terrain, sampleIndex, current);
+            ReadTerrainTexelWeights(terrain, texelIndex, current);
             float next[kMaxTerrainMaterialLayers];
             for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
             {
                 next[layer] = current[layer];
             }
-            MixTerrainSampleWeightsTowardLayer(next, request.layer, strength * falloff);
-            bool sampleChanged = false;
+            MixTerrainTexelWeightsTowardLayer(next, request.layer, layerCount, strength * falloff);
+            bool texelChanged = false;
             for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
             {
                 if (next[layer] != current[layer])
                 {
-                    sampleChanged = true;
+                    texelChanged = true;
                     break;
                 }
             }
-            if (sampleChanged)
+            if (texelChanged)
             {
-                WriteTerrainSampleWeights(terrain, sampleIndex, next);
+                WriteTerrainTexelWeights(terrain, texelIndex, next);
                 changed = true;
             }
         }

@@ -231,6 +231,12 @@ struct ParseState
     std::vector<unsigned char> terrainRowsSeen;
     std::vector<unsigned char> terrainPaintRowsSeen;
     bool seenTerrainPaint = false;
+    std::vector<float> legacyPaintWeights;
+    bool seenTerrainWeights = false;
+    bool seenTerrainWeightRow = false;
+    int declaredWeightMaps = 0;
+    std::vector<unsigned char> terrainWeightRowsSeen;
+    std::vector<int> quantizedWeights;
     std::vector<Box> platforms;
     std::vector<SlopeSpec> slopes;
     std::vector<CheckpointSpec> checkpoints;
@@ -1074,6 +1080,12 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             state.terrainPaintRowsSeen.assign(
                 static_cast<std::size_t>(state.terrain.resolutionZ), 0);
             state.seenTerrainPaint = false;
+            state.legacyPaintWeights.clear();
+            state.seenTerrainWeights = false;
+            state.seenTerrainWeightRow = false;
+            state.declaredWeightMaps = 0;
+            state.terrainWeightRowsSeen.clear();
+            state.quantizedWeights.clear();
             continue;
         }
         if (keyword == "terrain_material")
@@ -1122,6 +1134,11 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "terrain_layer without terrain");
             }
+            if (state.seenTerrainWeights || state.seenTerrainPaint)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_layer after weights");
+            }
             if (!RequireTokenCount(tokens, 4, failure, lineNumber))
             {
                 return failure;
@@ -1166,8 +1183,13 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "terrain_paint without terrain");
             }
-            const std::size_t expected =
-                2 + static_cast<std::size_t>(state.terrain.resolutionX * kMaxTerrainMaterialLayers);
+            if (state.seenTerrainWeights)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_paint mixed with terrain_weights");
+            }
+            const std::size_t expected = 2
+                + static_cast<std::size_t>(state.terrain.resolutionX * kLegacyTerrainPaintLayers);
             if (tokens.size() != expected)
             {
                 return MakeStatus(
@@ -1185,15 +1207,21 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "duplicate terrain_paint");
             }
-            EnsureTerrainMaterialWeights(state.terrain);
+            if (state.legacyPaintWeights.empty())
+            {
+                state.legacyPaintWeights.assign(
+                    static_cast<std::size_t>(
+                        TerrainSampleCount(state.terrain) * kLegacyTerrainPaintLayers),
+                    0.0f);
+            }
             for (int column = 0; column < state.terrain.resolutionX; ++column)
             {
-                int quantized[kMaxTerrainMaterialLayers]{};
+                int quantized[kLegacyTerrainPaintLayers]{};
                 int sum = 0;
-                for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+                for (int layer = 0; layer < kLegacyTerrainPaintLayers; ++layer)
                 {
                     const std::size_t tokenIndex = static_cast<std::size_t>(
-                        2 + column * kMaxTerrainMaterialLayers + layer);
+                        2 + column * kLegacyTerrainPaintLayers + layer);
                     if (!ParseIntToken(tokens[tokenIndex], quantized[layer])
                         || quantized[layer] < 0
                         || quantized[layer] > kTerrainMaterialWeightQuantum)
@@ -1209,12 +1237,118 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                         LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_paint");
                 }
                 float weights[kMaxTerrainMaterialLayers]{};
-                DequantizeTerrainSampleWeights(quantized, weights);
+                DequantizeTerrainTexelWeights(quantized, kLegacyTerrainPaintLayers, weights);
                 const int sampleIndex = TerrainHeightIndex(state.terrain, column, rowIndex);
-                WriteTerrainSampleWeights(state.terrain, sampleIndex, weights);
+                for (int layer = 0; layer < kLegacyTerrainPaintLayers; ++layer)
+                {
+                    state.legacyPaintWeights[static_cast<std::size_t>(
+                        sampleIndex * kLegacyTerrainPaintLayers + layer)] = weights[layer];
+                }
             }
             state.terrainPaintRowsSeen[static_cast<std::size_t>(rowIndex)] = 1;
             state.seenTerrainPaint = true;
+            continue;
+        }
+        if (keyword == "terrain_weights")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_weights without terrain");
+            }
+            if (state.seenTerrainPaint)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_weights mixed with terrain_paint");
+            }
+            if (!RequireSingleton(
+                    state.seenTerrainWeights, failure, lineNumber, "duplicate terrain_weights")
+                || !RequireTokenCount(tokens, 3, failure, lineNumber))
+            {
+                return failure;
+            }
+            int resolutionX = 0;
+            int resolutionZ = 0;
+            if (!ParseIntToken(tokens[1], resolutionX) || !ParseIntToken(tokens[2], resolutionZ)
+                || !TerrainWeightResolutionIsValid(resolutionX)
+                || !TerrainWeightResolutionIsValid(resolutionZ))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_weights");
+            }
+            state.terrain.weightResolutionX = resolutionX;
+            state.terrain.weightResolutionZ = resolutionZ;
+            state.declaredWeightMaps = TerrainPackedWeightMapCount(state.terrain);
+            state.terrainWeightRowsSeen.assign(
+                static_cast<std::size_t>(state.declaredWeightMaps * resolutionZ), 0);
+            state.quantizedWeights.assign(
+                static_cast<std::size_t>(
+                    resolutionX * resolutionZ * kMaxTerrainMaterialLayers),
+                0);
+            continue;
+        }
+        if (keyword == "terrain_weight")
+        {
+            if (!state.seenTerrain)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_weight without terrain");
+            }
+            if (!state.seenTerrainWeights)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "terrain_weight without terrain_weights");
+            }
+            if (!RequireTokenCount(tokens, 4, failure, lineNumber))
+            {
+                return failure;
+            }
+            int mapIndex = 0;
+            int rowIndex = 0;
+            if (!ParseIntToken(tokens[1], mapIndex) || !ParseIntToken(tokens[2], rowIndex)
+                || mapIndex < 0 || mapIndex >= state.declaredWeightMaps || rowIndex < 0
+                || rowIndex >= state.terrain.weightResolutionZ)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_weight");
+            }
+            const std::size_t seenIndex = static_cast<std::size_t>(
+                mapIndex * state.terrain.weightResolutionZ + rowIndex);
+            if (state.terrainWeightRowsSeen[seenIndex] != 0)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "duplicate terrain_weight");
+            }
+            const std::string_view hex = tokens[3];
+            const std::size_t expectedHex = static_cast<std::size_t>(
+                state.terrain.weightResolutionX * kTerrainWeightsPerMap * 2);
+            if (hex.size() != expectedHex)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "malformed terrain_weight");
+            }
+            for (int column = 0; column < state.terrain.weightResolutionX; ++column)
+            {
+                const int texelIndex = TerrainWeightTexelIndex(state.terrain, column, rowIndex);
+                for (int channel = 0; channel < kTerrainWeightsPerMap; ++channel)
+                {
+                    const std::size_t digit = static_cast<std::size_t>(
+                        (column * kTerrainWeightsPerMap + channel) * 2);
+                    int high = 0;
+                    int low = 0;
+                    if (!ParseTerrainWeightHexNibble(hex[digit], high)
+                        || !ParseTerrainWeightHexNibble(hex[digit + 1], low))
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_weight");
+                    }
+                    const int layer = mapIndex * kTerrainWeightsPerMap + channel;
+                    state.quantizedWeights[static_cast<std::size_t>(
+                        texelIndex * kMaxTerrainMaterialLayers + layer)] = (high << 4) | low;
+                }
+            }
+            state.terrainWeightRowsSeen[seenIndex] = 1;
+            state.seenTerrainWeightRow = true;
             continue;
         }
         if (keyword == "terrain_row")
@@ -1313,6 +1447,68 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                         return MakeStatus(
                             LoadLevelFileStatus::Invalid, lineNumber, "missing terrain_paint");
                     }
+                }
+                const int assigned = TerrainMaterialLayerCount(state.terrain);
+                const int samples = TerrainSampleCount(state.terrain);
+                for (int sample = 0; sample < samples; ++sample)
+                {
+                    for (int layer = assigned; layer < kLegacyTerrainPaintLayers; ++layer)
+                    {
+                        if (state.legacyPaintWeights[static_cast<std::size_t>(
+                                sample * kLegacyTerrainPaintLayers + layer)]
+                            != 0.0f)
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_paint");
+                        }
+                    }
+                }
+                MigrateLegacyTerrainPaintWeights(state.terrain, state.legacyPaintWeights);
+            }
+            else if (state.seenTerrainWeights && state.seenTerrainWeightRow)
+            {
+                for (unsigned char seenWeight : state.terrainWeightRowsSeen)
+                {
+                    if (seenWeight == 0)
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "missing terrain_weight");
+                    }
+                }
+                const int layerCount = TerrainMaterialLayerCount(state.terrain);
+                const int texels = TerrainWeightTexelCount(state.terrain);
+                EnsureTerrainMaterialWeights(state.terrain);
+                for (int texel = 0; texel < texels; ++texel)
+                {
+                    int quantized[kMaxTerrainMaterialLayers]{};
+                    int sum = 0;
+                    for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+                    {
+                        quantized[layer] = state.quantizedWeights[static_cast<std::size_t>(
+                            texel * kMaxTerrainMaterialLayers + layer)];
+                        if (quantized[layer] < 0 || quantized[layer] > kTerrainMaterialWeightQuantum)
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_weight");
+                        }
+                        if (layer >= layerCount && quantized[layer] != 0)
+                        {
+                            return MakeStatus(
+                                LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_weight");
+                        }
+                        if (layer < layerCount)
+                        {
+                            sum += quantized[layer];
+                        }
+                    }
+                    if (sum != kTerrainMaterialWeightQuantum)
+                    {
+                        return MakeStatus(
+                            LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_weight");
+                    }
+                    float weights[kMaxTerrainMaterialLayers]{};
+                    DequantizeTerrainTexelWeights(quantized, layerCount, weights);
+                    WriteTerrainTexelWeights(state.terrain, texel, weights);
                 }
             }
             else

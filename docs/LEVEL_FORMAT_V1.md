@@ -147,7 +147,8 @@ names only the singleton Directional Light.
 
 The writer emits `point_light` records then `spot_light` records after
 `directional_light` (and after optional `terrain` / `terrain_row` /
-`terrain_material` / `terrain_layer` / `terrain_paint` when present), omitted when the collections are empty.
+`terrain_material` / `terrain_layer` / `terrain_weights` / `terrain_weight`
+when present; legacy `terrain_paint` is read but not written), omitted when the collections are empty.
 
 ### Optional Terrain singleton (Milestone 86 / 88)
 
@@ -157,6 +158,8 @@ terrain_row <rowIndex> <h0> <h1> ... <hN>
 terrain_material <textureIdentity|-> <tiling>
 terrain_layer <layerIndex> <textureIdentity> <tiling>
 terrain_paint <rowIndex> <q00> <q01> <q02> <q03> ... <qN0> <qN1> <qN2> <qN3>
+terrain_weights <resolutionX> <resolutionZ>
+terrain_weight <mapIndex> <rowIndex> <hex>
 ```
 
 At most one Terrain per Level. Omitted records mean the Level has no Terrain;
@@ -227,6 +230,46 @@ tokens, out-of-range values, sums other than 255, duplicate rows, missing rows,
 and extra tokens are `Invalid`. The writer emits `terrain_layer` after
 `terrain_material` (when extras exist) and `terrain_paint` after that (when
 weights are non-default). The format version stays `1`.
+
+Milestone 92 keeps format version `1` and reads those M88/M90 records.
+New authored output uses dedicated weight maps instead of `terrain_paint`:
+
+```
+terrain_weights <resolutionX> <resolutionZ>
+terrain_weight <mapIndex> <rowIndex> <hex>
+```
+
+`terrain_layer` indices are contiguous starting at `1` and may exceed `3`,
+up to the practical palette cap of 16 layers (15 extras). `terrain_weights`
+is optional and singleton. Resolution on each axis is an integer in
+`[2, 32]`. The default grid is `32 32` and is independent of Terrain
+`resolutionX` / `resolutionZ`. The header is omitted when the resolution is
+the default and every texel is implicit layer 0. It is written alone when
+only the resolution is non-default.
+
+`terrain_weight` rows are omitted when weights are the implicit default.
+When any row is present, every packed map required by the palette is
+required: map count is `ceil(layerCount / 4)`, and each map has exactly
+`resolutionZ` unique rows. `mapIndex` is `[0, mapCount)`. `hex` is lowercase
+and contains exactly `resolutionX * 8` digits. Each texel is eight digits,
+`RRGGBBAA`, for layers `mapIndex*4+0..3`. Across every map, the channels
+for assigned layers sum to 255 and channels at or above the layer count are
+`00`. The parser reconstructs floats as `q/255` and renormalizes. Uppercase
+hex, the wrong length, a sum other than 255, a non-zero unused channel,
+duplicate rows, missing rows, and mixing `terrain_paint` with
+`terrain_weights` / `terrain_weight` are `Invalid`. A `terrain_layer` after
+weight records is `Invalid`.
+
+Loading old `terrain_paint` bilinearly resamples those four per-geometry
+weights onto the default 32×32 grid. Corners match the old corner samples.
+Saving then emits `terrain_weight` and does not emit `terrain_paint`.
+Unpainted M88 Terrain stays 100% layer 0 and omits weight records.
+
+A fully painted 16-layer 32×32 map is 4×32 = 128 lines of hex (each line
+under 512 characters). The 64 KiB / 256-line guards are unchanged; a Level
+that cannot fit the weight rows is `Invalid` rather than a reason to raise
+those guards. The writer emits `terrain_weights` then `terrain_weight` in
+map-major, row-major order after `terrain_layer`.
 
 ### Required repeated records
 

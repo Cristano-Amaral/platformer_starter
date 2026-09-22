@@ -9,17 +9,19 @@ in vec3 fragNormal;
 in vec4 fragColor;
 
 uniform sampler2D texture0;
-// Extra Terrain albedo layers must NOT use texture1..texture3. raylib
-// DrawMesh binds MATERIAL_MAP index i to texture unit i and writes those
-// sampler uniforms: texture1 becomes the shadow depth map on unit 1.
-uniform sampler2D terrainAlbedo1;
-uniform sampler2D terrainAlbedo2;
-uniform sampler2D terrainAlbedo3;
+// Terrain albedo and weight maps are sampler2DArray on units DrawMesh does
+// not claim. texture1 is the directional shadow depth map. Do not sample
+// Terrain layers from texture1..texture3.
+uniform sampler2DArray terrainAlbedo;
+uniform sampler2DArray terrainWeights;
 uniform sampler2D shadowMap;
 uniform vec4 colDiffuse;
 uniform int terrainLayerCount;
+uniform int terrainWeightMapCount;
 uniform vec2 terrainOriginXZ;
-uniform vec4 terrainLayerTiling;
+uniform vec2 terrainSizeXZ;
+uniform vec2 terrainWeightResolution;
+uniform float terrainLayerTiling[16];
 uniform vec3 ambientColor;
 uniform float ambientIntensity;
 uniform vec3 lightRayDirection;
@@ -71,29 +73,52 @@ float ShadowVisibility(vec3 worldPosition, float nDotL)
 vec4 SampleTerrainAlbedo()
 {
     vec2 delta = vec2(fragPosition.x - terrainOriginXZ.x, fragPosition.z - terrainOriginXZ.y);
-    vec4 weights = fragColor;
-    float weightSum = weights.r + weights.g + weights.b + weights.a;
-    if (weightSum > 1.0e-6)
+    float u = terrainSizeXZ.x > 0.0 ? delta.x / terrainSizeXZ.x : 0.0;
+    float v = terrainSizeXZ.y > 0.0 ? delta.y / terrainSizeXZ.y : 0.0;
+    u = clamp(u, 0.0, 1.0);
+    v = clamp(v, 0.0, 1.0);
+    vec2 weightUv = vec2(u, v) * ((terrainWeightResolution - vec2(1.0)) / terrainWeightResolution)
+        + (vec2(0.5) / terrainWeightResolution);
+
+    int maps = terrainWeightMapCount;
+    if (maps < 1)
     {
-        weights /= weightSum;
+        maps = 1;
     }
-    else
+    if (maps > 4)
     {
-        weights = vec4(1.0, 0.0, 0.0, 0.0);
+        maps = 4;
     }
 
-    vec4 texel = texture(texture0, delta * terrainLayerTiling.x) * weights.r;
-    if (terrainLayerCount > 1)
+    vec4 texel = vec4(0.0);
+    float weightSum = 0.0;
+    for (int mapIndex = 0; mapIndex < 4; ++mapIndex)
     {
-        texel += texture(terrainAlbedo1, delta * terrainLayerTiling.y) * weights.g;
+        if (mapIndex >= maps)
+        {
+            break;
+        }
+        vec4 weightSample = texture(terrainWeights, vec3(weightUv, float(mapIndex)));
+        float channels[4];
+        channels[0] = weightSample.r;
+        channels[1] = weightSample.g;
+        channels[2] = weightSample.b;
+        channels[3] = weightSample.a;
+        for (int channel = 0; channel < 4; ++channel)
+        {
+            int layer = mapIndex * 4 + channel;
+            if (layer >= terrainLayerCount || layer >= 16)
+            {
+                continue;
+            }
+            float weight = channels[channel];
+            weightSum += weight;
+            texel += texture(terrainAlbedo, vec3(delta * terrainLayerTiling[layer], float(layer))) * weight;
+        }
     }
-    if (terrainLayerCount > 2)
+    if (weightSum > 1.0e-6)
     {
-        texel += texture(terrainAlbedo2, delta * terrainLayerTiling.z) * weights.b;
-    }
-    if (terrainLayerCount > 3)
-    {
-        texel += texture(terrainAlbedo3, delta * terrainLayerTiling.w) * weights.a;
+        texel /= weightSum;
     }
     return texel;
 }
@@ -104,8 +129,8 @@ void main()
     vec4 albedo;
     if (terrainLayerCount > 0)
     {
-        // fragColor is Terrain material weights (R,G,B,A -> layers 0..3),
-        // not an ordinary mesh tint.
+        // Terrain blend weights live in terrainWeights, not in fragColor.
+        // Vertex color must not tint the splat.
         texel = SampleTerrainAlbedo();
         albedo = texel * colDiffuse;
     }

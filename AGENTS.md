@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 91 — Agent-Agnostic Development Workflow.
+Current milestone: Milestone 92 — Scalable Terrain Material Palette & Weight Maps.
 
-Canonical file: [`docs/milestones/MILESTONE_91.md`](docs/milestones/MILESTONE_91.md)
+Canonical file: [`docs/milestones/MILESTONE_92.md`](docs/milestones/MILESTONE_92.md)
 
-Branch: `milestone/91-agent-agnostic-development-workflow`
+Branch: `milestone/92-scalable-terrain-material-palette`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 92.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 93.
 
 Earlier milestone status, including Milestone 90 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

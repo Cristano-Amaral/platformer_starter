@@ -423,26 +423,38 @@ std::string SerializeLevelText(const LevelDefinition& level)
             AppendFloat(out, layer.textureTiling);
             out += '\n';
         }
+        if (TerrainWeightHeaderShouldWrite(level.terrain))
+        {
+            out += "terrain_weights ";
+            AppendInt(out, level.terrain.weightResolutionX);
+            out += ' ';
+            AppendInt(out, level.terrain.weightResolutionZ);
+            out += '\n';
+        }
         if (TerrainPaintRecordsShouldWrite(level.terrain))
         {
-            for (int row = 0; row < level.terrain.resolutionZ; ++row)
+            const int layerCount = TerrainMaterialLayerCount(level.terrain);
+            const int maps = TerrainPackedWeightMapCount(level.terrain);
+            for (int map = 0; map < maps; ++map)
             {
-                out += "terrain_paint ";
-                AppendInt(out, row);
-                for (int column = 0; column < level.terrain.resolutionX; ++column)
+                for (int row = 0; row < level.terrain.weightResolutionZ; ++row)
                 {
-                    const int sampleIndex = TerrainHeightIndex(level.terrain, column, row);
-                    float weights[kMaxTerrainMaterialLayers];
-                    ReadTerrainSampleWeights(level.terrain, sampleIndex, weights);
-                    int quantized[kMaxTerrainMaterialLayers]{};
-                    QuantizeTerrainSampleWeights(weights, quantized);
-                    for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+                    out += "terrain_weight ";
+                    AppendInt(out, map);
+                    out += ' ';
+                    AppendInt(out, row);
+                    out += ' ';
+                    for (int column = 0; column < level.terrain.weightResolutionX; ++column)
                     {
-                        out += ' ';
-                        AppendInt(out, quantized[layer]);
+                        const int texelIndex = TerrainWeightTexelIndex(level.terrain, column, row);
+                        float weights[kMaxTerrainMaterialLayers];
+                        ReadTerrainTexelWeights(level.terrain, texelIndex, weights);
+                        int quantized[kMaxTerrainMaterialLayers]{};
+                        QuantizeTerrainTexelWeights(weights, layerCount, quantized);
+                        AppendTerrainWeightMapHex(quantized, map, out);
                     }
+                    out += '\n';
                 }
-                out += '\n';
             }
         }
     }

@@ -2219,9 +2219,11 @@ int Application::Run()
                     levelEditorState.workingCopy,
                     levelEditorState.selection))
             {
+                const std::string terrainPaintHud =
+                    editor::FormatTerrainPaintHudName(levelEditorState.terrainPaint);
                 renderer.DrawEditorTerrainPaintHud(
                     true,
-                    editor::TerrainPaintHudName(levelEditorState.terrainPaint),
+                    terrainPaintHud.c_str(),
                     overlay.drawTerrainSculptBrush,
                     editor::OrientationWidgetLiveExtraTopInset(
                         levelEditorState.active,

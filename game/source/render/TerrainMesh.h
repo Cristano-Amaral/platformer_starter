@@ -1,9 +1,9 @@
 #pragma once
 
-// Milestone 86/88/90: GPU mesh and bounded Terrain material-layer textures.
-// Owned by Renderer. Mesh rebuilds when geometry/UVs/weights change. Each
-// layer texture loads only when that authored identity changes. Not a generic
-// mesh or resource manager.
+// Milestone 86/88/90/92: GPU mesh, per-layer source textures, and the
+// sampler2DArray albedo/weight representation. Mesh rebuilds when geometry
+// or layer-0 UVs change. Weight maps upload independently of the mesh.
+// Not a generic mesh or resource manager.
 
 #include "world/Terrain.h"
 
@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace render
 {
@@ -42,18 +43,33 @@ public:
     const Texture2D* GetTexture() const;
     const Texture2D* GetLayerTexture(int layer) const;
     const Texture2D* GetMissingLayerTexture() const;
+    unsigned int AlbedoArrayId() const;
+    unsigned int WeightArrayId() const;
+    int WeightMapCount() const;
+    bool CopyWeightMapTexel(
+        int map,
+        int x,
+        int z,
+        unsigned char& red,
+        unsigned char& green,
+        unsigned char& blue,
+        unsigned char& alpha) const;
     const world::TerrainSpec* LastSpec() const;
     std::size_t UploadCount() const;
     std::size_t UnloadCount() const;
     std::size_t TextureLoadCount() const;
     std::size_t TextureUnloadCount() const;
+    std::size_t WeightUploadCount() const;
 
 private:
     void UnloadMesh();
     void UnloadLayerTexture(int layer);
     void UnloadTextures();
+    void UnloadArrays();
     void EnsureMissingLayerTexture();
     void SyncTextures(const world::TerrainSpec& spec);
+    void RebuildAlbedoArray(const world::TerrainSpec& spec);
+    void SyncWeightArray(const world::TerrainSpec& spec);
 
     Mesh mesh{};
     std::filesystem::path authoringCookedRoot{};
@@ -68,9 +84,16 @@ private:
     bool hasSpec = false;
     world::TerrainSpec lastSpec{};
     std::string loggedMissingIdentity[world::kMaxTerrainMaterialLayers]{};
+    unsigned int albedoArrayId = 0;
+    unsigned int weightArrayId = 0;
+    int albedoArrayWidth = 0;
+    int albedoArrayHeight = 0;
+    int weightMapCount = 1;
+    std::vector<unsigned char> weightMapBytes{};
     std::size_t uploadCount = 0;
     std::size_t unloadCount = 0;
     std::size_t textureLoadCount = 0;
     std::size_t textureUnloadCount = 0;
+    std::size_t weightUploadCount = 0;
 };
 }

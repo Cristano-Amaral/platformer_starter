@@ -343,6 +343,12 @@ int main()
     Expect(
         working.terrain.extraLayers[0].textureIdentity == "textures/dirt.png",
         "assigned extra layer identity is the Texture thumbnail request");
+    Expect(world::TryAddTerrainMaterialLayer(working.terrain, "textures/rock.png"), "layer 2");
+    Expect(world::TryAddTerrainMaterialLayer(working.terrain, "textures/sand.png"), "layer 3");
+    Expect(world::TryAddTerrainMaterialLayer(working.terrain, "textures/mud.png"), "layer 4");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(working, active, active, "textures/mud.png"),
+        "delete guard checks a layer above index 3");
 
     editor::ThumbnailSourceStamp missingStamp{};
     editor::ThumbnailSourceStamp presentStamp{};

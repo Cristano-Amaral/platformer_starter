@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 91 — Agent-Agnostic Development Workflow**
+**Milestone 92 — Scalable Terrain Material Palette & Weight Maps**
 
-Canonical file: [`docs/milestones/MILESTONE_91.md`](milestones/MILESTONE_91.md)
+Canonical file: [`docs/milestones/MILESTONE_92.md`](milestones/MILESTONE_92.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -54,7 +54,8 @@ Milestone 88 is CLOSED.
 Milestone 89 is CLOSED.
 Milestone 90 is implemented, awaiting manual acceptance.
 Milestone 91 is implemented, awaiting manual acceptance.
-Do not start Milestone 92.
+Milestone 92 is implemented, awaiting manual acceptance.
+Do not start Milestone 93.
 
 ## Coding-agent loading contract
 
@@ -188,6 +189,7 @@ Historical milestone files do not override current implemented behavior.
 | 89 | [Milestone 89 — Content Browser Asset Library & Texture Import](milestones/MILESTONE_89.md) | complete |
 | 90 | [Milestone 90 — Terrain Material Painting](milestones/MILESTONE_90.md) | implemented, awaiting manual acceptance |
 | 91 | [Milestone 91 — Agent-Agnostic Development Workflow](milestones/MILESTONE_91.md) | implemented, awaiting manual acceptance |
+| 92 | [Milestone 92 — Scalable Terrain Material Palette & Weight Maps](milestones/MILESTONE_92.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

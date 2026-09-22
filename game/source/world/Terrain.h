@@ -1,12 +1,14 @@
 #pragma once
 
-// Milestone 86/87/88/90: optional singleton authored Terrain. Regular XZ
+// Milestone 86/87/88/90/92: optional singleton authored Terrain. Regular XZ
 // heightfield. Not a repeatable prop category, tile set, GUID, or generic
 // mesh editor. M87 sculpts these authored heights[] only; brush parameters
 // are not Level data. M88 adds one optional base surface texture identity
-// plus planar XZ tiling. M90 adds up to three extra texture layers and
-// per-sample painted weights. Not a generic Material asset, splat texture,
-// or PBR authoring.
+// plus planar XZ tiling. M90 painted up to three extra layers as per-sample
+// RGBA weights. M92 replaces that with an ordered palette (practical cap 16)
+// and dedicated RGBA weight maps whose resolution is independent of the
+// heightfield. Four layers share one packed map. Not a generic Material
+// asset, PBR authoring, or external splat editor.
 //
 // Origin convention (used by parse/write, render, Jolt, normals, picking,
 // Inspector, and Translate):
@@ -23,8 +25,12 @@
 //   v = (worldZ - origin.z) * layerTiling[L]
 // textureTiling / extraLayers[].textureTiling are repeats per world unit.
 // Empty layer-0 textureIdentity is the solid-color fallback. Identities are
-// textures/<file>.png; never an absolute path. Painted weights stay tied to
-// the XZ sample topology; changing heights does not move them.
+// textures/<file>.png; never an absolute path. Weight texels use the same
+// min-corner convention on their own grid:
+//   texel(ix, iz) XZ =
+//     (origin.x + ix * sizeX / (weightResolutionX - 1),
+//      origin.z + iz * sizeZ / (weightResolutionZ - 1))
+// Changing heights does not move weights. Sculpt does not edit weights.
 
 #include "assets/RuntimePng.h"
 #include "core/Vec3.h"
@@ -54,8 +60,18 @@ inline constexpr int kDefaultTerrainResolutionZ = 5;
 inline constexpr float kDefaultTerrainTextureTiling = 0.25f;
 inline constexpr float kMinTerrainTextureTiling = 0.01f;
 inline constexpr float kMaxTerrainTextureTiling = 16.0f;
-inline constexpr int kMaxTerrainMaterialLayers = 4;
+// Four weights share one RGBA map. Four maps is the practical palette cap:
+// 16 layers, well above the old M90 limit, and small enough for the 64 KiB /
+// 256-line Level guard at the default weight resolution.
+inline constexpr int kTerrainWeightsPerMap = 4;
+inline constexpr int kMaxTerrainWeightMaps = 4;
+inline constexpr int kMaxTerrainMaterialLayers = kTerrainWeightsPerMap * kMaxTerrainWeightMaps;
+inline constexpr int kLegacyTerrainPaintLayers = 4;
 inline constexpr int kTerrainMaterialWeightQuantum = 255;
+inline constexpr int kDefaultTerrainWeightResolutionX = 32;
+inline constexpr int kDefaultTerrainWeightResolutionZ = 32;
+inline constexpr int kMinTerrainWeightResolution = 2;
+inline constexpr int kMaxTerrainWeightResolution = 32;
 
 struct TerrainMaterialLayer
 {
@@ -72,12 +88,14 @@ struct TerrainSpec
     int resolutionX = kDefaultTerrainResolutionX;
     int resolutionZ = kDefaultTerrainResolutionZ;
     std::vector<float> heights{};
-    // Layer 0 (M88). Extra layers are M90 palette entries 1..3.
+    // Layer 0 (M88). Extra layers are palette entries 1..N.
     std::string textureIdentity{};
     float textureTiling = kDefaultTerrainTextureTiling;
     std::vector<TerrainMaterialLayer> extraLayers{};
-    // Empty means implicit defaults: layer 0 = 1, others = 0 per sample.
-    // Non-empty size is sampleCount * kMaxTerrainMaterialLayers.
+    int weightResolutionX = kDefaultTerrainWeightResolutionX;
+    int weightResolutionZ = kDefaultTerrainWeightResolutionZ;
+    // Empty means implicit defaults: layer 0 = 1, others = 0 per weight texel.
+    // Non-empty size is weightTexelCount * kMaxTerrainMaterialLayers.
     std::vector<float> materialWeights{};
 };
 
@@ -129,9 +147,47 @@ inline int TerrainMaterialLayerCount(const TerrainSpec& terrain)
     return 1 + extra;
 }
 
-inline int TerrainMaterialWeightIndex(int sampleIndex, int layer)
+inline int TerrainWeightMapCountForLayers(int layerCount)
 {
-    return sampleIndex * kMaxTerrainMaterialLayers + layer;
+    if (layerCount < 1)
+    {
+        layerCount = 1;
+    }
+    if (layerCount > kMaxTerrainMaterialLayers)
+    {
+        layerCount = kMaxTerrainMaterialLayers;
+    }
+    return (layerCount + kTerrainWeightsPerMap - 1) / kTerrainWeightsPerMap;
+}
+
+inline int TerrainPackedWeightMapCount(const TerrainSpec& terrain)
+{
+    return TerrainWeightMapCountForLayers(TerrainMaterialLayerCount(terrain));
+}
+
+inline bool TerrainWeightResolutionIsValid(int resolution)
+{
+    return resolution >= kMinTerrainWeightResolution && resolution <= kMaxTerrainWeightResolution;
+}
+
+inline int TerrainWeightTexelCount(const TerrainSpec& terrain)
+{
+    if (!TerrainWeightResolutionIsValid(terrain.weightResolutionX)
+        || !TerrainWeightResolutionIsValid(terrain.weightResolutionZ))
+    {
+        return 0;
+    }
+    return terrain.weightResolutionX * terrain.weightResolutionZ;
+}
+
+inline int TerrainWeightTexelIndex(const TerrainSpec& terrain, int ix, int iz)
+{
+    return iz * terrain.weightResolutionX + ix;
+}
+
+inline int TerrainMaterialWeightIndex(int texelIndex, int layer)
+{
+    return texelIndex * kMaxTerrainMaterialLayers + layer;
 }
 
 inline bool TerrainExtraLayersAreValid(const TerrainSpec& terrain)
@@ -168,9 +224,9 @@ inline bool TerrainExtraLayersAreValid(const TerrainSpec& terrain)
     return true;
 }
 
-inline float TerrainSampleLayerWeight(const TerrainSpec& terrain, int sampleIndex, int layer)
+inline float TerrainTexelLayerWeight(const TerrainSpec& terrain, int texelIndex, int layer)
 {
-    if (layer < 0 || layer >= kMaxTerrainMaterialLayers || sampleIndex < 0)
+    if (layer < 0 || layer >= kMaxTerrainMaterialLayers || texelIndex < 0)
     {
         return 0.0f;
     }
@@ -178,7 +234,7 @@ inline float TerrainSampleLayerWeight(const TerrainSpec& terrain, int sampleInde
     {
         return layer == 0 ? 1.0f : 0.0f;
     }
-    const int index = TerrainMaterialWeightIndex(sampleIndex, layer);
+    const int index = TerrainMaterialWeightIndex(texelIndex, layer);
     if (index < 0 || index >= static_cast<int>(terrain.materialWeights.size()))
     {
         return layer == 0 ? 1.0f : 0.0f;
@@ -192,20 +248,20 @@ inline bool TerrainMaterialWeightsAreDefault(const TerrainSpec& terrain)
     {
         return true;
     }
-    const int samples = TerrainSampleCount(terrain);
-    if (static_cast<int>(terrain.materialWeights.size()) != samples * kMaxTerrainMaterialLayers)
+    const int texels = TerrainWeightTexelCount(terrain);
+    if (static_cast<int>(terrain.materialWeights.size()) != texels * kMaxTerrainMaterialLayers)
     {
         return false;
     }
-    for (int sample = 0; sample < samples; ++sample)
+    for (int texel = 0; texel < texels; ++texel)
     {
-        if (TerrainSampleLayerWeight(terrain, sample, 0) != 1.0f)
+        if (TerrainTexelLayerWeight(terrain, texel, 0) != 1.0f)
         {
             return false;
         }
         for (int layer = 1; layer < kMaxTerrainMaterialLayers; ++layer)
         {
-            if (TerrainSampleLayerWeight(terrain, sample, layer) != 0.0f)
+            if (TerrainTexelLayerWeight(terrain, texel, layer) != 0.0f)
             {
                 return false;
             }
@@ -225,16 +281,31 @@ inline bool TerrainMaterialRecordShouldWrite(const TerrainSpec& terrain)
         || terrain.textureTiling != kDefaultTerrainTextureTiling;
 }
 
+inline bool TerrainWeightHeaderShouldWrite(const TerrainSpec& terrain)
+{
+    return TerrainPaintRecordsShouldWrite(terrain)
+        || terrain.weightResolutionX != kDefaultTerrainWeightResolutionX
+        || terrain.weightResolutionZ != kDefaultTerrainWeightResolutionZ;
+}
+
 inline int TerrainRecordLineCount(const TerrainSpec& terrain)
 {
     if (terrain.resolutionZ < kMinTerrainResolution)
     {
         return 0;
     }
-    return 1 + terrain.resolutionZ
+    int lines = 1 + terrain.resolutionZ
         + (TerrainMaterialRecordShouldWrite(terrain) ? 1 : 0)
-        + static_cast<int>(terrain.extraLayers.size())
-        + (TerrainPaintRecordsShouldWrite(terrain) ? terrain.resolutionZ : 0);
+        + static_cast<int>(terrain.extraLayers.size());
+    if (TerrainWeightHeaderShouldWrite(terrain))
+    {
+        ++lines;
+    }
+    if (TerrainPaintRecordsShouldWrite(terrain))
+    {
+        lines += TerrainPackedWeightMapCount(terrain) * terrain.weightResolutionZ;
+    }
+    return lines;
 }
 
 inline bool TerrainComponentFinite(float value)
@@ -314,25 +385,27 @@ inline bool TerrainSpecIsValid(const TerrainSpec& terrain)
     }
     if (!TerrainTextureIdentityIsValid(terrain.textureIdentity)
         || !TerrainTextureTilingIsValid(terrain.textureTiling)
-        || !TerrainExtraLayersAreValid(terrain))
+        || !TerrainExtraLayersAreValid(terrain)
+        || !TerrainWeightResolutionIsValid(terrain.weightResolutionX)
+        || !TerrainWeightResolutionIsValid(terrain.weightResolutionZ))
     {
         return false;
     }
     if (!terrain.materialWeights.empty())
     {
-        const int samples = TerrainSampleCount(terrain);
+        const int texels = TerrainWeightTexelCount(terrain);
         if (static_cast<int>(terrain.materialWeights.size())
-            != samples * kMaxTerrainMaterialLayers)
+            != texels * kMaxTerrainMaterialLayers)
         {
             return false;
         }
-        for (int sample = 0; sample < samples; ++sample)
+        const int assigned = TerrainMaterialLayerCount(terrain);
+        for (int texel = 0; texel < texels; ++texel)
         {
             float sum = 0.0f;
-            const int assigned = TerrainMaterialLayerCount(terrain);
             for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
             {
-                const float weight = TerrainSampleLayerWeight(terrain, sample, layer);
+                const float weight = TerrainTexelLayerWeight(terrain, texel, layer);
                 if (!TerrainComponentFinite(weight) || weight < 0.0f || weight > 1.0f)
                 {
                     return false;
@@ -370,8 +443,12 @@ inline bool TerrainHeightsEqual(const TerrainSpec& a, const TerrainSpec& b)
 
 inline bool TerrainMaterialWeightsEqual(const TerrainSpec& a, const TerrainSpec& b)
 {
-    const int samples = TerrainSampleCount(a);
-    if (TerrainSampleCount(b) != samples)
+    if (a.weightResolutionX != b.weightResolutionX || a.weightResolutionZ != b.weightResolutionZ)
+    {
+        return false;
+    }
+    const int texels = TerrainWeightTexelCount(a);
+    if (TerrainWeightTexelCount(b) != texels)
     {
         return false;
     }
@@ -379,12 +456,11 @@ inline bool TerrainMaterialWeightsEqual(const TerrainSpec& a, const TerrainSpec&
     {
         return true;
     }
-    for (int sample = 0; sample < samples; ++sample)
+    for (int texel = 0; texel < texels; ++texel)
     {
         for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
         {
-            if (TerrainSampleLayerWeight(a, sample, layer)
-                != TerrainSampleLayerWeight(b, sample, layer))
+            if (TerrainTexelLayerWeight(a, texel, layer) != TerrainTexelLayerWeight(b, texel, layer))
             {
                 return false;
             }
@@ -415,13 +491,14 @@ inline bool TerrainMeshDataEqual(const TerrainSpec& a, const TerrainSpec& b)
     return a.origin.x == b.origin.x && a.origin.y == b.origin.y && a.origin.z == b.origin.z
         && a.sizeX == b.sizeX && a.sizeZ == b.sizeZ && a.resolutionX == b.resolutionX
         && a.resolutionZ == b.resolutionZ && a.textureTiling == b.textureTiling
-        && TerrainHeightsEqual(a, b) && TerrainMaterialWeightsEqual(a, b);
+        && TerrainHeightsEqual(a, b);
 }
 
 inline bool TerrainSpecEqual(const TerrainSpec& a, const TerrainSpec& b)
 {
     return a.enabled == b.enabled && TerrainMeshDataEqual(a, b)
-        && a.textureIdentity == b.textureIdentity && TerrainExtraLayersEqual(a, b);
+        && a.textureIdentity == b.textureIdentity && TerrainExtraLayersEqual(a, b)
+        && TerrainMaterialWeightsEqual(a, b);
 }
 
 inline float TerrainSampleSpacingX(const TerrainSpec& terrain)
@@ -540,16 +617,24 @@ inline void CollectTerrainTextureIdentities(
     }
 }
 
-inline void NormalizeTerrainSampleWeights(float* weights)
+inline void NormalizeTerrainWeights(float* weights, int layerCount)
 {
     if (weights == nullptr)
     {
         return;
     }
+    if (layerCount < 1)
+    {
+        layerCount = 1;
+    }
+    if (layerCount > kMaxTerrainMaterialLayers)
+    {
+        layerCount = kMaxTerrainMaterialLayers;
+    }
     float sum = 0.0f;
     for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
     {
-        float value = weights[layer];
+        float value = layer < layerCount ? weights[layer] : 0.0f;
         if (!std::isfinite(value) || value < 0.0f)
         {
             value = 0.0f;
@@ -567,7 +652,7 @@ inline void NormalizeTerrainSampleWeights(float* weights)
         return;
     }
     const float inv = 1.0f / sum;
-    for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+    for (int layer = 0; layer < layerCount; ++layer)
     {
         weights[layer] *= inv;
     }
@@ -575,8 +660,8 @@ inline void NormalizeTerrainSampleWeights(float* weights)
 
 inline void EnsureTerrainMaterialWeights(TerrainSpec& terrain)
 {
-    const int samples = TerrainSampleCount(terrain);
-    const int expected = samples * kMaxTerrainMaterialLayers;
+    const int texels = TerrainWeightTexelCount(terrain);
+    const int expected = texels * kMaxTerrainMaterialLayers;
     if (expected <= 0)
     {
         terrain.materialWeights.clear();
@@ -587,10 +672,9 @@ inline void EnsureTerrainMaterialWeights(TerrainSpec& terrain)
         return;
     }
     terrain.materialWeights.assign(static_cast<std::size_t>(expected), 0.0f);
-    for (int sample = 0; sample < samples; ++sample)
+    for (int texel = 0; texel < texels; ++texel)
     {
-        terrain.materialWeights[static_cast<std::size_t>(
-            TerrainMaterialWeightIndex(sample, 0))] = 1.0f;
+        terrain.materialWeights[static_cast<std::size_t>(TerrainMaterialWeightIndex(texel, 0))] = 1.0f;
     }
 }
 
@@ -602,7 +686,7 @@ inline void CompactDefaultTerrainMaterialWeights(TerrainSpec& terrain)
     }
 }
 
-inline void ReadTerrainSampleWeights(const TerrainSpec& terrain, int sampleIndex, float* out)
+inline void ReadTerrainTexelWeights(const TerrainSpec& terrain, int texelIndex, float* out)
 {
     if (out == nullptr)
     {
@@ -610,11 +694,11 @@ inline void ReadTerrainSampleWeights(const TerrainSpec& terrain, int sampleIndex
     }
     for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
     {
-        out[layer] = TerrainSampleLayerWeight(terrain, sampleIndex, layer);
+        out[layer] = TerrainTexelLayerWeight(terrain, texelIndex, layer);
     }
 }
 
-inline void WriteTerrainSampleWeights(TerrainSpec& terrain, int sampleIndex, const float* weights)
+inline void WriteTerrainTexelWeights(TerrainSpec& terrain, int texelIndex, const float* weights)
 {
     if (weights == nullptr)
     {
@@ -626,10 +710,10 @@ inline void WriteTerrainSampleWeights(TerrainSpec& terrain, int sampleIndex, con
     {
         normalized[layer] = weights[layer];
     }
-    NormalizeTerrainSampleWeights(normalized);
+    NormalizeTerrainWeights(normalized, TerrainMaterialLayerCount(terrain));
     for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
     {
-        const int index = TerrainMaterialWeightIndex(sampleIndex, layer);
+        const int index = TerrainMaterialWeightIndex(texelIndex, layer);
         if (index >= 0 && index < static_cast<int>(terrain.materialWeights.size()))
         {
             terrain.materialWeights[static_cast<std::size_t>(index)] = normalized[layer];
@@ -637,12 +721,20 @@ inline void WriteTerrainSampleWeights(TerrainSpec& terrain, int sampleIndex, con
     }
 }
 
-inline void QuantizeTerrainSampleWeights(const float* weights, int* out)
+inline void QuantizeTerrainTexelWeights(const float* weights, int layerCount, int* out)
 {
+    if (layerCount < 1)
+    {
+        layerCount = 1;
+    }
+    if (layerCount > kMaxTerrainMaterialLayers)
+    {
+        layerCount = kMaxTerrainMaterialLayers;
+    }
     std::array<float, kMaxTerrainMaterialLayers> scaled{};
     std::array<int, kMaxTerrainMaterialLayers> quantized{};
     int sum = 0;
-    for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+    for (int layer = 0; layer < layerCount; ++layer)
     {
         float value = weights != nullptr ? weights[layer] : (layer == 0 ? 1.0f : 0.0f);
         if (!std::isfinite(value) || value < 0.0f)
@@ -672,17 +764,22 @@ inline void QuantizeTerrainSampleWeights(const float* weights, int* out)
     {
         int best = 0;
         float bestFrac = -1.0f;
-        for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+        bool found = false;
+        for (int layer = 0; layer < layerCount; ++layer)
         {
-            const float whole =
-                static_cast<float>(quantized[static_cast<std::size_t>(layer)]);
+            const float whole = static_cast<float>(quantized[static_cast<std::size_t>(layer)]);
             const float frac = scaled[static_cast<std::size_t>(layer)] - whole;
             if (frac > bestFrac
                 && quantized[static_cast<std::size_t>(layer)] < kTerrainMaterialWeightQuantum)
             {
                 bestFrac = frac;
                 best = layer;
+                found = true;
             }
+        }
+        if (!found)
+        {
+            break;
         }
         quantized[static_cast<std::size_t>(best)] += 1;
         --remainder;
@@ -691,7 +788,7 @@ inline void QuantizeTerrainSampleWeights(const float* weights, int* out)
     {
         int best = 0;
         int bestValue = -1;
-        for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+        for (int layer = 0; layer < layerCount; ++layer)
         {
             if (quantized[static_cast<std::size_t>(layer)] > bestValue)
             {
@@ -710,17 +807,25 @@ inline void QuantizeTerrainSampleWeights(const float* weights, int* out)
     {
         for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
         {
-            out[layer] = quantized[static_cast<std::size_t>(layer)];
+            out[layer] = layer < layerCount ? quantized[static_cast<std::size_t>(layer)] : 0;
         }
     }
 }
 
-inline void DequantizeTerrainSampleWeights(const int* quantized, float* out)
+inline void DequantizeTerrainTexelWeights(const int* quantized, int layerCount, float* out)
 {
+    if (layerCount < 1)
+    {
+        layerCount = 1;
+    }
+    if (layerCount > kMaxTerrainMaterialLayers)
+    {
+        layerCount = kMaxTerrainMaterialLayers;
+    }
     float weights[kMaxTerrainMaterialLayers]{};
     if (quantized != nullptr)
     {
-        for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
+        for (int layer = 0; layer < layerCount; ++layer)
         {
             int value = quantized[layer];
             if (value < 0)
@@ -739,7 +844,7 @@ inline void DequantizeTerrainSampleWeights(const int* quantized, float* out)
     {
         weights[0] = 1.0f;
     }
-    NormalizeTerrainSampleWeights(weights);
+    NormalizeTerrainWeights(weights, layerCount);
     if (out != nullptr)
     {
         for (int layer = 0; layer < kMaxTerrainMaterialLayers; ++layer)
@@ -747,6 +852,161 @@ inline void DequantizeTerrainSampleWeights(const int* quantized, float* out)
             out[layer] = weights[layer];
         }
     }
+}
+
+inline char TerrainWeightHexDigit(int nibble)
+{
+    return static_cast<char>(nibble < 10 ? ('0' + nibble) : ('a' + (nibble - 10)));
+}
+
+inline void AppendTerrainWeightMapHex(const int* quantized, int mapIndex, std::string& out)
+{
+    const int base = mapIndex * kTerrainWeightsPerMap;
+    for (int channel = 0; channel < kTerrainWeightsPerMap; ++channel)
+    {
+        int value = 0;
+        if (quantized != nullptr && base + channel < kMaxTerrainMaterialLayers)
+        {
+            value = quantized[base + channel];
+        }
+        if (value < 0)
+        {
+            value = 0;
+        }
+        if (value > kTerrainMaterialWeightQuantum)
+        {
+            value = kTerrainMaterialWeightQuantum;
+        }
+        out.push_back(TerrainWeightHexDigit((value >> 4) & 15));
+        out.push_back(TerrainWeightHexDigit(value & 15));
+    }
+}
+
+inline bool ParseTerrainWeightHexNibble(char digit, int& out)
+{
+    if (digit >= '0' && digit <= '9')
+    {
+        out = digit - '0';
+        return true;
+    }
+    if (digit >= 'a' && digit <= 'f')
+    {
+        out = 10 + (digit - 'a');
+        return true;
+    }
+    return false;
+}
+
+inline core::Vec3 TerrainWeightTexelPosition(const TerrainSpec& terrain, int ix, int iz)
+{
+    const float spanX = terrain.weightResolutionX > 1
+        ? terrain.sizeX / static_cast<float>(terrain.weightResolutionX - 1)
+        : 0.0f;
+    const float spanZ = terrain.weightResolutionZ > 1
+        ? terrain.sizeZ / static_cast<float>(terrain.weightResolutionZ - 1)
+        : 0.0f;
+    return {
+        terrain.origin.x + static_cast<float>(ix) * spanX,
+        terrain.origin.y,
+        terrain.origin.z + static_cast<float>(iz) * spanZ};
+}
+
+inline void BuildTerrainWeightMapRgba(const TerrainSpec& terrain, std::vector<unsigned char>& out)
+{
+    const int maps = TerrainPackedWeightMapCount(terrain);
+    const int width = terrain.weightResolutionX;
+    const int height = terrain.weightResolutionZ;
+    const int texels = TerrainWeightTexelCount(terrain);
+    out.assign(static_cast<std::size_t>(maps * width * height * kTerrainWeightsPerMap), 0);
+    if (texels <= 0 || maps <= 0)
+    {
+        return;
+    }
+    const int layerCount = TerrainMaterialLayerCount(terrain);
+    for (int texel = 0; texel < texels; ++texel)
+    {
+        float weights[kMaxTerrainMaterialLayers];
+        ReadTerrainTexelWeights(terrain, texel, weights);
+        int quantized[kMaxTerrainMaterialLayers]{};
+        QuantizeTerrainTexelWeights(weights, layerCount, quantized);
+        const int x = texel % width;
+        const int z = texel / width;
+        for (int map = 0; map < maps; ++map)
+        {
+            const std::size_t offset = static_cast<std::size_t>(
+                ((map * height + z) * width + x) * kTerrainWeightsPerMap);
+            const int base = map * kTerrainWeightsPerMap;
+            for (int channel = 0; channel < kTerrainWeightsPerMap; ++channel)
+            {
+                int value = quantized[base + channel];
+                if (value < 0)
+                {
+                    value = 0;
+                }
+                if (value > 255)
+                {
+                    value = 255;
+                }
+                out[offset + static_cast<std::size_t>(channel)] = static_cast<unsigned char>(value);
+            }
+        }
+    }
+}
+
+inline float LegacyTerrainPaintWeight(const float* legacy, int resolutionX, int x, int z, int layer)
+{
+    const int sample = z * resolutionX + x;
+    return legacy[sample * kLegacyTerrainPaintLayers + layer];
+}
+
+inline void MigrateLegacyTerrainPaintWeights(TerrainSpec& terrain, const std::vector<float>& legacy)
+{
+    const int samples = TerrainSampleCount(terrain);
+    const int expected = samples * kLegacyTerrainPaintLayers;
+    terrain.weightResolutionX = kDefaultTerrainWeightResolutionX;
+    terrain.weightResolutionZ = kDefaultTerrainWeightResolutionZ;
+    if (static_cast<int>(legacy.size()) != expected || samples <= 0)
+    {
+        terrain.materialWeights.clear();
+        return;
+    }
+    EnsureTerrainMaterialWeights(terrain);
+    const float geoSpanX = static_cast<float>(terrain.resolutionX - 1);
+    const float geoSpanZ = static_cast<float>(terrain.resolutionZ - 1);
+    const float weightSpanX = static_cast<float>(terrain.weightResolutionX - 1);
+    const float weightSpanZ = static_cast<float>(terrain.weightResolutionZ - 1);
+    for (int iz = 0; iz < terrain.weightResolutionZ; ++iz)
+    {
+        for (int ix = 0; ix < terrain.weightResolutionX; ++ix)
+        {
+            const float gx = weightSpanX > 0.0f
+                ? (static_cast<float>(ix) / weightSpanX) * geoSpanX
+                : 0.0f;
+            const float gz = weightSpanZ > 0.0f
+                ? (static_cast<float>(iz) / weightSpanZ) * geoSpanZ
+                : 0.0f;
+            const int x0 = static_cast<int>(std::floor(gx));
+            const int z0 = static_cast<int>(std::floor(gz));
+            const int x1 = x0 + 1 < terrain.resolutionX ? x0 + 1 : terrain.resolutionX - 1;
+            const int z1 = z0 + 1 < terrain.resolutionZ ? z0 + 1 : terrain.resolutionZ - 1;
+            const float tx = gx - static_cast<float>(x0);
+            const float tz = gz - static_cast<float>(z0);
+            float weights[kMaxTerrainMaterialLayers]{};
+            for (int layer = 0; layer < kLegacyTerrainPaintLayers; ++layer)
+            {
+                const float v00 = LegacyTerrainPaintWeight(legacy.data(), terrain.resolutionX, x0, z0, layer);
+                const float v10 = LegacyTerrainPaintWeight(legacy.data(), terrain.resolutionX, x1, z0, layer);
+                const float v01 = LegacyTerrainPaintWeight(legacy.data(), terrain.resolutionX, x0, z1, layer);
+                const float v11 = LegacyTerrainPaintWeight(legacy.data(), terrain.resolutionX, x1, z1, layer);
+                const float alongX0 = v00 + (v10 - v00) * tx;
+                const float alongX1 = v01 + (v11 - v01) * tx;
+                weights[layer] = alongX0 + (alongX1 - alongX0) * tz;
+            }
+            WriteTerrainTexelWeights(
+                terrain, TerrainWeightTexelIndex(terrain, ix, iz), weights);
+        }
+    }
+    CompactDefaultTerrainMaterialWeights(terrain);
 }
 
 inline bool TryAssignTerrainTextureIdentity(TerrainSpec& terrain, std::string_view identity)
@@ -787,19 +1047,22 @@ inline bool TryRemoveTerrainMaterialLayer(TerrainSpec& terrain, int layerIndex)
     {
         return false;
     }
-    EnsureTerrainMaterialWeights(terrain);
-    const int samples = TerrainSampleCount(terrain);
-    for (int sample = 0; sample < samples; ++sample)
+    if (!TerrainMaterialWeightsAreDefault(terrain))
     {
-        float weights[kMaxTerrainMaterialLayers];
-        ReadTerrainSampleWeights(terrain, sample, weights);
-        weights[0] += weights[layerIndex];
-        for (int layer = layerIndex; layer < kMaxTerrainMaterialLayers - 1; ++layer)
+        EnsureTerrainMaterialWeights(terrain);
+        const int texels = TerrainWeightTexelCount(terrain);
+        for (int texel = 0; texel < texels; ++texel)
         {
-            weights[layer] = weights[layer + 1];
+            float weights[kMaxTerrainMaterialLayers];
+            ReadTerrainTexelWeights(terrain, texel, weights);
+            weights[0] += weights[layerIndex];
+            for (int layer = layerIndex; layer < kMaxTerrainMaterialLayers - 1; ++layer)
+            {
+                weights[layer] = weights[layer + 1];
+            }
+            weights[kMaxTerrainMaterialLayers - 1] = 0.0f;
+            WriteTerrainTexelWeights(terrain, texel, weights);
         }
-        weights[kMaxTerrainMaterialLayers - 1] = 0.0f;
-        WriteTerrainSampleWeights(terrain, sample, weights);
     }
     terrain.extraLayers.erase(
         terrain.extraLayers.begin() + static_cast<std::ptrdiff_t>(layerIndex - 1));

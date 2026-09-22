@@ -104,10 +104,16 @@ void FillTerrainDrawRequest(
     }
     request.originX = spec->origin.x;
     request.originZ = spec->origin.z;
+    request.sizeX = spec->sizeX;
+    request.sizeZ = spec->sizeZ;
+    request.weightResolutionX = spec->weightResolutionX;
+    request.weightResolutionZ = spec->weightResolutionZ;
+    request.albedoArrayId = terrainGpu.AlbedoArrayId();
+    request.weightArrayId = terrainGpu.WeightArrayId();
+    request.weightMapCount = terrainGpu.WeightMapCount();
     for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
     {
         request.tiling[layer] = world::TerrainLayerTextureTiling(*spec, layer);
-        request.layers[layer] = terrainGpu.GetLayerTexture(layer);
     }
 }
 
@@ -151,19 +157,28 @@ bool SampleLitTerrainPixel(
     return true;
 }
 
-bool FillAllSampleWeights(world::TerrainSpec& terrain, float layer0, float layer1, float layer2, float layer3)
+bool FillAllTexelWeights(world::TerrainSpec& terrain, const float* weights)
 {
-    const float weights[world::kMaxTerrainMaterialLayers] = {layer0, layer1, layer2, layer3};
-    const int count = world::TerrainSampleCount(terrain);
-    if (count <= 0)
+    const int count = world::TerrainWeightTexelCount(terrain);
+    if (count <= 0 || weights == nullptr)
     {
         return false;
     }
-    for (int sample = 0; sample < count; ++sample)
+    for (int texel = 0; texel < count; ++texel)
     {
-        world::WriteTerrainSampleWeights(terrain, sample, weights);
+        world::WriteTerrainTexelWeights(terrain, texel, weights);
     }
     return true;
+}
+
+bool FillAllSampleWeights(world::TerrainSpec& terrain, float layer0, float layer1, float layer2, float layer3)
+{
+    float weights[world::kMaxTerrainMaterialLayers]{};
+    weights[0] = layer0;
+    weights[1] = layer1;
+    weights[2] = layer2;
+    weights[3] = layer3;
+    return FillAllTexelWeights(terrain, weights);
 }
 
 bool ReadVertexWeightColor(
@@ -334,28 +349,27 @@ int main()
     Expect(lighting.ShadowMapId() != 0, "shadow map id is valid");
     Expect(lighting.ShadowMapResolution() == 2048, "shadow map uses the default resolution");
     Expect(
-        lighting.TerrainExtraAlbedoSamplerLocation(0) >= 0
-            && lighting.TerrainExtraAlbedoSamplerLocation(1) >= 0
-            && lighting.TerrainExtraAlbedoSamplerLocation(2) >= 0,
-        "terrain extra albedo samplers exist");
+        lighting.TerrainAlbedoArraySamplerLocation() >= 0
+            && lighting.TerrainWeightArraySamplerLocation() >= 0,
+        "terrain array samplers exist");
     Expect(
         render::kWorldLitDiffuseTextureUnit != render::kWorldLitShadowMapTextureUnit,
-        "layer 0 unit does not alias the shadow map");
+        "diffuse unit does not alias the shadow map");
     Expect(
-        render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitShadowMapTextureUnit
-            && render::kWorldLitTerrainExtraTextureUnits[1] != render::kWorldLitShadowMapTextureUnit
-            && render::kWorldLitTerrainExtraTextureUnits[2] != render::kWorldLitShadowMapTextureUnit,
-        "extra Terrain albedo units do not alias the shadow map");
+        render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitShadowMapTextureUnit
+            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitShadowMapTextureUnit,
+        "terrain array units do not alias the shadow map");
     Expect(
-        render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitDiffuseTextureUnit
-            && render::kWorldLitTerrainExtraTextureUnits[1] != render::kWorldLitDiffuseTextureUnit
-            && render::kWorldLitTerrainExtraTextureUnits[2] != render::kWorldLitDiffuseTextureUnit,
-        "extra Terrain albedo units do not alias texture0");
+        render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitDiffuseTextureUnit
+            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitDiffuseTextureUnit,
+        "terrain array units do not alias texture0");
     Expect(
-        render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitTerrainExtraTextureUnits[1]
-            && render::kWorldLitTerrainExtraTextureUnits[1] != render::kWorldLitTerrainExtraTextureUnits[2]
-            && render::kWorldLitTerrainExtraTextureUnits[0] != render::kWorldLitTerrainExtraTextureUnits[2],
-        "extra Terrain albedo units are distinct");
+        render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitTerrainWeightArrayUnit,
+        "albedo and weight arrays use distinct units");
+    Expect(
+        render::kWorldLitTerrainAlbedoArrayUnit >= 12
+            && render::kWorldLitTerrainWeightArrayUnit >= 12,
+        "terrain arrays sit outside raylib material-map units");
 
     const std::size_t shaderLoads = lighting.ShaderLoadCount();
     const std::size_t shadowCreates = lighting.ShadowMapCreateCount();
@@ -570,6 +584,7 @@ int main()
             world::TryAddTerrainMaterialLayer(layered, "textures/test_textured_basecolor.png"),
             "GPU add extra layer");
         const std::size_t meshUploadsBeforeLayer = terrainGpu.UploadCount();
+        const std::size_t weightUploadsBeforePaint = terrainGpu.WeightUploadCount();
         terrainGpu.Sync(&layered);
         Expect(terrainGpu.LayerCount() == 2, "two GPU layers");
         Expect(terrainGpu.GetLayerTexture(1) != nullptr, "extra layer texture loads");
@@ -589,21 +604,18 @@ int main()
         Expect(world::ApplyTerrainPaintStamp(layered, gpuStamp), "GPU paint fixture");
         terrainGpu.Sync(&layered);
         Expect(
-            terrainGpu.UploadCount() == meshUploadsBeforeLayer + 1,
-            "paint weights rebuild mesh colors");
+            terrainGpu.UploadCount() == meshUploadsBeforeLayer,
+            "paint weights do not rebuild mesh geometry");
+        Expect(
+            terrainGpu.WeightUploadCount() > weightUploadsBeforePaint,
+            "paint uploads a dedicated weight map");
         Expect(terrainGpu.GetLayerTexture(0) != nullptr && terrainGpu.GetLayerTexture(1) != nullptr,
             "both layer textures remain after paint");
         BeginDrawing();
         BeginMode3D(terrainCamera);
         lighting.BindLitPass(environment);
         render::TerrainLayerDrawRequest drawRequest{};
-        drawRequest.layerCount = terrainGpu.LayerCount();
-        drawRequest.originX = layered.origin.x;
-        drawRequest.originZ = layered.origin.z;
-        drawRequest.layers[0] = terrainGpu.GetLayerTexture(0);
-        drawRequest.layers[1] = terrainGpu.GetLayerTexture(1);
-        drawRequest.tiling[0] = world::TerrainLayerTextureTiling(layered, 0);
-        drawRequest.tiling[1] = world::TerrainLayerTextureTiling(layered, 1);
+        FillTerrainDrawRequest(drawRequest, terrainGpu);
         lighting.DrawWorldTerrain(*terrainGpu.GetMesh(), WHITE, drawRequest);
         lighting.UnbindLitPass();
         EndMode3D();
@@ -710,9 +722,13 @@ int main()
         unsigned char weightB = 0;
         unsigned char weightA = 0;
         Expect(
-            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+            terrainGpu.CopyWeightMapTexel(0, 0, 0, weightR, weightG, weightB, weightA)
                 && weightR == 255 && weightG == 0 && weightB == 0 && weightA == 0,
-            "default weights encode R=layer0 G=layer1 B=layer2 A=layer3");
+            "default weight map 0 stores layer 0 in R");
+        Expect(
+            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+                && weightR == 255 && weightG == 255 && weightB == 255 && weightA == 255,
+            "vertex color is not a Terrain weight tint");
         render::LightingEnvironment albedoOnly{};
         albedoOnly.ambient.color = {1.0f, 1.0f, 1.0f};
         albedoOnly.ambient.intensity = 1.0f;
@@ -728,9 +744,9 @@ int main()
         Expect(FillAllSampleWeights(blend, 0.0f, 1.0f, 0.0f, 0.0f), "set all samples to layer 1");
         terrainGpu.Sync(&blend);
         Expect(
-            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+            terrainGpu.CopyWeightMapTexel(0, 0, 0, weightR, weightG, weightB, weightA)
                 && weightR == 0 && weightG == 255 && weightB == 0 && weightA == 0,
-            "layer 1 weights encode G=255 without using it as visual tint");
+            "layer 1 weights encode G in map 0");
         Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample layer 1 Terrain");
         Expect(
             ColorChannelsClose(pixel, Color{0, 0, 255, 255}, 40),
@@ -741,13 +757,44 @@ int main()
         Expect(FillAllSampleWeights(blend, 0.0f, 0.0f, 1.0f, 0.0f), "set all samples to layer 2");
         terrainGpu.Sync(&blend);
         Expect(
-            ReadVertexWeightColor(terrainGpu, 0, weightR, weightG, weightB, weightA)
+            terrainGpu.CopyWeightMapTexel(0, 0, 0, weightR, weightG, weightB, weightA)
                 && weightB == 255 && weightR == 0 && weightG == 0,
-            "layer 2 weights encode B=255");
+            "layer 2 weights encode B in map 0");
         Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample layer 2 Terrain");
         Expect(
             ColorChannelsClose(pixel, Color{255, 255, 0, 255}, 40),
             "layer 2 samples yellow albedo");
+
+        Expect(
+            StageSolidIdentity("textures/m92_blend_pad.png", Color{0, 0, 0, 255}),
+            "stage palette pad before layer 4");
+        Expect(
+            StageSolidIdentity("textures/m92_blend_red.png", Color{255, 0, 0, 255}),
+            "stage representative red layer 4");
+        Expect(
+            world::TryAddTerrainMaterialLayer(blend, "textures/m92_blend_pad.png"),
+            "pad slot before layer 4");
+        Expect(
+            world::TryAddTerrainMaterialLayer(blend, "textures/m92_blend_red.png"),
+            "blend layer 4 red");
+        float layerFour[world::kMaxTerrainMaterialLayers]{};
+        layerFour[4] = 1.0f;
+        Expect(FillAllTexelWeights(blend, layerFour), "set all texels to layer 4");
+        terrainGpu.Sync(&blend);
+        Expect(terrainGpu.WeightMapCount() >= 2, "layer 4 uses a second packed weight map");
+        Expect(
+            terrainGpu.CopyWeightMapTexel(1, 0, 0, weightR, weightG, weightB, weightA)
+                && weightR == 255 && weightG == 0 && weightB == 0 && weightA == 0,
+            "layer 4 is R of weight map 1");
+        Expect(
+            terrainGpu.CopyWeightMapTexel(0, 0, 0, weightR, weightG, weightB, weightA)
+                && weightR == 0 && weightG == 0 && weightB == 0 && weightA == 0,
+            "layer 4 does not write weight map 0");
+        Expect(SampleLitTerrainPixel(lighting, terrainGpu, albedoOnly, pixel), "sample layer 4 Terrain");
+        Expect(
+            ColorChannelsClose(pixel, Color{255, 0, 0, 255}, 50),
+            "renderer distinguishes a layer stored in the second packed map");
+        Expect(pixel.g < 40, "high-index layer is not the layer-0 green or shadow map");
 
         world::TerrainSpec half = world::MakeDefaultTerrain();
         Expect(
@@ -823,6 +870,47 @@ int main()
         Expect(pixel.g > 150 && pixel.r < 80, "source-only Layer 0 shows the assigned Texture");
         terrainGpu.SetAuthoringSourceRoot({});
         std::filesystem::remove_all(sourcePreviewRoot, sourceError);
+
+        world::TerrainSpec highIndex = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(highIndex, "textures/test_checker.png"),
+            "high-index fallback base is staged");
+        const char* cookedNames[] = {
+            "textures/test_cooked_rgb.png",
+            "textures/test_cooked_c.png",
+            "textures/test_cooked_d.png",
+            "textures/test_cooked_e.png"};
+        std::filesystem::copy_file(
+            cookedRgb,
+            cookedPreviewRoot / "textures" / "test_cooked_c.png",
+            std::filesystem::copy_options::overwrite_existing,
+            cookedError);
+        std::filesystem::copy_file(
+            cookedRgb,
+            cookedPreviewRoot / "textures" / "test_cooked_d.png",
+            std::filesystem::copy_options::overwrite_existing,
+            cookedError);
+        std::filesystem::copy_file(
+            cookedRgb,
+            cookedPreviewRoot / "textures" / "test_cooked_e.png",
+            std::filesystem::copy_options::overwrite_existing,
+            cookedError);
+        for (const char* identity : cookedNames)
+        {
+            Expect(world::TryAddTerrainMaterialLayer(highIndex, identity), "high-index cooked palette");
+        }
+        Expect(world::TerrainMaterialLayerCount(highIndex) == 5, "layer 4 is authored for fallback");
+        terrainGpu.SetAuthoringCookedRoot({});
+        terrainGpu.SetAuthoringSourceRoot({});
+        terrainGpu.Sync(&highIndex);
+        Expect(
+            terrainGpu.GetLayerTexture(4) == nullptr,
+            "Release stays staged-only for a layer above index 3");
+        terrainGpu.SetAuthoringCookedRoot(cookedPreviewRoot);
+        terrainGpu.Sync(&highIndex);
+        Expect(
+            terrainGpu.GetLayerTexture(4) != nullptr,
+            "Development cooked fallback loads a layer above index 3");
 
         terrainGpu.SetAuthoringCookedRoot({});
         terrainGpu.Unload();

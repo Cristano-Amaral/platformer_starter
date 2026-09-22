@@ -129,11 +129,16 @@ class TerrainTextureDependencyTests(unittest.TestCase):
             "terrain_material textures/test_checker.png 0.25\n"
             "terrain_layer 1 textures/terrain_detail.png 0.5\n"
             "terrain_layer 2 C:/abs/grass.png 0.25\n"
+            "terrain_layer 5 textures/terrain_high.png 0.25\n"
         )
         identities = cooker.extract_terrain_texture_identities(text)
         self.assertEqual(
             identities,
-            ["textures/test_checker.png", "textures/terrain_detail.png"],
+            [
+                "textures/test_checker.png",
+                "textures/terrain_detail.png",
+                "textures/terrain_high.png",
+            ],
         )
 
     def test_rejects_absolute_and_model_identities(self) -> None:
