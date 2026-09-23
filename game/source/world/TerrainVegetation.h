@@ -1,17 +1,20 @@
 #pragma once
 
 // Milestone 93: authored Terrain vegetation. The palette and occupancy grid
-// are Level data. Instance position, yaw, scale, and terrain alignment are
-// derived from that data plus the current heightfield. Nothing here is a
-// GPU resource, a Static Prop, or a GUID.
+// are Level data. Milestone 94 derives XZ with deterministic spacing so the
+// placement is less grid-like. Yaw, scale, and terrain alignment still come
+// from the captured cell parameters plus the current heightfield. Nothing
+// here is a GPU resource, a Static Prop, or a GUID.
 
 #include "world/Terrain.h"
 #include "world/TerrainGeometry.h"
 #include "world/TerrainSculpt.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 
 namespace world
@@ -569,6 +572,175 @@ inline void TerrainVegetationBasis(
     axisZ = forward;
 }
 
+// M93 sampled each instance inside the inner 60% of its cell (0.2..0.8).
+// Neighboring cells therefore left an empty band, and several instances
+// stacked inside the same inset. M94 keeps the per-cell count, then places
+// XZ with a cell-phased R2 sample that overlaps the cell edge. A
+// density-scaled spacing check against earlier samples of the same entry
+// rejects candidates that would clump. Other entries are not spaced apart.
+inline constexpr float kTerrainVegetationPlacementMargin = 0.28f;
+inline constexpr int kTerrainVegetationPlacementCandidates = 8;
+inline constexpr float kTerrainVegetationSpacingScale = 0.55f;
+inline constexpr float kTerrainVegetationPlacementBucket = 0.25f;
+inline constexpr int kTerrainVegetationPlacementReachCap = 12;
+inline constexpr float kTerrainVegetationR2X = 0.7548776662466927f;
+inline constexpr float kTerrainVegetationR2Z = 0.5698402909980532f;
+
+struct TerrainVegetationPlacementIndex
+{
+    float bucket = kTerrainVegetationPlacementBucket;
+    float originX = 0.0f;
+    float originZ = 0.0f;
+    std::vector<float> x;
+    std::vector<float> z;
+    std::unordered_map<std::uint64_t, std::vector<int>> cells;
+};
+
+inline std::uint64_t TerrainVegetationPlacementKey(int gridX, int gridZ)
+{
+    return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(gridX)) << 32)
+        | static_cast<std::uint32_t>(gridZ);
+}
+
+inline float TerrainVegetationNearestSpacingSquared(
+    const TerrainVegetationPlacementIndex& index,
+    float worldX,
+    float worldZ,
+    float searchRadius)
+{
+    if (index.x.empty() || !(index.bucket > 0.0f))
+    {
+        return 1.0e20f;
+    }
+    const int centerX = static_cast<int>(std::floor((worldX - index.originX) / index.bucket));
+    const int centerZ = static_cast<int>(std::floor((worldZ - index.originZ) / index.bucket));
+    int reach = static_cast<int>(std::ceil(searchRadius / index.bucket));
+    if (reach < 1)
+    {
+        reach = 1;
+    }
+    if (reach > kTerrainVegetationPlacementReachCap)
+    {
+        reach = kTerrainVegetationPlacementReachCap;
+    }
+    float best = 1.0e20f;
+    for (int dz = -reach; dz <= reach; ++dz)
+    {
+        for (int dx = -reach; dx <= reach; ++dx)
+        {
+            const auto found = index.cells.find(
+                TerrainVegetationPlacementKey(centerX + dx, centerZ + dz));
+            if (found == index.cells.end())
+            {
+                continue;
+            }
+            for (int pointIndex : found->second)
+            {
+                const float offsetX = index.x[static_cast<std::size_t>(pointIndex)] - worldX;
+                const float offsetZ = index.z[static_cast<std::size_t>(pointIndex)] - worldZ;
+                const float distanceSquared = offsetX * offsetX + offsetZ * offsetZ;
+                if (distanceSquared < best)
+                {
+                    best = distanceSquared;
+                }
+            }
+        }
+    }
+    return best;
+}
+
+inline void TerrainVegetationRememberPlacement(
+    TerrainVegetationPlacementIndex& index,
+    float worldX,
+    float worldZ)
+{
+    if (!(index.bucket > 0.0f))
+    {
+        return;
+    }
+    const int gridX = static_cast<int>(std::floor((worldX - index.originX) / index.bucket));
+    const int gridZ = static_cast<int>(std::floor((worldZ - index.originZ) / index.bucket));
+    const int pointIndex = static_cast<int>(index.x.size());
+    index.x.push_back(worldX);
+    index.z.push_back(worldZ);
+    index.cells[TerrainVegetationPlacementKey(gridX, gridZ)].push_back(pointIndex);
+}
+
+inline void TerrainVegetationChooseWorldXZ(
+    const TerrainSpec& terrain,
+    int ix,
+    int iz,
+    int instance,
+    int channelBase,
+    float minSpacing,
+    const TerrainVegetationPlacementIndex& placed,
+    float& outX,
+    float& outZ)
+{
+    const float cellSizeX = TerrainVegetationCellSizeX(terrain);
+    const float cellSizeZ = TerrainVegetationCellSizeZ(terrain);
+    const float margin = kTerrainVegetationPlacementMargin;
+    const float span = 1.0f + 2.0f * margin;
+    const float phaseX = TerrainVegetationHash01(terrain.vegetationSeed, ix, iz, 0, channelBase + 6);
+    const float phaseZ = TerrainVegetationHash01(terrain.vegetationSeed, ix, iz, 0, channelBase + 7);
+    const float minX = terrain.origin.x;
+    const float maxX = terrain.origin.x + terrain.sizeX;
+    const float minZ = terrain.origin.z;
+    const float maxZ = terrain.origin.z + terrain.sizeZ;
+    const float minSpacingSquared = minSpacing * minSpacing;
+    float bestX = terrain.origin.x;
+    float bestZ = terrain.origin.z;
+    float bestClearance = -1.0f;
+    for (int candidate = 0; candidate < kTerrainVegetationPlacementCandidates; ++candidate)
+    {
+        const float jitterX = TerrainVegetationHash01(
+                                  terrain.vegetationSeed, ix, iz, instance, channelBase + 16 + candidate)
+                - 0.5f;
+        const float jitterZ = TerrainVegetationHash01(
+                                  terrain.vegetationSeed, ix, iz, instance, channelBase + 32 + candidate)
+                - 0.5f;
+        const float sampleX = phaseX
+            + (static_cast<float>(instance) + 0.5f) * kTerrainVegetationR2X + jitterX * 0.35f;
+        const float sampleZ = phaseZ
+            + (static_cast<float>(instance) + 0.5f) * kTerrainVegetationR2Z + jitterZ * 0.35f;
+        const float unitX = sampleX - std::floor(sampleX);
+        const float unitZ = sampleZ - std::floor(sampleZ);
+        const float alongX = -margin + span * unitX;
+        const float alongZ = -margin + span * unitZ;
+        float worldX = terrain.origin.x + (static_cast<float>(ix) + alongX) * cellSizeX;
+        float worldZ = terrain.origin.z + (static_cast<float>(iz) + alongZ) * cellSizeZ;
+        if (worldX < minX)
+        {
+            worldX = minX;
+        }
+        if (worldX > maxX)
+        {
+            worldX = maxX;
+        }
+        if (worldZ < minZ)
+        {
+            worldZ = minZ;
+        }
+        if (worldZ > maxZ)
+        {
+            worldZ = maxZ;
+        }
+        const float clearance = TerrainVegetationNearestSpacingSquared(placed, worldX, worldZ, minSpacing);
+        if (clearance > bestClearance)
+        {
+            bestClearance = clearance;
+            bestX = worldX;
+            bestZ = worldZ;
+        }
+        if (clearance >= minSpacingSquared)
+        {
+            break;
+        }
+    }
+    outX = bestX;
+    outZ = bestZ;
+}
+
 inline int TerrainVegetationInstanceCountForCell(
     const TerrainSpec& terrain,
     float density,
@@ -613,6 +785,9 @@ inline void BuildTerrainVegetationInstances(
     for (int entryIndex = 0; entryIndex < entryCount; ++entryIndex)
     {
         const int channelBase = entryIndex * 8;
+        TerrainVegetationPlacementIndex placed{};
+        placed.originX = terrain.origin.x;
+        placed.originZ = terrain.origin.z;
         for (int iz = 0; iz < terrain.vegetationResolutionZ; ++iz)
         {
             for (int ix = 0; ix < terrain.vegetationResolutionX; ++ix)
@@ -642,26 +817,21 @@ inline void BuildTerrainVegetationInstances(
                 const bool randomYaw = TerrainVegetationPaintRandomYaw(paint);
                 const bool alignToNormal = TerrainVegetationPaintAlignToNormal(paint);
                 const int count = TerrainVegetationInstanceCountForCell(terrain, density, ix, iz);
+                const float idealSpacing = 1.0f / std::sqrt(std::max(density, kMinTerrainVegetationDensity));
+                const float minSpacing = idealSpacing * kTerrainVegetationSpacingScale;
                 for (int instance = 0; instance < count; ++instance)
                 {
-                    const float alongX = 0.2f
-                        + 0.6f
-                            * TerrainVegetationHash01(
-                                terrain.vegetationSeed, ix, iz, instance, channelBase + 1);
-                    const float alongZ = 0.2f
-                        + 0.6f
-                            * TerrainVegetationHash01(
-                                terrain.vegetationSeed, ix, iz, instance, channelBase + 2);
-                    const float worldX = terrain.origin.x
-                        + (static_cast<float>(ix) + alongX) * TerrainVegetationCellSizeX(terrain);
-                    const float worldZ = terrain.origin.z
-                        + (static_cast<float>(iz) + alongZ) * TerrainVegetationCellSizeZ(terrain);
+                    float worldX = terrain.origin.x;
+                    float worldZ = terrain.origin.z;
+                    TerrainVegetationChooseWorldXZ(
+                        terrain, ix, iz, instance, channelBase, minSpacing, placed, worldX, worldZ);
                     float worldY = terrain.origin.y;
                     core::Vec3 normal{0.0f, 1.0f, 0.0f};
                     if (!SampleTerrainSurface(terrain, worldX, worldZ, worldY, normal))
                     {
                         continue;
                     }
+                    TerrainVegetationRememberPlacement(placed, worldX, worldZ);
                     const float scaleT = minScale == maxScale
                         ? 0.0f
                         : TerrainVegetationHash01(
@@ -684,29 +854,105 @@ inline void BuildTerrainVegetationInstances(
     }
 }
 
-struct TerrainVegetationDrawBatch
+struct TerrainVegetationRenderGroup
 {
     int entryIndex = 0;
     std::size_t begin = 0;
     std::size_t count = 0;
 };
 
-inline void BuildTerrainVegetationDrawBatches(
-    const std::vector<TerrainVegetationInstance>& instances,
-    std::vector<TerrainVegetationDrawBatch>& out)
+struct TerrainVegetationRenderPlan
 {
-    out.clear();
-    for (std::size_t index = 0; index < instances.size();)
+    std::vector<int> instanceOrder;
+    std::vector<TerrainVegetationRenderGroup> groups;
+};
+
+// Groups instances that share a model identity. One group is one loaded model.
+// Draw submits that group once per mesh, not once per instance.
+inline void BuildTerrainVegetationRenderPlan(
+    const TerrainSpec& terrain,
+    const std::vector<TerrainVegetationInstance>& instances,
+    TerrainVegetationRenderPlan& out)
+{
+    out.instanceOrder.clear();
+    out.groups.clear();
+    if (instances.empty() || terrain.vegetationEntries.empty())
+    {
+        return;
+    }
+
+    std::vector<int> groupOfInstance(instances.size(), -1);
+    for (std::size_t index = 0; index < instances.size(); ++index)
     {
         const int entryIndex = instances[index].entryIndex;
-        std::size_t end = index + 1;
-        while (end < instances.size() && instances[end].entryIndex == entryIndex)
+        if (entryIndex < 0 || entryIndex >= static_cast<int>(terrain.vegetationEntries.size()))
         {
-            ++end;
+            continue;
         }
-        out.push_back(TerrainVegetationDrawBatch{entryIndex, index, end - index});
-        index = end;
+        const std::string& identity =
+            terrain.vegetationEntries[static_cast<std::size_t>(entryIndex)].modelIdentity;
+        int groupIndex = -1;
+        for (std::size_t group = 0; group < out.groups.size(); ++group)
+        {
+            const int representative = out.groups[group].entryIndex;
+            if (terrain.vegetationEntries[static_cast<std::size_t>(representative)].modelIdentity
+                == identity)
+            {
+                groupIndex = static_cast<int>(group);
+                break;
+            }
+        }
+        if (groupIndex < 0)
+        {
+            TerrainVegetationRenderGroup created{};
+            created.entryIndex = entryIndex;
+            out.groups.push_back(created);
+            groupIndex = static_cast<int>(out.groups.size() - 1);
+        }
+        groupOfInstance[index] = groupIndex;
+        ++out.groups[static_cast<std::size_t>(groupIndex)].count;
     }
+
+    std::size_t cursor = 0;
+    for (TerrainVegetationRenderGroup& group : out.groups)
+    {
+        group.begin = cursor;
+        cursor += group.count;
+        group.count = 0;
+    }
+    out.instanceOrder.assign(cursor, 0);
+    for (std::size_t index = 0; index < instances.size(); ++index)
+    {
+        const int groupIndex = groupOfInstance[index];
+        if (groupIndex < 0)
+        {
+            continue;
+        }
+        TerrainVegetationRenderGroup& group = out.groups[static_cast<std::size_t>(groupIndex)];
+        out.instanceOrder[group.begin + group.count] = static_cast<int>(index);
+        ++group.count;
+    }
+}
+
+// meshesPerModel is the renderable mesh count of that shared model.
+// The result is the number of instanced submissions, not the instance count.
+inline std::size_t TerrainVegetationInstancedSubmissionCount(
+    const TerrainVegetationRenderPlan& plan,
+    int meshesPerModel)
+{
+    if (meshesPerModel < 1)
+    {
+        meshesPerModel = 1;
+    }
+    std::size_t submissions = 0;
+    for (const TerrainVegetationRenderGroup& group : plan.groups)
+    {
+        if (group.count > 0)
+        {
+            submissions += static_cast<std::size_t>(meshesPerModel);
+        }
+    }
+    return submissions;
 }
 
 inline std::uint64_t TerrainVegetationDeriveSignature(const TerrainSpec& terrain)

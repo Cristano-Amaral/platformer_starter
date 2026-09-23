@@ -1580,6 +1580,14 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 ImGui::TextDisabled(
                     "Next Paint only. Painted vegetation keeps Density, Scale, Yaw, and Align.");
                 ImGui::InputScalar("Seed", ImGuiDataType_U32, &level.terrain.vegetationSeed);
+                std::vector<world::TerrainVegetationInstance> generatedVegetation;
+                world::BuildTerrainVegetationInstances(level.terrain, generatedVegetation);
+                world::TerrainVegetationRenderPlan vegetationPlan;
+                world::BuildTerrainVegetationRenderPlan(
+                    level.terrain, generatedVegetation, vegetationPlan);
+                ImGui::Text(
+                    "Generated instances: %d", static_cast<int>(generatedVegetation.size()));
+                ImGui::Text("Render groups: %d", static_cast<int>(vegetationPlan.groups.size()));
             }
             const bool vegetationWasOn = state.terrainVegetation.mode;
             if (ImGui::Checkbox("Vegetation Mode", &state.terrainVegetation.mode))

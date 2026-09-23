@@ -22,6 +22,7 @@ CANONICAL_FILES = (
     "docs/milestones/MILESTONE_91.md",
     "docs/milestones/MILESTONE_92.md",
     "docs/milestones/MILESTONE_93.md",
+    "docs/milestones/MILESTONE_94.md",
     "game/assets/source/levels/level_01.level",
     "game/assets/source/levels/level_02.level",
 )
@@ -91,8 +92,8 @@ class AgentInstructionTests(unittest.TestCase):
         self.assertIn("docs/MILESTONES.md", text)
         self.assertIn("docs/ARCHITECTURE.md", text)
         self.assertIn("docs/milestones/MILESTONE_", text)
-        self.assertIn("docs/milestones/MILESTONE_93.md", text)
-        self.assertIn("milestone/93-terrain-vegetation-foundation", text)
+        self.assertIn("docs/milestones/MILESTONE_94.md", text)
+        self.assertIn("milestone/94-terrain-vegetation-distribution-rendering", text)
         self.assertIn("level_01.level", text)
         self.assertIn("level_02.level", text)
         self.assertIn("manual acceptance", text.lower())

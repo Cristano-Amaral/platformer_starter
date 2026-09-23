@@ -108,6 +108,53 @@ int main()
     Expect(NearlyEqual(render::NormalizedShadowBias(0.0025f), 0.0025f), "default bias is kept");
     Expect(render::NormalizedShadowBias(-1.0f) > 0.0f, "negative bias is raised");
 
+    {
+        render::LightingEnvironment env = render::MakeDefaultLightingEnvironment();
+        Expect(VecNear(env.shadows.focus, {0.0f, 4.0f, 0.0f}), "default focus is scene origin");
+        const core::Vec3 spawn{0.0f, 1.0f, 0.0f};
+        const core::Vec3 farA{0.0f, 1.0f, 96.0f};
+        const core::Vec3 farB{84.0f, 4.0f, -70.0f};
+        Expect(
+            render::WorldPointIsInsideDirectionalShadowCoverage(env, spawn),
+            "spawn at origin is inside the default 72-unit volume");
+        Expect(
+            !render::WorldPointIsInsideDirectionalShadowCoverage(env, farA),
+            "fixed origin volume does not cover a player 96 units away");
+        Expect(
+            !render::WorldPointIsInsideDirectionalShadowCoverage(env, farB),
+            "fixed origin volume does not cover a second distant camera");
+
+        render::ApplyDirectionalShadowFocus(env, farA);
+        Expect(VecNear(env.shadows.focus, farA), "focus stores the camera look-at");
+        Expect(NearlyEqual(env.shadows.coverage, 72.0f), "following does not enlarge coverage");
+        const render::DirectionalLightView followedA =
+            render::BuildDirectionalLightView(env.directional, env.shadows);
+        Expect(VecNear(followedA.target, farA, 0.05f), "light view target tracks far camera A");
+        Expect(
+            render::WorldPointIsInsideDirectionalShadowCoverage(env, farA),
+            "after movement, far camera A is inside the followed volume");
+        Expect(
+            !render::WorldPointIsInsideDirectionalShadowCoverage(env, spawn),
+            "followed volume moves instead of growing to keep spawn");
+
+        render::ApplyDirectionalShadowFocus(env, farB);
+        const render::DirectionalLightView followedB =
+            render::BuildDirectionalLightView(env.directional, env.shadows);
+        Expect(VecNear(followedB.target, farB, 0.05f), "light view target tracks far camera B");
+        Expect(
+            render::WorldPointIsInsideDirectionalShadowCoverage(env, farB),
+            "after a second movement, far camera B is inside the followed volume");
+        Expect(
+            !render::WorldPointIsInsideDirectionalShadowCoverage(env, farA),
+            "previous far camera A leaves coverage when focus follows B");
+        Expect(NearlyEqual(env.shadows.coverage, 72.0f), "second follow still keeps coverage 72");
+
+        const core::Vec3 beforeNan = env.shadows.focus;
+        render::ApplyDirectionalShadowFocus(
+            env, {std::numeric_limits<float>::quiet_NaN(), 1.0f, 0.0f});
+        Expect(VecNear(env.shadows.focus, beforeNan), "non-finite look-at does not stomp focus");
+    }
+
     Expect(render::ShouldCastDirectionalShadow(render::ShadowParticipant::GreyboxWorld),
         "greybox casts");
     Expect(render::ShouldCastDirectionalShadow(render::ShadowParticipant::Terrain),

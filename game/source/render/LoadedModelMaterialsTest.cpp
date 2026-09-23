@@ -7,6 +7,8 @@
 #include "render/StaticModelScene.h"
 #include "world/LevelDefinition.h"
 #include "world/StaticProp.h"
+#include "world/Terrain.h"
+#include "world/TerrainVegetation.h"
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -230,6 +232,93 @@ int main()
     store.Sync(texturedOnly);
     store.Sync(texturedOnly);
     Expect(store.LoadCount() == loadsAfterFirst, "reload of unchanged stamp is not a double load");
+
+    {
+        world::LevelDefinition vegetation{};
+        vegetation.hasTerrain = true;
+        vegetation.terrain = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAddTerrainVegetationEntry(vegetation.terrain, "models/test_static.glb"),
+            "vegetation palette accepts the staged model");
+        Expect(
+            world::TryAddTerrainVegetationEntry(vegetation.terrain, "models/test_textured.glb"),
+            "vegetation palette accepts a second staged model");
+        vegetation.terrain.vegetationResolutionX = world::kMaxTerrainVegetationResolution;
+        vegetation.terrain.vegetationResolutionZ = world::kMaxTerrainVegetationResolution;
+        const int cells = vegetation.terrain.vegetationResolutionX * vegetation.terrain.vegetationResolutionZ;
+        vegetation.terrain.vegetationCells.assign(static_cast<std::size_t>(cells), 3);
+        vegetation.terrain.vegetationDensityQuanta.assign(
+            static_cast<std::size_t>(cells * world::kMaxTerrainVegetationEntries), 0);
+        vegetation.terrain.vegetationPaintParams.assign(
+            static_cast<std::size_t>(cells * world::kMaxTerrainVegetationEntries), 0);
+        const unsigned char density = world::QuantizeTerrainVegetationDensity(world::kMaxTerrainVegetationDensity);
+        for (int entryIndex = 0; entryIndex < 2; ++entryIndex)
+        {
+            const std::uint16_t paint = world::PackTerrainVegetationPaintFromEntry(
+                vegetation.terrain.vegetationEntries[static_cast<std::size_t>(entryIndex)]);
+            for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+            {
+                const int slot = world::TerrainVegetationDensitySlot(cellIndex, entryIndex);
+                vegetation.terrain.vegetationDensityQuanta[static_cast<std::size_t>(slot)] = density;
+                vegetation.terrain.vegetationPaintParams[static_cast<std::size_t>(slot)] = paint;
+            }
+        }
+        store.Sync(vegetation);
+        const std::size_t loadsBeforeVegetationDraw = store.LoadCount();
+        Expect(store.UniqueLoadedCount() == 2, "two vegetation models stay one resource each");
+        Expect(store.HasModel("models/test_static.glb"), "first vegetation model is loaded once");
+        Expect(store.HasModel("models/test_textured.glb"), "second vegetation model is loaded once");
+
+        const char* vertexShader = R"(#version 330
+in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec3 vertexNormal;
+in vec4 vertexColor;
+in mat4 instanceTransform;
+uniform mat4 mvp;
+uniform mat4 matModel;
+uniform int vegetationInstanced;
+void main()
+{
+    mat4 model = vegetationInstanced != 0 ? instanceTransform : matModel;
+    gl_Position = vegetationInstanced != 0
+        ? mvp * model * vec4(vertexPosition, 1.0)
+        : mvp * vec4(vertexPosition, 1.0);
+}
+)";
+        const char* fragmentShader = R"(#version 330
+out vec4 finalColor;
+void main()
+{
+    finalColor = vec4(1.0);
+}
+)";
+        const Shader shader = LoadShaderFromMemory(vertexShader, fragmentShader);
+        Expect(shader.id != 0, "vegetation instanced shader compiles");
+        Expect(
+            shader.locs != nullptr && shader.locs[SHADER_LOC_VERTEX_INSTANCETRANSFORM] >= 0,
+            "vegetation shader binds instanceTransform");
+        render::ModelDrawOverride vegetationOverride{};
+        vegetationOverride.shader = shader;
+        BeginDrawing();
+        ClearBackground(BLACK);
+        BeginMode3D(camera);
+        store.ResetDrawStats();
+        store.DrawTerrainVegetation(vegetation.terrain, &vegetationOverride);
+        EndMode3D();
+        EndDrawing();
+        Expect(store.VegetationInstanceCount() >= 512, "dense vegetation generates many instances");
+        Expect(store.VegetationRenderGroupCount() == 2, "two model identities are two render groups");
+        Expect(store.VegetationInstancedSubmissionCount() >= 2, "each model submits at least one instanced draw");
+        Expect(
+            store.VegetationInstancedSubmissionCount() < store.VegetationInstanceCount(),
+            "instanced submissions are not one ordinary draw per instance");
+        Expect(store.VegetationOrdinarySubmissionCount() == 0, "loaded models do not fall back to DrawModel");
+        Expect(store.LoadCount() == loadsBeforeVegetationDraw, "drawing vegetation does not load a model per instance");
+        Expect(store.UniqueLoadedCount() == 2, "drawing vegetation does not duplicate model resources");
+        UnloadShader(shader);
+    }
+
     store.Shutdown();
     store.Shutdown();
     Expect(store.UniqueLoadedCount() == 0, "shutdown unloads models");

@@ -370,13 +370,34 @@ int main()
         std::vector<world::TerrainVegetationInstance> instances;
         world::BuildTerrainVegetationInstances(terrain, instances);
         Expect(instances.size() >= 512, "a full grid derives hundreds of instances");
-        std::vector<world::TerrainVegetationDrawBatch> batches;
-        world::BuildTerrainVegetationDrawBatches(instances, batches);
-        Expect(batches.size() == 1, "one model identity is one draw batch");
-        Expect(batches[0].count == instances.size(), "the batch covers every instance");
+        world::TerrainVegetationRenderPlan plan;
+        world::BuildTerrainVegetationRenderPlan(terrain, instances, plan);
+        Expect(plan.groups.size() == 1, "one model identity is one render group");
+        Expect(plan.groups[0].count == instances.size(), "the group covers every instance");
+        const std::size_t submissions = world::TerrainVegetationInstancedSubmissionCount(plan, 1);
+        Expect(submissions == 1, "one mesh is one instanced submission");
+        Expect(submissions < instances.size(), "instances are not one submission each");
         std::vector<world::TerrainVegetationInstance> again;
         world::BuildTerrainVegetationInstances(terrain, again);
-        Expect(again.size() == instances.size(), "high-instance derivation is repeatable");
+        Expect(again.size() == instances.size() && SameInstances(instances, again),
+            "high-instance derivation is repeatable");
+        int outsideOldInset = 0;
+        const float cellX = world::TerrainVegetationCellSizeX(terrain);
+        const float cellZ = world::TerrainVegetationCellSizeZ(terrain);
+        for (const world::TerrainVegetationInstance& instance : instances)
+        {
+            const float unitX = (instance.position.x - terrain.origin.x) / cellX;
+            const float unitZ = (instance.position.z - terrain.origin.z) / cellZ;
+            const float fracX = unitX - std::floor(unitX);
+            const float fracZ = unitZ - std::floor(unitZ);
+            if (fracX < 0.18f || fracX > 0.82f || fracZ < 0.18f || fracZ > 0.82f)
+            {
+                ++outsideOldInset;
+            }
+        }
+        Expect(
+            outsideOldInset * 10 >= static_cast<int>(instances.size()),
+            "placement reaches the lanes the old cell inset left empty");
     }
 
     {
@@ -782,6 +803,101 @@ int main()
         }
         Expect(yFollowed, "all vegetation follows Terrain Y after sculpt");
         Expect(aStillUpright && bStillTilted, "only Align-on vegetation follows the Terrain normal");
+    }
+
+    {
+        world::TerrainSpec low = MakeTerrain();
+        Expect(AddTree(low), "low-density count entry");
+        low.vegetationEntries[0].density = 1.0f;
+        const int cells = low.vegetationResolutionX * low.vegetationResolutionZ;
+        low.vegetationCells.assign(static_cast<std::size_t>(cells), 1);
+        low.vegetationDensityQuanta.assign(
+            static_cast<std::size_t>(cells * world::kMaxTerrainVegetationEntries), 0);
+        low.vegetationPaintParams.assign(
+            static_cast<std::size_t>(cells * world::kMaxTerrainVegetationEntries), 0);
+        const unsigned char lowQuantum = world::QuantizeTerrainVegetationDensity(1.0f);
+        const unsigned char highQuantum = world::QuantizeTerrainVegetationDensity(8.0f);
+        const std::uint16_t lowPaint =
+            world::PackTerrainVegetationPaintFromEntry(low.vegetationEntries[0]);
+        for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+        {
+            const int slot = world::TerrainVegetationDensitySlot(cellIndex, 0);
+            low.vegetationDensityQuanta[static_cast<std::size_t>(slot)] = lowQuantum;
+            low.vegetationPaintParams[static_cast<std::size_t>(slot)] = lowPaint;
+        }
+        std::vector<world::TerrainVegetationInstance> lowInstances;
+        world::BuildTerrainVegetationInstances(low, lowInstances);
+        world::TerrainSpec high = low;
+        high.vegetationEntries[0].density = 8.0f;
+        for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+        {
+            high.vegetationDensityQuanta[static_cast<std::size_t>(
+                world::TerrainVegetationDensitySlot(cellIndex, 0))] = highQuantum;
+        }
+        std::vector<world::TerrainVegetationInstance> highInstances;
+        world::BuildTerrainVegetationInstances(high, highInstances);
+        Expect(!lowInstances.empty() && highInstances.size() >= lowInstances.size() * 2,
+            "high authored density generates substantially more instances than low density");
+
+        world::TerrainSpec seeded = high;
+        seeded.vegetationSeed = 1u;
+        std::vector<world::TerrainVegetationInstance> seedA;
+        std::vector<world::TerrainVegetationInstance> seedAAgain;
+        world::BuildTerrainVegetationInstances(seeded, seedA);
+        world::BuildTerrainVegetationInstances(seeded, seedAAgain);
+        Expect(SameInstances(seedA, seedAAgain), "the same seed repeats the same distribution");
+        seeded.vegetationSeed = 99u;
+        std::vector<world::TerrainVegetationInstance> seedB;
+        std::vector<world::TerrainVegetationInstance> seedBAgain;
+        world::BuildTerrainVegetationInstances(seeded, seedB);
+        world::BuildTerrainVegetationInstances(seeded, seedBAgain);
+        Expect(SameInstances(seedB, seedBAgain), "a second seed is stable");
+        Expect(!SameInstances(seedA, seedB), "a different seed changes the distribution");
+
+        world::TerrainSpec shared = MakeTerrain();
+        Expect(AddTree(shared, "models/test_static.glb"), "shared model entry A");
+        Expect(AddTree(shared, "models/test_static.glb"), "shared model entry B");
+        shared.vegetationResolutionX = world::kMaxTerrainVegetationResolution;
+        shared.vegetationResolutionZ = world::kMaxTerrainVegetationResolution;
+        const int sharedCells = shared.vegetationResolutionX * shared.vegetationResolutionZ;
+        shared.vegetationCells.assign(static_cast<std::size_t>(sharedCells), 3);
+        shared.vegetationDensityQuanta.assign(
+            static_cast<std::size_t>(sharedCells * world::kMaxTerrainVegetationEntries), 0);
+        shared.vegetationPaintParams.assign(
+            static_cast<std::size_t>(sharedCells * world::kMaxTerrainVegetationEntries), 0);
+        const unsigned char sharedDensity = world::QuantizeTerrainVegetationDensity(8.0f);
+        for (int entryIndex = 0; entryIndex < 2; ++entryIndex)
+        {
+            const std::uint16_t paint =
+                world::PackTerrainVegetationPaintFromEntry(shared.vegetationEntries[static_cast<std::size_t>(entryIndex)]);
+            for (int cellIndex = 0; cellIndex < sharedCells; ++cellIndex)
+            {
+                const int slot = world::TerrainVegetationDensitySlot(cellIndex, entryIndex);
+                shared.vegetationDensityQuanta[static_cast<std::size_t>(slot)] = sharedDensity;
+                shared.vegetationPaintParams[static_cast<std::size_t>(slot)] = paint;
+            }
+        }
+        std::vector<world::TerrainVegetationInstance> sharedInstances;
+        world::BuildTerrainVegetationInstances(shared, sharedInstances);
+        world::TerrainVegetationRenderPlan sharedPlan;
+        world::BuildTerrainVegetationRenderPlan(shared, sharedInstances, sharedPlan);
+        Expect(sharedInstances.size() >= 512, "two entries of one model still generate many instances");
+        Expect(sharedPlan.groups.size() == 1, "one model identity stays one render group");
+        Expect(
+            world::TerrainVegetationInstancedSubmissionCount(sharedPlan, 1) == 1,
+            "shared model identity is one instanced submission per mesh");
+
+        world::TerrainSpec split = shared;
+        split.vegetationEntries[1].modelIdentity = "models/test_authored.glb";
+        world::TerrainVegetationRenderPlan splitPlan;
+        world::BuildTerrainVegetationRenderPlan(split, sharedInstances, splitPlan);
+        Expect(splitPlan.groups.size() == 2, "two model identities are two render groups");
+        Expect(
+            world::TerrainVegetationInstancedSubmissionCount(splitPlan, 1) == 2,
+            "each model identity adds one instanced submission per mesh");
+        Expect(
+            world::TerrainVegetationInstancedSubmissionCount(splitPlan, 1) < sharedInstances.size(),
+            "mixed models are still not one submission per instance");
     }
 
     {

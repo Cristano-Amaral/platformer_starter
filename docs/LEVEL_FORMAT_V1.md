@@ -325,7 +325,9 @@ hex digits (`164` triples) so each line stays under 512 characters
 8 entries, and the vegetation header that is 62 vegetation lines. A maximum
 16-layer weight map plus a 24×24 vegetation grid plus canonical authored
 objects stays within 256 lines and 64 KiB. Derived Y, yaw, scale, and the
-current Terrain normal are not written.
+current Terrain normal are not written. Milestone 94 does not change these
+records. Its derived XZ placement can differ from the Milestone 93 sampler;
+Save still does not write generated transforms.
 
 The first M93 writer used one nibble per cell, where `N` selected entry
 `N - 1`. Correction 1 used exactly `resolutionX * 2` hex digits and no

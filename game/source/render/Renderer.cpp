@@ -2574,6 +2574,8 @@ void Renderer::DrawWorld(
             spotEffective.empty() ? nullptr : spotEffective.data(),
             spotEffective.size());
     }
+    ApplyDirectionalShadowFocus(
+        lightingEnv, core::Vec3{view.target.x, view.target.y, view.target.z});
     const bool lightingReady = worldLighting != nullptr && worldLighting->IsReady();
     const bool shadowsActive = lightingReady && DirectionalShadowsAreActive(lightingEnv);
     if (shadowsActive)

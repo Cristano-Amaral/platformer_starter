@@ -86,6 +86,64 @@ void BeginIsolatedModelDraw()
 }
 
 constexpr Color kMissingPropColor{120, 72, 88, 255};
+constexpr Color kMissingVegetationColor{120, 72, 88, 255};
+
+Matrix VegetationInstanceMatrix(const world::TerrainVegetationInstance& instance)
+{
+    const float scale = instance.uniformScale;
+    Matrix transform{};
+    transform.m0 = instance.axisX.x * scale;
+    transform.m1 = instance.axisX.y * scale;
+    transform.m2 = instance.axisX.z * scale;
+    transform.m3 = 0.0f;
+    transform.m4 = instance.axisY.x * scale;
+    transform.m5 = instance.axisY.y * scale;
+    transform.m6 = instance.axisY.z * scale;
+    transform.m7 = 0.0f;
+    transform.m8 = instance.axisZ.x * scale;
+    transform.m9 = instance.axisZ.y * scale;
+    transform.m10 = instance.axisZ.z * scale;
+    transform.m11 = 0.0f;
+    transform.m12 = instance.position.x;
+    transform.m13 = instance.position.y;
+    transform.m14 = instance.position.z;
+    transform.m15 = 1.0f;
+    return transform;
+}
+
+void DrawVegetationInstanceMatrix(const Matrix& transform)
+{
+    rlPushMatrix();
+    rlMultMatrixf(MatrixToFloat(transform));
+}
+
+void ClearMeshInstanceDivisors(const Mesh& mesh, int location)
+{
+    if (location < 0)
+    {
+        return;
+    }
+    const bool boundArray = mesh.vaoId != 0 && rlEnableVertexArray(mesh.vaoId);
+    for (unsigned int column = 0; column < 4; ++column)
+    {
+        const unsigned int attribute = static_cast<unsigned int>(location) + column;
+        rlSetVertexAttributeDivisor(attribute, 0);
+        rlDisableVertexAttribute(attribute);
+    }
+    if (boundArray)
+    {
+        rlDisableVertexArray();
+    }
+}
+
+void SetVegetationInstanced(const Shader& shader, int location, int enabled)
+{
+    if (shader.id == 0 || location < 0)
+    {
+        return;
+    }
+    SetShaderValue(shader, location, &enabled, SHADER_UNIFORM_INT);
+}
 }
 
 struct StaticModelSceneStore::GpuState
@@ -105,10 +163,17 @@ struct StaticModelSceneStore::GpuState
     mutable std::size_t drawSubmissions = 0;
     mutable std::size_t highlightSubmissions = 0;
     mutable std::size_t gameplayHighlightSubmissions = 0;
+    mutable std::size_t vegetationInstanceCount = 0;
+    mutable std::size_t vegetationRenderGroupCount = 0;
+    mutable std::size_t vegetationInstancedSubmissions = 0;
+    mutable std::size_t vegetationOrdinarySubmissions = 0;
     mutable std::vector<std::string> submittedIdentities;
     std::size_t loadCount = 0;
+    mutable bool vegetationCacheValid = false;
     mutable std::uint64_t vegetationSignature = 0;
     mutable std::vector<world::TerrainVegetationInstance> vegetationInstances;
+    mutable world::TerrainVegetationRenderPlan vegetationPlan;
+    mutable std::vector<Matrix> vegetationMatrices;
 };
 
 StaticModelSceneStore::StaticModelSceneStore()
@@ -338,6 +403,10 @@ void StaticModelSceneStore::ResetDrawStats() const
     gpu->drawSubmissions = 0;
     gpu->highlightSubmissions = 0;
     gpu->gameplayHighlightSubmissions = 0;
+    gpu->vegetationInstanceCount = 0;
+    gpu->vegetationRenderGroupCount = 0;
+    gpu->vegetationInstancedSubmissions = 0;
+    gpu->vegetationOrdinarySubmissions = 0;
     gpu->submittedIdentities.clear();
 }
 
@@ -348,6 +417,26 @@ std::size_t StaticModelSceneStore::DrawSubmissionCount() const
         return 0;
     }
     return gpu->drawSubmissions;
+}
+
+std::size_t StaticModelSceneStore::VegetationInstanceCount() const
+{
+    return gpu == nullptr ? 0 : gpu->vegetationInstanceCount;
+}
+
+std::size_t StaticModelSceneStore::VegetationRenderGroupCount() const
+{
+    return gpu == nullptr ? 0 : gpu->vegetationRenderGroupCount;
+}
+
+std::size_t StaticModelSceneStore::VegetationInstancedSubmissionCount() const
+{
+    return gpu == nullptr ? 0 : gpu->vegetationInstancedSubmissions;
+}
+
+std::size_t StaticModelSceneStore::VegetationOrdinarySubmissionCount() const
+{
+    return gpu == nullptr ? 0 : gpu->vegetationOrdinarySubmissions;
 }
 
 std::size_t StaticModelSceneStore::HighlightSubmissionCount() const
@@ -484,117 +573,168 @@ void StaticModelSceneStore::DrawTerrainVegetation(
         return;
     }
     const std::uint64_t signature = world::TerrainVegetationDeriveSignature(terrain);
-    if (signature != gpu->vegetationSignature)
+    if (!gpu->vegetationCacheValid || signature != gpu->vegetationSignature)
     {
         world::BuildTerrainVegetationInstances(terrain, gpu->vegetationInstances);
+        world::BuildTerrainVegetationRenderPlan(terrain, gpu->vegetationInstances, gpu->vegetationPlan);
         gpu->vegetationSignature = signature;
+        gpu->vegetationCacheValid = true;
     }
+    gpu->vegetationInstanceCount = gpu->vegetationInstances.size();
+    gpu->vegetationRenderGroupCount = gpu->vegetationPlan.groups.size();
+    gpu->vegetationInstancedSubmissions = 0;
+    gpu->vegetationOrdinarySubmissions = 0;
     if (gpu->vegetationInstances.empty())
     {
         return;
     }
 
-    std::vector<world::TerrainVegetationDrawBatch> batches;
-    world::BuildTerrainVegetationDrawBatches(gpu->vegetationInstances, batches);
+    const Shader overrideShader = override != nullptr ? override->shader : Shader{};
+    const int instanceAttribute = overrideShader.id != 0 && overrideShader.locs != nullptr
+        ? overrideShader.locs[SHADER_LOC_VERTEX_INSTANCETRANSFORM]
+        : -1;
+    const int instancedUniform = instanceAttribute >= 0
+        ? GetShaderLocation(overrideShader, "vegetationInstanced")
+        : -1;
+    const bool canInstance = instanceAttribute >= 0 && instancedUniform >= 0;
+
     BeginIsolatedModelDraw();
-    for (const world::TerrainVegetationDrawBatch& batch : batches)
+    for (const world::TerrainVegetationRenderGroup& group : gpu->vegetationPlan.groups)
     {
-        if (batch.count == 0
-            || batch.entryIndex < 0
-            || batch.entryIndex >= static_cast<int>(terrain.vegetationEntries.size()))
+        if (group.count == 0
+            || group.entryIndex < 0
+            || group.entryIndex >= static_cast<int>(terrain.vegetationEntries.size()))
         {
             continue;
         }
-        const std::string& identity = terrain.vegetationEntries[static_cast<std::size_t>(batch.entryIndex)]
-                                          .modelIdentity;
-        if (gpu != nullptr)
-        {
-            gpu->drawSubmissions += batch.count;
-            gpu->submittedIdentities.push_back(identity);
-        }
+        const std::string& identity =
+            terrain.vegetationEntries[static_cast<std::size_t>(group.entryIndex)].modelIdentity;
+        gpu->submittedIdentities.push_back(identity);
         GpuState::Entry* entry = nullptr;
         const auto found = gpu->entries.find(identity);
         if (found != gpu->entries.end())
         {
             entry = &found->second;
         }
+        const bool hasModel = entry != nullptr && entry->hasModel && entry->model.meshCount > 0
+            && entry->model.meshes != nullptr;
 
-        ModelMaterialGpuSnapshot snapshot{};
-        Shader originalShaders[kMaxCapturedModelMaterials]{};
-        Texture2D originalSlot1[kMaxCapturedModelMaterials]{};
-        int restoreCount = 0;
-        const bool useOverride = override != nullptr && override->shader.id != 0 && entry != nullptr
-            && entry->hasModel;
-        if (useOverride)
+        if (!hasModel || !canInstance)
         {
-            snapshot = CaptureModelMaterialGpuState(entry->model);
-            restoreCount = entry->model.materials == nullptr || entry->model.materialCount <= 0
-                ? 0
-                : (entry->model.materialCount < kMaxCapturedModelMaterials
-                       ? entry->model.materialCount
-                       : kMaxCapturedModelMaterials);
-            for (int materialIndex = 0; materialIndex < restoreCount; ++materialIndex)
+            SetVegetationInstanced(overrideShader, instancedUniform, 0);
+            const bool bindOverride = hasModel && overrideShader.id != 0;
+            Shader originalShaders[kMaxCapturedModelMaterials]{};
+            Texture2D originalSlot1[kMaxCapturedModelMaterials]{};
+            int restoreCount = 0;
+            if (bindOverride)
             {
-                originalShaders[materialIndex] = entry->model.materials[materialIndex].shader;
-                if (entry->model.materials[materialIndex].maps != nullptr)
+                restoreCount = entry->model.materials == nullptr || entry->model.materialCount <= 0
+                    ? 0
+                    : (entry->model.materialCount < kMaxCapturedModelMaterials
+                           ? entry->model.materialCount
+                           : kMaxCapturedModelMaterials);
+                for (int materialIndex = 0; materialIndex < restoreCount; ++materialIndex)
                 {
-                    originalSlot1[materialIndex] = entry->model.materials[materialIndex].maps[1].texture;
-                    if (override->slot1Texture.id != 0)
+                    originalShaders[materialIndex] = entry->model.materials[materialIndex].shader;
+                    entry->model.materials[materialIndex].shader = overrideShader;
+                    if (entry->model.materials[materialIndex].maps != nullptr)
                     {
-                        entry->model.materials[materialIndex].maps[1].texture = override->slot1Texture;
+                        originalSlot1[materialIndex] =
+                            entry->model.materials[materialIndex].maps[1].texture;
+                        if (override != nullptr && override->slot1Texture.id != 0)
+                        {
+                            entry->model.materials[materialIndex].maps[1].texture = override->slot1Texture;
+                        }
                     }
                 }
-                entry->model.materials[materialIndex].shader = override->shader;
             }
-        }
-
-        for (std::size_t index = 0; index < batch.count; ++index)
-        {
-            const world::TerrainVegetationInstance& instance =
-                gpu->vegetationInstances[batch.begin + index];
-            const float scale = instance.uniformScale;
-            Matrix transform{};
-            transform.m0 = instance.axisX.x * scale;
-            transform.m1 = instance.axisX.y * scale;
-            transform.m2 = instance.axisX.z * scale;
-            transform.m3 = 0.0f;
-            transform.m4 = instance.axisY.x * scale;
-            transform.m5 = instance.axisY.y * scale;
-            transform.m6 = instance.axisY.z * scale;
-            transform.m7 = 0.0f;
-            transform.m8 = instance.axisZ.x * scale;
-            transform.m9 = instance.axisZ.y * scale;
-            transform.m10 = instance.axisZ.z * scale;
-            transform.m11 = 0.0f;
-            transform.m12 = instance.position.x;
-            transform.m13 = instance.position.y;
-            transform.m14 = instance.position.z;
-            transform.m15 = 1.0f;
-            rlPushMatrix();
-            rlMultMatrixf(MatrixToFloat(transform));
-            if (entry != nullptr && entry->hasModel)
+            for (std::size_t index = 0; index < group.count; ++index)
             {
-                DrawModel(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
-            }
-            else
-            {
-                DrawCube(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, Color{120, 72, 88, 255});
-            }
-            rlPopMatrix();
-        }
-
-        if (useOverride && entry != nullptr)
-        {
-            for (int materialIndex = 0; materialIndex < restoreCount; ++materialIndex)
-            {
-                entry->model.materials[materialIndex].shader = originalShaders[materialIndex];
-                if (entry->model.materials[materialIndex].maps != nullptr)
+                const int instanceIndex = gpu->vegetationPlan.instanceOrder[group.begin + index];
+                if (instanceIndex < 0
+                    || instanceIndex >= static_cast<int>(gpu->vegetationInstances.size()))
                 {
-                    entry->model.materials[materialIndex].maps[1].texture = originalSlot1[materialIndex];
+                    continue;
+                }
+                const Matrix transform =
+                    VegetationInstanceMatrix(gpu->vegetationInstances[static_cast<std::size_t>(instanceIndex)]);
+                DrawVegetationInstanceMatrix(transform);
+                if (hasModel)
+                {
+                    DrawModel(entry->model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+                }
+                else
+                {
+                    DrawCube(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, kMissingVegetationColor);
+                }
+                rlPopMatrix();
+                ++gpu->vegetationOrdinarySubmissions;
+            }
+            if (bindOverride)
+            {
+                for (int materialIndex = 0; materialIndex < restoreCount; ++materialIndex)
+                {
+                    entry->model.materials[materialIndex].shader = originalShaders[materialIndex];
+                    if (entry->model.materials[materialIndex].maps != nullptr)
+                    {
+                        entry->model.materials[materialIndex].maps[1].texture = originalSlot1[materialIndex];
+                    }
                 }
             }
-            RestoreModelMaterialGpuState(entry->model, snapshot);
+            continue;
         }
+
+        gpu->vegetationMatrices.resize(group.count);
+        for (std::size_t index = 0; index < group.count; ++index)
+        {
+            const int instanceIndex = gpu->vegetationPlan.instanceOrder[group.begin + index];
+            const world::TerrainVegetationInstance& instance =
+                gpu->vegetationInstances[static_cast<std::size_t>(instanceIndex)];
+            gpu->vegetationMatrices[index] =
+                MatrixMultiply(entry->model.transform, VegetationInstanceMatrix(instance));
+        }
+
+        SetVegetationInstanced(overrideShader, instancedUniform, 1);
+        for (int meshIndex = 0; meshIndex < entry->model.meshCount; ++meshIndex)
+        {
+            const Mesh& mesh = entry->model.meshes[meshIndex];
+            if (mesh.vertexCount <= 0)
+            {
+                continue;
+            }
+            int materialIndex = 0;
+            if (entry->model.meshMaterial != nullptr)
+            {
+                materialIndex = entry->model.meshMaterial[meshIndex];
+            }
+            if (entry->model.materials == nullptr || materialIndex < 0
+                || materialIndex >= entry->model.materialCount)
+            {
+                continue;
+            }
+            Texture2D savedSlot1{};
+            const bool rebindShadow = override != nullptr && override->slot1Texture.id != 0
+                && entry->model.materials[materialIndex].maps != nullptr;
+            if (rebindShadow)
+            {
+                savedSlot1 = entry->model.materials[materialIndex].maps[1].texture;
+                entry->model.materials[materialIndex].maps[1].texture = override->slot1Texture;
+            }
+            Material material = entry->model.materials[materialIndex];
+            material.shader = overrideShader;
+            DrawMeshInstanced(
+                mesh,
+                material,
+                gpu->vegetationMatrices.data(),
+                static_cast<int>(group.count));
+            ClearMeshInstanceDivisors(mesh, instanceAttribute);
+            if (rebindShadow)
+            {
+                entry->model.materials[materialIndex].maps[1].texture = savedSlot1;
+            }
+            ++gpu->vegetationInstancedSubmissions;
+        }
+        SetVegetationInstanced(overrideShader, instancedUniform, 0);
     }
     RestoreGreyboxImmediateState();
 }

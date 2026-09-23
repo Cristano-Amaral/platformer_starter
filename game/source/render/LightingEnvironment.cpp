@@ -60,6 +60,11 @@ core::Vec3 Sub(core::Vec3 a, core::Vec3 b)
     return {a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
+float Dot(core::Vec3 a, core::Vec3 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
 core::Vec3 Cross(core::Vec3 a, core::Vec3 b)
 {
     return {
@@ -307,6 +312,60 @@ ShadowProjection BuildShadowProjection(const DirectionalShadowConfig& shadows)
     projection.nearPlane = validated.nearPlane;
     projection.farPlane = validated.farPlane;
     return projection;
+}
+
+void ApplyDirectionalShadowFocus(LightingEnvironment& environment, core::Vec3 regionCenter)
+{
+    if (!FiniteVec(regionCenter))
+    {
+        return;
+    }
+    environment.shadows.focus = regionCenter;
+}
+
+bool WorldPointIsInsideDirectionalShadowCoverage(
+    const LightingEnvironment& environment,
+    core::Vec3 worldPoint)
+{
+    if (!FiniteVec(worldPoint))
+    {
+        return false;
+    }
+
+    const LightingEnvironment validated = ValidateLightingEnvironment(environment);
+    const DirectionalLightView view =
+        BuildDirectionalLightView(validated.directional, validated.shadows);
+    const ShadowProjection projection = BuildShadowProjection(validated.shadows);
+
+    // OpenGL look-at: camera looks down -Z. Matches BindLitPass MatrixLookAt.
+    const core::Vec3 zAxis = NormalizeVec(Sub(view.eye, view.target), {0.0f, 0.0f, 1.0f});
+    core::Vec3 xAxis = Cross(view.up, zAxis);
+    if (LengthSquared(xAxis) < 1.0e-6f)
+    {
+        xAxis = Cross(core::Vec3{0.0f, 1.0f, 0.0f}, zAxis);
+    }
+    xAxis = NormalizeVec(xAxis, {1.0f, 0.0f, 0.0f});
+    const core::Vec3 yAxis = NormalizeVec(Cross(zAxis, xAxis), view.up);
+    const core::Vec3 toPoint = Sub(worldPoint, view.eye);
+    const float viewX = Dot(toPoint, xAxis);
+    const float viewY = Dot(toPoint, yAxis);
+    const float viewZ = Dot(toPoint, zAxis);
+
+    // world_lit.fs treats the shadow-map edge as outside (UV 0 and 1 miss).
+    constexpr float kEdge = 1.0e-4f;
+    if (viewX <= projection.left + kEdge || viewX >= projection.right - kEdge)
+    {
+        return false;
+    }
+    if (viewY <= projection.bottom + kEdge || viewY >= projection.top - kEdge)
+    {
+        return false;
+    }
+    if (viewZ >= -projection.nearPlane - kEdge || viewZ <= -projection.farPlane + kEdge)
+    {
+        return false;
+    }
+    return true;
 }
 
 bool ShouldCastDirectionalShadow(ShadowParticipant participant)

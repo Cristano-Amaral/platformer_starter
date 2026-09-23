@@ -42,14 +42,19 @@ public:
 
     void ResetDrawStats() const;
     std::size_t DrawSubmissionCount() const;
+    std::size_t VegetationInstanceCount() const;
+    std::size_t VegetationRenderGroupCount() const;
+    std::size_t VegetationInstancedSubmissionCount() const;
+    std::size_t VegetationOrdinarySubmissionCount() const;
     bool SubmittedIdentity(std::string_view identity) const;
     std::vector<std::string> SubmittedIdentities() const;
 
     void DrawProp(const world::StaticPropSpec& spec) const;
     void DrawProp(const world::StaticPropSpec& spec, const ModelDrawOverride& override) const;
     // Repeated instances of palette models already cached by Sync. One Model
-    // per identity. world_lit.vs binds one matModel, so this is a CPU batch
-    // of DrawModel calls, not a GPU instance attribute.
+    // per identity. Compatible instances are one DrawMeshInstanced per mesh
+    // when the active world shader exposes instanceTransform. Otherwise the
+    // draw falls back to one DrawModel per instance.
     void DrawTerrainVegetation(
         const world::TerrainSpec& terrain,
         const ModelDrawOverride* override) const;

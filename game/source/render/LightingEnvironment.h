@@ -45,6 +45,8 @@ struct DirectionalShadowConfig
     float farPlane = 120.0f;
     float lightDistance = 48.0f;
     float bias = 0.0025f;
+    // Center of the orthographic volume. DrawWorld updates this to the
+    // current 3D camera look-at so the 72-unit map tracks the view.
     core::Vec3 focus{0.0f, 4.0f, 0.0f};
 };
 
@@ -135,6 +137,10 @@ DirectionalLightView BuildDirectionalLightView(
     const DirectionalLight& light,
     const DirectionalShadowConfig& shadows);
 ShadowProjection BuildShadowProjection(const DirectionalShadowConfig& shadows);
+void ApplyDirectionalShadowFocus(LightingEnvironment& environment, core::Vec3 regionCenter);
+bool WorldPointIsInsideDirectionalShadowCoverage(
+    const LightingEnvironment& environment,
+    core::Vec3 worldPoint);
 float NormalizedShadowBias(float bias);
 int NormalizedShadowMapResolution(int resolution);
 bool ShouldCastDirectionalShadow(ShadowParticipant participant);
