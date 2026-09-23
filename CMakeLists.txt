@@ -136,6 +136,12 @@ add_executable(Platformer3D
     game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
+    game/source/gameplay/GameplayIdentity.h
+    game/source/gameplay/GameplayStat.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/gameplay/GameplayDefinitionFile.h
     game/source/gameplay/InventoryUi.cpp
     game/source/gameplay/InventoryUi.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -875,6 +881,30 @@ else()
 endif()
 target_compile_definitions(InventoryTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
+)
+
+# Milestone 98: gameplay-definition identity, stats, registry, and catalog file.
+# Not shipped. No window, raylib, Jolt, or ImGui.
+add_executable(GameplayDefinitionTest
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/gameplay/GameplayDefinitionFile.h
+    game/source/gameplay/GameplayDefinitionTest.cpp
+    game/source/gameplay/GameplayIdentity.h
+    game/source/gameplay/GameplayStat.h
+)
+target_include_directories(GameplayDefinitionTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(GameplayDefinitionTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(GameplayDefinitionTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay"
+    PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH)
+target_compile_definitions(GameplayDefinitionTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH}\""
 )
 
 # Milestone 56: player-facing Inventory UI presentation/input/lifecycle.

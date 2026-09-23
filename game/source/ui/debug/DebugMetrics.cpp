@@ -3,8 +3,10 @@
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
 
 #include "core/RunTimeFormat.h"
+#include "editor/AuthoringPaths.h"
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
+#include "gameplay/GameplayDefinitionFile.h"
 #include "gameplay/Inventory.h"
 #include "imgui.h"
 
@@ -29,6 +31,145 @@ const char* BoolText(bool value)
 {
     return value ? "true" : "false";
 }
+
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+void DrawGameplayDefinitionsInspection()
+{
+    struct Probe
+    {
+        const char* label = "";
+        gameplay::GameplayDefinitionReference reference;
+        std::optional<gameplay::GameplayDefinitionCategory> expected;
+        gameplay::GameplayReferenceResolution resolution;
+    };
+
+    static bool loaded = false;
+    static gameplay::ParseGameplayDefinitionsResult parsed;
+    static std::string pathText;
+    static Probe probes[3];
+
+    if (!ImGui::CollapsingHeader("Gameplay Definitions (M98)", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        return;
+    }
+
+    ImGui::TextUnformatted(
+        "Development inspection of the authored gameplay-definition catalog.");
+    ImGui::TextUnformatted(
+        "Does not drive Player, Inventory, Item Pickup, or Level objects.");
+    if (ImGui::Button("Reload gameplay definitions"))
+    {
+        loaded = false;
+    }
+    if (!loaded)
+    {
+        loaded = true;
+        const std::filesystem::path path =
+            editor::AuthoringSourcePath(gameplay::kGameplayDefinitionsLogicalPath);
+        pathText = path.empty() ? std::string() : path.string();
+        if (path.empty())
+        {
+            parsed = {};
+            parsed.status = gameplay::LoadGameplayDefinitionsStatus::Error;
+            parsed.error = "authoring unavailable";
+        }
+        else
+        {
+            parsed = gameplay::LoadGameplayDefinitionsFile(path);
+        }
+
+        probes[0].label = "valid";
+        probes[0].reference.identity = "items/master_key";
+        probes[0].expected = gameplay::GameplayDefinitionCategory::Item;
+        probes[1].label = "missing";
+        probes[1].reference.identity = "items/missing_relic";
+        probes[1].expected = gameplay::GameplayDefinitionCategory::Item;
+        probes[2].label = "category mismatch";
+        probes[2].reference.identity = "characters/guard";
+        probes[2].expected = gameplay::GameplayDefinitionCategory::Item;
+        for (Probe& probe : probes)
+        {
+            const std::string authored = probe.reference.identity;
+            if (parsed.status == gameplay::LoadGameplayDefinitionsStatus::Loaded)
+            {
+                probe.resolution = parsed.registry.Resolve(probe.reference, probe.expected);
+            }
+            else
+            {
+                probe.resolution = {};
+            }
+            if (probe.reference.identity != authored)
+            {
+                probe.resolution = {};
+                probe.resolution.status = gameplay::GameplayReferenceStatus::Malformed;
+            }
+        }
+    }
+
+    ImGui::Text("Source: %s", pathText.empty() ? "(unavailable)" : pathText.c_str());
+    ImGui::Text(
+        "Load: %s%s%s",
+        gameplay::LoadGameplayDefinitionsStatusName(parsed.status),
+        parsed.error.empty() ? "" : " - ",
+        parsed.error.c_str());
+    ImGui::Text("Definitions: %d", static_cast<int>(parsed.registry.Count()));
+    for (const gameplay::GameplayDefinition& definition : parsed.registry.Definitions())
+    {
+        const std::string_view category = gameplay::GameplayDefinitionCategoryName(definition.category);
+        ImGui::BulletText(
+            "%s (%.*s)",
+            definition.identity.c_str(),
+            static_cast<int>(category.size()),
+            category.data());
+        for (std::size_t index = 0; index < gameplay::kGameplayStatCount; ++index)
+        {
+            if (!definition.hasStat[index])
+            {
+                continue;
+            }
+            const std::string_view statName =
+                gameplay::GameplayStatName(static_cast<gameplay::GameplayStatId>(index));
+            ImGui::Text(
+                "    %.*s = %.6g",
+                static_cast<int>(statName.size()),
+                statName.data(),
+                definition.statValue[index]);
+        }
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Identity is the authored key. A runtime index is not serialized.");
+    if (parsed.status != gameplay::LoadGameplayDefinitionsStatus::Loaded)
+    {
+        ImGui::TextUnformatted("Resolve probes were not run.");
+        return;
+    }
+    for (const Probe& probe : probes)
+    {
+        const char* expectedName = probe.expected.has_value()
+            ? gameplay::GameplayDefinitionCategoryName(*probe.expected).data()
+            : "any";
+        ImGui::Text(
+            "%s: %s as %s -> %s",
+            probe.label,
+            probe.reference.identity.c_str(),
+            expectedName,
+            gameplay::GameplayReferenceStatusName(probe.resolution.status));
+        if (probe.resolution.status == gameplay::GameplayReferenceStatus::Resolved
+            && probe.resolution.definition != nullptr && probe.resolution.index.has_value())
+        {
+            ImGui::Text(
+                "    bound %s at runtime index %d",
+                probe.resolution.definition->identity.c_str(),
+                static_cast<int>(*probe.resolution.index));
+        }
+        else
+        {
+            ImGui::TextUnformatted("    bound definition: none");
+        }
+    }
+}
+#endif
 
 float CoyoteRemaining(const DebugMetricsSnapshot& snapshot)
 {
@@ -446,6 +587,8 @@ void DrawDebugMetrics(
             ImGui::TextUnformatted(lastResult);
         }
     }
+
+    DrawGameplayDefinitionsInspection();
 #else
     (void)inventory;
 #endif

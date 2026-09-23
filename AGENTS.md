@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 97 — Terrain Rendering / Material Visual Upgrade.
+Current milestone: Milestone 98 — Gameplay Definition Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_97.md`](docs/milestones/MILESTONE_97.md)
+Canonical file: [`docs/milestones/MILESTONE_98.md`](docs/milestones/MILESTONE_98.md)
 
-Branch: `milestone/97-terrain-material-visual-upgrade`
+Branch: `milestone/98-gameplay-definition-foundation`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 98.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 99.
 
 Earlier milestone status, including Milestone 90 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

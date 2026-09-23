@@ -1,0 +1,16 @@
+PLATFORMER_GAMEPLAY_DEFINITIONS
+definition items/master_key
+stat InteractionRange 2.5
+definition items/health_potion
+stat MaxHealth 25
+definition characters/player
+stat MaxHealth 100
+stat MoveSpeed 6
+stat JumpStrength 8
+stat GravityScale 1
+definition characters/guard
+stat MaxHealth 40
+stat MoveSpeed 3
+stat AttackPower 8
+stat Defense 2
+stat InteractionRange 1.5
