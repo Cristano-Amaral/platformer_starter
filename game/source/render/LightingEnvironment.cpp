@@ -203,6 +203,10 @@ LightingEnvironment ValidateLightingEnvironment(LightingEnvironment environment)
     {
         environment.shadows.focus = defaults.shadows.focus;
     }
+    if (!FiniteVec(environment.viewPosition))
+    {
+        environment.viewPosition = defaults.viewPosition;
+    }
     return environment;
 }
 

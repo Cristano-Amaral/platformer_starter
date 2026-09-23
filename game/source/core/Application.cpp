@@ -1925,7 +1925,8 @@ int Application::Run()
                             levelEditorState.terrainVegetation))
                     || (groundCoverBrush
                         && editor::TerrainGroundCoverUiBlocksPointer(
-                            levelEditorState.terrainGroundCover));
+                            levelEditorState.terrainGroundCover))
+                    || editor::TerrainPaintUiBlocksPointer(levelEditorState.terrainPaint);
                 overlay.terrainBrushPreviewKind = groundCoverBrush ? 2 : (vegetationBrush ? 1 : 0);
                 if (!brushPointerBlocked)
                 {

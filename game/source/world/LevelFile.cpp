@@ -497,6 +497,36 @@ bool RequireTokenCount(
     return false;
 }
 
+bool RequireTokenCountRange(
+    const std::vector<std::string_view>& tokens,
+    std::size_t minimum,
+    std::size_t maximum,
+    ParseLevelFileResult& failure,
+    int line)
+{
+    if (tokens.size() >= minimum && tokens.size() <= maximum)
+    {
+        return true;
+    }
+    failure = MakeStatus(LoadLevelFileStatus::Invalid, line, "wrong field count");
+    return false;
+}
+
+bool ParseOptionalTerrainChannelIdentity(std::string_view token, std::string& out)
+{
+    if (token == assets::kRuntimePngNoneToken)
+    {
+        out.clear();
+        return true;
+    }
+    if (!assets::RuntimePngIdentityIsValid(token))
+    {
+        return false;
+    }
+    out = std::string(token);
+    return true;
+}
+
 bool RequireSingleton(
     bool& seen,
     ParseLevelFileResult& failure,
@@ -1330,7 +1360,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     failure,
                     lineNumber,
                     "duplicate terrain_material")
-                || !RequireTokenCount(tokens, 3, failure, lineNumber))
+                || !RequireTokenCountRange(tokens, 3, 5, failure, lineNumber))
             {
                 return failure;
             }
@@ -1355,6 +1385,20 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_material");
             }
             state.terrain.textureTiling = tiling;
+            state.terrain.normalIdentity.clear();
+            state.terrain.roughnessIdentity.clear();
+            if (tokens.size() >= 4
+                && !ParseOptionalTerrainChannelIdentity(tokens[3], state.terrain.normalIdentity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_material");
+            }
+            if (tokens.size() >= 5
+                && !ParseOptionalTerrainChannelIdentity(tokens[4], state.terrain.roughnessIdentity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_material");
+            }
             continue;
         }
         if (keyword == "terrain_layer")
@@ -1369,7 +1413,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "terrain_layer after weights");
             }
-            if (!RequireTokenCount(tokens, 4, failure, lineNumber))
+            if (!RequireTokenCountRange(tokens, 4, 6, failure, lineNumber))
             {
                 return failure;
             }
@@ -1387,7 +1431,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
             }
             const std::string_view identityToken = tokens[2];
             if (!assets::RuntimePngIdentityIsValid(identityToken)
-                || TerrainReferencesTextureIdentity(state.terrain, identityToken))
+                || TerrainReferencesAlbedoIdentity(state.terrain, identityToken))
             {
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
@@ -1404,6 +1448,20 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
             }
             state.terrain.extraLayers.back().textureTiling = tiling;
+            if (tokens.size() >= 5
+                && !ParseOptionalTerrainChannelIdentity(
+                    tokens[4], state.terrain.extraLayers.back().normalIdentity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
+            if (tokens.size() >= 6
+                && !ParseOptionalTerrainChannelIdentity(
+                    tokens[5], state.terrain.extraLayers.back().roughnessIdentity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid terrain_layer");
+            }
             continue;
         }
         if (keyword == "terrain_paint")

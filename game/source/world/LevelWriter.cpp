@@ -412,6 +412,18 @@ std::string SerializeLevelText(const LevelDefinition& level)
             }
             out += ' ';
             AppendFloat(out, level.terrain.textureTiling);
+            if (TerrainLayerOptionalChannelsShouldWrite(
+                    level.terrain.normalIdentity, level.terrain.roughnessIdentity))
+            {
+                out += ' ';
+                out += level.terrain.normalIdentity.empty()
+                    ? std::string(assets::kRuntimePngNoneToken)
+                    : level.terrain.normalIdentity;
+                out += ' ';
+                out += level.terrain.roughnessIdentity.empty()
+                    ? std::string(assets::kRuntimePngNoneToken)
+                    : level.terrain.roughnessIdentity;
+            }
             out += '\n';
         }
         for (std::size_t extra = 0; extra < level.terrain.extraLayers.size(); ++extra)
@@ -423,6 +435,17 @@ std::string SerializeLevelText(const LevelDefinition& level)
             out += layer.textureIdentity;
             out += ' ';
             AppendFloat(out, layer.textureTiling);
+            if (TerrainLayerOptionalChannelsShouldWrite(layer.normalIdentity, layer.roughnessIdentity))
+            {
+                out += ' ';
+                out += layer.normalIdentity.empty()
+                    ? std::string(assets::kRuntimePngNoneToken)
+                    : layer.normalIdentity;
+                out += ' ';
+                out += layer.roughnessIdentity.empty()
+                    ? std::string(assets::kRuntimePngNoneToken)
+                    : layer.roughnessIdentity;
+            }
             out += '\n';
         }
         if (TerrainWeightHeaderShouldWrite(level.terrain))

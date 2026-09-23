@@ -109,6 +109,8 @@ void FillTerrainDrawRequest(
     request.weightResolutionX = spec->weightResolutionX;
     request.weightResolutionZ = spec->weightResolutionZ;
     request.albedoArrayId = terrainGpu.AlbedoArrayId();
+    request.normalArrayId = terrainGpu.NormalArrayId();
+    request.roughnessArrayId = terrainGpu.RoughnessArrayId();
     request.weightArrayId = terrainGpu.WeightArrayId();
     request.weightMapCount = terrainGpu.WeightMapCount();
     for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
@@ -141,8 +143,10 @@ bool SampleLitTerrainPixel(
     camera.up = Vector3{0.0f, 1.0f, 0.0f};
     camera.fovy = 35.0f;
     camera.projection = CAMERA_PERSPECTIVE;
+    render::LightingEnvironment litEnvironment = environment;
+    litEnvironment.viewPosition = {camera.position.x, camera.position.y, camera.position.z};
     BeginMode3D(camera);
-    lighting.BindLitPass(environment);
+    lighting.BindLitPass(litEnvironment);
     render::TerrainLayerDrawRequest request{};
     FillTerrainDrawRequest(request, terrainGpu);
     lighting.DrawWorldTerrain(*terrainGpu.GetMesh(), WHITE, request);
@@ -350,25 +354,38 @@ int main()
     Expect(lighting.ShadowMapResolution() == 2048, "shadow map uses the default resolution");
     Expect(
         lighting.TerrainAlbedoArraySamplerLocation() >= 0
-            && lighting.TerrainWeightArraySamplerLocation() >= 0,
+            && lighting.TerrainWeightArraySamplerLocation() >= 0
+            && lighting.TerrainNormalArraySamplerLocation() >= 0
+            && lighting.TerrainRoughnessArraySamplerLocation() >= 0,
         "terrain array samplers exist");
     Expect(
         render::kWorldLitDiffuseTextureUnit != render::kWorldLitShadowMapTextureUnit,
         "diffuse unit does not alias the shadow map");
     Expect(
         render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitShadowMapTextureUnit
-            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitShadowMapTextureUnit,
+            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitShadowMapTextureUnit
+            && render::kWorldLitTerrainNormalArrayUnit != render::kWorldLitShadowMapTextureUnit
+            && render::kWorldLitTerrainRoughnessArrayUnit != render::kWorldLitShadowMapTextureUnit,
         "terrain array units do not alias the shadow map");
     Expect(
         render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitDiffuseTextureUnit
-            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitDiffuseTextureUnit,
+            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitDiffuseTextureUnit
+            && render::kWorldLitTerrainNormalArrayUnit != render::kWorldLitDiffuseTextureUnit
+            && render::kWorldLitTerrainRoughnessArrayUnit != render::kWorldLitDiffuseTextureUnit,
         "terrain array units do not alias texture0");
     Expect(
-        render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitTerrainWeightArrayUnit,
-        "albedo and weight arrays use distinct units");
+        render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitTerrainWeightArrayUnit
+            && render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitTerrainNormalArrayUnit
+            && render::kWorldLitTerrainAlbedoArrayUnit != render::kWorldLitTerrainRoughnessArrayUnit
+            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitTerrainNormalArrayUnit
+            && render::kWorldLitTerrainWeightArrayUnit != render::kWorldLitTerrainRoughnessArrayUnit
+            && render::kWorldLitTerrainNormalArrayUnit != render::kWorldLitTerrainRoughnessArrayUnit,
+        "albedo, weight, normal, and roughness arrays use distinct units");
     Expect(
         render::kWorldLitTerrainAlbedoArrayUnit >= 12
-            && render::kWorldLitTerrainWeightArrayUnit >= 12,
+            && render::kWorldLitTerrainWeightArrayUnit >= 12
+            && render::kWorldLitTerrainNormalArrayUnit >= 12
+            && render::kWorldLitTerrainRoughnessArrayUnit >= 12,
         "terrain arrays sit outside raylib material-map units");
 
     const std::size_t shaderLoads = lighting.ShaderLoadCount();
@@ -915,6 +932,108 @@ int main()
         terrainGpu.SetAuthoringCookedRoot({});
         terrainGpu.Unload();
         std::filesystem::remove_all(cookedPreviewRoot, cookedError);
+    }
+
+    {
+        Expect(StageSolidIdentity("textures/m97_tilt_NormalGL.png", Color{255, 128, 128, 255}),
+            "stage tilted Normal");
+        Expect(StageSolidIdentity("textures/m97_smooth_Roughness.png", Color{25, 25, 25, 255}),
+            "stage smooth Roughness");
+        Expect(StageSolidIdentity("textures/m97_rough_Roughness.png", Color{240, 240, 240, 255}),
+            "stage rough Roughness");
+        render::TerrainGpuResources channelGpu;
+        world::TerrainSpec albedoOnly = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(albedoOnly, "textures/m90_blend_green.png"),
+            "albedo-only channel fixture");
+        channelGpu.Sync(&albedoOnly);
+        Expect(channelGpu.NormalArrayId() != 0 && channelGpu.RoughnessArrayId() != 0,
+            "neutral Normal/Roughness arrays exist for albedo-only Terrain");
+        render::LightingEnvironment lit{};
+        lit.ambient.intensity = 0.2f;
+        lit.directional.shadowsEnabled = false;
+        Color albedoPixel{};
+        Expect(SampleLitTerrainPixel(lighting, channelGpu, lit, albedoPixel), "sample albedo-only");
+        Expect(albedoPixel.g > albedoPixel.r && albedoPixel.g > 40, "albedo-only stays green and visible");
+
+        world::TerrainSpec missingMaps = albedoOnly;
+        missingMaps.normalIdentity = "textures/missing_NormalGL.png";
+        missingMaps.roughnessIdentity = "textures/missing_Roughness.png";
+        channelGpu.Sync(&missingMaps);
+        Color missingPixel{};
+        Expect(SampleLitTerrainPixel(lighting, channelGpu, lit, missingPixel), "missing maps still draw");
+        Expect(
+            ColorChannelsClose(missingPixel, albedoPixel, 20),
+            "missing Normal/Roughness keep the albedo-only appearance");
+
+        world::TerrainSpec tilted = albedoOnly;
+        Expect(
+            world::TryAssignTerrainLayerNormal(tilted, 0, "textures/m97_tilt_NormalGL.png"),
+            "assign tilted Normal");
+        channelGpu.Sync(&tilted);
+        Color tiltedPixel{};
+        Expect(SampleLitTerrainPixel(lighting, channelGpu, lit, tiltedPixel), "sample tilted Normal");
+        const int albedoLum = albedoPixel.r + albedoPixel.g + albedoPixel.b;
+        const int tiltedLum = tiltedPixel.r + tiltedPixel.g + tiltedPixel.b;
+        Expect(tiltedLum != albedoLum, "Normal map changes Terrain lighting");
+
+        world::TerrainSpec smooth = albedoOnly;
+        Expect(
+            world::TryAssignTerrainLayerRoughness(smooth, 0, "textures/m97_smooth_Roughness.png"),
+            "assign smooth Roughness");
+        channelGpu.Sync(&smooth);
+        Color smoothPixel{};
+        Expect(SampleLitTerrainPixel(lighting, channelGpu, lit, smoothPixel), "sample smooth Roughness");
+        world::TerrainSpec rough = albedoOnly;
+        Expect(
+            world::TryAssignTerrainLayerRoughness(rough, 0, "textures/m97_rough_Roughness.png"),
+            "assign rough Roughness");
+        channelGpu.Sync(&rough);
+        Color roughPixel{};
+        Expect(SampleLitTerrainPixel(lighting, channelGpu, lit, roughPixel), "sample rough Roughness");
+        const int smoothLum = smoothPixel.r + smoothPixel.g + smoothPixel.b;
+        const int roughLum = roughPixel.r + roughPixel.g + roughPixel.b;
+        Expect(smoothLum > roughLum, "low roughness is brighter than high roughness");
+
+        render::TerrainGpuResources fullGpu;
+        world::TerrainSpec fullPalette = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAssignTerrainTextureIdentity(fullPalette, "textures/m90_blend_green.png"),
+            "full palette layer 0");
+        for (int extra = 1; extra < world::kMaxTerrainMaterialLayers; ++extra)
+        {
+            const std::string identity =
+                "textures/m97_full_" + std::to_string(extra) + ".png";
+            Expect(
+                StageSolidIdentity(
+                    identity,
+                    Color{static_cast<unsigned char>(extra * 8), 128, 64, 255}),
+                "stage full palette albedo");
+            Expect(world::TryAddTerrainMaterialLayer(fullPalette, identity), "add full palette layer");
+            Expect(
+                world::TryAssignTerrainLayerNormal(
+                    fullPalette, extra, "textures/m97_tilt_NormalGL.png"),
+                "full palette Normal");
+            Expect(
+                world::TryAssignTerrainLayerRoughness(
+                    fullPalette, extra, "textures/m97_rough_Roughness.png"),
+                "full palette Roughness");
+        }
+        Expect(
+            world::TerrainMaterialLayerCount(fullPalette) == world::kMaxTerrainMaterialLayers,
+            "16 Terrain layers remain authored");
+        fullGpu.Sync(&fullPalette);
+        Expect(fullGpu.LayerCount() == world::kMaxTerrainMaterialLayers, "GPU palette is 16");
+        Expect(
+            fullGpu.AlbedoArrayId() != 0 && fullGpu.NormalArrayId() != 0
+                && fullGpu.RoughnessArrayId() != 0 && fullGpu.WeightArrayId() != 0,
+            "full palette albedo/normal/roughness/weight arrays exist");
+        Expect(fullGpu.WeightMapCount() == 4, "16 layers still pack into four RGBA weight maps");
+        Color fullPixel{};
+        Expect(SampleLitTerrainPixel(lighting, fullGpu, lit, fullPixel), "full palette still draws");
+        Expect(fullPixel.g > 40, "full palette remains visible");
+        fullGpu.Unload();
+        channelGpu.Unload();
     }
 
     lighting.Unload();

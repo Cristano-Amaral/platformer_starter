@@ -157,8 +157,8 @@ when present; legacy `terrain_paint` is read but not written), omitted when the 
 ```
 terrain <enabled> <originX> <originY> <originZ> <sizeX> <sizeZ> <resolutionX> <resolutionZ>
 terrain_row <rowIndex> <h0> <h1> ... <hN>
-terrain_material <textureIdentity|-> <tiling>
-terrain_layer <layerIndex> <textureIdentity> <tiling>
+terrain_material <textureIdentity|-> <tiling> [<normalIdentity|-> <roughnessIdentity|->]
+terrain_layer <layerIndex> <textureIdentity> <tiling> [<normalIdentity|-> <roughnessIdentity|->]
 terrain_paint <rowIndex> <q00> <q01> <q02> <q03> ... <qN0> <qN1> <qN2> <qN3>
 terrain_weights <resolutionX> <resolutionZ>
 terrain_weight <mapIndex> <rowIndex> <hex>
@@ -385,6 +385,17 @@ A second header, an entry/data record without the header, a bit above the
 palette, a data stream whose length does not match occupancy, or ground
 cover without Terrain is `Invalid`. The writer emits `terrain_cover`, then
 entries, then data records after vegetation.
+
+Milestone 97 keeps format version `1`. Optional Normal and Roughness
+identities belong to the existing material layer records rather than new
+keywords. Old three-token `terrain_material` and four-token `terrain_layer`
+records remain valid and mean empty Normal/Roughness. When either optional
+channel is assigned, the writer emits two extra tokens after tiling:
+`<normalIdentity|-> <roughnessIdentity|->`. `-` means none. Albedo
+duplicate policy is unchanged; Normal/Roughness identities may repeat
+across layers. A texture named only as Normal or Roughness is still a
+cook/stage dependency. Identities stay `textures/<file>.png`. The format
+version stays `1`.
 
 ### Required repeated records
 

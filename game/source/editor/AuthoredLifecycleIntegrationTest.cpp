@@ -2939,6 +2939,56 @@ int main()
         Expect(
             editor::HandleAuthoredLifecycleRequest(
                 state, active, LevelEditorRequest::AddTerrain, true),
+            "Add Terrain for material channels");
+        const world::LevelDefinition appliedBefore = active;
+        Expect(
+            world::TryAssignTerrainLayerNormal(
+                state.workingCopy.terrain, 0, "textures/rock_NormalGL.png"),
+            "workingCopy Normal assign");
+        Expect(
+            world::TryAssignTerrainLayerRoughness(
+                state.workingCopy.terrain, 0, "textures/rock_Roughness.png"),
+            "workingCopy Roughness assign");
+        Expect(active.terrain.normalIdentity.empty(), "Normal assign does not mutate active");
+        Expect(active.terrain.roughnessIdentity.empty(), "Roughness assign does not mutate active");
+        world::LevelDefinition applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply promotes channel identities");
+        Expect(applied.terrain.normalIdentity == "textures/rock_NormalGL.png", "Apply copies Normal");
+        Expect(
+            applied.terrain.roughnessIdentity == "textures/rock_Roughness.png",
+            "Apply copies Roughness");
+        Expect(
+            world::TryClearTerrainLayerNormal(state.workingCopy.terrain, 0),
+            "workingCopy Clear Normal");
+        Expect(
+            applied.terrain.normalIdentity == "textures/rock_NormalGL.png",
+            "Clear Normal does not mutate active before Apply");
+        applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply Clear Normal");
+        Expect(applied.terrain.normalIdentity.empty(), "Apply promotes cleared Normal");
+        Expect(
+            applied.terrain.roughnessIdentity == "textures/rock_Roughness.png",
+            "Clear Normal leaves Roughness");
+        const std::string saved = world::SerializeLevelText(applied);
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload of channels parses");
+        Expect(
+            reloaded.level.terrain.normalIdentity.empty()
+                && reloaded.level.terrain.roughnessIdentity == "textures/rock_Roughness.png",
+            "saved baseline keeps cleared Normal and assigned Roughness");
+        (void)appliedBefore;
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddTerrain, true),
             "Add Terrain for vegetation");
         state.selection = {EditorObjectKind::Terrain, 0};
         const bool dirtyBeforeAdd = state.dirty;

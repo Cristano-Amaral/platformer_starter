@@ -56,6 +56,8 @@ struct LightingEnvironment
     DirectionalLight directional{};
     DirectionalShadowConfig shadows{};
     PackedLocalLights localLights{};
+    // Camera world position. Used only by Terrain roughness specular.
+    core::Vec3 viewPosition{0.0f, 8.0f, 12.0f};
 };
 
 struct DirectionalLightView

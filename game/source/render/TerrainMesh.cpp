@@ -4,6 +4,7 @@
 #include "assets/RuntimePngResolve.h"
 #include "platform/RuntimePaths.h"
 #include "world/TerrainGeometry.h"
+#include "world/TerrainMaterialShading.h"
 
 #include "external/glad.h"
 #include "raylib.h"
@@ -95,6 +96,162 @@ bool FillTerrainMesh(const world::TerrainSpec& spec, Mesh& mesh)
     return true;
 }
 
+unsigned int UploadTerrainChannelArray(
+    int layers,
+    Image* images,
+    unsigned char* owns,
+    Color layer0Fallback,
+    Color missingFallback,
+    bool repeatWrap,
+    int& outWidth,
+    int& outHeight)
+{
+    int width = 1;
+    int height = 1;
+    for (int layer = 0; layer < layers; ++layer)
+    {
+        if (owns[layer] == 0 || images[layer].data == nullptr)
+        {
+            continue;
+        }
+        if (images[layer].width > width)
+        {
+            width = images[layer].width;
+        }
+        if (images[layer].height > height)
+        {
+            height = images[layer].height;
+        }
+    }
+    if (width > world::kTerrainArrayMaxDimension)
+    {
+        width = world::kTerrainArrayMaxDimension;
+    }
+    if (height > world::kTerrainArrayMaxDimension)
+    {
+        height = world::kTerrainArrayMaxDimension;
+    }
+    unsigned int id = 0;
+    glGenTextures(1, &id);
+    if (id == 0)
+    {
+        for (int layer = 0; layer < layers; ++layer)
+        {
+            if (owns[layer] != 0)
+            {
+                UnloadImage(images[layer]);
+                images[layer] = {};
+                owns[layer] = 0;
+            }
+        }
+        outWidth = 0;
+        outHeight = 0;
+        return 0;
+    }
+    glBindTexture(GL_TEXTURE_2D_ARRAY, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage3D(
+        GL_TEXTURE_2D_ARRAY,
+        0,
+        GL_RGBA8,
+        width,
+        height,
+        layers,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        nullptr);
+    for (int layer = 0; layer < layers; ++layer)
+    {
+        Image slice{};
+        if (owns[layer] != 0)
+        {
+            slice = images[layer];
+            images[layer] = {};
+            owns[layer] = 0;
+            ImageFormat(&slice, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+            if (slice.width != width || slice.height != height)
+            {
+                ImageResize(&slice, width, height);
+            }
+        }
+        else
+        {
+            slice = GenImageColor(width, height, layer == 0 ? layer0Fallback : missingFallback);
+        }
+        if (slice.data != nullptr)
+        {
+            glTexSubImage3D(
+                GL_TEXTURE_2D_ARRAY,
+                0,
+                0,
+                0,
+                layer,
+                width,
+                height,
+                1,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                slice.data);
+        }
+        UnloadImage(slice);
+    }
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    const int wrap = repeatWrap ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, wrap);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, wrap);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    outWidth = width;
+    outHeight = height;
+    return id;
+}
+
+void ApplyDirectXNormalGreenFlip(Image& image)
+{
+    if (image.data == nullptr || image.width <= 0 || image.height <= 0)
+    {
+        return;
+    }
+    ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    auto* pixels = static_cast<unsigned char*>(image.data);
+    const int count = image.width * image.height;
+    for (int index = 0; index < count; ++index)
+    {
+        pixels[index * 4 + 1] = world::FlipDirectXNormalGreenQuantum(pixels[index * 4 + 1]);
+    }
+}
+
+void LoadTerrainChannelImage(
+    const std::string& identity,
+    const std::filesystem::path& cookedRoot,
+    const std::filesystem::path& sourceRoot,
+    Image& image,
+    unsigned char& owns)
+{
+    image = {};
+    owns = 0;
+    if (world::TerrainTextureIdentityIsNone(identity) || !assets::RuntimePngIdentityIsValid(identity))
+    {
+        return;
+    }
+    const assets::RuntimePngLoadResolution resolved =
+        assets::ResolveRuntimePngLoadFile(identity, cookedRoot, {}, sourceRoot);
+    if (!assets::RuntimePngLoadFileIsAvailable(resolved))
+    {
+        return;
+    }
+    Image loaded = LoadImage(resolved.path.string().c_str());
+    if (loaded.data == nullptr || loaded.width <= 0 || loaded.height <= 0)
+    {
+        UnloadImage(loaded);
+        return;
+    }
+    image = loaded;
+    owns = 1;
+}
+
 }
 
 TerrainGpuResources::~TerrainGpuResources()
@@ -147,6 +304,8 @@ void TerrainGpuResources::UnloadTextures()
     {
         UnloadLayerTexture(layer);
         loggedMissingIdentity[layer].clear();
+        loggedMissingNormal[layer].clear();
+        loggedMissingRoughness[layer].clear();
     }
 }
 
@@ -156,6 +315,16 @@ void TerrainGpuResources::UnloadArrays()
     {
         glDeleteTextures(1, &albedoArrayId);
         albedoArrayId = 0;
+    }
+    if (normalArrayId != 0)
+    {
+        glDeleteTextures(1, &normalArrayId);
+        normalArrayId = 0;
+    }
+    if (roughnessArrayId != 0)
+    {
+        glDeleteTextures(1, &roughnessArrayId);
+        roughnessArrayId = 0;
     }
     if (weightArrayId != 0)
     {
@@ -265,9 +434,85 @@ void TerrainGpuResources::SyncTextures(const world::TerrainSpec& spec)
         loggedMissingIdentity[layer].clear();
         ++textureLoadCount;
     }
+
+    bool normalDirty = previousLayerCount != layerCount || normalArrayId == 0;
+    bool roughnessDirty = previousLayerCount != layerCount || roughnessArrayId == 0;
+    for (int layer = 0; layer < world::kMaxTerrainMaterialLayers; ++layer)
+    {
+        if (layer >= layerCount)
+        {
+            if (!lastNormalIdentity[layer].empty())
+            {
+                normalDirty = true;
+            }
+            if (!lastRoughnessIdentity[layer].empty())
+            {
+                roughnessDirty = true;
+            }
+            lastNormalIdentity[layer].clear();
+            lastRoughnessIdentity[layer].clear();
+            loggedMissingNormal[layer].clear();
+            loggedMissingRoughness[layer].clear();
+            continue;
+        }
+        const std::string& normalIdentity = world::TerrainLayerNormalIdentity(spec, layer);
+        if (lastNormalIdentity[layer] != normalIdentity)
+        {
+            normalDirty = true;
+            lastNormalIdentity[layer] = normalIdentity;
+        }
+        if (!normalIdentity.empty()
+            && !assets::RuntimePngLoadFileIsAvailable(assets::ResolveRuntimePngLoadFile(
+                normalIdentity, authoringCookedRoot, {}, authoringSourceRoot)))
+        {
+            if (loggedMissingNormal[layer] != normalIdentity)
+            {
+                std::fprintf(
+                    stderr,
+                    "TerrainMaterial: missing normal map: %s\n",
+                    normalIdentity.c_str());
+                loggedMissingNormal[layer] = normalIdentity;
+            }
+        }
+        else
+        {
+            loggedMissingNormal[layer].clear();
+        }
+        const std::string& roughnessIdentity = world::TerrainLayerRoughnessIdentity(spec, layer);
+        if (lastRoughnessIdentity[layer] != roughnessIdentity)
+        {
+            roughnessDirty = true;
+            lastRoughnessIdentity[layer] = roughnessIdentity;
+        }
+        if (!roughnessIdentity.empty()
+            && !assets::RuntimePngLoadFileIsAvailable(assets::ResolveRuntimePngLoadFile(
+                roughnessIdentity, authoringCookedRoot, {}, authoringSourceRoot)))
+        {
+            if (loggedMissingRoughness[layer] != roughnessIdentity)
+            {
+                std::fprintf(
+                    stderr,
+                    "TerrainMaterial: missing roughness map: %s\n",
+                    roughnessIdentity.c_str());
+                loggedMissingRoughness[layer] = roughnessIdentity;
+            }
+        }
+        else
+        {
+            loggedMissingRoughness[layer].clear();
+        }
+    }
     if (albedoDirty)
     {
         RebuildAlbedoArray(spec);
+    }
+    if (normalDirty)
+    {
+        RebuildNormalArray(spec);
+    }
+    if (roughnessDirty)
+    {
+        RebuildRoughnessArray(spec);
     }
 }
 
@@ -300,6 +545,8 @@ void TerrainGpuResources::Sync(const world::TerrainSpec* spec)
     else
     {
         lastSpec.textureIdentity = spec->textureIdentity;
+        lastSpec.normalIdentity = spec->normalIdentity;
+        lastSpec.roughnessIdentity = spec->roughnessIdentity;
         lastSpec.enabled = spec->enabled;
         lastSpec.extraLayers = spec->extraLayers;
         lastSpec.materialWeights = spec->materialWeights;
@@ -390,6 +637,16 @@ unsigned int TerrainGpuResources::AlbedoArrayId() const
     return albedoArrayId;
 }
 
+unsigned int TerrainGpuResources::NormalArrayId() const
+{
+    return normalArrayId;
+}
+
+unsigned int TerrainGpuResources::RoughnessArrayId() const
+{
+    return roughnessArrayId;
+}
+
 unsigned int TerrainGpuResources::WeightArrayId() const
 {
     return weightArrayId;
@@ -444,118 +701,96 @@ void TerrainGpuResources::RebuildAlbedoArray(const world::TerrainSpec& spec)
     const int layers = layerCount > 0 ? layerCount : 1;
     std::vector<Image> images(static_cast<std::size_t>(layers));
     std::vector<unsigned char> owns(static_cast<std::size_t>(layers), 0);
-    int width = 1;
-    int height = 1;
     for (int layer = 0; layer < layers; ++layer)
     {
-        images[static_cast<std::size_t>(layer)] = {};
-        if (!textureLoaded[layer])
-        {
-            continue;
-        }
-        const std::string& identity = world::TerrainLayerTextureIdentity(spec, layer);
-        const assets::RuntimePngLoadResolution resolved =
-            assets::ResolveRuntimePngLoadFile(identity, authoringCookedRoot, {}, authoringSourceRoot);
-        if (!assets::RuntimePngLoadFileIsAvailable(resolved))
-        {
-            continue;
-        }
-        Image image = LoadImage(resolved.path.string().c_str());
-        if (image.data == nullptr || image.width <= 0 || image.height <= 0)
-        {
-            UnloadImage(image);
-            continue;
-        }
-        if (image.width > width)
-        {
-            width = image.width;
-        }
-        if (image.height > height)
-        {
-            height = image.height;
-        }
-        images[static_cast<std::size_t>(layer)] = image;
-        owns[static_cast<std::size_t>(layer)] = 1;
+        LoadTerrainChannelImage(
+            world::TerrainLayerTextureIdentity(spec, layer),
+            authoringCookedRoot,
+            authoringSourceRoot,
+            images[static_cast<std::size_t>(layer)],
+            owns[static_cast<std::size_t>(layer)]);
     }
-    if (width > 512)
-    {
-        width = 512;
-    }
-    if (height > 512)
-    {
-        height = 512;
-    }
-    unsigned int id = 0;
-    glGenTextures(1, &id);
-    if (id == 0)
-    {
-        for (int layer = 0; layer < layers; ++layer)
-        {
-            if (owns[static_cast<std::size_t>(layer)] != 0)
-            {
-                UnloadImage(images[static_cast<std::size_t>(layer)]);
-            }
-        }
-        return;
-    }
-    glBindTexture(GL_TEXTURE_2D_ARRAY, id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage3D(
-        GL_TEXTURE_2D_ARRAY,
-        0,
-        GL_RGBA8,
-        width,
-        height,
+    albedoArrayId = UploadTerrainChannelArray(
         layers,
-        0,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        nullptr);
+        images.data(),
+        owns.data(),
+        Color{255, 255, 255, 255},
+        Color{255, 0, 255, 255},
+        true,
+        albedoArrayWidth,
+        albedoArrayHeight);
+}
+
+void TerrainGpuResources::RebuildNormalArray(const world::TerrainSpec& spec)
+{
+    if (normalArrayId != 0)
+    {
+        glDeleteTextures(1, &normalArrayId);
+        normalArrayId = 0;
+    }
+    const int layers = layerCount > 0 ? layerCount : 1;
+    std::vector<Image> images(static_cast<std::size_t>(layers));
+    std::vector<unsigned char> owns(static_cast<std::size_t>(layers), 0);
     for (int layer = 0; layer < layers; ++layer)
     {
-        Image slice{};
-        if (owns[static_cast<std::size_t>(layer)] != 0)
+        LoadTerrainChannelImage(
+            world::TerrainLayerNormalIdentity(spec, layer),
+            authoringCookedRoot,
+            authoringSourceRoot,
+            images[static_cast<std::size_t>(layer)],
+            owns[static_cast<std::size_t>(layer)]);
+        if (owns[static_cast<std::size_t>(layer)] != 0
+            && world::TerrainNormalMapIdentityIsDirectX(world::TerrainLayerNormalIdentity(spec, layer)))
         {
-            slice = images[static_cast<std::size_t>(layer)];
-            images[static_cast<std::size_t>(layer)] = {};
-            owns[static_cast<std::size_t>(layer)] = 0;
-            ImageFormat(&slice, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-            if (slice.width != width || slice.height != height)
-            {
-                ImageResize(&slice, width, height);
-            }
+            ApplyDirectXNormalGreenFlip(images[static_cast<std::size_t>(layer)]);
         }
-        else
-        {
-            const Color fill = layer == 0 ? Color{255, 255, 255, 255} : Color{255, 0, 255, 255};
-            slice = GenImageColor(width, height, fill);
-        }
-        if (slice.data != nullptr)
-        {
-            glTexSubImage3D(
-                GL_TEXTURE_2D_ARRAY,
-                0,
-                0,
-                0,
-                layer,
-                width,
-                height,
-                1,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                slice.data);
-        }
-        UnloadImage(slice);
     }
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-    albedoArrayId = id;
-    albedoArrayWidth = width;
-    albedoArrayHeight = height;
+    const Color flatNormal{128, 128, 255, 255};
+    int width = 0;
+    int height = 0;
+    normalArrayId = UploadTerrainChannelArray(
+        layers,
+        images.data(),
+        owns.data(),
+        flatNormal,
+        flatNormal,
+        true,
+        width,
+        height);
+}
+
+void TerrainGpuResources::RebuildRoughnessArray(const world::TerrainSpec& spec)
+{
+    if (roughnessArrayId != 0)
+    {
+        glDeleteTextures(1, &roughnessArrayId);
+        roughnessArrayId = 0;
+    }
+    const int layers = layerCount > 0 ? layerCount : 1;
+    std::vector<Image> images(static_cast<std::size_t>(layers));
+    std::vector<unsigned char> owns(static_cast<std::size_t>(layers), 0);
+    for (int layer = 0; layer < layers; ++layer)
+    {
+        LoadTerrainChannelImage(
+            world::TerrainLayerRoughnessIdentity(spec, layer),
+            authoringCookedRoot,
+            authoringSourceRoot,
+            images[static_cast<std::size_t>(layer)],
+            owns[static_cast<std::size_t>(layer)]);
+    }
+    const unsigned char quantum = world::TerrainDefaultRoughnessQuantum();
+    const Color defaultRough{quantum, quantum, quantum, 255};
+    int width = 0;
+    int height = 0;
+    roughnessArrayId = UploadTerrainChannelArray(
+        layers,
+        images.data(),
+        owns.data(),
+        defaultRough,
+        defaultRough,
+        true,
+        width,
+        height);
 }
 
 void TerrainGpuResources::SyncWeightArray(const world::TerrainSpec& spec)

@@ -629,6 +629,52 @@ void DrawTerrainLayerThumbnail(
     }
 }
 
+void DrawTerrainMaterialChannelRow(
+    LevelEditorState& state,
+    world::LevelDefinition& level,
+    const LevelEditorViewContext& view,
+    int layer,
+    editor::TerrainMaterialChannelKind channel,
+    const char* label,
+    const std::string& identity,
+    bool canClear)
+{
+    ImGui::PushID(static_cast<int>(channel));
+    ImGui::TextUnformatted(label);
+    DrawTerrainLayerThumbnail(view, identity, kTerrainMaterialThumbSize);
+    if (!identity.empty() && ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", identity.c_str());
+    }
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    const std::string display =
+        identity.empty() ? std::string("None") : TerrainLayerDisplayName(identity);
+    ImGui::TextUnformatted(display.c_str());
+    if (!identity.empty() && ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", identity.c_str());
+    }
+    DrawTerrainRuntimeWarning(identity);
+    const char* assignLabel = identity.empty() ? "Assign..." : "Replace...";
+    if (ImGui::SmallButton(assignLabel))
+    {
+        editor::RequestTerrainMaterialChannelPicker(state.terrainPaint, layer, channel);
+    }
+    if (canClear)
+    {
+        ImGui::SameLine();
+        ImGui::BeginDisabled(identity.empty());
+        if (ImGui::SmallButton("Clear"))
+        {
+            editor::TryClearTerrainMaterialChannel(level.terrain, layer, channel);
+        }
+        ImGui::EndDisabled();
+    }
+    ImGui::EndGroup();
+    ImGui::PopID();
+}
+
 void DrawContentBrowserAssetDetails(const LevelEditorState& state)
 {
     const std::string& identity = state.contentBrowser.selectedIdentity;
@@ -1453,6 +1499,141 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             {
                 ImGui::TextWrapped("Palette limit reached (16 layers).");
             }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Terrain Material");
+            {
+                const int selected = state.terrainPaint.selectedLayer;
+                const std::string& albedoIdentity =
+                    world::TerrainLayerTextureIdentity(level.terrain, selected);
+                ImGui::TextUnformatted(TerrainLayerTitle(selected).c_str());
+                DrawTerrainMaterialChannelRow(
+                    state,
+                    level,
+                    view,
+                    selected,
+                    editor::TerrainMaterialChannelKind::Albedo,
+                    "Albedo",
+                    albedoIdentity,
+                    selected == 0);
+                DrawTerrainMaterialChannelRow(
+                    state,
+                    level,
+                    view,
+                    selected,
+                    editor::TerrainMaterialChannelKind::Normal,
+                    "Normal",
+                    world::TerrainLayerNormalIdentity(level.terrain, selected),
+                    true);
+                DrawTerrainMaterialChannelRow(
+                    state,
+                    level,
+                    view,
+                    selected,
+                    editor::TerrainMaterialChannelKind::Roughness,
+                    "Roughness",
+                    world::TerrainLayerRoughnessIdentity(level.terrain, selected),
+                    true);
+            }
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+            bool materialPickerVisible = false;
+            if (editor::ConsumeTerrainMaterialChannelPickerOpenRequest(state.terrainPaint))
+            {
+                ImGui::OpenPopup(editor::kTerrainMaterialChannelPopupId);
+            }
+            ImGui::SetNextWindowSize(ImVec2(420.0f, 360.0f), ImGuiCond_Appearing);
+            if (ImGui::BeginPopup(editor::kTerrainMaterialChannelPopupId))
+            {
+                materialPickerVisible = true;
+                const editor::TerrainMaterialChannelKind channel = state.terrainPaint.pickerChannel;
+                const char* pickerTitle = "Albedo PNG textures";
+                if (channel == editor::TerrainMaterialChannelKind::Normal)
+                {
+                    pickerTitle = "Compatible Normal maps";
+                }
+                else if (channel == editor::TerrainMaterialChannelKind::Roughness)
+                {
+                    pickerTitle = "Compatible Roughness maps";
+                }
+                ImGui::TextUnformatted(pickerTitle);
+                char query[128];
+                std::snprintf(
+                    query, sizeof(query), "%s", state.terrainPaint.pickerFilter.c_str());
+                if (ImGui::InputText("Search", query, sizeof(query)))
+                {
+                    state.terrainPaint.pickerFilter = query;
+                }
+                const editor::TerrainMaterialChannelPickerView pickerView =
+                    editor::BuildTerrainMaterialChannelPickerView(
+                        state.terrainPaint, textureChoices);
+                const std::vector<std::string>& filtered = pickerView.identities;
+                const char* pickerStatus = pickerView.statusText;
+                if (pickerStatus[0] != '\0')
+                {
+                    ImGui::TextWrapped("%s", pickerStatus);
+                }
+                ImGui::BeginChild("##materialChannelPickerList", ImVec2(0.0f, 0.0f), true);
+                const float pickerWidth = ImGui::GetContentRegionAvail().x;
+                const int columns = ComputeContentBrowserThumbnailColumns(
+                    pickerWidth, kTerrainVegetationPickerThumbSize, 8.0f);
+                if (ImGui::BeginTable(
+                        "materialChannelPickerGrid",
+                        columns,
+                        ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_NoPadOuterX))
+                {
+                    int column = 0;
+                    for (const std::string& choice : filtered)
+                    {
+                        if (column == 0)
+                        {
+                            ImGui::TableNextRow();
+                        }
+                        ImGui::TableSetColumnIndex(column);
+                        ImGui::PushID(choice.c_str());
+                        ImGui::BeginGroup();
+                        if (ImGui::InvisibleButton(
+                                "##pick",
+                                ImVec2(
+                                    kTerrainVegetationPickerThumbSize,
+                                    editor::TerrainPickerCardHeight(
+                                        kTerrainVegetationPickerThumbSize,
+                                        ImGui::GetTextLineHeight()))))
+                        {
+                            if (editor::TryAssignTerrainMaterialChannel(
+                                    level.terrain,
+                                    state.terrainPaint.pickerLayer,
+                                    channel,
+                                    choice))
+                            {
+                                ImGui::CloseCurrentPopup();
+                            }
+                        }
+                        const ImVec2 cellMin = ImGui::GetItemRectMin();
+                        ImGui::SetCursorScreenPos(cellMin);
+                        DrawTerrainLayerThumbnail(
+                            view, choice, kTerrainVegetationPickerThumbSize);
+                        ImGui::SetCursorScreenPos(
+                            ImVec2(cellMin.x, cellMin.y + kTerrainVegetationPickerThumbSize));
+                        ImGui::PushTextWrapPos(cellMin.x + kTerrainVegetationPickerThumbSize);
+                        ImGui::TextUnformatted(TerrainLayerDisplayName(choice).c_str());
+                        ImGui::PopTextWrapPos();
+                        ImGui::EndGroup();
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("%s", choice.c_str());
+                        }
+                        ImGui::PopID();
+                        column = (column + 1) % columns;
+                    }
+                    ImGui::EndTable();
+                }
+                ImGui::EndChild();
+                ImGui::EndPopup();
+            }
+            editor::NoteTerrainPaintPickerOpen(state.terrainPaint, materialPickerVisible);
+#else
+            editor::NoteTerrainPaintPickerOpen(state.terrainPaint, false);
+#endif
 
             ImGui::Separator();
             ImGui::TextUnformatted("Terrain Paint");

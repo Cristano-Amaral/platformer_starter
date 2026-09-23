@@ -215,6 +215,8 @@ void DrawAuthoredTerrain(const TerrainGpuResources* terrainGpu, Color fill)
         TerrainLayerDrawRequest request{};
         request.layerCount = terrainGpu->LayerCount();
         request.albedoArrayId = terrainGpu->AlbedoArrayId();
+        request.normalArrayId = terrainGpu->NormalArrayId();
+        request.roughnessArrayId = terrainGpu->RoughnessArrayId();
         request.weightArrayId = terrainGpu->WeightArrayId();
         request.weightMapCount = terrainGpu->WeightMapCount();
         const world::TerrainSpec* spec = terrainGpu->LastSpec();
@@ -2611,7 +2613,9 @@ void Renderer::DrawWorld(
             spotEffective.size());
     }
     ApplyDirectionalShadowFocus(
-        lightingEnv, core::Vec3{view.target.x, view.target.y, view.target.z});
+        lightingEnv,
+        core::Vec3{view.target.x, view.target.y, view.target.z});
+    lightingEnv.viewPosition = core::Vec3{view.position.x, view.position.y, view.position.z};
     const bool lightingReady = worldLighting != nullptr && worldLighting->IsReady();
     const bool shadowsActive = lightingReady && DirectionalShadowsAreActive(lightingEnv);
     if (shadowsActive)

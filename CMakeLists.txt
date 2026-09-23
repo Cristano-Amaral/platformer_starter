@@ -218,6 +218,7 @@ add_executable(Platformer3D
     game/source/world/StaticProp.cpp
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
+    game/source/world/TerrainMaterialShading.h
     game/source/world/TerrainSculpt.h
     game/source/world/TerrainPaint.h
     game/source/world/LevelGoal.h
@@ -768,7 +769,12 @@ add_executable(TerrainMaterialTest
     game/source/world/TerrainMaterialTest.cpp
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
+    game/source/world/TerrainMaterialShading.h
     game/source/world/TerrainSculpt.h
+    game/source/world/TerrainPaint.h
+    game/source/editor/TerrainPaint.h
+    game/source/editor/TerrainSculpt.h
+    game/source/editor/TerrainPickerCard.h
     game/source/assets/RuntimePng.h
 )
 target_include_directories(TerrainMaterialTest PRIVATE game/source)
@@ -2353,6 +2359,7 @@ add_executable(WorldLightingResourcesTest
     game/source/render/WorldLightingResourcesTest.cpp
     game/source/world/Terrain.h
     game/source/world/TerrainGeometry.h
+    game/source/world/TerrainMaterialShading.h
     game/source/world/TerrainSculpt.h
     game/source/world/TerrainPaint.h
     game/source/assets/RuntimePng.h

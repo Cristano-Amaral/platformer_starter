@@ -836,10 +836,16 @@ def extract_terrain_texture_identities(level_text: str) -> list[str]:
         if not tokens:
             continue
         identity = None
-        if tokens[0] == "terrain_material" and len(tokens) == 3:
-            identity = tokens[1]
-        elif tokens[0] == "terrain_layer" and len(tokens) == 4:
-            identity = tokens[2]
+        if tokens[0] == "terrain_material" and 3 <= len(tokens) <= 5:
+            for token in tokens[1:2] + tokens[3:]:
+                if token != RUNTIME_PNG_NONE_TOKEN and is_valid_runtime_png_identity(token):
+                    identities.append(token)
+            continue
+        elif tokens[0] == "terrain_layer" and 4 <= len(tokens) <= 6:
+            for token in tokens[2:3] + tokens[4:]:
+                if token != RUNTIME_PNG_NONE_TOKEN and is_valid_runtime_png_identity(token):
+                    identities.append(token)
+            continue
         elif tokens[0] == "terrain_cover_entry" and len(tokens) >= 8:
             identity = " ".join(tokens[7:])
         else:

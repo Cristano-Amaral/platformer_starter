@@ -2799,6 +2799,60 @@ int main()
             oldParsed.level.terrain.textureIdentity.empty()
                 && oldParsed.level.terrain.textureTiling == world::kDefaultTerrainTextureTiling,
             "old syntax has deterministic material fallback defaults");
+        Expect(
+            oldParsed.level.terrain.normalIdentity.empty()
+                && oldParsed.level.terrain.roughnessIdentity.empty(),
+            "old albedo-only Terrain has empty Normal/Roughness identities");
+
+        world::LevelDefinition withChannels = withMaterial;
+        Expect(
+            world::TryAssignTerrainLayerNormal(
+                withChannels.terrain, 0, "textures/rock_NormalGL.png"),
+            "channel Normal fixture");
+        Expect(
+            world::TryAssignTerrainLayerRoughness(
+                withChannels.terrain, 0, "textures/rock_Roughness.png"),
+            "channel Roughness fixture");
+        const std::string channelText = world::SerializeLevelText(withChannels);
+        Expect(channelText == world::SerializeLevelText(withChannels), "channel writer is deterministic");
+        Expect(
+            channelText.find(
+                "terrain_material textures/test_checker.png 0.5 textures/rock_NormalGL.png "
+                "textures/rock_Roughness.png\n")
+                != std::string::npos,
+            "writer emits optional Normal and Roughness tokens on terrain_material");
+        const world::ParseLevelFileResult channelParsed = world::ParseLevelText(channelText);
+        Expect(channelParsed.status == world::LoadLevelFileStatus::Loaded, "channel Terrain loads");
+        Expect(
+            world::AuthoredLevelDataEqual(withChannels, channelParsed.level),
+            "Normal/Roughness semantic roundtrip");
+        const world::ParseLevelFileResult oldAlbedoRecord = world::ParseLevelText(
+            flatText + "terrain_material textures/test_checker.png 0.5\n");
+        Expect(
+            oldAlbedoRecord.status == world::LoadLevelFileStatus::Loaded
+                && oldAlbedoRecord.level.terrain.normalIdentity.empty()
+                && oldAlbedoRecord.level.terrain.roughnessIdentity.empty(),
+            "old 3-token terrain_material remains valid without channels");
+        Expect(
+            world::ParseLevelText(
+                flatText
+                + "terrain_material textures/test_checker.png 0.5 textures/rock_NormalGL.png\n")
+                    .status
+                == world::LoadLevelFileStatus::Loaded,
+            "4-token terrain_material with Normal only is valid");
+        Expect(
+            world::ParseLevelText(
+                flatText
+                + "terrain_material textures/test_checker.png 0.5 - textures/rock_Roughness.png\n")
+                    .status
+                == world::LoadLevelFileStatus::Loaded,
+            "none-token Normal with Roughness is valid");
+        Expect(
+            world::ParseLevelText(
+                flatText + "terrain_material textures/test_checker.png 0.5 C:/abs/n.png -\n")
+                    .status
+                == world::LoadLevelFileStatus::Invalid,
+            "absolute Normal path rejected");
 
         Expect(
             world::ParseLevelText(flatText + "terrain_material textures/test_checker.png 0.5\n"
@@ -2847,6 +2901,14 @@ int main()
         Expect(
             world::TrySetTerrainLayerTextureTiling(layered.terrain, 1, 0.5f),
             "extra layer tiling fixture");
+        Expect(
+            world::TryAssignTerrainLayerNormal(
+                layered.terrain, 1, "textures/detail_NormalGL.png"),
+            "extra layer Normal fixture");
+        Expect(
+            world::TryAssignTerrainLayerRoughness(
+                layered.terrain, 1, "textures/detail_Roughness.png"),
+            "extra layer Roughness fixture");
         const core::Vec3 paintCenter = world::TerrainSamplePosition(layered.terrain, 4, 2);
         world::TerrainPaintStampRequest paint{};
         paint.layer = 1;
@@ -2872,6 +2934,18 @@ int main()
                 && layeredParsed.level.terrain.extraLayers[0].textureIdentity
                     == "textures/test_textured_basecolor.png",
             "extra layer identity roundtrips");
+        Expect(
+            layeredParsed.level.terrain.extraLayers[0].normalIdentity
+                    == "textures/detail_NormalGL.png"
+                && layeredParsed.level.terrain.extraLayers[0].roughnessIdentity
+                    == "textures/detail_Roughness.png",
+            "extra layer Normal/Roughness roundtrip");
+        Expect(
+            layeredText.find(
+                "terrain_layer 1 textures/test_textured_basecolor.png 0.5 "
+                "textures/detail_NormalGL.png textures/detail_Roughness.png\n")
+                != std::string::npos,
+            "writer emits optional channel tokens on terrain_layer");
         Expect(
             !world::TerrainMaterialWeightsAreDefault(layeredParsed.level.terrain),
             "painted weights persist");

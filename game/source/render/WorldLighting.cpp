@@ -170,12 +170,15 @@ struct WorldLightingResources::GpuState
     int locLocalLightConeCos = -1;
     int locTerrainAlbedo = -1;
     int locTerrainWeights = -1;
+    int locTerrainNormal = -1;
+    int locTerrainRoughness = -1;
     int locTerrainLayerCount = -1;
     int locTerrainWeightMapCount = -1;
     int locTerrainOriginXZ = -1;
     int locTerrainSizeXZ = -1;
     int locTerrainWeightResolution = -1;
     int locTerrainLayerTiling = -1;
+    int locViewPos = -1;
     Texture2D dummyWhite{};
     bool hasDummyWhite = false;
     int shadowResolution = 0;
@@ -263,12 +266,15 @@ void WorldLightingResources::Unload()
     gpu->locShadowMapResolution = -1;
     gpu->locTerrainAlbedo = -1;
     gpu->locTerrainWeights = -1;
+    gpu->locTerrainNormal = -1;
+    gpu->locTerrainRoughness = -1;
     gpu->locTerrainLayerCount = -1;
     gpu->locTerrainWeightMapCount = -1;
     gpu->locTerrainOriginXZ = -1;
     gpu->locTerrainSizeXZ = -1;
     gpu->locTerrainWeightResolution = -1;
     gpu->locTerrainLayerTiling = -1;
+    gpu->locViewPos = -1;
     if (gpu->hasDummyWhite)
     {
         UnloadTexture(gpu->dummyWhite);
@@ -397,14 +403,19 @@ void WorldLightingResources::Load()
     gpu->locLocalLightConeCos = GetShaderLocation(gpu->lit, "localLightConeCos");
     gpu->locTerrainAlbedo = GetShaderLocation(gpu->lit, "terrainAlbedo");
     gpu->locTerrainWeights = GetShaderLocation(gpu->lit, "terrainWeights");
+    gpu->locTerrainNormal = GetShaderLocation(gpu->lit, "terrainNormal");
+    gpu->locTerrainRoughness = GetShaderLocation(gpu->lit, "terrainRoughness");
     gpu->locTerrainLayerCount = GetShaderLocation(gpu->lit, "terrainLayerCount");
     gpu->locTerrainWeightMapCount = GetShaderLocation(gpu->lit, "terrainWeightMapCount");
     gpu->locTerrainOriginXZ = GetShaderLocation(gpu->lit, "terrainOriginXZ");
     gpu->locTerrainSizeXZ = GetShaderLocation(gpu->lit, "terrainSizeXZ");
     gpu->locTerrainWeightResolution = GetShaderLocation(gpu->lit, "terrainWeightResolution");
     gpu->locTerrainLayerTiling = GetShaderLocation(gpu->lit, "terrainLayerTiling");
+    gpu->locViewPos = GetShaderLocation(gpu->lit, "viewPos");
     const int albedoUnit = kWorldLitTerrainAlbedoArrayUnit;
     const int weightUnit = kWorldLitTerrainWeightArrayUnit;
+    const int normalUnit = kWorldLitTerrainNormalArrayUnit;
+    const int roughnessUnit = kWorldLitTerrainRoughnessArrayUnit;
     if (gpu->locTerrainAlbedo >= 0)
     {
         SetShaderValue(gpu->lit, gpu->locTerrainAlbedo, &albedoUnit, SHADER_UNIFORM_INT);
@@ -412,6 +423,14 @@ void WorldLightingResources::Load()
     if (gpu->locTerrainWeights >= 0)
     {
         SetShaderValue(gpu->lit, gpu->locTerrainWeights, &weightUnit, SHADER_UNIFORM_INT);
+    }
+    if (gpu->locTerrainNormal >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locTerrainNormal, &normalUnit, SHADER_UNIFORM_INT);
+    }
+    if (gpu->locTerrainRoughness >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locTerrainRoughness, &roughnessUnit, SHADER_UNIFORM_INT);
     }
     const int terrainLayersOff = 0;
     if (gpu->locTerrainLayerCount >= 0)
@@ -590,6 +609,12 @@ void WorldLightingResources::BindLitPass(const LightingEnvironment& environment)
     {
         SetShaderValue(gpu->lit, gpu->locShadowMap, &shadowSlot, SHADER_UNIFORM_INT);
     }
+    const float viewPos[3] = {
+        validated.viewPosition.x, validated.viewPosition.y, validated.viewPosition.z};
+    if (gpu->locViewPos >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locViewPos, viewPos, SHADER_UNIFORM_VEC3);
+    }
 
     float posRange[kMaxActiveLocalLights * 4]{};
     float colorIntensity[kMaxActiveLocalLights * 4]{};
@@ -677,6 +702,8 @@ void WorldLightingResources::UnbindLitPass()
     BindTextureUnit(kWorldLitShadowMapTextureUnit, 0);
     BindTexture2DArray(kWorldLitTerrainAlbedoArrayUnit, 0);
     BindTexture2DArray(kWorldLitTerrainWeightArrayUnit, 0);
+    BindTexture2DArray(kWorldLitTerrainNormalArrayUnit, 0);
+    BindTexture2DArray(kWorldLitTerrainRoughnessArrayUnit, 0);
     rlActiveTextureSlot(kWorldLitDiffuseTextureUnit);
     gpu->litPassActive = false;
 }
@@ -856,6 +883,8 @@ void WorldLightingResources::DrawWorldTerrain(
     }
     const int albedoUnit = kWorldLitTerrainAlbedoArrayUnit;
     const int weightUnit = kWorldLitTerrainWeightArrayUnit;
+    const int normalUnit = kWorldLitTerrainNormalArrayUnit;
+    const int roughnessUnit = kWorldLitTerrainRoughnessArrayUnit;
     if (gpu->locTerrainAlbedo >= 0)
     {
         SetShaderValue(gpu->lit, gpu->locTerrainAlbedo, &albedoUnit, SHADER_UNIFORM_INT);
@@ -864,6 +893,14 @@ void WorldLightingResources::DrawWorldTerrain(
     {
         SetShaderValue(gpu->lit, gpu->locTerrainWeights, &weightUnit, SHADER_UNIFORM_INT);
     }
+    if (gpu->locTerrainNormal >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locTerrainNormal, &normalUnit, SHADER_UNIFORM_INT);
+    }
+    if (gpu->locTerrainRoughness >= 0)
+    {
+        SetShaderValue(gpu->lit, gpu->locTerrainRoughness, &roughnessUnit, SHADER_UNIFORM_INT);
+    }
     if (request.albedoArrayId != 0)
     {
         BindTexture2DArray(kWorldLitTerrainAlbedoArrayUnit, request.albedoArrayId);
@@ -871,6 +908,14 @@ void WorldLightingResources::DrawWorldTerrain(
     if (request.weightArrayId != 0)
     {
         BindTexture2DArray(kWorldLitTerrainWeightArrayUnit, request.weightArrayId);
+    }
+    if (request.normalArrayId != 0)
+    {
+        BindTexture2DArray(kWorldLitTerrainNormalArrayUnit, request.normalArrayId);
+    }
+    if (request.roughnessArrayId != 0)
+    {
+        BindTexture2DArray(kWorldLitTerrainRoughnessArrayUnit, request.roughnessArrayId);
     }
 
     DrawMesh(mesh, gpu->solidMaterial, MatrixIdentity());
@@ -882,6 +927,8 @@ void WorldLightingResources::DrawWorldTerrain(
     }
     BindTexture2DArray(kWorldLitTerrainAlbedoArrayUnit, 0);
     BindTexture2DArray(kWorldLitTerrainWeightArrayUnit, 0);
+    BindTexture2DArray(kWorldLitTerrainNormalArrayUnit, 0);
+    BindTexture2DArray(kWorldLitTerrainRoughnessArrayUnit, 0);
     if (gpu->litPassActive)
     {
         rlActiveTextureSlot(kWorldLitShadowMapTextureUnit);
@@ -901,5 +948,15 @@ int WorldLightingResources::TerrainAlbedoArraySamplerLocation() const
 int WorldLightingResources::TerrainWeightArraySamplerLocation() const
 {
     return gpu != nullptr && IsReady() ? gpu->locTerrainWeights : -1;
+}
+
+int WorldLightingResources::TerrainNormalArraySamplerLocation() const
+{
+    return gpu != nullptr && IsReady() ? gpu->locTerrainNormal : -1;
+}
+
+int WorldLightingResources::TerrainRoughnessArraySamplerLocation() const
+{
+    return gpu != nullptr && IsReady() ? gpu->locTerrainRoughness : -1;
 }
 }

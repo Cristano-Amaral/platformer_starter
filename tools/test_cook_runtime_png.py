@@ -164,6 +164,70 @@ class TerrainTextureDependencyTests(unittest.TestCase):
             ],
         )
 
+    def test_extracts_normal_and_roughness_only_identities(self) -> None:
+        text = (
+            "PLATFORMER_LEVEL 1\n"
+            "terrain_material textures/test_checker.png 0.25 textures/rock_NormalGL.png "
+            "textures/rock_Roughness.png\n"
+            "terrain_layer 1 textures/terrain_detail.png 0.5 - textures/only_Roughness.png\n"
+            "terrain_layer 2 textures/other.png 0.25 textures/only_NormalGL.png -\n"
+        )
+        identities = cooker.extract_terrain_texture_identities(text)
+        self.assertEqual(
+            identities,
+            [
+                "textures/test_checker.png",
+                "textures/rock_NormalGL.png",
+                "textures/rock_Roughness.png",
+                "textures/terrain_detail.png",
+                "textures/only_Roughness.png",
+                "textures/other.png",
+                "textures/only_NormalGL.png",
+            ],
+        )
+
+    def test_level_referenced_normal_only_png_cooks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            sources = cooker.source_root(root)
+            extra_png = sources / "textures" / "rock_NormalGL.png"
+            extra_png.write_bytes(
+                (cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png").read_bytes()
+            )
+            extra_level = sources / "levels" / "level_terrain_normal.level"
+            extra_level.write_text(
+                "PLATFORMER_LEVEL 1\n"
+                "id level_terrain_normal\n"
+                "terrain_material - 0.25 textures/rock_NormalGL.png -\n",
+                encoding="utf-8",
+            )
+            collected = cooker.collect_cook_assets(sources)
+            ids = [item["id"] for item in collected]
+            self.assertIn("textures/rock_NormalGL.png", ids)
+            self.assertEqual(ids.count("textures/rock_NormalGL.png"), 1)
+
+    def test_level_referenced_roughness_only_png_cooks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            sources = cooker.source_root(root)
+            extra_png = sources / "textures" / "rock_Roughness.png"
+            extra_png.write_bytes(
+                (cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png").read_bytes()
+            )
+            extra_level = sources / "levels" / "level_terrain_rough.level"
+            extra_level.write_text(
+                "PLATFORMER_LEVEL 1\n"
+                "id level_terrain_rough\n"
+                "terrain_material textures/test_checker.png 0.25 - textures/rock_Roughness.png\n",
+                encoding="utf-8",
+            )
+            collected = cooker.collect_cook_assets(sources)
+            ids = [item["id"] for item in collected]
+            self.assertIn("textures/rock_Roughness.png", ids)
+            self.assertEqual(ids.count("textures/rock_Roughness.png"), 1)
+
     def test_extracts_terrain_ground_cover_identities(self) -> None:
         text = (
             "PLATFORMER_LEVEL 1\n"

@@ -366,6 +366,40 @@ int main()
     Expect(
         editor::AuthoredLevelsProtectTerrainTextureIdentity(working, active, active, "textures/mud.png"),
         "delete guard checks a layer above index 3");
+    Expect(
+        world::TryAssignTerrainLayerNormal(working.terrain, 4, "textures/mud_NormalGL.png"),
+        "Normal on a high-index layer");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(
+            working, active, active, "textures/mud_NormalGL.png"),
+        "workingCopy Normal reference blocks delete");
+    world::LevelDefinition normalActive = working;
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(
+            active, normalActive, active, "textures/mud_NormalGL.png"),
+        "active Normal reference blocks delete");
+    world::LevelDefinition normalBaseline = working;
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(
+            active, active, normalBaseline, "textures/mud_NormalGL.png"),
+        "saved-baseline Normal reference blocks delete");
+    Expect(
+        world::TryAssignTerrainLayerRoughness(working.terrain, 0, "textures/grass_Roughness.png"),
+        "Roughness on layer 0");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(
+            working, active, active, "textures/grass_Roughness.png"),
+        "workingCopy Roughness reference blocks delete");
+    world::LevelDefinition roughActive = working;
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(
+            active, roughActive, active, "textures/grass_Roughness.png"),
+        "active Roughness reference blocks delete");
+    world::LevelDefinition roughBaseline = working;
+    Expect(
+        editor::AuthoredLevelsProtectTerrainTextureIdentity(
+            active, active, roughBaseline, "textures/grass_Roughness.png"),
+        "saved-baseline Roughness reference blocks delete");
     world::ResizeTerrainHeights(working.terrain);
     Expect(
         world::TryAddTerrainVegetationEntry(working.terrain, "models/crate.glb"),

@@ -18,17 +18,21 @@ namespace render
 {
 // raylib DrawMesh binds MATERIAL_MAP index i (0..11) to texture unit i.
 // maps[1] is the directional shadow depth texture, so texture1 cannot be a
-// Terrain sampler. Palette albedo and packed weight maps are sampler2DArray
-// textures on units outside that material-map range.
+// Terrain sampler. Palette albedo, normal, roughness, and packed weight maps
+// are sampler2DArray textures on units outside that material-map range.
 inline constexpr int kWorldLitDiffuseTextureUnit = 0;
 inline constexpr int kWorldLitShadowMapTextureUnit = 1;
 inline constexpr int kWorldLitTerrainAlbedoArrayUnit = 12;
 inline constexpr int kWorldLitTerrainWeightArrayUnit = 13;
+inline constexpr int kWorldLitTerrainNormalArrayUnit = 14;
+inline constexpr int kWorldLitTerrainRoughnessArrayUnit = 15;
 
 struct TerrainLayerDrawRequest
 {
     int layerCount = 0;
     unsigned int albedoArrayId = 0;
+    unsigned int normalArrayId = 0;
+    unsigned int roughnessArrayId = 0;
     unsigned int weightArrayId = 0;
     int weightMapCount = 1;
     int weightResolutionX = 2;
@@ -61,6 +65,8 @@ public:
     bool FailureLogged() const;
     int TerrainAlbedoArraySamplerLocation() const;
     int TerrainWeightArraySamplerLocation() const;
+    int TerrainNormalArraySamplerLocation() const;
+    int TerrainRoughnessArraySamplerLocation() const;
 
     ModelDrawOverride ShadowModelOverride() const;
     ModelDrawOverride LitModelOverride() const;

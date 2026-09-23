@@ -1,9 +1,10 @@
 #pragma once
 
-// Milestone 86/88/90/92: GPU mesh, per-layer source textures, and the
-// sampler2DArray albedo/weight representation. Mesh rebuilds when geometry
-// or layer-0 UVs change. Weight maps upload independently of the mesh.
-// Not a generic mesh or resource manager.
+// Milestone 86/88/90/92/97: GPU mesh, per-layer source textures, and the
+// sampler2DArray albedo/normal/roughness/weight representation. Mesh rebuilds
+// when geometry or layer-0 UVs change. Weight maps upload independently of
+// the mesh. Channel arrays share the M92 palette capacity; they are not one
+// sampler per layer. Not a generic mesh or resource manager.
 
 #include "world/Terrain.h"
 
@@ -44,6 +45,8 @@ public:
     const Texture2D* GetLayerTexture(int layer) const;
     const Texture2D* GetMissingLayerTexture() const;
     unsigned int AlbedoArrayId() const;
+    unsigned int NormalArrayId() const;
+    unsigned int RoughnessArrayId() const;
     unsigned int WeightArrayId() const;
     int WeightMapCount() const;
     bool CopyWeightMapTexel(
@@ -69,6 +72,8 @@ private:
     void EnsureMissingLayerTexture();
     void SyncTextures(const world::TerrainSpec& spec);
     void RebuildAlbedoArray(const world::TerrainSpec& spec);
+    void RebuildNormalArray(const world::TerrainSpec& spec);
+    void RebuildRoughnessArray(const world::TerrainSpec& spec);
     void SyncWeightArray(const world::TerrainSpec& spec);
 
     Mesh mesh{};
@@ -77,6 +82,8 @@ private:
     Texture2D textures[world::kMaxTerrainMaterialLayers]{};
     bool textureLoaded[world::kMaxTerrainMaterialLayers]{};
     std::string lastTextureIdentity[world::kMaxTerrainMaterialLayers]{};
+    std::string lastNormalIdentity[world::kMaxTerrainMaterialLayers]{};
+    std::string lastRoughnessIdentity[world::kMaxTerrainMaterialLayers]{};
     Texture2D missingLayer{};
     bool missingLayerLoaded = false;
     bool loaded = false;
@@ -84,7 +91,11 @@ private:
     bool hasSpec = false;
     world::TerrainSpec lastSpec{};
     std::string loggedMissingIdentity[world::kMaxTerrainMaterialLayers]{};
+    std::string loggedMissingNormal[world::kMaxTerrainMaterialLayers]{};
+    std::string loggedMissingRoughness[world::kMaxTerrainMaterialLayers]{};
     unsigned int albedoArrayId = 0;
+    unsigned int normalArrayId = 0;
+    unsigned int roughnessArrayId = 0;
     unsigned int weightArrayId = 0;
     int albedoArrayWidth = 0;
     int albedoArrayHeight = 0;

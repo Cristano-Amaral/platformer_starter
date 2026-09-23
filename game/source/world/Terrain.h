@@ -1,6 +1,6 @@
 #pragma once
 
-// Milestone 86/87/88/90/92/93/96: optional singleton authored Terrain. Regular XZ
+// Milestone 86/87/88/90/92/93/96/97: optional singleton authored Terrain. Regular XZ
 // heightfield. Not a repeatable prop category, tile set, GUID, or generic
 // mesh editor. M87 sculpts these authored heights[] only; brush parameters
 // are not Level data. M88 adds one optional base surface texture identity
@@ -10,9 +10,11 @@
 // heightfield. Four layers share one packed map. M93 adds a vegetation
 // palette and a separate occupancy grid; derived transforms are not stored.
 // M96 adds a dedicated Ground Cover density grid. It is not vegetation
-// occupancy and does not store per-blade transforms.
+// occupancy and does not store per-blade transforms. M97 adds optional
+// Normal and Roughness identities to each material layer; they use the
+// same M92 paint weights and are not separate paint layers.
 // Not a generic Material
-// asset, PBR authoring, or external splat editor.
+// asset, engine-wide PBR authoring, or external splat editor.
 //
 // Origin convention (used by parse/write, render, Jolt, normals, picking,
 // Inspector, and Translate):
@@ -125,6 +127,8 @@ inline constexpr int kTerrainGroundCoverDataHexPerRecord = 492;
 struct TerrainMaterialLayer
 {
     std::string textureIdentity{};
+    std::string normalIdentity{};
+    std::string roughnessIdentity{};
     float textureTiling = kDefaultTerrainTextureTiling;
 };
 
@@ -158,7 +162,10 @@ struct TerrainSpec
     int resolutionZ = kDefaultTerrainResolutionZ;
     std::vector<float> heights{};
     // Layer 0 (M88). Extra layers are palette entries 1..N.
+    // M97 optional Normal/Roughness belong to the same layer as albedo.
     std::string textureIdentity{};
+    std::string normalIdentity{};
+    std::string roughnessIdentity{};
     float textureTiling = kDefaultTerrainTextureTiling;
     std::vector<TerrainMaterialLayer> extraLayers{};
     int weightResolutionX = kDefaultTerrainWeightResolutionX;
@@ -225,6 +232,48 @@ inline bool TerrainTextureIdentityIsValid(std::string_view identity)
         return true;
     }
     return assets::RuntimePngIdentityIsValid(identity);
+}
+
+inline bool TerrainOptionalChannelIdentityIsValid(std::string_view identity)
+{
+    return identity.empty() || assets::RuntimePngIdentityIsValid(identity);
+}
+
+// Terrain-specific picker convention. Not a generalized asset tag database.
+// Content Browser still lists every runtime PNG. Normal/Roughness pickers
+// keep identities whose filename stem uses these suffixes.
+inline bool TerrainNormalMapIdentityIsCompatible(std::string_view identity)
+{
+    if (!assets::RuntimePngIdentityIsValid(identity))
+    {
+        return false;
+    }
+    return identity.ends_with("_NormalGL.png") || identity.ends_with("_NormalDX.png")
+        || identity.ends_with("_Normal.png") || identity.ends_with("_normal.png")
+        || identity.ends_with("_nrm.png");
+}
+
+// Shader/TBN is OpenGL-style (green = +bitangent). DirectX maps invert Y.
+inline bool TerrainNormalMapIdentityIsDirectX(std::string_view identity)
+{
+    return assets::RuntimePngIdentityIsValid(identity) && identity.ends_with("_NormalDX.png");
+}
+
+inline bool TerrainRoughnessMapIdentityIsCompatible(std::string_view identity)
+{
+    if (!assets::RuntimePngIdentityIsValid(identity))
+    {
+        return false;
+    }
+    return identity.ends_with("_Roughness.png") || identity.ends_with("_roughness.png")
+        || identity.ends_with("_rough.png");
+}
+
+inline bool TerrainLayerOptionalChannelsShouldWrite(
+    std::string_view normalIdentity,
+    std::string_view roughnessIdentity)
+{
+    return !normalIdentity.empty() || !roughnessIdentity.empty();
 }
 
 inline int TerrainMaterialLayerCount(const TerrainSpec& terrain)
@@ -294,6 +343,8 @@ inline bool TerrainExtraLayersAreValid(const TerrainSpec& terrain)
     {
         if (TerrainTextureIdentityIsNone(layer.textureIdentity)
             || !assets::RuntimePngIdentityIsValid(layer.textureIdentity)
+            || !TerrainOptionalChannelIdentityIsValid(layer.normalIdentity)
+            || !TerrainOptionalChannelIdentityIsValid(layer.roughnessIdentity)
             || !TerrainTextureTilingIsValid(layer.textureTiling))
         {
             return false;
@@ -372,7 +423,9 @@ inline bool TerrainPaintRecordsShouldWrite(const TerrainSpec& terrain)
 inline bool TerrainMaterialRecordShouldWrite(const TerrainSpec& terrain)
 {
     return !TerrainTextureIdentityIsNone(terrain.textureIdentity)
-        || terrain.textureTiling != kDefaultTerrainTextureTiling;
+        || terrain.textureTiling != kDefaultTerrainTextureTiling
+        || TerrainLayerOptionalChannelsShouldWrite(
+            terrain.normalIdentity, terrain.roughnessIdentity);
 }
 
 inline bool TerrainWeightHeaderShouldWrite(const TerrainSpec& terrain)
@@ -1326,6 +1379,8 @@ inline bool TerrainSpecIsValid(const TerrainSpec& terrain)
         }
     }
     if (!TerrainTextureIdentityIsValid(terrain.textureIdentity)
+        || !TerrainOptionalChannelIdentityIsValid(terrain.normalIdentity)
+        || !TerrainOptionalChannelIdentityIsValid(terrain.roughnessIdentity)
         || !TerrainTextureTilingIsValid(terrain.textureTiling)
         || !TerrainExtraLayersAreValid(terrain)
         || !TerrainWeightResolutionIsValid(terrain.weightResolutionX)
@@ -1422,6 +1477,8 @@ inline bool TerrainExtraLayersEqual(const TerrainSpec& a, const TerrainSpec& b)
     for (std::size_t index = 0; index < a.extraLayers.size(); ++index)
     {
         if (a.extraLayers[index].textureIdentity != b.extraLayers[index].textureIdentity
+            || a.extraLayers[index].normalIdentity != b.extraLayers[index].normalIdentity
+            || a.extraLayers[index].roughnessIdentity != b.extraLayers[index].roughnessIdentity
             || a.extraLayers[index].textureTiling != b.extraLayers[index].textureTiling)
         {
             return false;
@@ -1441,7 +1498,8 @@ inline bool TerrainMeshDataEqual(const TerrainSpec& a, const TerrainSpec& b)
 inline bool TerrainSpecEqual(const TerrainSpec& a, const TerrainSpec& b)
 {
     return a.enabled == b.enabled && TerrainMeshDataEqual(a, b)
-        && a.textureIdentity == b.textureIdentity && TerrainExtraLayersEqual(a, b)
+        && a.textureIdentity == b.textureIdentity && a.normalIdentity == b.normalIdentity
+        && a.roughnessIdentity == b.roughnessIdentity && TerrainExtraLayersEqual(a, b)
         && TerrainMaterialWeightsEqual(a, b) && TerrainVegetationEqual(a, b)
         && TerrainGroundCoverEqual(a, b);
 }
@@ -1524,7 +1582,37 @@ inline float TerrainLayerTextureTiling(const TerrainSpec& terrain, int layer)
     return terrain.extraLayers[static_cast<std::size_t>(extra)].textureTiling;
 }
 
-inline bool TerrainReferencesTextureIdentity(const TerrainSpec& terrain, std::string_view identity)
+inline const std::string& TerrainLayerNormalIdentity(const TerrainSpec& terrain, int layer)
+{
+    static const std::string kEmpty{};
+    if (layer <= 0)
+    {
+        return terrain.normalIdentity;
+    }
+    const int extra = layer - 1;
+    if (extra < 0 || extra >= static_cast<int>(terrain.extraLayers.size()))
+    {
+        return kEmpty;
+    }
+    return terrain.extraLayers[static_cast<std::size_t>(extra)].normalIdentity;
+}
+
+inline const std::string& TerrainLayerRoughnessIdentity(const TerrainSpec& terrain, int layer)
+{
+    static const std::string kEmpty{};
+    if (layer <= 0)
+    {
+        return terrain.roughnessIdentity;
+    }
+    const int extra = layer - 1;
+    if (extra < 0 || extra >= static_cast<int>(terrain.extraLayers.size()))
+    {
+        return kEmpty;
+    }
+    return terrain.extraLayers[static_cast<std::size_t>(extra)].roughnessIdentity;
+}
+
+inline bool TerrainReferencesAlbedoIdentity(const TerrainSpec& terrain, std::string_view identity)
 {
     if (identity.empty())
     {
@@ -1544,21 +1632,46 @@ inline bool TerrainReferencesTextureIdentity(const TerrainSpec& terrain, std::st
     return false;
 }
 
+inline bool TerrainReferencesTextureIdentity(const TerrainSpec& terrain, std::string_view identity)
+{
+    if (identity.empty())
+    {
+        return false;
+    }
+    if (terrain.textureIdentity == identity || terrain.normalIdentity == identity
+        || terrain.roughnessIdentity == identity)
+    {
+        return true;
+    }
+    for (const TerrainMaterialLayer& layer : terrain.extraLayers)
+    {
+        if (layer.textureIdentity == identity || layer.normalIdentity == identity
+            || layer.roughnessIdentity == identity)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 inline void CollectTerrainTextureIdentities(
     const TerrainSpec& terrain,
     std::vector<std::string>& out)
 {
-    if (!TerrainTextureIdentityIsNone(terrain.textureIdentity)
-        && assets::RuntimePngIdentityIsValid(terrain.textureIdentity))
-    {
-        out.push_back(terrain.textureIdentity);
-    }
+    const auto appendIfValid = [&](const std::string& identity) {
+        if (!identity.empty() && assets::RuntimePngIdentityIsValid(identity))
+        {
+            out.push_back(identity);
+        }
+    };
+    appendIfValid(terrain.textureIdentity);
+    appendIfValid(terrain.normalIdentity);
+    appendIfValid(terrain.roughnessIdentity);
     for (const TerrainMaterialLayer& layer : terrain.extraLayers)
     {
-        if (assets::RuntimePngIdentityIsValid(layer.textureIdentity))
-        {
-            out.push_back(layer.textureIdentity);
-        }
+        appendIfValid(layer.textureIdentity);
+        appendIfValid(layer.normalIdentity);
+        appendIfValid(layer.roughnessIdentity);
     }
 }
 
@@ -1975,7 +2088,7 @@ inline bool TryAddTerrainMaterialLayer(TerrainSpec& terrain, std::string_view id
 {
     if (static_cast<int>(terrain.extraLayers.size()) >= kMaxTerrainMaterialLayers - 1
         || !assets::RuntimePngIdentityIsValid(identity)
-        || TerrainReferencesTextureIdentity(terrain, identity))
+        || TerrainReferencesAlbedoIdentity(terrain, identity))
     {
         return false;
     }
@@ -2050,6 +2163,109 @@ inline bool TryClearTerrainTextureIdentity(TerrainSpec& terrain)
         return false;
     }
     terrain.textureIdentity.clear();
+    return true;
+}
+
+inline bool TryAssignTerrainLayerNormal(TerrainSpec& terrain, int layerIndex, std::string_view identity)
+{
+    if (!assets::RuntimePngIdentityIsValid(identity))
+    {
+        return false;
+    }
+    if (layerIndex <= 0)
+    {
+        if (terrain.normalIdentity == identity)
+        {
+            return false;
+        }
+        terrain.normalIdentity = std::string(identity);
+        return true;
+    }
+    const int extra = layerIndex - 1;
+    if (extra < 0 || extra >= static_cast<int>(terrain.extraLayers.size()))
+    {
+        return false;
+    }
+    std::string& stored = terrain.extraLayers[static_cast<std::size_t>(extra)].normalIdentity;
+    if (stored == identity)
+    {
+        return false;
+    }
+    stored = std::string(identity);
+    return true;
+}
+
+inline bool TryClearTerrainLayerNormal(TerrainSpec& terrain, int layerIndex)
+{
+    if (layerIndex <= 0)
+    {
+        if (terrain.normalIdentity.empty())
+        {
+            return false;
+        }
+        terrain.normalIdentity.clear();
+        return true;
+    }
+    const int extra = layerIndex - 1;
+    if (extra < 0 || extra >= static_cast<int>(terrain.extraLayers.size())
+        || terrain.extraLayers[static_cast<std::size_t>(extra)].normalIdentity.empty())
+    {
+        return false;
+    }
+    terrain.extraLayers[static_cast<std::size_t>(extra)].normalIdentity.clear();
+    return true;
+}
+
+inline bool TryAssignTerrainLayerRoughness(
+    TerrainSpec& terrain,
+    int layerIndex,
+    std::string_view identity)
+{
+    if (!assets::RuntimePngIdentityIsValid(identity))
+    {
+        return false;
+    }
+    if (layerIndex <= 0)
+    {
+        if (terrain.roughnessIdentity == identity)
+        {
+            return false;
+        }
+        terrain.roughnessIdentity = std::string(identity);
+        return true;
+    }
+    const int extra = layerIndex - 1;
+    if (extra < 0 || extra >= static_cast<int>(terrain.extraLayers.size()))
+    {
+        return false;
+    }
+    std::string& stored = terrain.extraLayers[static_cast<std::size_t>(extra)].roughnessIdentity;
+    if (stored == identity)
+    {
+        return false;
+    }
+    stored = std::string(identity);
+    return true;
+}
+
+inline bool TryClearTerrainLayerRoughness(TerrainSpec& terrain, int layerIndex)
+{
+    if (layerIndex <= 0)
+    {
+        if (terrain.roughnessIdentity.empty())
+        {
+            return false;
+        }
+        terrain.roughnessIdentity.clear();
+        return true;
+    }
+    const int extra = layerIndex - 1;
+    if (extra < 0 || extra >= static_cast<int>(terrain.extraLayers.size())
+        || terrain.extraLayers[static_cast<std::size_t>(extra)].roughnessIdentity.empty())
+    {
+        return false;
+    }
+    terrain.extraLayers[static_cast<std::size_t>(extra)].roughnessIdentity.clear();
     return true;
 }
 
