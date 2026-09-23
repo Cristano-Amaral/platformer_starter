@@ -1,4 +1,5 @@
 #include "assets/RuntimePng.h"
+#include "assets/RuntimePngCutout.h"
 #include "assets/RuntimePngDelete.h"
 #include "assets/RuntimePngImport.h"
 #include "assets/SourceTextureCatalog.h"
@@ -29,6 +30,15 @@ std::filesystem::path TestCheckerPngPath()
 {
 #if defined(PLATFORMER_TEST_CHECKER_PNG)
     return std::filesystem::path{PLATFORMER_TEST_CHECKER_PNG}.lexically_normal();
+#else
+    return {};
+#endif
+}
+
+std::filesystem::path TestGroundCoverTuftPngPath()
+{
+#if defined(PLATFORMER_TEST_GROUND_COVER_TUFT_PNG)
+    return std::filesystem::path{PLATFORMER_TEST_GROUND_COVER_TUFT_PNG}.lexically_normal();
 #else
     return {};
 #endif
@@ -255,6 +265,31 @@ int main()
         Expect(
             destination.lexically_relative(cookedRoot).generic_string() == "textures/grass.png",
             "cook destination keeps runtime identity");
+    }
+
+    {
+        const std::filesystem::path tuft = TestGroundCoverTuftPngPath();
+        Expect(PathIsRegularFile(tuft), "ground-cover tuft fixture exists");
+        Expect(
+            assets::RuntimePngIdentityIsValid("textures/test_ground_cover_tuft.png"),
+            "tuft identity follows textures/<file>.png");
+        Expect(
+            assets::RuntimePngFileHasUsefulCutoutAlpha(tuft),
+            "source tuft PNG keeps useful cutout alpha");
+        Expect(
+            !assets::RuntimePngFileHasUsefulCutoutAlpha(fixture),
+            "canonical checker remains opaque");
+        CopyFile(tuft, sourceRoot / "textures" / "test_ground_cover_tuft.png");
+        const std::vector<std::string> identities = assets::CollectSourceRuntimePngIdentities(sourceRoot);
+        bool foundTuft = false;
+        for (const std::string& identity : identities)
+        {
+            if (identity == "textures/test_ground_cover_tuft.png")
+            {
+                foundTuft = true;
+            }
+        }
+        Expect(foundTuft, "Development source discovery includes the Ground Cover tuft");
     }
 
     RemoveTree(tempRoot);

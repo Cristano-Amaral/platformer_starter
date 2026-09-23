@@ -9,6 +9,8 @@
 #include "world/StaticProp.h"
 #include "world/Terrain.h"
 #include "world/TerrainVegetation.h"
+#include "world/TerrainGroundCover.h"
+#include "render/GroundCoverGpu.h"
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -317,6 +319,101 @@ void main()
         Expect(store.LoadCount() == loadsBeforeVegetationDraw, "drawing vegetation does not load a model per instance");
         Expect(store.UniqueLoadedCount() == 2, "drawing vegetation does not duplicate model resources");
         UnloadShader(shader);
+    }
+
+    {
+        std::error_code error;
+        const std::filesystem::path coverRoot =
+            std::filesystem::temp_directory_path() / "platformer_m96_ground_cover";
+        std::filesystem::create_directories(coverRoot / "textures", error);
+        Image grass = GenImageColor(8, 8, Color{80, 160, 70, 255});
+        Image clover = GenImageColor(8, 8, Color{60, 140, 90, 180});
+        const std::filesystem::path grassPath = coverRoot / "textures" / "grass.png";
+        const std::filesystem::path cloverPath = coverRoot / "textures" / "clover.png";
+        ExportImage(grass, grassPath.string().c_str());
+        ExportImage(clover, cloverPath.string().c_str());
+        UnloadImage(grass);
+        UnloadImage(clover);
+
+        world::TerrainSpec cover = world::MakeDefaultTerrain();
+        Expect(world::TryAddTerrainGroundCoverEntry(cover, "textures/grass.png"), "GPU cover A");
+        Expect(world::TryAddTerrainGroundCoverEntry(cover, "textures/clover.png"), "GPU cover B");
+        Expect(world::TryAddTerrainGroundCoverEntry(cover, "textures/grass.png"), "GPU cover A reused");
+        const int cells = cover.groundCoverResolutionX * cover.groundCoverResolutionZ;
+        cover.groundCoverCells.assign(static_cast<std::size_t>(cells), 0x7);
+        cover.groundCoverDensityQuanta.assign(
+            static_cast<std::size_t>(cells * world::kMaxTerrainGroundCoverEntries), 0);
+        cover.groundCoverPaintParams.assign(
+            static_cast<std::size_t>(cells * world::kMaxTerrainGroundCoverEntries), 0);
+        for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+        {
+            for (int entryIndex = 0; entryIndex < 3; ++entryIndex)
+            {
+                const int slot = world::TerrainGroundCoverDensitySlot(cellIndex, entryIndex);
+                cover.groundCoverDensityQuanta[static_cast<std::size_t>(slot)] = 255;
+                cover.groundCoverPaintParams[static_cast<std::size_t>(slot)] =
+                    world::PackTerrainGroundCoverPaintFromEntry(
+                        cover.groundCoverEntries[static_cast<std::size_t>(entryIndex)]);
+            }
+        }
+
+        render::GroundCoverGpuResources gpu;
+        gpu.SetAuthoringSourceRoot(coverRoot);
+        gpu.Sync(&cover);
+        const std::size_t loadsBeforeDraw = gpu.TextureLoadCount();
+        Expect(gpu.InstanceCount() > 64, "dense ground cover generates many GPU instances");
+        Expect(gpu.RenderGroupCount() == 2, "shared texture identities collapse to one render group");
+        Expect(gpu.UniqueTextureCount() == 2, "duplicate identities reuse one GPU texture");
+
+        const char* vertexShader = R"(#version 330
+in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec3 vertexNormal;
+in vec4 vertexColor;
+in mat4 instanceTransform;
+uniform mat4 mvp;
+uniform mat4 matModel;
+uniform int vegetationInstanced;
+void main()
+{
+    mat4 model = vegetationInstanced != 0 ? instanceTransform : matModel;
+    gl_Position = vegetationInstanced != 0
+        ? mvp * model * vec4(vertexPosition, 1.0)
+        : mvp * vec4(vertexPosition, 1.0);
+}
+)";
+        const char* fragmentShader = R"(#version 330
+out vec4 finalColor;
+void main()
+{
+    finalColor = vec4(1.0);
+}
+)";
+        const Shader shader = LoadShaderFromMemory(vertexShader, fragmentShader);
+        Expect(shader.id != 0, "ground-cover instanced shader compiles");
+        Expect(
+            shader.locs != nullptr && shader.locs[SHADER_LOC_VERTEX_INSTANCETRANSFORM] >= 0,
+            "ground-cover shader binds instanceTransform");
+        render::ModelDrawOverride coverOverride{};
+        coverOverride.shader = shader;
+        BeginDrawing();
+        ClearBackground(BLACK);
+        BeginMode3D(camera);
+        gpu.ResetDrawStats();
+        gpu.Draw(cover, &coverOverride, true);
+        EndMode3D();
+        EndDrawing();
+        Expect(gpu.InstancedSubmissionCount() >= 2, "ground cover submits instanced draws");
+        Expect(
+            gpu.InstancedSubmissionCount() < gpu.InstanceCount(),
+            "ground-cover submissions are not one draw per blade");
+        Expect(gpu.OrdinarySubmissionCount() == 0, "ground cover does not fall back to DrawMesh per instance");
+        Expect(gpu.TextureLoadCount() == loadsBeforeDraw, "drawing does not load a texture per instance");
+        gpu.Draw(cover, &coverOverride, false);
+        Expect(gpu.InstancedSubmissionCount() == 0, "ground cover does not cast directional shadows");
+        UnloadShader(shader);
+        gpu.Unload();
+        std::filesystem::remove_all(coverRoot, error);
     }
 
     store.Shutdown();

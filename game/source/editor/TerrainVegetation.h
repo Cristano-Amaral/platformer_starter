@@ -6,6 +6,7 @@
 
 #include "editor/EditorPicking.h"
 #include "editor/EditorSelection.h"
+#include "editor/TerrainPickerCard.h"
 #include "editor/TerrainSculpt.h"
 #include "world/LevelDefinition.h"
 #include "world/TerrainVegetation.h"

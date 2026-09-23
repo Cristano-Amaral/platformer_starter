@@ -97,6 +97,12 @@ KNOWN_ASSETS = (
         "kind": KIND_RUNTIME_PNG,
     },
     {
+        "id": "textures/test_ground_cover_tuft.png",
+        "source": "textures/test_ground_cover_tuft.png",
+        "cooked": "textures/test_ground_cover_tuft.png",
+        "kind": KIND_RUNTIME_PNG,
+    },
+    {
         "id": "levels/level_01.level",
         "source": "levels/level_01.level",
         "cooked": "levels/level_01.level",
@@ -834,6 +840,8 @@ def extract_terrain_texture_identities(level_text: str) -> list[str]:
             identity = tokens[1]
         elif tokens[0] == "terrain_layer" and len(tokens) == 4:
             identity = tokens[2]
+        elif tokens[0] == "terrain_cover_entry" and len(tokens) >= 8:
+            identity = " ".join(tokens[7:])
         else:
             continue
         if identity == RUNTIME_PNG_NONE_TOKEN:
@@ -844,7 +852,8 @@ def extract_terrain_texture_identities(level_text: str) -> list[str]:
 
 
 def discover_level_referenced_runtime_png_assets(sources: Path) -> list[dict[str, str]]:
-    """runtime_png identities referenced by Terrain material and layer records.
+    """runtime_png identities referenced by Terrain material, layer, and
+    ground-cover records.
 
     Does not glob source/textures. Unrelated PNGs stay out of cooked output
     unless a Level names them. Explicit KNOWN_ASSETS entries still win.

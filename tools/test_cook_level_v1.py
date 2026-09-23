@@ -104,6 +104,17 @@ class LevelV1HeaderTests(unittest.TestCase):
         cooker.validate_level_v1_header(payload)
         self.assertIn(b"terrain_veg_entry 0 1", payload)
 
+    def test_terrain_ground_cover_record_does_not_fail_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"terrain_cover 8 8 1\n"
+            b"terrain_cover_entry 0 12 0.22 0.55 0.18 0.48 textures/test_checker.png\n"
+            b"terrain_cover_data a0ff0001\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertIn(b"terrain_cover_entry 0 12", payload)
+
     def test_terrain_material_record_does_not_fail_header_gate(self) -> None:
         payload = (
             b"PLATFORMER_LEVEL 1\n"

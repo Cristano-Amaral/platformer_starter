@@ -13,6 +13,7 @@
 #include "editor/TerrainSculpt.h"
 #include "editor/TerrainPaint.h"
 #include "editor/TerrainVegetation.h"
+#include "world/TerrainGroundCover.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
@@ -84,6 +85,7 @@ void SeedEditor(editor::LevelEditorState& state, const world::LevelDefinition& a
     editor::ResetTerrainSculptState(state.terrainSculpt);
     editor::ResetTerrainPaintState(state.terrainPaint);
     editor::ResetTerrainVegetationState(state.terrainVegetation);
+    editor::ResetTerrainGroundCoverState(state.terrainGroundCover);
     editor::RefreshLevelEditorDerivedFlags(state, active);
 }
 
@@ -3000,6 +3002,66 @@ int main()
             world::TerrainVegetationEqual(applied.terrain, reloaded.level.terrain),
             "reload preserves authored vegetation");
         Expect(saved.find("terrain_veg") != std::string::npos, "Save writes vegetation records");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddTerrain, true),
+            "Add Terrain for ground cover");
+        state.selection = {EditorObjectKind::Terrain, 0};
+        const bool dirtyBeforeAdd = state.dirty;
+        Expect(
+            editor::TryAddTerrainGroundCoverPaletteEntry(
+                state.workingCopy.terrain, state.terrainGroundCover, "textures/grass.png"),
+            "workingCopy ground-cover palette add");
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "adding a ground-cover texture is Modified");
+        Expect(state.dirty == dirtyBeforeAdd, "palette add is not Dirty until Apply");
+        Expect(active.terrain.groundCoverEntries.empty(), "palette add does not mutate active");
+        state.terrainGroundCover.mode = true;
+        state.terrainGroundCover.selectedEntry = 0;
+        state.workingCopy.terrain.groundCoverEntries[0].density = 20.0f;
+        const core::Vec3 sample = world::TerrainSamplePosition(state.workingCopy.terrain, 4, 2);
+        world::TerrainGroundCoverStampRequest paint{};
+        paint.entryIndex = 0;
+        paint.radius = 3.0f;
+        paint.centerX = sample.x;
+        paint.centerZ = sample.z;
+        Expect(
+            world::ApplyTerrainGroundCoverStamp(state.workingCopy.terrain, paint),
+            "workingCopy ground-cover paint");
+        const world::TerrainSpec paintedCopy = state.workingCopy.terrain;
+        Expect(
+            active.terrain.groundCoverCells.empty(),
+            "workingCopy paint does not affect active before Apply");
+        state.workingCopy.terrain.groundCoverEntries[0].density = 40.0f;
+        Expect(
+            world::TerrainGroundCoverEqual(state.workingCopy.terrain, paintedCopy)
+                || state.workingCopy.terrain.groundCoverCells == paintedCopy.groundCoverCells,
+            "changing Next Paint without painting leaves occupancy");
+        world::LevelDefinition applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply promotes ground-cover workingCopy");
+        Expect(
+            world::TerrainGroundCoverEqual(applied.terrain, state.workingCopy.terrain),
+            "Apply copies ground-cover palette and maps");
+        const std::string saved = world::SerializeLevelText(applied);
+        Expect(
+            saved.find("picker") == std::string::npos
+                && saved.find("thumbnail") == std::string::npos
+                && saved.find("Next Paint") == std::string::npos,
+            "UI-only ground-cover state is not serialized");
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload ground cover");
+        Expect(
+            world::TerrainGroundCoverEqual(applied.terrain, reloaded.level.terrain),
+            "reload preserves authored ground cover");
+        Expect(saved.find("terrain_cover") != std::string::npos, "Save writes ground-cover records");
     }
 
     if (gFailures != 0)

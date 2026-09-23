@@ -1,4 +1,5 @@
 #include "world/LevelWriter.h"
+#include "world/TerrainGroundCover.h"
 #include "world/TerrainVegetation.h"
 
 #include "assets/RuntimePng.h"
@@ -555,6 +556,50 @@ std::string SerializeLevelText(const LevelDefinition& level)
                 out.append(styleHex, styleCursor, take);
                 out += '\n';
                 styleCursor += take;
+            }
+        }
+        if (TerrainGroundCoverShouldWrite(level.terrain))
+        {
+            out += "terrain_cover ";
+            AppendInt(out, level.terrain.groundCoverResolutionX);
+            out += ' ';
+            AppendInt(out, level.terrain.groundCoverResolutionZ);
+            out += ' ';
+            out += std::to_string(level.terrain.groundCoverSeed);
+            out += '\n';
+            for (std::size_t index = 0; index < level.terrain.groundCoverEntries.size(); ++index)
+            {
+                const TerrainGroundCoverEntry& entry = level.terrain.groundCoverEntries[index];
+                out += "terrain_cover_entry ";
+                AppendInt(out, static_cast<int>(index));
+                out += ' ';
+                AppendFloat(out, entry.density);
+                out += ' ';
+                AppendFloat(out, entry.minWidth);
+                out += ' ';
+                AppendFloat(out, entry.maxWidth);
+                out += ' ';
+                AppendFloat(out, entry.minHeight);
+                out += ' ';
+                AppendFloat(out, entry.maxHeight);
+                out += ' ';
+                out += entry.textureIdentity;
+                out += '\n';
+            }
+            std::string coverHex;
+            AppendTerrainGroundCoverDataHex(level.terrain, coverHex);
+            std::size_t coverCursor = 0;
+            while (coverCursor < coverHex.size())
+            {
+                std::size_t take = coverHex.size() - coverCursor;
+                if (take > static_cast<std::size_t>(kTerrainGroundCoverDataHexPerRecord))
+                {
+                    take = static_cast<std::size_t>(kTerrainGroundCoverDataHexPerRecord);
+                }
+                out += "terrain_cover_data ";
+                out.append(coverHex, coverCursor, take);
+                out += '\n';
+                coverCursor += take;
             }
         }
     }

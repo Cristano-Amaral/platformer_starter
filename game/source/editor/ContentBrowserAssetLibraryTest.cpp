@@ -1,4 +1,5 @@
 #include "assets/RuntimePng.h"
+#include "assets/RuntimePngCutout.h"
 #include "assets/RuntimePngImport.h"
 #include "assets/SourceTextureCatalog.h"
 #include "assets/StaticGlbImport.h"
@@ -6,9 +7,12 @@
 #include "editor/ContentBrowser.h"
 #include "editor/ContentBrowserOrganization.h"
 #include "editor/ContentBrowserView.h"
+#include "editor/TerrainGroundCover.h"
 #include "editor/TerrainTextureReference.h"
 #include "editor/TerrainVegetationReference.h"
+#include "editor/TerrainGroundCoverReference.h"
 #include "world/TerrainVegetation.h"
+#include "world/TerrainGroundCover.h"
 #include "editor/TextureThumbnailLifecycle.h"
 #include "world/LevelDefinition.h"
 
@@ -45,6 +49,15 @@ std::filesystem::path TestCheckerPngPath()
 {
 #if defined(PLATFORMER_TEST_CHECKER_PNG)
     return std::filesystem::path{PLATFORMER_TEST_CHECKER_PNG}.lexically_normal();
+#else
+    return {};
+#endif
+}
+
+std::filesystem::path TestGroundCoverTuftPngPath()
+{
+#if defined(PLATFORMER_TEST_GROUND_COVER_TUFT_PNG)
+    return std::filesystem::path{PLATFORMER_TEST_GROUND_COVER_TUFT_PNG}.lexically_normal();
 #else
     return {};
 #endif
@@ -97,8 +110,10 @@ int main()
 
     const std::filesystem::path glb = TestStaticGlbPath();
     const std::filesystem::path png = TestCheckerPngPath();
+    const std::filesystem::path tuft = TestGroundCoverTuftPngPath();
     Expect(PathIsRegularFile(glb), "glb fixture exists");
     Expect(PathIsRegularFile(png), "png fixture exists");
+    Expect(PathIsRegularFile(tuft), "ground-cover tuft fixture exists");
 
     const std::filesystem::path tempRoot = MakeTempRoot();
     const std::filesystem::path sourceRoot = (tempRoot / "source").lexically_normal();
@@ -382,6 +397,32 @@ int main()
         !editor::AuthoredLevelsProtectTerrainVegetationIdentity(
             active, active, active, "models/crate.glb"),
         "unreferenced vegetation remains deletable");
+    Expect(
+        world::TryAddTerrainGroundCoverEntry(working.terrain, "textures/grass.png"),
+        "ground-cover palette can reference a catalog texture");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainGroundCoverIdentity(
+            working, active, active, "textures/grass.png"),
+        "ground-cover texture reference blocks delete");
+    Expect(
+        !editor::AuthoredLevelsProtectTerrainGroundCoverIdentity(
+            active, active, active, "textures/clover.png"),
+        "unreferenced ground-cover texture is not protected");
+    const std::string coverDelete =
+        editor::TerrainGroundCoverReferencedDeleteMessage("textures/grass.png");
+    Expect(
+        coverDelete.find("textures/grass.png") != std::string::npos
+            && coverDelete.find("ground cover") != std::string::npos,
+        "ground-cover delete diagnostic names the texture");
+    world::LevelDefinition coverBaseline = working;
+    Expect(
+        editor::AuthoredLevelsProtectTerrainGroundCoverIdentity(
+            active, working, active, "textures/grass.png"),
+        "active ground-cover reference blocks delete");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainGroundCoverIdentity(
+            active, active, coverBaseline, "textures/grass.png"),
+        "saved-baseline ground-cover reference blocks delete");
 
     editor::ThumbnailSourceStamp missingStamp{};
     editor::ThumbnailSourceStamp presentStamp{};
@@ -488,6 +529,28 @@ int main()
     Expect(restored.collection == editor::ContentBrowserCollection::Textures, "collection persists");
     Expect(restored.folderPath == "Environment/Grass", "folder layout persists");
     Expect(world::AuthoredLevelDataEqual(working, working), "layout persistence is not Level data");
+
+    CopyFile(tuft, sourceRoot / "textures" / "test_ground_cover_tuft.png");
+    editor::RefreshContentBrowser(browser, sourceRoot);
+    Expect(
+        browser.textureCatalog.Find("textures/grass.png") != nullptr,
+        "ordinary opaque Terrain textures remain in the Content Browser");
+    Expect(
+        browser.textureCatalog.Find("textures/test_ground_cover_tuft.png") != nullptr,
+        "Ground Cover tuft is listed in the shared texture catalog");
+    std::vector<editor::TerrainGroundCoverPickerItem> coverCatalog;
+    for (const assets::SourceTextureCatalogEntry& entry : browser.textureCatalog.Entries())
+    {
+        coverCatalog.push_back({entry.canonicalIdentity, entry.displayName});
+    }
+    const std::vector<editor::TerrainGroundCoverPickerItem> coverCompatible =
+        editor::CollectCompatibleTerrainGroundCoverPickerItems(coverCatalog, sourceRoot);
+    Expect(
+        coverCompatible.size() == 1,
+        "Ground Cover picker does not treat opaque Terrain PNGs as cutouts");
+    Expect(
+        coverCompatible[0].canonicalIdentity == "textures/test_ground_cover_tuft.png",
+        "Ground Cover picker keeps the valid cutout texture");
 
     RemoveTree(tempRoot);
     if (gFailures != 0)

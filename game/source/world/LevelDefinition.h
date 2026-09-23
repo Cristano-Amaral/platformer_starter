@@ -128,4 +128,11 @@ inline bool LevelReferencesTerrainVegetationModel(
 {
     return level.hasTerrain && TerrainReferencesVegetationModel(level.terrain, identity);
 }
+
+inline bool LevelReferencesTerrainGroundCoverTexture(
+    const LevelDefinition& level,
+    std::string_view identity)
+{
+    return level.hasTerrain && TerrainReferencesGroundCoverTexture(level.terrain, identity);
+}
 }

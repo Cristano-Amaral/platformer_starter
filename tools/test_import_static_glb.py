@@ -193,6 +193,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(ids.count("models/player.glb"), 1)
         self.assertIn("models/player.glb", ids)
         self.assertIn("textures/test_checker.png", ids)
+        self.assertIn("textures/test_ground_cover_tuft.png", ids)
         self.assertNotIn("textures/test_textured_basecolor.png", ids)
         self.assertIn("levels/level_01.level", ids)
         self.assertIn("levels/level_02.level", ids)

@@ -197,6 +197,8 @@ add_executable(Platformer3D
     game/source/render/StaticModelScene.h
     game/source/render/TerrainMesh.cpp
     game/source/render/TerrainMesh.h
+    game/source/render/GroundCoverGpu.cpp
+    game/source/render/GroundCoverGpu.h
     game/source/render/ItemPickupTargetHighlight.h
     game/source/render/ItemPickupCollectionFeedbackDraw.cpp
     game/source/render/ItemPickupCollectionFeedbackDraw.h
@@ -298,6 +300,7 @@ set_target_properties(Platformer3D PROPERTIES
 
 # Cooker owns source -> cooked. Staging copies cooked files next to the exe:
 #   <exe dir>/assets/textures/test_checker.png
+#   <exe dir>/assets/textures/test_ground_cover_tuft.png
 #   <exe dir>/assets/models/player.glb
 #   <exe dir>/assets/models/test_static.glb
 #   <exe dir>/assets/models/test_authored.glb
@@ -390,6 +393,9 @@ file(TO_CMAKE_PATH
 file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/textures/test_checker.png"
     PLATFORMER_TEST_CHECKER_PNG)
+file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/textures/test_ground_cover_tuft.png"
+    PLATFORMER_TEST_GROUND_COVER_TUFT_PNG)
 target_compile_definitions(StaticGlbImportTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
 )
@@ -548,6 +554,7 @@ else()
 endif()
 target_compile_definitions(RuntimePngImportTest PRIVATE
     "PLATFORMER_TEST_CHECKER_PNG=\"${PLATFORMER_TEST_CHECKER_PNG}\""
+    "PLATFORMER_TEST_GROUND_COVER_TUFT_PNG=\"${PLATFORMER_TEST_GROUND_COVER_TUFT_PNG}\""
 )
 
 # Milestone 89: Content Browser collections, logical folders, Favorites, search,
@@ -608,6 +615,7 @@ endif()
 target_compile_definitions(ContentBrowserAssetLibraryTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
     "PLATFORMER_TEST_CHECKER_PNG=\"${PLATFORMER_TEST_CHECKER_PNG}\""
+    "PLATFORMER_TEST_GROUND_COVER_TUFT_PNG=\"${PLATFORMER_TEST_GROUND_COVER_TUFT_PNG}\""
 )
 
 # Milestone 48.2: Model Preview selection/load/orbit/framing math. Not ImGui/raylib.
@@ -805,6 +813,29 @@ if(MSVC)
 else()
     target_compile_options(TerrainVegetationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Milestone 96: Terrain Grass / Ground Cover CPU authoring, distribution, and
+# instancing-plan tests. No window, raylib, Jolt, or ImGui.
+add_executable(TerrainGroundCoverTest
+    game/source/world/TerrainGroundCoverTest.cpp
+    game/source/world/Terrain.h
+    game/source/world/TerrainGeometry.h
+    game/source/world/TerrainSculpt.h
+    game/source/world/TerrainVegetation.h
+    game/source/world/TerrainGroundCover.h
+    game/source/editor/TerrainSculpt.h
+    game/source/editor/TerrainGroundCover.h
+)
+target_include_directories(TerrainGroundCoverTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(TerrainGroundCoverTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(TerrainGroundCoverTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(TerrainGroundCoverTest PRIVATE
+    "PLATFORMER_TEST_CHECKER_PNG=\"${PLATFORMER_TEST_CHECKER_PNG}\""
+    "PLATFORMER_TEST_GROUND_COVER_TUFT_PNG=\"${PLATFORMER_TEST_GROUND_COVER_TUFT_PNG}\""
+)
 
 
 # Milestone 54: player runtime Inventory API and lifecycle policy. Not shipped.
@@ -2234,6 +2265,8 @@ add_executable(LoadedModelMaterialsTest
     game/source/render/LoadedModelMaterials.cpp
     game/source/render/LoadedModelMaterials.h
     game/source/render/LoadedModelMaterialsTest.cpp
+    game/source/render/GroundCoverGpu.cpp
+    game/source/render/GroundCoverGpu.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
     game/source/world/LevelDefinition.cpp

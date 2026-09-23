@@ -27,6 +27,7 @@ namespace render
 {
 class WorldLightingResources;
 class TerrainGpuResources;
+class GroundCoverGpuResources;
 class StaticModelSceneStore;
 // Debug/Development overlay drawn in the same 3D pass as the world. Renderer
 // does not own selection or editor camera; Application fills this each frame.
@@ -157,7 +158,8 @@ struct DebugWorldOverlay
     bool drawTerrainSculptBrush = false;
     core::Vec3 terrainSculptBrushCenter{};
     float terrainSculptBrushRadius = 0.0f;
-    // 0 sculpt/paint (yellow), 1 vegetation (cyan). Visualization only.
+    // 0 sculpt/paint (yellow), 1 vegetation (cyan), 2 ground cover (green).
+    // Visualization only.
     int terrainBrushPreviewKind = 0;
     // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
     // authored, not a Jolt body, and never a Gameplay/Release world grid.
@@ -281,6 +283,7 @@ struct DeathHudView
 class StaticModelSceneStore;
 class WorldLightingResources;
 class TerrainGpuResources;
+class GroundCoverGpuResources;
 
 class Renderer
 {
@@ -393,5 +396,6 @@ private:
     std::unique_ptr<PlayerModelGpuState> playerModelGpu;
     std::unique_ptr<WorldLightingResources> worldLighting;
     std::unique_ptr<TerrainGpuResources> terrainGpu;
+    std::unique_ptr<GroundCoverGpuResources> groundCoverGpu;
 };
 }

@@ -9,6 +9,7 @@
 #include "world/TerrainPaint.h"
 #include "world/TerrainSculpt.h"
 #include "world/TerrainVegetation.h"
+#include "world/TerrainGroundCover.h"
 
 #include <array>
 #include <cstddef>
@@ -127,7 +128,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 37> allowed{
+    static constexpr std::array<std::string_view, 40> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -164,7 +165,10 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "terrain_veg",
         "terrain_veg_entry",
         "terrain_veg_row",
-        "terrain_veg_style"};
+        "terrain_veg_style",
+        "terrain_cover",
+        "terrain_cover_entry",
+        "terrain_cover_data"};
 
     std::size_t cursor = 0;
     while (cursor <= text.size())
@@ -3712,6 +3716,111 @@ int main()
             partialParsed.status == world::LoadLevelFileStatus::Loaded
                 && world::AuthoredLevelDataEqual(regions, partialParsed.level),
             "partial scale repaint survives Save/reload");
+    }
+
+    {
+        world::LevelDefinition compatible = parsed.level;
+        Expect(CountRecords(world::SerializeLevelText(compatible), "terrain_cover") == 0,
+            "old levels omit ground-cover records");
+        world::LevelDefinition authored = parsed.level;
+        authored.hasTerrain = true;
+        authored.terrain = world::MakeDefaultTerrain();
+        Expect(
+            world::TryAddTerrainGroundCoverEntry(authored.terrain, "textures/test_checker.png"),
+            "ground-cover palette accepts a runtime PNG identity");
+        authored.terrain.groundCoverEntries[0].density = 18.0f;
+        authored.terrain.groundCoverSeed = 21u;
+        world::TerrainGroundCoverStampRequest paint{};
+        paint.operation = world::TerrainGroundCoverBrushOperation::Paint;
+        paint.entryIndex = 0;
+        paint.radius = 4.0f;
+        paint.centerX = authored.terrain.origin.x + authored.terrain.sizeX * 0.5f;
+        paint.centerZ = authored.terrain.origin.z + authored.terrain.sizeZ * 0.5f;
+        Expect(world::ApplyTerrainGroundCoverStamp(authored.terrain, paint), "stamp paints ground cover");
+        Expect(world::IsWritableLevelDefinition(authored), "painted ground cover is writable");
+        const std::string coverText = world::SerializeLevelText(authored);
+        Expect(coverText == world::SerializeLevelText(authored), "ground-cover Save is deterministic");
+        Expect(CountRecords(coverText, "terrain_cover") == 1, "one ground-cover header");
+        Expect(CountRecords(coverText, "terrain_cover_entry") == 1, "one ground-cover palette entry");
+        Expect(CountRecords(coverText, "terrain_cover_data") > 0, "occupied ground cover writes compact data");
+        Expect(OnlyAuthoredKeywords(coverText), "ground-cover keywords are authored");
+        const world::ParseLevelFileResult coverParsed = world::ParseLevelText(coverText);
+        Expect(coverParsed.status == world::LoadLevelFileStatus::Loaded, "ground cover round trip loads");
+        Expect(
+            world::AuthoredLevelDataEqual(authored, coverParsed.level),
+            "ground cover round trip preserves authored data");
+        std::vector<world::TerrainGroundCoverInstance> first;
+        std::vector<world::TerrainGroundCoverInstance> second;
+        world::BuildTerrainGroundCoverInstances(coverParsed.level.terrain, first);
+        world::BuildTerrainGroundCoverInstances(coverParsed.level.terrain, second);
+        Expect(!first.empty() && first.size() == second.size(), "reloaded ground cover derives instances");
+        Expect(
+            world::ParseLevelText(coverText + "terrain_cover 8 8 1\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "duplicate terrain_cover is rejected");
+        Expect(
+            world::ParseLevelText(canonical + "terrain_cover 8 8 1\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "terrain_cover without terrain is rejected");
+        Expect(
+            world::ParseLevelText(
+                coverText + "terrain_cover_entry 1 12 0.2 0.5 0.2 0.5 models/test_static.glb\n")
+                .status
+                == world::LoadLevelFileStatus::Invalid,
+            "malformed ground-cover texture identity is rejected");
+
+        world::LevelDefinition dense = authored;
+        Expect(
+            world::TryAddTerrainGroundCoverEntry(dense.terrain, "textures/test_textured_basecolor.png"),
+            "second ground-cover identity");
+        Expect(
+            world::TryAddTerrainGroundCoverEntry(dense.terrain, "textures/a.png"),
+            "third ground-cover identity");
+        Expect(
+            world::TryAddTerrainGroundCoverEntry(dense.terrain, "textures/b.png"),
+            "fourth ground-cover identity");
+        const int coverCells =
+            dense.terrain.groundCoverResolutionX * dense.terrain.groundCoverResolutionZ;
+        dense.terrain.groundCoverCells.assign(static_cast<std::size_t>(coverCells), 0xF);
+        dense.terrain.groundCoverDensityQuanta.assign(
+            static_cast<std::size_t>(coverCells * world::kMaxTerrainGroundCoverEntries), 255);
+        dense.terrain.groundCoverPaintParams.assign(
+            static_cast<std::size_t>(coverCells * world::kMaxTerrainGroundCoverEntries), 0xFFFF);
+        Expect(world::TerrainSpecIsValid(dense.terrain), "full 4-entry ground-cover grid stays valid");
+        Expect(world::IsWritableLevelDefinition(dense), "full 4-entry ground cover stays writable");
+        const std::string denseText = world::SerializeLevelText(dense);
+        Expect(
+            world::CountLevelV1RecordLines(dense) <= static_cast<int>(world::kMaxLevelLines),
+            "full ground cover stays within 256 lines");
+        Expect(denseText.size() <= world::kMaxLevelFileBytes, "full ground cover stays within 64 KiB");
+        bool coverLineTooLong = false;
+        std::size_t coverCursor = 0;
+        while (coverCursor <= denseText.size())
+        {
+            const std::size_t newline = denseText.find('\n', coverCursor);
+            const std::size_t end = newline == std::string::npos ? denseText.size() : newline;
+            if (end - coverCursor > world::kMaxLevelLineLength)
+            {
+                coverLineTooLong = true;
+            }
+            if (newline == std::string::npos)
+            {
+                break;
+            }
+            coverCursor = newline + 1;
+        }
+        Expect(!coverLineTooLong, "ground-cover data stays within 512-character lines");
+        Expect(
+            world::TerrainGroundCoverRecordLineCount(dense.terrain) <= 9,
+            "8x8 4-entry occupancy stays in a handful of records");
+
+        world::LevelDefinition withVeg = dense;
+        Expect(
+            world::TryAddTerrainVegetationEntry(withVeg.terrain, "models/test_static.glb"),
+            "ground cover can coexist with one vegetation entry");
+        Expect(
+            world::IsWritableLevelDefinition(withVeg),
+            "typical vegetation plus full ground cover stays writable");
     }
 
     Expect(

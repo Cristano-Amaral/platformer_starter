@@ -149,6 +149,7 @@ The writer emits `point_light` records then `spot_light` records after
 `directional_light` (and after optional `terrain` / `terrain_row` /
 `terrain_material` / `terrain_layer` / `terrain_weights` / `terrain_weight` /
 `terrain_veg` / `terrain_veg_entry` / `terrain_veg_row` / `terrain_veg_style`
+`terrain_cover` / `terrain_cover_entry` / `terrain_cover_data`
 when present; legacy `terrain_paint` is read but not written), omitted when the collections are empty.
 
 ### Optional Terrain singleton (Milestone 86 / 88)
@@ -341,6 +342,49 @@ row without the header, a bit above the palette, a density byte on an empty
 entry, a style stream whose length does not match occupancy, or vegetation
 without Terrain is `Invalid`. The writer emits `terrain_veg`, then entries,
 then occupied rows, then style records after `terrain_weight`.
+
+Milestone 96 keeps format version `1`. Ground cover is omitted entirely when
+the palette is empty. It is not vegetation occupancy and it does not store
+instance transforms:
+
+```
+terrain_cover <resolutionX> <resolutionZ> <seed>
+terrain_cover_entry <index> <density> <minWidth> <maxWidth> <minHeight> <maxHeight> <textureIdentity>
+terrain_cover_data <hex>
+```
+
+`terrain_cover` is an optional singleton and requires `terrain`. Resolution on
+each axis is an integer in `[4, 8]`. The default grid is `8 8` and is
+independent of the heightfield, weight-map, and vegetation resolutions.
+`seed` is a `uint32`. At most 4 `terrain_cover_entry` records, indices
+contiguous from 0. Density is in `[0.5, 48]`. Width is in `[0.05, 1.5]` and
+height is in `[0.05, 2]` with min <= max. `textureIdentity` is the remainder
+of the line and must be `textures/<file>.png`. Palette density/width/height
+are Next-Paint values. Changing them does not rewrite ground cover already
+painted. Duplicate texture identities are legal as separate slots. The
+Development Ground Cover picker further requires useful PNG cutout alpha
+(decoded 8-bit alpha below 0.5, or RGB `tRNS`); Level load still accepts
+any valid runtime PNG identity.
+
+`terrain_cover_data` is a concatenated lowercase hex stream of occupied
+cells in raster order. Each cell starts with one occupancy nibble (bit `i`
+set means palette entry `i` occupies that cell). Each set bit is followed,
+in ascending entry index, by six hex digits: an 8-bit density quantum and a
+16-bit packed min/max width/height (4 bits each). Empty occupancy is stored
+as nibble `0` with no extra digits. A fully empty grid omits data records.
+The writer splits the stream into `terrain_cover_data` records of at most
+492 hex digits so each line stays under 512 characters
+(`terrain_cover_data ` is 19 characters). An 8×8 grid with all four entries
+occupied is 1600 digits → 4 data records, plus 1 header and 4 entries = 9
+lines. Absolute worst-case Terrain (max heightfield + 16-layer weights +
+max 8-entry vegetation) has only a few spare lines; a typical Level plus
+full ground cover stays inside 256 lines / 64 KiB / 512 characters. A Level
+that cannot fit is `Invalid`. Derived transforms are never written.
+
+A second header, an entry/data record without the header, a bit above the
+palette, a data stream whose length does not match occupancy, or ground
+cover without Terrain is `Invalid`. The writer emits `terrain_cover`, then
+entries, then data records after vegetation.
 
 ### Required repeated records
 
@@ -649,6 +693,9 @@ terrain_veg         omitted when the vegetation palette is empty
 terrain_veg_entry   palette index order
 terrain_veg_row     occupied rows only, row index order
 terrain_veg_style   occupied-slot style stream, 492 hex digits per record
+terrain_cover       omitted when the ground-cover palette is empty
+terrain_cover_entry palette index order
+terrain_cover_data  occupied-slot density/style stream, 492 hex digits per record
 point_light         variable, pointLights index order
 spot_light          variable, spotLights index order
 ```

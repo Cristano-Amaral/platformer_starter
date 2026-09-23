@@ -53,6 +53,28 @@ class RuntimePngCookTests(unittest.TestCase):
         self.assertEqual(result.recipe, cooker.RUNTIME_PNG_RECIPE)
         self.assertEqual(result.cooked_data, source_data)
 
+    def test_ground_cover_tuft_keeps_cutout_alpha(self) -> None:
+        from PIL import Image
+
+        source_path = (
+            cooker.source_root(cooker.repo_root()) / "textures" / "test_ground_cover_tuft.png"
+        )
+        source_data = source_path.read_bytes()
+        with Image.open(BytesIO(source_data)) as image:
+            self.assertEqual(image.mode, "RGBA")
+            alpha = list(image.getchannel("A").getdata())
+            self.assertLess(min(alpha), 128)
+            self.assertEqual(max(alpha), 255)
+        result = cooker.cook_runtime_png_bytes(source_data)
+        self.assertEqual((result.source_width, result.source_height), (64, 64))
+        self.assertFalse(result.resized)
+        self.assertEqual(result.cooked_data, source_data)
+        with Image.open(BytesIO(result.cooked_data)) as cooked:
+            self.assertEqual(cooked.mode, "RGBA")
+            cooked_alpha = list(cooked.getchannel("A").getdata())
+            self.assertLess(min(cooked_alpha), 128)
+            self.assertEqual(max(cooked_alpha), 255)
+
     def test_fixture_1024x512_becomes_512x256(self) -> None:
         fixture = TOOLS_DIR / "fixtures" / "textures" / "test_large_checker.png"
         source_data = fixture.read_bytes()
@@ -115,6 +137,7 @@ class RuntimePngCookTests(unittest.TestCase):
         self.assertEqual(kinds["models/test_authored.glb"], cooker.KIND_COPY)
         self.assertEqual(kinds["models/test_textured.glb"], cooker.KIND_COPY)
         self.assertEqual(kinds["textures/test_checker.png"], cooker.KIND_RUNTIME_PNG)
+        self.assertEqual(kinds["textures/test_ground_cover_tuft.png"], cooker.KIND_RUNTIME_PNG)
         self.assertNotIn("textures/test_textured_basecolor.png", kinds)
         glb_path = cooker.source_root(cooker.repo_root()) / "models" / "test_static.glb"
         source_data = glb_path.read_bytes()
@@ -138,6 +161,22 @@ class TerrainTextureDependencyTests(unittest.TestCase):
                 "textures/test_checker.png",
                 "textures/terrain_detail.png",
                 "textures/terrain_high.png",
+            ],
+        )
+
+    def test_extracts_terrain_ground_cover_identities(self) -> None:
+        text = (
+            "PLATFORMER_LEVEL 1\n"
+            "terrain_cover 8 8 1\n"
+            "terrain_cover_entry 0 12 0.22 0.55 0.18 0.48 textures/grass.png\n"
+            "terrain_cover_entry 1 8 0.2 0.4 0.2 0.4 C:/abs/grass.png\n"
+            "terrain_cover_entry 2 10 0.2 0.4 0.2 0.4 textures/clover.png\n"
+        )
+        self.assertEqual(
+            cooker.extract_terrain_texture_identities(text),
+            [
+                "textures/grass.png",
+                "textures/clover.png",
             ],
         )
 
@@ -199,10 +238,33 @@ class TerrainTextureDependencyTests(unittest.TestCase):
             self.assertTrue((dest / "textures" / "test_checker.png").is_file())
             self.assertFalse((dest / "textures" / "test_textured_basecolor.png").exists())
 
+    def test_level_referenced_ground_cover_png_is_discovered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            copy_known_sources(root)
+            sources = cooker.source_root(root)
+            extra_png = sources / "textures" / "ground_cover_tuft.png"
+            extra_png.write_bytes(
+                (cooker.source_root(cooker.repo_root()) / "textures" / "test_checker.png").read_bytes()
+            )
+            extra_level = sources / "levels" / "level_ground_cover.level"
+            extra_level.write_text(
+                "PLATFORMER_LEVEL 1\n"
+                "id level_ground_cover\n"
+                "terrain_cover 8 8 1\n"
+                "terrain_cover_entry 0 12 0.22 0.55 0.18 0.48 textures/ground_cover_tuft.png\n",
+                encoding="utf-8",
+            )
+            collected = cooker.collect_cook_assets(sources)
+            ids = [item["id"] for item in collected]
+            self.assertIn("textures/ground_cover_tuft.png", ids)
+            self.assertEqual(ids.count("textures/ground_cover_tuft.png"), 1)
+
     def test_canonical_collect_does_not_require_authoring_png(self) -> None:
         collected = cooker.collect_cook_assets(cooker.source_root(cooker.repo_root()))
         ids = [item["id"] for item in collected]
         self.assertIn("textures/test_checker.png", ids)
+        self.assertIn("textures/test_ground_cover_tuft.png", ids)
         self.assertNotIn("textures/test_textured_basecolor.png", ids)
 
     def test_cook_imported_runtime_png_reuses_recipe(self) -> None:

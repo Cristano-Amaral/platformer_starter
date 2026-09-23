@@ -28,6 +28,7 @@
 #include "editor/TerrainSculpt.h"
 #include "editor/TerrainPaint.h"
 #include "editor/TerrainVegetation.h"
+#include "editor/TerrainGroundCover.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemIdInspectorEdit.h"
@@ -163,6 +164,7 @@ enum class TerrainInspectorCategory
     MaterialsPaint = 1,
     Sculpt = 2,
     Vegetation = 3,
+    GroundCover = 4,
 };
 
 struct LevelEditorState
@@ -235,6 +237,7 @@ struct LevelEditorState
     TerrainSculptState terrainSculpt{};
     TerrainPaintState terrainPaint{};
     TerrainVegetationState terrainVegetation{};
+    TerrainGroundCoverState terrainGroundCover{};
     // Session-local Terrain Inspector category. Not authored, not Dirty, not Level Format.
     TerrainInspectorCategory terrainInspectorCategory = TerrainInspectorCategory::Terrain;
     // True from a claimed LMB press (gizmo/widget/ImGui/look) until release.

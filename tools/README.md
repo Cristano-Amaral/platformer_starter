@@ -29,6 +29,7 @@ No Blender.
 
 The cooker copies known authored files from `game/assets/source/` to
 `game/assets/cooked/` by explicit identity (`textures/test_checker.png`,
+`textures/test_ground_cover_tuft.png`,
 `models/player.glb`, `models/test_static.glb`, `models/test_authored.glb`, `models/test_textured.glb`,
 `levels/level_01.level`, `levels/level_02.level`, `sounds/item_pickup_collect.wav`,
 `sounds/player_damage.wav`, `sounds/player_death.wav`, `sounds/player_respawn.wav`,

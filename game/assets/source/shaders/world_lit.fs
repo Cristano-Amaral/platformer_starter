@@ -37,6 +37,7 @@ uniform vec4 localLightPosRange[8];
 uniform vec4 localLightColorIntensity[8];
 uniform vec4 localLightDirType[8];
 uniform vec4 localLightConeCos[8];
+uniform int groundCoverCutout;
 
 out vec4 finalColor;
 
@@ -138,6 +139,10 @@ void main()
     {
         texel = texture(texture0, fragTexCoord);
         albedo = texel * colDiffuse * fragColor;
+        if (groundCoverCutout != 0 && texel.a < 0.5)
+        {
+            discard;
+        }
     }
     vec3 normal = normalize(fragNormal);
     vec3 toLight = normalize(-lightRayDirection);

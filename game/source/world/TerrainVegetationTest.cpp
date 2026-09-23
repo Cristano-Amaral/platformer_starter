@@ -1193,6 +1193,15 @@ int main()
         Expect(
             world::TerrainVegetationInstancedSubmissionCount(plan, 1) == 1,
             "M94 instanced rendering remains active");
+        Expect(
+            editor::TerrainPickerCardShouldActivate(true, 16.0f, 16.0f, 0.0f, 0.0f, 64.0f, 16.0f),
+            "vegetation picker thumbnail remains a card hit target");
+        Expect(
+            editor::TerrainPickerCardShouldActivate(true, 16.0f, 70.0f, 0.0f, 0.0f, 64.0f, 16.0f),
+            "vegetation picker name remains the same card hit target");
+        Expect(
+            !editor::TerrainPickerCardShouldActivate(true, -4.0f, 16.0f, 0.0f, 0.0f, 64.0f, 16.0f),
+            "vegetation picker ignores presses outside the card");
     }
 
     if (gFailures != 0)

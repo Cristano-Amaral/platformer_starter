@@ -182,6 +182,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
         self.assertIn("levels/level_01.level", inventory)
         self.assertIn("levels/level_02.level", inventory)
         self.assertIn("models/player.glb", inventory)
+        self.assertIn("textures/test_ground_cover_tuft.png", inventory)
         self.assertNotIn("levels/level_03.level", inventory)
 
     def test_extra_cooked_level_is_staged_without_required_inventory_edit(self) -> None:
@@ -191,6 +192,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             dest = root / "dest"
             required = [
                 "textures/test_checker.png",
+                "textures/test_ground_cover_tuft.png",
                 "models/player.glb",
                 "models/test_static.glb",
                 "models/test_authored.glb",
@@ -241,6 +243,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             dest = root / "dest"
             required = [
                 "textures/test_checker.png",
+                "textures/test_ground_cover_tuft.png",
                 "models/player.glb",
                 "models/test_static.glb",
                 "models/test_authored.glb",
@@ -329,6 +332,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
             dest = root / "dest"
             required = [
                 "textures/test_checker.png",
+                "textures/test_ground_cover_tuft.png",
                 "models/player.glb",
                 "models/test_static.glb",
                 "models/test_authored.glb",

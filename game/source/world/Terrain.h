@@ -1,6 +1,6 @@
 #pragma once
 
-// Milestone 86/87/88/90/92/93: optional singleton authored Terrain. Regular XZ
+// Milestone 86/87/88/90/92/93/96: optional singleton authored Terrain. Regular XZ
 // heightfield. Not a repeatable prop category, tile set, GUID, or generic
 // mesh editor. M87 sculpts these authored heights[] only; brush parameters
 // are not Level data. M88 adds one optional base surface texture identity
@@ -9,6 +9,8 @@
 // and dedicated RGBA weight maps whose resolution is independent of the
 // heightfield. Four layers share one packed map. M93 adds a vegetation
 // palette and a separate occupancy grid; derived transforms are not stored.
+// M96 adds a dedicated Ground Cover density grid. It is not vegetation
+// occupancy and does not store per-blade transforms.
 // Not a generic Material
 // asset, PBR authoring, or external splat editor.
 //
@@ -94,6 +96,32 @@ inline constexpr float kMinTerrainVegetationScale = 0.05f;
 inline constexpr float kMaxTerrainVegetationScale = 8.0f;
 inline constexpr std::uint32_t kDefaultTerrainVegetationSeed = 1u;
 
+// Ground cover is a separate dense-detail domain. 8x8 keeps a fully painted
+// 4-entry map inside a handful of Level v1 lines beside max materials and
+// max vegetation. Palette 4 matches RGBA occupancy bits and editor cards.
+inline constexpr int kMinTerrainGroundCoverResolution = 4;
+inline constexpr int kMaxTerrainGroundCoverResolution = 8;
+inline constexpr int kDefaultTerrainGroundCoverResolutionX = 8;
+inline constexpr int kDefaultTerrainGroundCoverResolutionZ = 8;
+inline constexpr int kMaxTerrainGroundCoverEntries = 4;
+inline constexpr int kMaxTerrainGroundCoverInstancesPerCell = 32;
+inline constexpr int kMaxTerrainGroundCoverInstances = 16384;
+inline constexpr float kDefaultTerrainGroundCoverDensity = 12.0f;
+inline constexpr float kMinTerrainGroundCoverDensity = 0.5f;
+inline constexpr float kMaxTerrainGroundCoverDensity = 48.0f;
+inline constexpr float kDefaultTerrainGroundCoverMinWidth = 0.22f;
+inline constexpr float kDefaultTerrainGroundCoverMaxWidth = 0.55f;
+inline constexpr float kMinTerrainGroundCoverWidth = 0.05f;
+inline constexpr float kMaxTerrainGroundCoverWidth = 1.5f;
+inline constexpr float kDefaultTerrainGroundCoverMinHeight = 0.18f;
+inline constexpr float kDefaultTerrainGroundCoverMaxHeight = 0.48f;
+inline constexpr float kMinTerrainGroundCoverHeight = 0.05f;
+inline constexpr float kMaxTerrainGroundCoverHeight = 2.0f;
+inline constexpr std::uint32_t kDefaultTerrainGroundCoverSeed = 1u;
+inline constexpr int kTerrainGroundCoverStyleHexDigits = 2;
+inline constexpr std::string_view kTerrainGroundCoverDataKeyword = "terrain_cover_data";
+inline constexpr int kTerrainGroundCoverDataHexPerRecord = 492;
+
 struct TerrainMaterialLayer
 {
     std::string textureIdentity{};
@@ -108,6 +136,16 @@ struct TerrainVegetationEntry
     float maxScale = kDefaultTerrainVegetationMaxScale;
     bool randomYaw = true;
     bool alignToNormal = false;
+};
+
+struct TerrainGroundCoverEntry
+{
+    std::string textureIdentity{};
+    float density = kDefaultTerrainGroundCoverDensity;
+    float minWidth = kDefaultTerrainGroundCoverMinWidth;
+    float maxWidth = kDefaultTerrainGroundCoverMaxWidth;
+    float minHeight = kDefaultTerrainGroundCoverMinHeight;
+    float maxHeight = kDefaultTerrainGroundCoverMaxHeight;
 };
 
 struct TerrainSpec
@@ -141,6 +179,18 @@ struct TerrainSpec
     std::vector<unsigned char> vegetationCells{};
     std::vector<unsigned char> vegetationDensityQuanta{};
     std::vector<std::uint16_t> vegetationPaintParams{};
+    // M96. Resolution 0 and empty entries/cells mean no authored ground cover.
+    // Each cell is a 4-bit occupancy mask. Bit i set means groundCoverEntries[i]
+    // occupies that cell. Slot (cell, entry) stores Paint-captured density
+    // (8-bit) and packed min/max width/height (16-bit). Palette entry fields
+    // are Next-Paint only. Derived blade/tuft transforms are not stored.
+    int groundCoverResolutionX = 0;
+    int groundCoverResolutionZ = 0;
+    std::uint32_t groundCoverSeed = kDefaultTerrainGroundCoverSeed;
+    std::vector<TerrainGroundCoverEntry> groundCoverEntries{};
+    std::vector<unsigned char> groundCoverCells{};
+    std::vector<unsigned char> groundCoverDensityQuanta{};
+    std::vector<std::uint16_t> groundCoverPaintParams{};
 };
 
 inline int TerrainSampleCount(int resolutionX, int resolutionZ)
@@ -735,6 +785,431 @@ inline bool TerrainVegetationEqual(const TerrainSpec& a, const TerrainSpec& b)
         && a.vegetationPaintParams == b.vegetationPaintParams;
 }
 
+inline bool TerrainGroundCoverResolutionIsValid(int resolution)
+{
+    return resolution >= kMinTerrainGroundCoverResolution
+        && resolution <= kMaxTerrainGroundCoverResolution;
+}
+
+inline bool TerrainGroundCoverDensityIsValid(float density)
+{
+    return std::isfinite(density) && density >= kMinTerrainGroundCoverDensity
+        && density <= kMaxTerrainGroundCoverDensity;
+}
+
+inline bool TerrainGroundCoverWidthIsValid(float width)
+{
+    return std::isfinite(width) && width >= kMinTerrainGroundCoverWidth
+        && width <= kMaxTerrainGroundCoverWidth;
+}
+
+inline bool TerrainGroundCoverHeightIsValid(float height)
+{
+    return std::isfinite(height) && height >= kMinTerrainGroundCoverHeight
+        && height <= kMaxTerrainGroundCoverHeight;
+}
+
+inline bool TerrainGroundCoverTextureIdentityIsValid(std::string_view identity)
+{
+    return assets::RuntimePngIdentityIsValid(identity);
+}
+
+inline bool TerrainGroundCoverEntryIsValid(const TerrainGroundCoverEntry& entry)
+{
+    return TerrainGroundCoverTextureIdentityIsValid(entry.textureIdentity)
+        && TerrainGroundCoverDensityIsValid(entry.density)
+        && TerrainGroundCoverWidthIsValid(entry.minWidth)
+        && TerrainGroundCoverWidthIsValid(entry.maxWidth) && entry.minWidth <= entry.maxWidth
+        && TerrainGroundCoverHeightIsValid(entry.minHeight)
+        && TerrainGroundCoverHeightIsValid(entry.maxHeight)
+        && entry.minHeight <= entry.maxHeight;
+}
+
+inline bool TerrainGroundCoverIsAbsent(const TerrainSpec& terrain)
+{
+    return terrain.groundCoverEntries.empty() && terrain.groundCoverCells.empty()
+        && terrain.groundCoverDensityQuanta.empty() && terrain.groundCoverPaintParams.empty()
+        && terrain.groundCoverResolutionX == 0 && terrain.groundCoverResolutionZ == 0;
+}
+
+inline int TerrainGroundCoverDensitySlot(int cellIndex, int entryIndex)
+{
+    return cellIndex * kMaxTerrainGroundCoverEntries + entryIndex;
+}
+
+inline unsigned char QuantizeTerrainGroundCoverDensity(float density)
+{
+    if (!TerrainGroundCoverDensityIsValid(density))
+    {
+        return 0;
+    }
+    const float span = kMaxTerrainGroundCoverDensity - kMinTerrainGroundCoverDensity;
+    const int quantum = static_cast<int>(
+        std::lround(((density - kMinTerrainGroundCoverDensity) / span) * 255.0f));
+    if (quantum <= 0)
+    {
+        return 0;
+    }
+    if (quantum >= 255)
+    {
+        return 255;
+    }
+    return static_cast<unsigned char>(quantum);
+}
+
+inline float DequantizeTerrainGroundCoverDensity(unsigned char quantum)
+{
+    const float span = kMaxTerrainGroundCoverDensity - kMinTerrainGroundCoverDensity;
+    return kMinTerrainGroundCoverDensity + (static_cast<float>(quantum) / 255.0f) * span;
+}
+
+inline constexpr int kTerrainGroundCoverStyleMaxQuantum = 15;
+
+inline unsigned char QuantizeTerrainGroundCoverWidth(float width)
+{
+    if (!TerrainGroundCoverWidthIsValid(width))
+    {
+        return 0;
+    }
+    const float span = kMaxTerrainGroundCoverWidth - kMinTerrainGroundCoverWidth;
+    const int quantum = static_cast<int>(
+        std::lround(((width - kMinTerrainGroundCoverWidth) / span)
+            * static_cast<float>(kTerrainGroundCoverStyleMaxQuantum)));
+    if (quantum <= 0)
+    {
+        return 0;
+    }
+    if (quantum >= kTerrainGroundCoverStyleMaxQuantum)
+    {
+        return static_cast<unsigned char>(kTerrainGroundCoverStyleMaxQuantum);
+    }
+    return static_cast<unsigned char>(quantum);
+}
+
+inline float DequantizeTerrainGroundCoverWidth(unsigned char quantum)
+{
+    const float span = kMaxTerrainGroundCoverWidth - kMinTerrainGroundCoverWidth;
+    const float t = static_cast<float>(quantum) / static_cast<float>(kTerrainGroundCoverStyleMaxQuantum);
+    return kMinTerrainGroundCoverWidth + t * span;
+}
+
+inline unsigned char QuantizeTerrainGroundCoverHeight(float height)
+{
+    if (!TerrainGroundCoverHeightIsValid(height))
+    {
+        return 0;
+    }
+    const float span = kMaxTerrainGroundCoverHeight - kMinTerrainGroundCoverHeight;
+    const int quantum = static_cast<int>(
+        std::lround(((height - kMinTerrainGroundCoverHeight) / span)
+            * static_cast<float>(kTerrainGroundCoverStyleMaxQuantum)));
+    if (quantum <= 0)
+    {
+        return 0;
+    }
+    if (quantum >= kTerrainGroundCoverStyleMaxQuantum)
+    {
+        return static_cast<unsigned char>(kTerrainGroundCoverStyleMaxQuantum);
+    }
+    return static_cast<unsigned char>(quantum);
+}
+
+inline float DequantizeTerrainGroundCoverHeight(unsigned char quantum)
+{
+    const float span = kMaxTerrainGroundCoverHeight - kMinTerrainGroundCoverHeight;
+    const float t = static_cast<float>(quantum) / static_cast<float>(kTerrainGroundCoverStyleMaxQuantum);
+    return kMinTerrainGroundCoverHeight + t * span;
+}
+
+inline std::uint16_t PackTerrainGroundCoverPaint(
+    unsigned char minWidthQuantum,
+    unsigned char maxWidthQuantum,
+    unsigned char minHeightQuantum,
+    unsigned char maxHeightQuantum)
+{
+    unsigned char minW = minWidthQuantum;
+    unsigned char maxW = maxWidthQuantum;
+    unsigned char minH = minHeightQuantum;
+    unsigned char maxH = maxHeightQuantum;
+    if (minW > kTerrainGroundCoverStyleMaxQuantum)
+    {
+        minW = static_cast<unsigned char>(kTerrainGroundCoverStyleMaxQuantum);
+    }
+    if (maxW > kTerrainGroundCoverStyleMaxQuantum)
+    {
+        maxW = static_cast<unsigned char>(kTerrainGroundCoverStyleMaxQuantum);
+    }
+    if (minH > kTerrainGroundCoverStyleMaxQuantum)
+    {
+        minH = static_cast<unsigned char>(kTerrainGroundCoverStyleMaxQuantum);
+    }
+    if (maxH > kTerrainGroundCoverStyleMaxQuantum)
+    {
+        maxH = static_cast<unsigned char>(kTerrainGroundCoverStyleMaxQuantum);
+    }
+    if (minW > maxW)
+    {
+        maxW = minW;
+    }
+    if (minH > maxH)
+    {
+        maxH = minH;
+    }
+    return static_cast<std::uint16_t>(
+        (minW & 15) | ((maxW & 15) << 4) | ((minH & 15) << 8) | ((maxH & 15) << 12));
+}
+
+inline std::uint16_t PackTerrainGroundCoverPaintFromEntry(const TerrainGroundCoverEntry& entry)
+{
+    return PackTerrainGroundCoverPaint(
+        QuantizeTerrainGroundCoverWidth(entry.minWidth),
+        QuantizeTerrainGroundCoverWidth(entry.maxWidth),
+        QuantizeTerrainGroundCoverHeight(entry.minHeight),
+        QuantizeTerrainGroundCoverHeight(entry.maxHeight));
+}
+
+inline unsigned char TerrainGroundCoverPaintMinWidthQuantum(std::uint16_t packed)
+{
+    return static_cast<unsigned char>(packed & 15u);
+}
+
+inline unsigned char TerrainGroundCoverPaintMaxWidthQuantum(std::uint16_t packed)
+{
+    return static_cast<unsigned char>((packed >> 4) & 15u);
+}
+
+inline unsigned char TerrainGroundCoverPaintMinHeightQuantum(std::uint16_t packed)
+{
+    return static_cast<unsigned char>((packed >> 8) & 15u);
+}
+
+inline unsigned char TerrainGroundCoverPaintMaxHeightQuantum(std::uint16_t packed)
+{
+    return static_cast<unsigned char>((packed >> 12) & 15u);
+}
+
+inline int TerrainGroundCoverCellIndex(const TerrainSpec& terrain, int ix, int iz)
+{
+    return iz * terrain.groundCoverResolutionX + ix;
+}
+
+inline unsigned char TerrainGroundCoverEntryBit(int entryIndex)
+{
+    if (entryIndex < 0 || entryIndex >= kMaxTerrainGroundCoverEntries)
+    {
+        return 0;
+    }
+    return static_cast<unsigned char>(1u << entryIndex);
+}
+
+inline bool TerrainGroundCoverCellHasEntry(unsigned char cell, int entryIndex)
+{
+    const unsigned char bit = TerrainGroundCoverEntryBit(entryIndex);
+    return bit != 0 && (cell & bit) != 0;
+}
+
+inline unsigned char TerrainGroundCoverAllowedCellMask(int entryCount)
+{
+    if (entryCount <= 0)
+    {
+        return 0;
+    }
+    if (entryCount >= kMaxTerrainGroundCoverEntries)
+    {
+        return 0x0Fu;
+    }
+    return static_cast<unsigned char>((1u << entryCount) - 1u);
+}
+
+inline bool TerrainGroundCoverDataIsValid(const TerrainSpec& terrain)
+{
+    if (TerrainGroundCoverIsAbsent(terrain))
+    {
+        return true;
+    }
+    const int entryCount = static_cast<int>(terrain.groundCoverEntries.size());
+    if (entryCount < 1 || entryCount > kMaxTerrainGroundCoverEntries
+        || !TerrainGroundCoverResolutionIsValid(terrain.groundCoverResolutionX)
+        || !TerrainGroundCoverResolutionIsValid(terrain.groundCoverResolutionZ))
+    {
+        return false;
+    }
+    const int cells = terrain.groundCoverResolutionX * terrain.groundCoverResolutionZ;
+    if (static_cast<int>(terrain.groundCoverCells.size()) != cells
+        || static_cast<int>(terrain.groundCoverDensityQuanta.size())
+            != cells * kMaxTerrainGroundCoverEntries
+        || static_cast<int>(terrain.groundCoverPaintParams.size())
+            != cells * kMaxTerrainGroundCoverEntries)
+    {
+        return false;
+    }
+    for (const TerrainGroundCoverEntry& entry : terrain.groundCoverEntries)
+    {
+        if (!TerrainGroundCoverEntryIsValid(entry))
+        {
+            return false;
+        }
+    }
+    const unsigned char allowed = TerrainGroundCoverAllowedCellMask(entryCount);
+    for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+    {
+        const unsigned char cell = terrain.groundCoverCells[static_cast<std::size_t>(cellIndex)];
+        if ((cell & static_cast<unsigned char>(~allowed)) != 0)
+        {
+            return false;
+        }
+        for (int entryIndex = 0; entryIndex < kMaxTerrainGroundCoverEntries; ++entryIndex)
+        {
+            const unsigned char quantum = terrain.groundCoverDensityQuanta[static_cast<std::size_t>(
+                TerrainGroundCoverDensitySlot(cellIndex, entryIndex))];
+            const std::uint16_t paint = terrain.groundCoverPaintParams[static_cast<std::size_t>(
+                TerrainGroundCoverDensitySlot(cellIndex, entryIndex))];
+            const bool occupied = TerrainGroundCoverCellHasEntry(cell, entryIndex);
+            if (!occupied && (quantum != 0 || paint != 0))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+inline bool TerrainGroundCoverShouldWrite(const TerrainSpec& terrain)
+{
+    return !terrain.groundCoverEntries.empty();
+}
+
+inline int TerrainGroundCoverOccupiedSlotCount(const TerrainSpec& terrain)
+{
+    if (!TerrainGroundCoverShouldWrite(terrain))
+    {
+        return 0;
+    }
+    int slots = 0;
+    for (unsigned char cell : terrain.groundCoverCells)
+    {
+        for (int entryIndex = 0; entryIndex < kMaxTerrainGroundCoverEntries; ++entryIndex)
+        {
+            if (TerrainGroundCoverCellHasEntry(cell, entryIndex))
+            {
+                ++slots;
+            }
+        }
+    }
+    return slots;
+}
+
+inline int TerrainGroundCoverDataHexDigitCount(const TerrainSpec& terrain)
+{
+    if (!TerrainGroundCoverShouldWrite(terrain)
+        || static_cast<int>(terrain.groundCoverCells.size())
+            != terrain.groundCoverResolutionX * terrain.groundCoverResolutionZ)
+    {
+        return 0;
+    }
+    int digits = 0;
+    const int cells = terrain.groundCoverResolutionX * terrain.groundCoverResolutionZ;
+    for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+    {
+        const unsigned char cell = terrain.groundCoverCells[static_cast<std::size_t>(cellIndex)];
+        digits += 1;
+        for (int entryIndex = 0; entryIndex < kMaxTerrainGroundCoverEntries; ++entryIndex)
+        {
+            if (TerrainGroundCoverCellHasEntry(cell, entryIndex))
+            {
+                digits += 6;
+            }
+        }
+    }
+    bool anyOccupied = false;
+    for (unsigned char cell : terrain.groundCoverCells)
+    {
+        if (cell != 0)
+        {
+            anyOccupied = true;
+            break;
+        }
+    }
+    return anyOccupied ? digits : 0;
+}
+
+inline int TerrainGroundCoverDataRecordCount(const TerrainSpec& terrain)
+{
+    const int digits = TerrainGroundCoverDataHexDigitCount(terrain);
+    if (digits <= 0)
+    {
+        return 0;
+    }
+    return (digits + kTerrainGroundCoverDataHexPerRecord - 1) / kTerrainGroundCoverDataHexPerRecord;
+}
+
+inline int TerrainGroundCoverRecordLineCount(const TerrainSpec& terrain)
+{
+    if (!TerrainGroundCoverShouldWrite(terrain))
+    {
+        return 0;
+    }
+    return 1 + static_cast<int>(terrain.groundCoverEntries.size())
+        + TerrainGroundCoverDataRecordCount(terrain);
+}
+
+inline bool TerrainGroundCoverEqual(const TerrainSpec& a, const TerrainSpec& b)
+{
+    if (a.groundCoverResolutionX != b.groundCoverResolutionX
+        || a.groundCoverResolutionZ != b.groundCoverResolutionZ
+        || a.groundCoverSeed != b.groundCoverSeed
+        || a.groundCoverEntries.size() != b.groundCoverEntries.size()
+        || a.groundCoverCells.size() != b.groundCoverCells.size())
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < a.groundCoverEntries.size(); ++index)
+    {
+        const TerrainGroundCoverEntry& left = a.groundCoverEntries[index];
+        const TerrainGroundCoverEntry& right = b.groundCoverEntries[index];
+        if (left.textureIdentity != right.textureIdentity || left.density != right.density
+            || left.minWidth != right.minWidth || left.maxWidth != right.maxWidth
+            || left.minHeight != right.minHeight || left.maxHeight != right.maxHeight)
+        {
+            return false;
+        }
+    }
+    return a.groundCoverCells == b.groundCoverCells
+        && a.groundCoverDensityQuanta == b.groundCoverDensityQuanta
+        && a.groundCoverPaintParams == b.groundCoverPaintParams;
+}
+
+inline bool TerrainReferencesGroundCoverTexture(
+    const TerrainSpec& terrain,
+    std::string_view identity)
+{
+    if (identity.empty())
+    {
+        return false;
+    }
+    for (const TerrainGroundCoverEntry& entry : terrain.groundCoverEntries)
+    {
+        if (entry.textureIdentity == identity)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline void CollectTerrainGroundCoverTextureIdentities(
+    const TerrainSpec& terrain,
+    std::vector<std::string>& out)
+{
+    for (const TerrainGroundCoverEntry& entry : terrain.groundCoverEntries)
+    {
+        if (assets::RuntimePngIdentityIsValid(entry.textureIdentity))
+        {
+            out.push_back(entry.textureIdentity);
+        }
+    }
+}
+
 inline bool TerrainReferencesVegetationModel(
     const TerrainSpec& terrain,
     std::string_view identity)
@@ -771,6 +1246,7 @@ inline int TerrainRecordLineCount(const TerrainSpec& terrain)
         lines += TerrainPackedWeightMapCount(terrain) * terrain.weightResolutionZ;
     }
     lines += TerrainVegetationRecordLineCount(terrain);
+    lines += TerrainGroundCoverRecordLineCount(terrain);
     return lines;
 }
 
@@ -854,7 +1330,8 @@ inline bool TerrainSpecIsValid(const TerrainSpec& terrain)
         || !TerrainExtraLayersAreValid(terrain)
         || !TerrainWeightResolutionIsValid(terrain.weightResolutionX)
         || !TerrainWeightResolutionIsValid(terrain.weightResolutionZ)
-        || !TerrainVegetationDataIsValid(terrain))
+        || !TerrainVegetationDataIsValid(terrain)
+        || !TerrainGroundCoverDataIsValid(terrain))
     {
         return false;
     }
@@ -965,7 +1442,8 @@ inline bool TerrainSpecEqual(const TerrainSpec& a, const TerrainSpec& b)
 {
     return a.enabled == b.enabled && TerrainMeshDataEqual(a, b)
         && a.textureIdentity == b.textureIdentity && TerrainExtraLayersEqual(a, b)
-        && TerrainMaterialWeightsEqual(a, b) && TerrainVegetationEqual(a, b);
+        && TerrainMaterialWeightsEqual(a, b) && TerrainVegetationEqual(a, b)
+        && TerrainGroundCoverEqual(a, b);
 }
 
 inline float TerrainSampleSpacingX(const TerrainSpec& terrain)

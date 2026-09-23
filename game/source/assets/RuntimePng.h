@@ -168,15 +168,19 @@ inline std::string RuntimePngDisplayName(std::string_view canonicalIdentity)
     return fileName;
 }
 
-inline bool TryReadRuntimePngDimensions(
+inline bool TryReadRuntimePngIhdr(
     const std::uint8_t* data,
     std::size_t size,
     int& width,
     int& height,
+    int& bitDepth,
+    int& colorType,
     std::string* reason = nullptr)
 {
     width = 0;
     height = 0;
+    bitDepth = 0;
+    colorType = 0;
     const auto fail = [&](const char* text) {
         if (reason != nullptr)
         {
@@ -230,7 +234,21 @@ inline bool TryReadRuntimePngDimensions(
     }
     width = static_cast<int>(parsedWidth);
     height = static_cast<int>(parsedHeight);
+    bitDepth = static_cast<int>(data[24]);
+    colorType = static_cast<int>(data[25]);
     return true;
+}
+
+inline bool TryReadRuntimePngDimensions(
+    const std::uint8_t* data,
+    std::size_t size,
+    int& width,
+    int& height,
+    std::string* reason = nullptr)
+{
+    int bitDepth = 0;
+    int colorType = 0;
+    return TryReadRuntimePngIhdr(data, size, width, height, bitDepth, colorType, reason);
 }
 
 inline bool RuntimePngDimensionsWithinRecipeLimit(int width, int height)

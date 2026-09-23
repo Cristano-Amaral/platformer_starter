@@ -18,6 +18,7 @@
 #include "render/LevelGoalVisualization.h"
 #include "render/LoadedModelMaterials.h"
 #include "render/StaticModelScene.h"
+#include "render/GroundCoverGpu.h"
 #include "render/TerrainMesh.h"
 #include "render/WorldLighting.h"
 #include "world/CollectibleWorld.h"
@@ -60,6 +61,8 @@ constexpr Color kTerrainSculptBrushColor{255, 214, 70, 255};
 constexpr Color kTerrainSculptBrushMuted{255, 214, 70, 120};
 constexpr Color kTerrainVegetationBrushColor{90, 240, 255, 255};
 constexpr Color kTerrainVegetationBrushMuted{90, 240, 255, 140};
+constexpr Color kTerrainGroundCoverBrushColor{110, 210, 92, 255};
+constexpr Color kTerrainGroundCoverBrushMuted{110, 210, 92, 140};
 constexpr Color kPlatformColor{110, 118, 132, 255};
 constexpr Color kPlatformAccentColor{96, 104, 118, 255};
 constexpr Color kPlayerColor{216, 96, 72, 255};
@@ -100,6 +103,7 @@ enum class WorldSolidMode
 WorldSolidMode gWorldSolidMode = WorldSolidMode::Combined;
 WorldLightingResources* gWorldLighting = nullptr;
 const ModelDrawOverride* gWorldModelOverride = nullptr;
+bool gWorldShadowPass = false;
 constexpr Color kGoalVolumeIncomplete{64, 140, 92, 255};
 constexpr Color kHazardBarColor{196, 48, 36, 255};
 constexpr Color kHazardToothColor{232, 96, 40, 255};
@@ -1751,10 +1755,13 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     if (overlay.drawTerrainSculptBrush && overlay.terrainSculptBrushRadius > 0.0f)
     {
         const bool vegetationBrush = overlay.terrainBrushPreviewKind == 1;
-        const Color brushColor =
-            vegetationBrush ? kTerrainVegetationBrushColor : kTerrainSculptBrushColor;
-        const Color brushMuted =
-            vegetationBrush ? kTerrainVegetationBrushMuted : kTerrainSculptBrushMuted;
+        const bool groundCoverBrush = overlay.terrainBrushPreviewKind == 2;
+        const Color brushColor = groundCoverBrush
+            ? kTerrainGroundCoverBrushColor
+            : (vegetationBrush ? kTerrainVegetationBrushColor : kTerrainSculptBrushColor);
+        const Color brushMuted = groundCoverBrush
+            ? kTerrainGroundCoverBrushMuted
+            : (vegetationBrush ? kTerrainVegetationBrushMuted : kTerrainSculptBrushMuted);
         const Vector3 center = ToRaylib(overlay.terrainSculptBrushCenter);
         const Vector3 lifted{
             center.x, center.y + 0.03f, center.z};
@@ -1947,11 +1954,12 @@ struct Renderer::PlayerModelGpuState
     bool missingLogged = false;
 };
 
-Renderer::Renderer()
+    Renderer::Renderer()
     : staticPropModels(std::make_unique<StaticModelSceneStore>())
     , playerModelGpu(std::make_unique<PlayerModelGpuState>())
     , worldLighting(std::make_unique<WorldLightingResources>())
     , terrainGpu(std::make_unique<TerrainGpuResources>())
+    , groundCoverGpu(std::make_unique<GroundCoverGpuResources>())
 {
 }
 
@@ -1987,6 +1995,10 @@ void Renderer::SetTerrainAuthoringCookedRoot(const std::filesystem::path& cooked
     {
         terrainGpu->SetAuthoringCookedRoot(cookedRoot);
     }
+    if (groundCoverGpu)
+    {
+        groundCoverGpu->SetAuthoringCookedRoot(cookedRoot);
+    }
 }
 
 void Renderer::SetTerrainAuthoringSourceRoot(const std::filesystem::path& sourceRoot)
@@ -1994,6 +2006,10 @@ void Renderer::SetTerrainAuthoringSourceRoot(const std::filesystem::path& source
     if (terrainGpu)
     {
         terrainGpu->SetAuthoringSourceRoot(sourceRoot);
+    }
+    if (groundCoverGpu)
+    {
+        groundCoverGpu->SetAuthoringSourceRoot(sourceRoot);
     }
 }
 
@@ -2075,6 +2091,10 @@ void Renderer::UnloadRuntimeAssets()
     if (terrainGpu)
     {
         terrainGpu->Unload();
+    }
+    if (groundCoverGpu)
+    {
+        groundCoverGpu->Unload();
     }
 }
 
@@ -2234,6 +2254,10 @@ void Renderer::DrawWorld(
             spec = &level.terrain;
         }
         terrainGpu->Sync(spec);
+        if (groundCoverGpu)
+        {
+            groundCoverGpu->Sync(spec);
+        }
     }
     const world::TerrainSpec* vegetationTerrain = nullptr;
     if (overlay.usePreviewTerrain)
@@ -2252,6 +2276,11 @@ void Renderer::DrawWorld(
             && staticPropModels != nullptr)
         {
             staticPropModels->DrawTerrainVegetation(*vegetationTerrain, gWorldModelOverride);
+        }
+        if (gWorldSolidMode != WorldSolidMode::Wires && vegetationTerrain != nullptr
+            && groundCoverGpu != nullptr)
+        {
+            groundCoverGpu->Draw(*vegetationTerrain, gWorldModelOverride, !gWorldShadowPass);
         }
 
         const Color platformColors[] = {kPlatformColor, kPlatformAccentColor};
@@ -2591,9 +2620,11 @@ void Renderer::DrawWorld(
         gWorldSolidMode = WorldSolidMode::Solid;
         const ModelDrawOverride shadowOverride = worldLighting->ShadowModelOverride();
         gWorldModelOverride = &shadowOverride;
+        gWorldShadowPass = true;
         worldLighting->BeginShadowPass(lightingEnv);
         drawWorldGeometry();
         worldLighting->EndShadowPass();
+        gWorldShadowPass = false;
         gWorldModelOverride = nullptr;
         rlSetClipPlanes(RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     }
