@@ -58,6 +58,8 @@ constexpr Color kGroundColor{78, 84, 96, 255};
 constexpr Color kTerrainColor{118, 140, 96, 255};
 constexpr Color kTerrainSculptBrushColor{255, 214, 70, 255};
 constexpr Color kTerrainSculptBrushMuted{255, 214, 70, 120};
+constexpr Color kTerrainVegetationBrushColor{90, 240, 255, 255};
+constexpr Color kTerrainVegetationBrushMuted{90, 240, 255, 140};
 constexpr Color kPlatformColor{110, 118, 132, 255};
 constexpr Color kPlatformAccentColor{96, 104, 118, 255};
 constexpr Color kPlayerColor{216, 96, 72, 255};
@@ -1748,25 +1750,30 @@ void DrawWorldOverlay(const DebugWorldOverlay& overlay)
     DrawLocalLightAuthoring(overlay);
     if (overlay.drawTerrainSculptBrush && overlay.terrainSculptBrushRadius > 0.0f)
     {
+        const bool vegetationBrush = overlay.terrainBrushPreviewKind == 1;
+        const Color brushColor =
+            vegetationBrush ? kTerrainVegetationBrushColor : kTerrainSculptBrushColor;
+        const Color brushMuted =
+            vegetationBrush ? kTerrainVegetationBrushMuted : kTerrainSculptBrushMuted;
         const Vector3 center = ToRaylib(overlay.terrainSculptBrushCenter);
         const Vector3 lifted{
             center.x, center.y + 0.03f, center.z};
         DrawCircle3D(lifted, overlay.terrainSculptBrushRadius, {1.0f, 0.0f, 0.0f}, 90.0f,
-            kTerrainSculptBrushColor);
+            brushColor);
         DrawCircle3D(
             lifted,
             overlay.terrainSculptBrushRadius * 0.15f,
             {1.0f, 0.0f, 0.0f},
             90.0f,
-            kTerrainSculptBrushColor);
+            brushColor);
         DrawLine3D(
             lifted,
             Vector3{lifted.x, lifted.y + 0.35f, lifted.z},
-            kTerrainSculptBrushColor);
+            brushColor);
         rlDrawRenderBatchActive();
         rlDisableDepthTest();
         DrawCircle3D(lifted, overlay.terrainSculptBrushRadius, {1.0f, 0.0f, 0.0f}, 90.0f,
-            kTerrainSculptBrushMuted);
+            brushMuted);
         rlDrawRenderBatchActive();
         rlEnableDepthTest();
     }

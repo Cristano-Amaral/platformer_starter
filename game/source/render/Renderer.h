@@ -157,6 +157,8 @@ struct DebugWorldOverlay
     bool drawTerrainSculptBrush = false;
     core::Vec3 terrainSculptBrushCenter{};
     float terrainSculptBrushRadius = 0.0f;
+    // 0 sculpt/paint (yellow), 1 vegetation (cyan). Visualization only.
+    int terrainBrushPreviewKind = 0;
     // M77 editor-only XZ viewport grid. Visualization only: not pickable, not
     // authored, not a Jolt body, and never a Gameplay/Release world grid.
     int editorViewportGridLineCount = 0;

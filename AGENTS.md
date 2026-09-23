@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 94 — Terrain Vegetation Distribution & Rendering Improvements.
+Current milestone: Milestone 95 — Terrain Vegetation Editor UX.
 
-Canonical file: [`docs/milestones/MILESTONE_94.md`](docs/milestones/MILESTONE_94.md)
+Canonical file: [`docs/milestones/MILESTONE_95.md`](docs/milestones/MILESTONE_95.md)
 
-Branch: `milestone/94-terrain-vegetation-distribution-rendering`
+Branch: `milestone/95-terrain-vegetation-editor-ux`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 95.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 96.
 
 Earlier milestone status, including Milestone 90 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

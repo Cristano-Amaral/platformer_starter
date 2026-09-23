@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 94 — Terrain Vegetation Distribution & Rendering Improvements**
+**Milestone 95 — Terrain Vegetation Editor UX**
 
-Canonical file: [`docs/milestones/MILESTONE_94.md`](milestones/MILESTONE_94.md)
+Canonical file: [`docs/milestones/MILESTONE_95.md`](milestones/MILESTONE_95.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -57,7 +57,8 @@ Milestone 91 is implemented, awaiting manual acceptance.
 Milestone 92 is implemented, awaiting manual acceptance.
 Milestone 93 is implemented, awaiting manual acceptance.
 Milestone 94 is implemented, awaiting manual acceptance.
-Do not start Milestone 95.
+Milestone 95 is implemented, awaiting manual acceptance.
+Do not start Milestone 96.
 
 ## Coding-agent loading contract
 
@@ -194,6 +195,7 @@ Historical milestone files do not override current implemented behavior.
 | 92 | [Milestone 92 — Scalable Terrain Material Palette & Weight Maps](milestones/MILESTONE_92.md) | implemented, awaiting manual acceptance |
 | 93 | [Milestone 93 — Terrain Vegetation Foundation](milestones/MILESTONE_93.md) | implemented, awaiting manual acceptance |
 | 94 | [Milestone 94 — Terrain Vegetation Distribution & Rendering Improvements](milestones/MILESTONE_94.md) | implemented, awaiting manual acceptance |
+| 95 | [Milestone 95 — Terrain Vegetation Editor UX](milestones/MILESTONE_95.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

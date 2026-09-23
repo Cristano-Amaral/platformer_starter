@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 namespace
@@ -933,6 +934,265 @@ int main()
             state, level, selection, hit, true, true, false, false, false, false);
         Expect(erased.mutatedWorkingCopy, "editor erase mutates the working copy");
         Expect(OccupiedCells(level.terrain) == 0, "editor erase clears the hit region");
+    }
+
+    {
+        world::TerrainSpec terrain = MakeTerrain();
+        editor::TerrainVegetationState state{};
+        Expect(
+            editor::TryAddTerrainVegetationPaletteEntry(terrain, state, "models/test_static.glb"),
+            "picker add writes a valid model into the palette");
+        Expect(terrain.vegetationEntries.size() == 1, "palette has one entry");
+        Expect(state.selectedEntry == 0, "adding selects the new entry");
+        Expect(
+            editor::TryAddTerrainVegetationPaletteEntry(terrain, state, "models/test_static.glb"),
+            "duplicate identity is a second palette entry");
+        Expect(terrain.vegetationEntries.size() == 2, "same model may occupy two slots");
+        Expect(state.selectedEntry == 1, "duplicate add selects the new slot");
+        Expect(
+            editor::TryAddTerrainVegetationPaletteEntry(terrain, state, "models/test_authored.glb"),
+            "second distinct model");
+        for (int extra = 3; extra < world::kMaxTerrainVegetationEntries; ++extra)
+        {
+            Expect(
+                editor::TryAddTerrainVegetationPaletteEntry(
+                    terrain, state, "models/test_static.glb"),
+                "fill remaining palette slots");
+        }
+        Expect(editor::TerrainVegetationPaletteIsFull(terrain), "palette reports full at 8");
+        Expect(state.selectedEntry == 7, "filling the palette selects the last slot");
+        Expect(
+            !editor::TryAddTerrainVegetationPaletteEntry(terrain, state, "models/test_authored.glb"),
+            "palette maximum rejects a ninth entry");
+        Expect(terrain.vegetationEntries.size() == 8, "full palette stays at 8");
+        const char* fullStatus = editor::TerrainVegetationPaletteStatusText(terrain);
+        Expect(std::string(fullStatus).find("8") != std::string::npos, "full palette status names the limit");
+        Expect(
+            editor::TryRemoveTerrainVegetationPaletteEntry(terrain, state, 0),
+            "palette remove remaps occupancy");
+        Expect(terrain.vegetationEntries.size() == 7, "removal drops one entry");
+        Expect(state.selectedEntry == 6, "removing an earlier entry remaps a later selection");
+        Expect(
+            editor::TryRemoveTerrainVegetationPaletteEntry(terrain, state, 6),
+            "removing the selected entry succeeds");
+        Expect(state.selectedEntry == 0, "removing the selected entry remaps to 0");
+    }
+
+    {
+        world::TerrainSpec terrain = MakeTerrain();
+        editor::TerrainVegetationState state{};
+        Expect(editor::TerrainVegetationPaletteIsEmpty(terrain), "empty palette status fixture");
+        Expect(
+            std::string(editor::TerrainVegetationPaletteStatusText(terrain)).find("empty")
+                != std::string::npos,
+            "empty palette has explicit feedback");
+        Expect(AddTree(terrain, "models/test_static.glb"), "selection fixture A");
+        Expect(AddTree(terrain, "models/test_authored.glb"), "selection fixture B");
+        terrain.vegetationEntries[0].density = 2.0f;
+        terrain.vegetationEntries[1].density = 2.0f;
+        world::TerrainVegetationStampRequest paintA = CenterStamp(terrain);
+        paintA.entryIndex = 0;
+        Expect(world::ApplyTerrainVegetationStamp(terrain, paintA), "paint A before selection change");
+        const world::TerrainSpec painted = terrain;
+        std::vector<world::TerrainVegetationInstance> beforeSelect;
+        world::BuildTerrainVegetationInstances(terrain, beforeSelect);
+        state.selectedEntry = 0;
+        Expect(
+            editor::TrySelectTerrainVegetationEntry(state, 1, terrain),
+            "selecting another entry succeeds");
+        Expect(state.selectedEntry == 1, "selected entry is the other model");
+        Expect(world::TerrainVegetationEqual(terrain, painted), "selection does not mutate occupancy");
+        std::vector<world::TerrainVegetationInstance> afterSelect;
+        world::BuildTerrainVegetationInstances(terrain, afterSelect);
+        Expect(SameInstances(beforeSelect, afterSelect), "selection does not change derived instances");
+        Expect(!editor::TrySelectTerrainVegetationEntry(state, 9, terrain), "out-of-range selection is refused");
+        Expect(state.selectedEntry == 1, "invalid selection leaves the current entry");
+    }
+
+    {
+        world::TerrainSpec terrain = MakeTerrain();
+        Expect(AddTree(terrain), "next-paint fixture");
+        terrain.vegetationEntries[0].density = 1.0f;
+        terrain.vegetationEntries[0].minScale = 0.5f;
+        terrain.vegetationEntries[0].maxScale = 0.5f;
+        terrain.vegetationEntries[0].randomYaw = false;
+        terrain.vegetationEntries[0].alignToNormal = false;
+        Expect(world::ApplyTerrainVegetationStamp(terrain, CenterStamp(terrain)), "paint current next-paint values");
+        const world::TerrainSpec painted = terrain;
+        std::vector<world::TerrainVegetationInstance> before;
+        world::BuildTerrainVegetationInstances(terrain, before);
+        terrain.vegetationEntries[0].density = 8.0f;
+        terrain.vegetationEntries[0].minScale = 2.0f;
+        terrain.vegetationEntries[0].maxScale = 4.0f;
+        terrain.vegetationEntries[0].randomYaw = true;
+        terrain.vegetationEntries[0].alignToNormal = true;
+        Expect(terrain.vegetationCells == painted.vegetationCells, "next-paint density does not rewrite occupancy");
+        Expect(
+            terrain.vegetationDensityQuanta == painted.vegetationDensityQuanta,
+            "next-paint density does not rewrite captured cell density");
+        Expect(
+            terrain.vegetationPaintParams == painted.vegetationPaintParams,
+            "next-paint scale/yaw/align do not rewrite captured style");
+        std::vector<world::TerrainVegetationInstance> after;
+        world::BuildTerrainVegetationInstances(terrain, after);
+        Expect(SameInstances(before, after), "changing Next Paint without painting keeps the distribution");
+    }
+
+    {
+        world::TerrainSpec terrain = MakeTerrain();
+        editor::TerrainVegetationState state{};
+        Expect(AddTree(terrain, "models/test_static.glb"), "paint selected entry A");
+        Expect(AddTree(terrain, "models/test_authored.glb"), "paint selected entry B");
+        state.selectedEntry = 1;
+        terrain.vegetationEntries[1].density = 3.0f;
+        terrain.vegetationEntries[1].minScale = 1.5f;
+        terrain.vegetationEntries[1].maxScale = 1.5f;
+        terrain.vegetationEntries[1].randomYaw = false;
+        world::TerrainVegetationStampRequest request = CenterStamp(terrain);
+        request.entryIndex = state.selectedEntry;
+        Expect(world::ApplyTerrainVegetationStamp(terrain, request), "paint authors the selected entry");
+        const std::uint16_t captured = world::PackTerrainVegetationPaintFromEntry(terrain.vegetationEntries[1]);
+        int paintedB = 0;
+        int paintedA = 0;
+        bool capturedParams = false;
+        for (int cellIndex = 0; cellIndex < static_cast<int>(terrain.vegetationCells.size()); ++cellIndex)
+        {
+            if (world::TerrainVegetationCellHasEntry(terrain.vegetationCells[static_cast<std::size_t>(cellIndex)], 1))
+            {
+                ++paintedB;
+                capturedParams = capturedParams
+                    || EntryPaint(terrain, cellIndex, 1) == captured;
+            }
+            if (world::TerrainVegetationCellHasEntry(terrain.vegetationCells[static_cast<std::size_t>(cellIndex)], 0))
+            {
+                ++paintedA;
+            }
+        }
+        Expect(paintedB > 0 && paintedA == 0, "paint writes only the selected entry");
+        Expect(capturedParams, "paint stores the current Next-Paint values");
+    }
+
+    {
+        std::vector<editor::TerrainVegetationPickerItem> items;
+        editor::TerrainVegetationPickerItem pine{};
+        pine.canonicalIdentity = "models/pine.glb";
+        pine.displayName = "pine.glb";
+        editor::TerrainVegetationPickerItem crate{};
+        crate.canonicalIdentity = "models/crate.glb";
+        crate.displayName = "crate.glb";
+        items.push_back(pine);
+        items.push_back(crate);
+        Expect(
+            editor::FilterTerrainVegetationPickerItems(items, "").size() == 2,
+            "empty search lists every compatible model");
+        Expect(
+            editor::FilterTerrainVegetationPickerItems(items, "PINE").size() == 1,
+            "search is case-insensitive");
+        Expect(
+            editor::FilterTerrainVegetationPickerItems(items, "no-such-model").empty(),
+            "search with no compatible models is empty");
+        Expect(
+            std::string(editor::TerrainVegetationPickerStatusText(items, {}, false)).find("match")
+                != std::string::npos,
+            "empty search results have explicit feedback");
+        Expect(
+            std::string(editor::TerrainVegetationPickerStatusText({}, {}, false)).find("available")
+                != std::string::npos,
+            "empty catalog has explicit feedback");
+        Expect(
+            editor::TerrainVegetationModelIsCataloged("models/pine.glb", items),
+            "cataloged identity is available");
+        Expect(
+            !editor::TerrainVegetationModelIsCataloged("models/missing_tree.glb", items),
+            "missing referenced model is reported");
+        Expect(
+            editor::TerrainVegetationModelDisplayName("models/missing_tree.glb", items)
+                == "missing_tree.glb",
+            "missing model still shows a useful file name");
+    }
+
+    {
+        world::LevelDefinition working{};
+        working.hasTerrain = true;
+        working.terrain = MakeTerrain();
+        world::LevelDefinition active = working;
+        editor::TerrainVegetationState state{};
+        state.mode = true;
+        Expect(
+            editor::TryAddTerrainVegetationPaletteEntry(
+                working.terrain, state, "models/test_static.glb"),
+            "add palette entry on workingCopy");
+        Expect(active.terrain.vegetationEntries.empty(), "add does not mutate active before Apply");
+        const editor::EditorSelection selection{editor::EditorObjectKind::Terrain, 0};
+        editor::Ray3 hit{};
+        hit.origin = {
+            working.terrain.origin.x + working.terrain.sizeX * 0.5f,
+            30.0f,
+            working.terrain.origin.z + working.terrain.sizeZ * 0.5f};
+        hit.direction = {0.0f, -1.0f, 0.0f};
+        const editor::TerrainVegetationFrameResult painted = editor::TickTerrainVegetation(
+            state, working, selection, hit, true, true, false, false, false, false);
+        Expect(painted.mutatedWorkingCopy, "paint mutates workingCopy");
+        Expect(OccupiedCells(working.terrain) > 0, "workingCopy paint is visible immediately");
+        Expect(OccupiedCells(active.terrain) == 0, "workingCopy paint does not affect active");
+        Expect(
+            editor::TickTerrainVegetation(
+                state, working, selection, hit, true, true, false, true, false, false)
+                .mutatedWorkingCopy
+                == false,
+            "ImGui-captured pointer does not paint");
+        state.pickerOpen = true;
+        Expect(
+            editor::TickTerrainVegetation(
+                state, working, selection, hit, true, true, false, false, false, false)
+                .mutatedWorkingCopy
+                == false,
+            "open asset picker does not paint");
+        Expect(state.pickerPointerLock, "picker latches pointer lock");
+        state.pickerOpen = false;
+        Expect(
+            editor::TickTerrainVegetation(
+                state, working, selection, hit, true, true, false, false, false, false)
+                .mutatedWorkingCopy
+                == false,
+            "picker dismiss click does not paint while the lock is held");
+        Expect(
+            editor::TickTerrainVegetation(
+                state, working, selection, hit, false, false, true, false, false, false)
+                .mutatedWorkingCopy
+                == false,
+            "picker lock clears on release without painting");
+        Expect(!state.pickerPointerLock, "release clears picker pointer lock");
+        state.pickerOpen = true;
+        Expect(
+            !editor::TerrainVegetationBrushPreviewShouldDraw(true, true, state),
+            "preview is hidden while the picker is open");
+        state.pickerOpen = false;
+        state.pickerPointerLock = false;
+        Expect(
+            editor::TerrainVegetationBrushPreviewShouldDraw(true, true, state),
+            "preview draws for an active vegetation hit");
+        Expect(
+            !editor::TerrainVegetationBrushPreviewShouldDraw(false, true, state),
+            "preview is hidden when vegetation painting is inactive");
+        Expect(
+            !editor::TerrainVegetationBrushPreviewShouldDraw(true, false, state),
+            "preview is hidden without a Terrain hit");
+        active = working;
+        Expect(world::TerrainVegetationEqual(active.terrain, working.terrain),
+            "Apply promotes workingCopy vegetation");
+        std::vector<world::TerrainVegetationInstance> first;
+        std::vector<world::TerrainVegetationInstance> second;
+        world::BuildTerrainVegetationInstances(working.terrain, first);
+        world::BuildTerrainVegetationInstances(working.terrain, second);
+        Expect(SameInstances(first, second), "editor-only picker/selection does not change M94 distribution");
+        world::TerrainVegetationRenderPlan plan;
+        world::BuildTerrainVegetationRenderPlan(working.terrain, first, plan);
+        Expect(!first.empty(), "painted vegetation still generates instances");
+        Expect(plan.groups.size() == 1, "one identity is one render group");
+        Expect(
+            world::TerrainVegetationInstancedSubmissionCount(plan, 1) == 1,
+            "M94 instanced rendering remains active");
     }
 
     if (gFailures != 0)

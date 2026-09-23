@@ -12,6 +12,7 @@
 #include "editor/StaticPropTransform.h"
 #include "editor/TerrainSculpt.h"
 #include "editor/TerrainPaint.h"
+#include "editor/TerrainVegetation.h"
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "physics/PhysicsCapacity.h"
@@ -2926,6 +2927,79 @@ int main()
             "reselecting Terrain keeps the paint layer");
         editor::ResetTerrainPaintState(state.terrainPaint);
         Expect(!state.terrainPaint.mode, "lifecycle reset clears Paint mode");
+    }
+
+    {
+        world::LevelDefinition active = MakeActiveLevel();
+        MakeWritableEditorFixture(active);
+        editor::LevelEditorState state{};
+        SeedEditor(state, active);
+        Expect(
+            editor::HandleAuthoredLifecycleRequest(
+                state, active, LevelEditorRequest::AddTerrain, true),
+            "Add Terrain for vegetation");
+        state.selection = {EditorObjectKind::Terrain, 0};
+        const bool dirtyBeforeAdd = state.dirty;
+        Expect(
+            editor::TryAddTerrainVegetationPaletteEntry(
+                state.workingCopy.terrain, state.terrainVegetation, "models/test_static.glb"),
+            "workingCopy palette add");
+        editor::RefreshLevelEditorDerivedFlags(state, active);
+        Expect(state.modified, "adding a vegetation model is Modified");
+        Expect(state.dirty == dirtyBeforeAdd, "palette add is not Dirty until Apply");
+        Expect(active.terrain.vegetationEntries.empty(), "palette add does not mutate active");
+        Expect(
+            editor::TryAddTerrainVegetationPaletteEntry(
+                state.workingCopy.terrain, state.terrainVegetation, "models/test_authored.glb"),
+            "workingCopy second vegetation model");
+        state.terrainVegetation.mode = true;
+        state.terrainVegetation.selectedEntry = 0;
+        state.workingCopy.terrain.vegetationEntries[0].density = 2.0f;
+        const core::Vec3 sample = world::TerrainSamplePosition(state.workingCopy.terrain, 4, 2);
+        editor::Ray3 ray{{sample.x, sample.y + 8.0f, sample.z}, {0.0f, -1.0f, 0.0f}};
+        const editor::TerrainVegetationFrameResult painted = editor::TickTerrainVegetation(
+            state.terrainVegetation,
+            state.workingCopy,
+            state.selection,
+            ray,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false);
+        Expect(painted.mutatedWorkingCopy, "vegetation paint mutates workingCopy");
+        Expect(active.terrain.vegetationCells.empty() || active.terrain.vegetationEntries.empty(),
+            "workingCopy vegetation paint does not mutate active");
+        const world::TerrainSpec paintedCopy = state.workingCopy.terrain;
+        Expect(
+            editor::TrySelectTerrainVegetationEntry(
+                state.terrainVegetation, 1, state.workingCopy.terrain),
+            "select second entry after paint");
+        Expect(
+            world::TerrainVegetationEqual(state.workingCopy.terrain, paintedCopy),
+            "changing selected entry does not rewrite painted vegetation");
+        state.workingCopy.terrain.vegetationEntries[1].density = 8.0f;
+        Expect(
+            state.workingCopy.terrain.vegetationCells == paintedCopy.vegetationCells,
+            "Next Paint without painting leaves occupancy");
+        world::LevelDefinition applied = state.workingCopy;
+        editor::RefreshLevelEditorDerivedFlags(state, applied);
+        Expect(!state.modified, "Apply promotes vegetation workingCopy");
+        Expect(world::TerrainVegetationEqual(applied.terrain, state.workingCopy.terrain),
+            "Apply copies vegetation palette and occupancy");
+        const std::string saved = world::SerializeLevelText(applied);
+        Expect(
+            saved.find("picker") == std::string::npos
+                && saved.find("thumbnail") == std::string::npos
+                && saved.find("Next Paint") == std::string::npos,
+            "UI-only vegetation state is not serialized");
+        const world::ParseLevelFileResult reloaded = world::ParseLevelText(saved);
+        Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload vegetation");
+        Expect(
+            world::TerrainVegetationEqual(applied.terrain, reloaded.level.terrain),
+            "reload preserves authored vegetation");
+        Expect(saved.find("terrain_veg") != std::string::npos, "Save writes vegetation records");
     }
 
     if (gFailures != 0)

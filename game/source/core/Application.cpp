@@ -1894,29 +1894,41 @@ int Application::Run()
                     levelEditorState.workingCopy,
                     levelEditorState.selection))
             {
-                const editor::Ray3 brushRay = editor::ScreenToWorldRayFromWindow(
-                    cameraView,
+                const bool vegetationBrush = editor::TerrainVegetationInteractionIsActive(
+                    levelEditorState.terrainVegetation,
+                    levelEditorState.workingCopy,
+                    levelEditorState.selection);
+                const bool brushPointerBlocked = editor::EditorViewportPointerBlocked(
                     editorInput.mouseX,
                     editorInput.mouseY,
-                    editorViewport);
-                core::Vec3 brushHit{};
-                overlay.drawTerrainSculptBrush = editor::PickWorkingCopyTerrainSculptHit(
-                    levelEditorState.workingCopy, brushRay, brushHit);
-                if (overlay.drawTerrainSculptBrush)
+                    editorViewport,
+                    debugUi.WantsMouseCapture())
+                    || (vegetationBrush
+                        && editor::TerrainVegetationUiBlocksPointer(
+                            levelEditorState.terrainVegetation));
+                overlay.terrainBrushPreviewKind = vegetationBrush ? 1 : 0;
+                if (!brushPointerBlocked)
                 {
-                    overlay.terrainSculptBrushCenter = brushHit;
-                    overlay.terrainSculptBrushRadius =
-                        editor::TerrainVegetationInteractionIsActive(
-                            levelEditorState.terrainVegetation,
-                            levelEditorState.workingCopy,
-                            levelEditorState.selection)
-                        ? levelEditorState.terrainVegetation.radius
-                        : (editor::TerrainPaintInteractionIsActive(
-                               levelEditorState.terrainPaint,
-                               levelEditorState.workingCopy,
-                               levelEditorState.selection)
-                               ? levelEditorState.terrainPaint.radius
-                               : levelEditorState.terrainSculpt.radius);
+                    const editor::Ray3 brushRay = editor::ScreenToWorldRayFromWindow(
+                        cameraView,
+                        editorInput.mouseX,
+                        editorInput.mouseY,
+                        editorViewport);
+                    core::Vec3 brushHit{};
+                    overlay.drawTerrainSculptBrush = editor::PickWorkingCopyTerrainSculptHit(
+                        levelEditorState.workingCopy, brushRay, brushHit);
+                    if (overlay.drawTerrainSculptBrush)
+                    {
+                        overlay.terrainSculptBrushCenter = brushHit;
+                        overlay.terrainSculptBrushRadius = vegetationBrush
+                            ? levelEditorState.terrainVegetation.radius
+                            : (editor::TerrainPaintInteractionIsActive(
+                                   levelEditorState.terrainPaint,
+                                   levelEditorState.workingCopy,
+                                   levelEditorState.selection)
+                                   ? levelEditorState.terrainPaint.radius
+                                   : levelEditorState.terrainSculpt.radius);
+                    }
                 }
             }
             overlay.drawDirectionalLightAuthoring = true;
@@ -2243,7 +2255,9 @@ int Application::Run()
                     levelEditorState.selection))
             {
                 const std::string terrainVegetationHud =
-                    editor::FormatTerrainVegetationHudName(levelEditorState.terrainVegetation);
+                    editor::FormatTerrainVegetationHudName(
+                        levelEditorState.terrainVegetation,
+                        levelEditorState.workingCopy.terrain);
                 renderer.DrawEditorTerrainPaintHud(
                     true,
                     terrainVegetationHud.c_str(),

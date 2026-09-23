@@ -369,6 +369,19 @@ int main()
         vegetationDelete.find("models/crate.glb") != std::string::npos
             && vegetationDelete.find("Terrain vegetation") != std::string::npos,
         "vegetation delete diagnostic names the model");
+    world::LevelDefinition savedBaseline = working;
+    Expect(
+        editor::AuthoredLevelsProtectTerrainVegetationIdentity(
+            active, working, active, "models/crate.glb"),
+        "active vegetation reference blocks delete");
+    Expect(
+        editor::AuthoredLevelsProtectTerrainVegetationIdentity(
+            active, active, savedBaseline, "models/crate.glb"),
+        "saved-baseline vegetation reference blocks delete");
+    Expect(
+        !editor::AuthoredLevelsProtectTerrainVegetationIdentity(
+            active, active, active, "models/crate.glb"),
+        "unreferenced vegetation remains deletable");
 
     editor::ThumbnailSourceStamp missingStamp{};
     editor::ThumbnailSourceStamp presentStamp{};
