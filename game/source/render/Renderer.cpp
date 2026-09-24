@@ -2520,15 +2520,13 @@ void Renderer::DrawWorld(
             {
                 if (gWorldSolidMode != WorldSolidMode::Wires)
                 {
-                    const world::StaticPropSpec visual =
-                        world::ItemPickupPresentedVisualProp(presented, elapsedSeconds);
                     if (gWorldModelOverride != nullptr)
                     {
-                        staticPropModels->DrawProp(visual, *gWorldModelOverride);
+                        staticPropModels->DrawProp(presentation.visual, *gWorldModelOverride);
                     }
                     else
                     {
-                        staticPropModels->DrawProp(visual);
+                        staticPropModels->DrawProp(presentation.visual);
                     }
                 }
                 if (overlayPass && presentation.drawModelHighlight)

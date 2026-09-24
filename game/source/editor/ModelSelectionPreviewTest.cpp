@@ -487,6 +487,23 @@ int main()
         world::LevelDefinition working = active;
         const editor::EditorSelection pickup0{editor::EditorObjectKind::ItemPickup, 0};
 
+        world::ItemPickupSpec unassigned{};
+        unassigned.position = {1.0f, 0.0f, 3.0f};
+        const core::Vec3 unassignedPositionBefore = unassigned.position;
+        const core::Vec3 unassignedOffsetBefore = unassigned.visualOffset;
+        core::Vec3 placeholderCenter{};
+        core::Vec3 placeholderSize{};
+        editor::ItemPickupEditorBounds(
+            unassigned, placeholderCenter, placeholderSize, {}, {}, &previewRegistry);
+        Expect(NearlyEqual(
+                placeholderCenter.y - placeholderSize.y * 0.5f,
+                unassigned.position.y),
+            "unassigned primitive placeholder rests on authored support point");
+        Expect(Vec3Near(unassigned.position, unassignedPositionBefore),
+            "placeholder presentation does not mutate ItemPickupSpec position");
+        Expect(Vec3Near(unassigned.visualOffset, unassignedOffsetBefore),
+            "placeholder presentation does not mutate visualOffset");
+
         Expect(
             !editor::IsModelBackedSelection(pickup0, working, &previewRegistry),
             "no World Model keeps primitive fallback");
@@ -541,6 +558,34 @@ int main()
         Expect(
             GhostMatchesResolvedProp(scaleGhost, scaledPreview),
             "Scale pending workingCopy transform uses the resolved World Model");
+
+        editor::SelectedModelGhostRequest groundedGhost = scaleGhost;
+        const core::Vec3 loadedMin{-2.0f, -1.0f, -0.5f};
+        const core::Vec3 loadedMax{2.0f, 3.0f, 0.5f};
+        editor::ApplyLoadedLocalBoundsToGhost(
+            groundedGhost, true, loadedMin, loadedMax);
+        core::Vec3 groundedCorners[8]{};
+        editor::StaticPropWorldCorners(
+            groundedGhost.visual, loadedMin, loadedMax, groundedCorners);
+        float groundedMinY = groundedCorners[0].y;
+        for (const core::Vec3 corner : groundedCorners)
+        {
+            groundedMinY = std::min(groundedMinY, corner.y);
+        }
+        Expect(NearlyEqual(
+                groundedMinY,
+                working.itemPickups[0].position.y + working.itemPickups[0].visualOffset.y),
+            "rotated non-uniformly scaled model bounds rest on authored support plus visualOffset");
+
+        world::ItemPickupSpec offsetPickup = working.itemPickups[0];
+        offsetPickup.visualOffset.y += 0.75f;
+        world::LevelDefinition offsetWorking = working;
+        offsetWorking.itemPickups[0] = offsetPickup;
+        editor::SelectedModelGhostRequest offsetGhost =
+            editor::MakeSelectedModelGhostRequest(pickup0, offsetWorking, &previewRegistry);
+        editor::ApplyLoadedLocalBoundsToGhost(offsetGhost, true, loadedMin, loadedMax);
+        Expect(NearlyEqual(offsetGhost.visual.position.y - groundedGhost.visual.position.y, 0.75f),
+            "explicit visualOffset stays additive after support anchoring");
 
         editor::StructuralIndexMap map{};
         editor::ResetStructuralIndexMap(map, active);

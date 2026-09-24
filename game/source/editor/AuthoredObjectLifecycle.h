@@ -218,6 +218,15 @@ bool IsPendingDeleteActiveIndex(
     EditorObjectKind kind,
     std::size_t activeIndex);
 
+// Produces the exact candidate promoted by Apply. Empty Item Pickups are
+// discarded only when they are pending additions with no active counterpart.
+// Existing authored identities, including unresolved ones, are preserved.
+bool PrepareLevelEditorApplyCandidate(
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map,
+    world::LevelDefinition& candidate,
+    std::size_t& discardedIncompleteItemPickups);
+
 PendingDeleteVisuals MakePendingDeleteVisuals(
     const world::LevelDefinition& active,
     const StructuralIndexMap& map);

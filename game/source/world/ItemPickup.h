@@ -62,7 +62,7 @@ inline constexpr std::string_view kItemPickupIdleKeyword = "idle";
 struct ItemPickupSpec
 {
     core::Vec3 position{};
-    std::string itemId{kDefaultItemPickupId};
+    std::string itemId{};
     int quantity = kDefaultItemPickupQuantity;
     // True when the authored token was a mapped legacy key/1 record.
     // Diagnostic only; never serialized.
@@ -175,6 +175,14 @@ inline core::Vec3 ItemPickupVisualPosition(const ItemPickupSpec& spec)
     return spec.position + spec.visualOffset;
 }
 
+// The authored position is a support/contact point. The temporary centered
+// primitive fallback is presentation-only and sits above that point.
+inline core::Vec3 ItemPickupPrimitivePresentationPosition(core::Vec3 supportPosition)
+{
+    supportPosition.y += kItemPickupVisualSize * 0.5f;
+    return supportPosition;
+}
+
 // Transient visual-only Y bob. Zero when idle animation is disabled.
 // Does not mutate authored fields. phase = elapsedSeconds * idleBobSpeed * 2π.
 inline float ItemPickupIdleBobOffsetY(const ItemPickupSpec& spec, double elapsedSeconds)
@@ -226,6 +234,77 @@ inline StaticPropSpec ItemPickupVisualProp(const ItemPickupSpec& spec)
     visual.position = ItemPickupVisualPosition(spec);
     visual.rotationDegrees = spec.visualRotationDegrees;
     visual.scale = spec.visualScale;
+    return visual;
+}
+
+// Treat visual.position as the authored support point, then raise/lower the
+// model origin so the transformed model bounds rest on that point. Rotation
+// and non-uniform scale are applied to all eight corners before min Y is
+// chosen. visualOffset is already part of visual.position, so it remains an
+// explicit additive authored adjustment rather than being mutated here.
+inline StaticPropSpec ItemPickupSupportAnchoredVisualProp(
+    StaticPropSpec visual,
+    core::Vec3 localMin,
+    core::Vec3 localMax)
+{
+    constexpr float kDegreesToRadians = 3.14159265f / 180.0f;
+    const auto rotate = [&](core::Vec3 value)
+    {
+        const auto rotateX = [&](core::Vec3 input, float degrees)
+        {
+            const float radians = degrees * kDegreesToRadians;
+            const float cosine = std::cos(radians);
+            const float sine = std::sin(radians);
+            return core::Vec3{
+                input.x,
+                input.y * cosine - input.z * sine,
+                input.y * sine + input.z * cosine};
+        };
+        const auto rotateY = [&](core::Vec3 input, float degrees)
+        {
+            const float radians = degrees * kDegreesToRadians;
+            const float cosine = std::cos(radians);
+            const float sine = std::sin(radians);
+            return core::Vec3{
+                input.x * cosine + input.z * sine,
+                input.y,
+                -input.x * sine + input.z * cosine};
+        };
+        const auto rotateZ = [&](core::Vec3 input, float degrees)
+        {
+            const float radians = degrees * kDegreesToRadians;
+            const float cosine = std::cos(radians);
+            const float sine = std::sin(radians);
+            return core::Vec3{
+                input.x * cosine - input.y * sine,
+                input.x * sine + input.y * cosine,
+                input.z};
+        };
+        return rotateZ(
+            rotateY(rotateX(value, visual.rotationDegrees.x), visual.rotationDegrees.y),
+            visual.rotationDegrees.z);
+    };
+
+    float minimumRelativeY = 0.0f;
+    bool haveCorner = false;
+    for (const float x : {localMin.x, localMax.x})
+    {
+        for (const float y : {localMin.y, localMax.y})
+        {
+            for (const float z : {localMin.z, localMax.z})
+            {
+                const core::Vec3 scaled{
+                    x * visual.scale.x, y * visual.scale.y, z * visual.scale.z};
+                const float relativeY = rotate(scaled).y;
+                if (!haveCorner || relativeY < minimumRelativeY)
+                {
+                    minimumRelativeY = relativeY;
+                    haveCorner = true;
+                }
+            }
+        }
+    }
+    visual.position.y -= minimumRelativeY;
     return visual;
 }
 

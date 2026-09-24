@@ -267,6 +267,11 @@ void ApplyLoadedModelBoundsToPending(
         {
             visual.localMin = localMin;
             visual.localMax = localMax;
+            if (visual.kind == editor::EditorObjectKind::ItemPickup)
+            {
+                visual.staticProp = world::ItemPickupSupportAnchoredVisualProp(
+                    visual.staticProp, localMin, localMax);
+            }
         }
         editor::StaticPropWorldAabb(
             visual.staticProp,
@@ -1768,6 +1773,11 @@ int Application::Run()
                     break;
                 }
                 overlay.placementCandidateCenter = candidate.center;
+                if (candidate.kind == editor::EditorObjectKind::ItemPickup)
+                {
+                    overlay.placementCandidateCenter =
+                        world::ItemPickupPrimitivePresentationPosition(candidate.center);
+                }
                 overlay.placementCandidateSize = candidate.size;
                 overlay.placementCandidateCheckpoint = candidate.checkpoint;
                 overlay.placementCandidateHazard = candidate.hazard;
@@ -3846,9 +3856,16 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
 
 bool Application::ApplyLevelEditorPreview()
 {
+    world::LevelDefinition candidate{};
+    std::size_t discardedIncompleteItemPickups = 0;
     // Validate the candidate while the live world is still intact, so an
     // invalid working copy cannot shut physics down or move the camera.
-    if (!world::IsWritableLevelDefinition(levelEditorState.workingCopy))
+    if (!editor::PrepareLevelEditorApplyCandidate(
+            levelEditorState.workingCopy,
+            levelEditorState.structuralMap,
+            candidate,
+            discardedIncompleteItemPickups)
+        || !world::IsWritableLevelDefinition(candidate))
     {
         editor::ResetLevelActionStatuses(levelEditorState);
         levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Invalid;
@@ -3856,8 +3873,6 @@ bool Application::ApplyLevelEditorPreview()
             "Apply rejected: authored validation failed. Active level unchanged.";
         return true;
     }
-
-    const world::LevelDefinition candidate = levelEditorState.workingCopy;
 
     if (!physicsWorld.TryRebuild(
             candidate, candidate.initialSpawnVisualCenter, player.Size()))
@@ -3886,8 +3901,9 @@ bool Application::ApplyLevelEditorPreview()
         levelEditorState.additionalSelections);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
-    levelEditorState.lastMessage =
-        "Applied. Rendering and collision were rebuilt from the same authored data.";
+    levelEditorState.lastMessage = discardedIncompleteItemPickups > 0
+        ? "Applied. Incomplete new Item Pickup discarded."
+        : "Applied. Rendering and collision were rebuilt from the same authored data.";
     editor::CancelAllEditorPlacement(
         levelEditorState.placementMode,
         levelEditorState.placementPointerBlocked,

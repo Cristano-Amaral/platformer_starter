@@ -358,7 +358,7 @@ EditorPickingSet BuildPickingSet(
             set,
             EditorObjectKind::ItemPickup,
             index,
-            pickup.position,
+            world::ItemPickupPrimitivePresentationPosition(pickup.position),
             world::kItemPickupVisualExtents,
             0.0f);
     }
@@ -463,6 +463,11 @@ void ApplyLoadedLocalBounds(PickingProxy& proxy, core::Vec3 localMin, core::Vec3
     }
     proxy.localMin = localMin;
     proxy.localMax = localMax;
+    if (proxy.selection.kind == EditorObjectKind::ItemPickup)
+    {
+        proxy.staticProp = world::ItemPickupSupportAnchoredVisualProp(
+            proxy.staticProp, localMin, localMax);
+    }
     StaticPropWorldAabb(
         proxy.staticProp, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
 }
@@ -475,6 +480,11 @@ void ApplyLoadedLocalBounds(PendingPickProxy& proxy, core::Vec3 localMin, core::
     }
     proxy.localMin = localMin;
     proxy.localMax = localMax;
+    if (proxy.selection.kind == EditorObjectKind::ItemPickup)
+    {
+        proxy.staticProp = world::ItemPickupSupportAnchoredVisualProp(
+            proxy.staticProp, localMin, localMax);
+    }
     StaticPropWorldAabb(
         proxy.staticProp, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
 }

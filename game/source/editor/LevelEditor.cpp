@@ -2753,7 +2753,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 editor::CollectItemDefinitionPickerRows(
                     state.itemDatabase.working, itemDefinitionFilter);
             bool currentInDatabase = false;
-            std::string currentLabel = pickup.itemId;
+            std::string currentLabel = pickup.itemId.empty() ? "None / unassigned" : pickup.itemId;
             if (state.itemDatabase.loaded)
             {
                 const gameplay::GameplayDefinition* current =
@@ -2767,7 +2767,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                         : (std::string(current->identity) + " — " + current->item.displayName);
                 }
             }
-            if (!currentInDatabase)
+            if (!pickup.itemId.empty() && !currentInDatabase)
             {
                 ImGui::TextColored(
                     ImVec4(0.92f, 0.42f, 0.32f, 1.0f),
@@ -2780,6 +2780,12 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             }
             if (ImGui::BeginCombo("Item Definition", currentLabel.c_str()))
             {
+                if (ImGui::Selectable("None / unassigned", pickup.itemId.empty()))
+                {
+                    pickup.itemId.clear();
+                    pickup.legacyItemReference = false;
+                    CopyItemIdInspectorBuffer(itemIdField.buffer, pickup.itemId);
+                }
                 if (itemRows.empty())
                 {
                     ImGui::TextDisabled("No Item definitions match.");
@@ -4162,7 +4168,11 @@ LevelEditorRequest DrawLevelControls(
     RecoverEditorWindowIfNeeded(kLevelEditorWindowName, view);
 
     const bool authoringAvailable = IsLevelAuthoringAvailable();
-    const bool workingCopyValid = world::IsWritableLevelDefinition(state.workingCopy);
+    world::LevelDefinition applyCandidate{};
+    std::size_t discardedIncompleteItemPickups = 0;
+    const bool workingCopyValid = editor::PrepareLevelEditorApplyCandidate(
+        state.workingCopy, state.structuralMap, applyCandidate, discardedIncompleteItemPickups)
+        && world::IsWritableLevelDefinition(applyCandidate);
 
     if (ImGui::CollapsingHeader("Level", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -4844,7 +4854,11 @@ LevelEditorRequest DrawEditorMenuBar(
     if (ImGui::BeginMenu("Level"))
     {
         const bool authoringAvailable = IsLevelAuthoringAvailable();
-        const bool workingCopyValid = world::IsWritableLevelDefinition(state.workingCopy);
+        world::LevelDefinition applyCandidate{};
+        std::size_t discardedIncompleteItemPickups = 0;
+        const bool workingCopyValid = editor::PrepareLevelEditorApplyCandidate(
+            state.workingCopy, state.structuralMap, applyCandidate, discardedIncompleteItemPickups)
+            && world::IsWritableLevelDefinition(applyCandidate);
 
         ImGui::BeginDisabled(!CanApplyPreview(state.modified, workingCopyValid));
         if (ImGui::MenuItem("Apply Preview"))
@@ -5070,7 +5084,11 @@ LevelEditorRequest DrawEditorQuickToolbar(
     ImGui::TextDisabled("|");
     ImGui::SameLine();
 
-    const bool workingCopyValid = world::IsWritableLevelDefinition(state.workingCopy);
+    world::LevelDefinition applyCandidate{};
+    std::size_t discardedIncompleteItemPickups = 0;
+    const bool workingCopyValid = editor::PrepareLevelEditorApplyCandidate(
+        state.workingCopy, state.structuralMap, applyCandidate, discardedIncompleteItemPickups)
+        && world::IsWritableLevelDefinition(applyCandidate);
     DrawQuickToolbarCommandButton(
         "Apply",
         "Apply Preview",

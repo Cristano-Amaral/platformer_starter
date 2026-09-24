@@ -195,11 +195,13 @@ inline ItemPickupTargetPresentation MakeItemPickupTargetPresentation(
         {
             result.localMin = loadedMin;
             result.localMax = loadedMax;
+            result.visual = world::ItemPickupSupportAnchoredVisualProp(
+                result.visual, loadedMin, loadedMax);
         }
     }
     else
     {
-        result.visual.position = pickup.position;
+        result.visual.position = world::ItemPickupPrimitivePresentationPosition(pickup.position);
         result.visual.position.y += world::ItemPickupIdleBobOffsetY(pickup, elapsedSeconds);
         result.visual.rotationDegrees = {
             0.0f, world::ItemPickupIdleSpinYDegrees(pickup, elapsedSeconds), 0.0f};

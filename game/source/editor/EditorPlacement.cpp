@@ -254,7 +254,7 @@ core::Vec3 MakePlacedObjectCenter(
         contactOrFallback.x + offset.x,
         contactOrFallback.y + offset.y,
         contactOrFallback.z + offset.z};
-    if (sitOnSurface)
+    if (sitOnSurface && mode != PlacementMode::ItemPickup)
     {
         center.y += DefaultPlacementSize(mode).y * 0.5f;
     }

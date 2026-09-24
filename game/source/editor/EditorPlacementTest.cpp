@@ -607,12 +607,28 @@ int main()
                 && candidate.size.y == world::kItemPickupVisualExtents.y
                 && candidate.size.z == world::kItemPickupVisualExtents.z,
             "candidate uses pickup visual size");
+        editor::EditorPickingSet ground{};
+        ground.proxies.push_back(
+            {{EditorObjectKind::Ground, 0}, {0.0f, -0.25f, 0.0f}, {20.0f, 0.5f, 8.0f}, 0.0f});
+        const editor::PlacementCandidate grounded = editor::ResolvePlacementCandidate(
+            PlacementMode::ItemPickup,
+            editor::Ray3{{0.0f, 10.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
+            ground,
+            {9.0f, 9.0f, 9.0f});
+        Expect(NearlyEqual(grounded.center.y, 0.0f),
+            "Item Pickup position is the support surface, not a primitive center");
+        const core::Vec3 placeholderCenter =
+            world::ItemPickupPrimitivePresentationPosition(grounded.center);
+        Expect(NearlyEqual(
+                placeholderCenter.y - world::kItemPickupVisualSize * 0.5f,
+                grounded.center.y),
+            "Item Pickup placeholder rests fully above the support point");
         world::LevelDefinition working = MakeActiveLevel();
         Expect(
             editor::AddItemPickupAt(working, {2.0f, 1.5f, 0.0f}).succeeded,
             "palette confirm Add Item Pickup");
         Expect(working.itemPickups[0].position.x == 2.0f, "placed Item Pickup uses world center");
-        Expect(working.itemPickups[0].itemId == world::kDefaultItemPickupId, "placed default itemId");
+        Expect(working.itemPickups[0].itemId.empty(), "placed Item Pickup starts unassigned");
         Expect(working.itemPickups[0].visualScale.x == 1.0f
                 && working.itemPickups[0].visualOffset.y == 0.0f
                 && working.itemPickups[0].showInteractionBounds

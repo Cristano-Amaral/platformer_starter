@@ -1327,7 +1327,7 @@ int main()
         Expect(state.workingCopy.itemPickups.size() == 1, "workingCopy gains exactly one Item Pickup");
         Expect(active.itemPickups.empty(), "Edit Add does not mutate active");
         Expect(
-            state.workingCopy.itemPickups[0].itemId == world::kDefaultItemPickupId
+            state.workingCopy.itemPickups[0].itemId.empty()
                 && state.workingCopy.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
                 && state.workingCopy.itemPickups[0].modelIdentity.empty()
                 && state.workingCopy.itemPickups[0].visualOffset.y == 0.0f
@@ -2045,9 +2045,9 @@ int main()
             "Add second Item Pickup for Item ID Inspector regression");
         Expect(state.workingCopy.itemPickups.size() == 2, "workingCopy has two Item Pickups");
         Expect(
-            state.workingCopy.itemPickups[0].itemId == world::kDefaultItemPickupId
-                && state.workingCopy.itemPickups[1].itemId == world::kDefaultItemPickupId,
-            "both added Item Pickups start as key");
+            state.workingCopy.itemPickups[0].itemId.empty()
+                && state.workingCopy.itemPickups[1].itemId.empty(),
+            "both added Item Pickups start unassigned");
 
         state.selection = {EditorObjectKind::ItemPickup, 1};
         state.additionalSelections = {{EditorObjectKind::ItemPickup, 0}};

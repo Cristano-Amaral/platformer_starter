@@ -19,6 +19,7 @@ struct SelectedModelGhostRequest
     bool visible = false;
     bool demotePrimaryBox = false;
     bool drawOrientedBounds = false;
+    bool supportAnchoredItemPickup = false;
     world::StaticPropSpec visual{};
     core::Vec3 localMin = kStaticPropDefaultLocalMin;
     core::Vec3 localMax = kStaticPropDefaultLocalMax;
@@ -84,6 +85,7 @@ inline SelectedModelGhostRequest MakeSelectedModelGhostRequest(
         request.visible = true;
         request.demotePrimaryBox = true;
         request.drawOrientedBounds = true;
+        request.supportAnchoredItemPickup = true;
         request.visual = visual;
         return request;
     }
@@ -102,5 +104,10 @@ inline void ApplyLoadedLocalBoundsToGhost(
     }
     request.localMin = loadedMin;
     request.localMax = loadedMax;
+    if (request.supportAnchoredItemPickup)
+    {
+        request.visual = world::ItemPickupSupportAnchoredVisualProp(
+            request.visual, loadedMin, loadedMax);
+    }
 }
 }

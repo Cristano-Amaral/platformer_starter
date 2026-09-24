@@ -1531,7 +1531,7 @@ int main()
         Expect(added.succeeded, "Add Item Pickup");
         Expect(working.itemPickups.size() == 1, "one Item Pickup after Add");
         Expect(
-            working.itemPickups[0].itemId == world::kDefaultItemPickupId
+            working.itemPickups[0].itemId.empty()
                 && working.itemPickups[0].quantity == world::kDefaultItemPickupQuantity
                 && working.itemPickups[0].modelIdentity.empty()
                 && working.itemPickups[0].visualOffset.x == 0.0f
@@ -1552,7 +1552,7 @@ int main()
                 && working.itemPickups[0].idleBobSpeed == world::kDefaultItemPickupIdleBobSpeed
                 && working.itemPickups[0].idleSpinSpeedDegrees
                     == world::kDefaultItemPickupIdleSpinSpeedDegrees,
-            "6. Add uses M59 defaults");
+            "6. Add is unassigned and keeps presentation defaults");
         Expect(added.selection.kind == EditorObjectKind::ItemPickup, "Add selects Item Pickup");
         working.itemPickups[0].itemId = "items/coin";
         working.itemPickups[0].quantity = 4;
@@ -1977,9 +1977,11 @@ int main()
         Expect(editor::AddItemPickup(working, kTestPlacementB).succeeded, "Add second Item Pickup");
         Expect(working.itemPickups.size() == 2, "two Item Pickups");
         Expect(
-            working.itemPickups[0].itemId == world::kDefaultItemPickupId
-                && working.itemPickups[1].itemId == world::kDefaultItemPickupId,
-            "both new Item Pickups default to key");
+            working.itemPickups[0].itemId.empty()
+                && working.itemPickups[1].itemId.empty(),
+            "both new Item Pickups start unassigned");
+        working.itemPickups[0].itemId = "items/master_key";
+        working.itemPickups[1].itemId = "items/master_key";
         const world::LevelDefinition baseline = working;
 
         const EditorSelection primary{EditorObjectKind::ItemPickup, 1};
@@ -2030,6 +2032,38 @@ int main()
         Expect(std::strcmp(field.buffer, "items/coin") == 0, "invalid focus-loss restores buffer");
         Expect(working.itemPickups[1].itemId == "items/coin", "invalid focus-loss leaves workingCopy");
         Expect(working.itemPickups[0].itemId == "items/master_key", "invalid edit does not mutate the other pickup");
+    }
+
+    {
+        world::LevelDefinition active = MakeBaseLevel();
+        world::ItemPickupSpec missing{};
+        missing.itemId = "items/missing_definition";
+        missing.position = {1.0f, 0.0f, 0.0f};
+        active.itemPickups.push_back(missing);
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        world::LevelDefinition working = active;
+        Expect(editor::AddItemPickup(working, kTestPlacementA).succeeded,
+            "add incomplete pickup for Apply preparation");
+
+        world::LevelDefinition candidate{};
+        std::size_t discarded = 0;
+        Expect(editor::PrepareLevelEditorApplyCandidate(working, map, candidate, discarded),
+            "Apply candidate accepts discardable incomplete add");
+        Expect(discarded == 1 && candidate.itemPickups.size() == 1,
+            "Apply discards only the new unassigned pickup");
+        Expect(candidate.itemPickups[0].itemId == "items/missing_definition",
+            "existing non-empty Missing pickup is preserved");
+
+        active.itemPickups[0].itemId.clear();
+        editor::ResetStructuralIndexMap(map, active);
+        discarded = 99;
+        Expect(editor::PrepareLevelEditorApplyCandidate(active, map, candidate, discarded),
+            "existing empty pickup is retained in the Apply candidate");
+        Expect(discarded == 0 && candidate.itemPickups.size() == 1,
+            "existing empty pickup is preserved for diagnosis");
+        Expect(!world::ItemPickupSpecIsValid(candidate.itemPickups[0]),
+            "existing empty pickup still fails authored validation");
     }
 
     {

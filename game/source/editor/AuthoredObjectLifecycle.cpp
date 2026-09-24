@@ -505,6 +505,35 @@ bool IsPendingDeleteActiveIndex(
         && MappedWorkingIndex(map, kind, activeIndex) == kNoStructuralIndex;
 }
 
+bool PrepareLevelEditorApplyCandidate(
+    const world::LevelDefinition& workingCopy,
+    const StructuralIndexMap& map,
+    world::LevelDefinition& candidate,
+    std::size_t& discardedIncompleteItemPickups)
+{
+    candidate = workingCopy;
+    discardedIncompleteItemPickups = 0;
+    for (std::size_t index = candidate.itemPickups.size(); index > 0; --index)
+    {
+        const std::size_t pickupIndex = index - 1;
+        const world::ItemPickupSpec& pickup = candidate.itemPickups[pickupIndex];
+        if (!pickup.itemId.empty()
+            || MappedActiveIndex(map, EditorObjectKind::ItemPickup, pickupIndex)
+                != kNoStructuralIndex)
+        {
+            continue;
+        }
+        const LifecycleEditResult deleted =
+            DeleteSelected(candidate, {EditorObjectKind::ItemPickup, pickupIndex});
+        if (!deleted.succeeded)
+        {
+            return false;
+        }
+        ++discardedIncompleteItemPickups;
+    }
+    return true;
+}
+
 PendingDeleteVisuals MakePendingDeleteVisuals(
     const world::LevelDefinition& active,
     const StructuralIndexMap& map)
@@ -850,7 +879,6 @@ LifecycleEditResult AddItemPickupAt(
 
     world::ItemPickupSpec pickup{};
     pickup.position = ApplyWorldCenter(worldCenter, {});
-    pickup.itemId = std::string(world::kDefaultItemPickupId);
     pickup.quantity = world::kDefaultItemPickupQuantity;
     workingCopy.itemPickups.push_back(pickup);
     return Ok({EditorObjectKind::ItemPickup, workingCopy.itemPickups.size() - 1});

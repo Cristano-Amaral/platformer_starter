@@ -134,7 +134,7 @@ inline void ItemPickupEditorBounds(
         gameplay::ItemPickupResolvedVisualProp(pickup, itemDefinitions);
     if (visual.modelIdentity.empty())
     {
-        outCenter = pickup.position;
+        outCenter = world::ItemPickupPrimitivePresentationPosition(pickup.position);
         outSize = world::kItemPickupVisualExtents;
         return;
     }

@@ -54,7 +54,7 @@ bool Vec3Near(core::Vec3 a, core::Vec3 b, float tolerance = 1.0e-4f)
 
 world::ItemPickupSpec MakePickup(
     core::Vec3 position,
-    std::string_view itemId = world::kDefaultItemPickupId,
+    std::string_view itemId = gameplay::kCanonicalKeyItemIdentity,
     int quantity = world::kDefaultItemPickupQuantity)
 {
     world::ItemPickupSpec spec{};
@@ -155,9 +155,28 @@ int main()
     const core::Vec3 behind{spawn.x - 1.55f, spawn.y, spawn.z};
 
     {
+        const world::ParseLevelFileResult legacyKey =
+            world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 key\n");
+        Expect(legacyKey.status == world::LoadLevelFileStatus::Loaded
+                && legacyKey.level.itemPickups[0].itemId == "items/master_key"
+                && legacyKey.level.itemPickups[0].legacyItemReference,
+            "legacy key still maps to items/master_key");
+        const world::ParseLevelFileResult legacyOne =
+            world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 1\n");
+        Expect(legacyOne.status == world::LoadLevelFileStatus::Loaded
+                && legacyOne.level.itemPickups[0].itemId == "items/master_key"
+                && legacyOne.level.itemPickups[0].legacyItemReference,
+            "legacy 1 still maps to items/master_key");
+    }
+
+    {
+        const world::ItemPickupSpec newAuthoringPickup{};
+        Expect(newAuthoringPickup.itemId.empty(), "new ItemPickupSpec is unassigned");
+        Expect(!world::ItemPickupSpecIsValid(newAuthoringPickup),
+            "unassigned ItemPickupSpec is not persistable");
         world::ItemPickupSpec pickup = MakePickup(nearby);
-        Expect(world::ItemPickupSpecIsValid(pickup), "default pickup is valid");
-        Expect(pickup.itemId == "items/master_key", "default itemId is key");
+        Expect(world::ItemPickupSpecIsValid(pickup), "assigned pickup is valid");
+        Expect(pickup.itemId == "items/master_key", "test pickup explicitly uses key");
         Expect(pickup.quantity == 1, "default quantity is 1");
         Expect(pickup.modelIdentity.empty(), "default has no model");
         Expect(pickup.visualOffset.x == 0.0f && pickup.visualOffset.y == 0.0f

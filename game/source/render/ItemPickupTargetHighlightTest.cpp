@@ -169,6 +169,13 @@ int main()
             modeled, true, false, true, loadedMin, loadedMax);
     Expect(Vec3Near(loaded.localMin, loadedMin), "18. loaded model-local min is used");
     Expect(Vec3Near(loaded.localMax, loadedMax), "loaded model-local max is used");
+    float loadedMinWorldY = loaded.boundsCorners[0].y;
+    for (const core::Vec3 corner : loaded.boundsCorners)
+    {
+        loadedMinWorldY = std::min(loadedMinWorldY, corner.y);
+    }
+    Expect(NearlyEqual(loadedMinWorldY, modeled.position.y + modeled.visualOffset.y),
+        "loaded rotated/scaled model rests on pickup support plus visualOffset");
     Expect(
         Vec3Near(
             loaded.boundsCorners[0],
