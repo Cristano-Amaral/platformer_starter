@@ -2,6 +2,8 @@
 // Trigger only after TryCollectItemPickup succeeds. No second targeting path.
 
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "render/ItemPickupTargetHighlight.h"
@@ -16,6 +18,7 @@
 namespace
 {
 int gFailures = 0;
+const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
 
 void Expect(bool condition, const std::string& name)
 {
@@ -37,7 +40,7 @@ bool Vec3Near(core::Vec3 a, core::Vec3 b, float tolerance = 1.0e-4f)
         && NearlyEqual(a.z, b.z, tolerance);
 }
 
-world::ItemPickupSpec MakePickup(core::Vec3 position, std::string_view itemId = "key")
+world::ItemPickupSpec MakePickup(core::Vec3 position, std::string_view itemId = "items/master_key")
 {
     world::ItemPickupSpec spec{};
     spec.position = position;
@@ -54,7 +57,7 @@ bool CollectThenMaybeFeedback(
     int index,
     double elapsedSeconds)
 {
-    if (!gameplay::TryCollectItemPickup(inventory, runState, pickups, index))
+    if (!gameplay::TryCollectItemPickup(inventory, runState, pickups, index, registry))
     {
         return false;
     }
@@ -65,6 +68,8 @@ bool CollectThenMaybeFeedback(
 
 int main()
 {
+    gameplay::Equipment equipment;
+
     const core::Vec3 nearby{1.55f, 1.0f, 0.0f};
     const core::Vec3 playerCenter{0.0f, 1.0f, 0.0f};
 
@@ -88,16 +93,16 @@ int main()
         Expect(
             gameplay::ActiveItemPickupCollectionEffectCount(feedback) == 1,
             "1. one active effect");
-        Expect(inventory.GetQuantity("key") == 1, "inventory increments once");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "inventory increments once");
         Expect(run.collected[0] == 1, "pickup marked collected");
         Expect(Vec3Near(feedback.effects[0].origin, nearby), "4. origin uses presented position");
     }
 
     {
-        world::ItemPickupSpec pickup = MakePickup(nearby);
+        world::ItemPickupSpec pickup = MakePickup(nearby, "items/coin");
         std::vector<world::ItemPickupSpec> pickups{pickup};
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", gameplay::kMaxItemQuantity), "seed inventory at cap");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/coin", gameplay::kMaxItemQuantity), "seed inventory at cap");
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         gameplay::ItemPickupCollectionFeedbackState feedback{};
         Expect(
@@ -108,7 +113,7 @@ int main()
             gameplay::ActiveItemPickupCollectionEffectCount(feedback) == 0,
             "2. no active effect on failed add");
         Expect(run.collected[0] == 0, "failed add leaves pickup available");
-        Expect(inventory.GetQuantity("key") == gameplay::kMaxItemQuantity, "failed add does not mutate");
+        Expect(inventory.GetQuantity("items/coin") == gameplay::kMaxItemQuantity, "failed add does not mutate");
     }
 
     {
@@ -130,7 +135,7 @@ int main()
             !CollectThenMaybeFeedback(inventory, run, feedback, pickups, 0, 0.0),
             "3. already-collected emits none");
         Expect(feedback.emittedCount == 1, "3. second collect does not emit");
-        Expect(inventory.GetQuantity("key") == 1, "collected quantity stays 1");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "collected quantity stays 1");
     }
 
     {

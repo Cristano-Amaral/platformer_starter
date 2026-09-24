@@ -4,6 +4,7 @@
 // Model. Independent of thumbnail PNG cache and Model Preview.
 
 #include "core/Vec3.h"
+#include "gameplay/GameplayDefinition.h"
 #include "render/LoadedModelMaterials.h"
 #include "world/LevelDefinition.h"
 
@@ -28,7 +29,8 @@ public:
     void Sync(
         const world::LevelDefinition& level,
         std::string_view extraIdentity = {},
-        const world::LevelDefinition* extraLevel = nullptr);
+        const world::LevelDefinition* extraLevel = nullptr,
+        const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
 
     bool HasModel(std::string_view identity) const;
     bool IsFailed(std::string_view identity) const;

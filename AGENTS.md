@@ -29,15 +29,15 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 99 — Item Database & Item Editor.
+Current milestone: Milestone 100 — Inventory & Equipment Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_99.md`](docs/milestones/MILESTONE_99.md)
+Canonical file: [`docs/milestones/MILESTONE_100.md`](docs/milestones/MILESTONE_100.md)
 
-Branch: `milestone/99-item-database-editor`
+Branch: `milestone/100-inventory-equipment-foundation`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 100.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 101.
 
-Earlier milestone status, including Milestone 98 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
+Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 

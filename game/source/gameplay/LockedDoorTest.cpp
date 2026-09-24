@@ -4,6 +4,8 @@
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/GameplayAudio.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "physics/DynamicBoxGrab.h"
@@ -30,6 +32,7 @@
 namespace
 {
 int gFailures = 0;
+const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
 
 std::string LockedDoorPrompt(std::string_view itemId, bool hasItem)
 {
@@ -140,7 +143,7 @@ void PressInteract(
     {
         if (pickupTarget != gameplay::kNoItemPickupIndex)
         {
-            (void)gameplay::TryCollectItemPickup(inventory, pickups, pickupSpecs, pickupTarget);
+            (void)gameplay::TryCollectItemPickup(inventory, pickups, pickupSpecs, pickupTarget, registry);
         }
         else
         {
@@ -189,6 +192,8 @@ int CountRecords(std::string_view text, std::string_view keyword)
 
 int main()
 {
+    gameplay::Equipment equipment;
+
     const world::ParseLevelFileResult parsed =
         world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     if (parsed.status != world::LoadLevelFileStatus::Loaded)
@@ -240,14 +245,14 @@ int main()
         const std::string keyed = canonical + "door 4 1.5 0 1.2 3 2.4 3.2 1\n";
         const world::ParseLevelFileResult one = world::ParseLevelText(keyed);
         Expect(one.status == world::LoadLevelFileStatus::Loaded, "3. M57 trailing 1 parses");
-        Expect(one.level.doors[0].requiredItemId == "key", "3. trailing 1 maps to key");
+        Expect(one.level.doors[0].requiredItemId == "items/master_key", "3. trailing 1 maps to key");
         const std::string written = world::SerializeLevelText(one.level);
         Expect(
             world::AuthoredLevelDataEqual(one.level, world::ParseLevelText(written).level),
             "4. keyed Door round-trip");
-        Expect(written.find(" 3.2 key\n") != std::string::npos
-                || written.find("3.2 key\n") != std::string::npos,
-            "canonical writer emits key, not 1");
+        Expect(            written.find(" 3.2 items/master_key\n") != std::string::npos
+                || written.find("3.2 items/master_key\n") != std::string::npos,
+            "canonical writer emits items/master_key, not 1");
     }
 
     {
@@ -255,10 +260,14 @@ int main()
         Expect(
             world::ParseLevelText(zero).level.doors[0].requiredItemId.empty(),
             "M57 trailing 0 is no requirement");
-        const std::string card = canonical + "door 4 1.5 0 1.2 3 2.4 3.2 card\n";
-        Expect(world::ParseLevelText(card).level.doors[0].requiredItemId == "card", "card parses");
-        const std::string red = canonical + "door 4 1.5 0 1.2 3 2.4 3.2 red_key\n";
-        Expect(world::ParseLevelText(red).level.doors[0].requiredItemId == "red_key", "red_key parses");
+        const std::string card = canonical + "door 4 1.5 0 1.2 3 2.4 3.2 items/card\n";
+        Expect(world::ParseLevelText(card).level.doors[0].requiredItemId == "items/card", "card parses");
+        const std::string red = canonical + "door 4 1.5 0 1.2 3 2.4 3.2 items/red_key\n";
+        Expect(world::ParseLevelText(red).level.doors[0].requiredItemId == "items/red_key", "red_key parses");
+        Expect(
+            world::ParseLevelText(canonical + "door 4 1.5 0 1.2 3 2.4 3.2 card\n").status
+                == world::LoadLevelFileStatus::Invalid,
+            "unmapped M54 card door token rejected");
         Expect(
             world::ParseLevelText(canonical + "door 4 1.5 0 1.2 3 2.4 3.2 redKey\n").status
                 == world::LoadLevelFileStatus::Invalid,
@@ -267,9 +276,9 @@ int main()
         Expect(gameplay::IsValidItemId("red_key"), "IsValidItemId accepts red_key");
         const std::string writtenCard = world::SerializeLevelText(world::ParseLevelText(card).level);
         Expect(
-            writtenCard.find(" 3.2 card\n") != std::string::npos
-                || writtenCard.find("3.2 card\n") != std::string::npos,
-            "canonical writer emits card");
+            writtenCard.find(" 3.2 items/card\n") != std::string::npos
+                || writtenCard.find("3.2 items/card\n") != std::string::npos,
+            "canonical writer emits items/card");
     }
 
     Expect(
@@ -293,7 +302,7 @@ int main()
         world::LevelDefinition a = parsed.level;
         world::LevelDefinition b = parsed.level;
         a.doors.push_back(MakeDoor({4.0f, 1.5f, 0.0f}));
-        b.doors.push_back(MakeDoor({4.0f, 1.5f, 0.0f}, "key"));
+        b.doors.push_back(MakeDoor({4.0f, 1.5f, 0.0f}, "items/master_key"));
         Expect(!world::AuthoredLevelDataEqual(a, b), "6. authored equality includes requiredItemId");
         b.doors[0].requiredItemId.clear();
         Expect(world::AuthoredLevelDataEqual(a, b), "equality matches when requiredItemId matches");
@@ -307,21 +316,21 @@ int main()
         Expect(added.requiredItemId.empty(), "7. Add Door defaults no required item");
         world::LevelDefinition working = parsed.level;
         working.doors.push_back(added);
-        working.doors[0].requiredItemId = "card";
+        working.doors[0].requiredItemId = "items/card";
         world::DoorSpec duplicated = working.doors[0];
         duplicated.center.x += 1.0f;
         working.doors.push_back(duplicated);
-        Expect(working.doors[1].requiredItemId == "card", "8. Duplicate Door preserves required item");
-        working.doors[0].requiredItemId = "key";
+        Expect(working.doors[1].requiredItemId == "items/card", "8. Duplicate Door preserves required item");
+        working.doors[0].requiredItemId = "items/master_key";
         Expect(
             working.doors[0].requiredItemId != working.doors[1].requiredItemId,
             "9. Inspector-style Required Item edit mutates only workingCopy");
         const world::LevelDefinition active = parsed.level;
         Expect(!world::AuthoredLevelDataEqual(working, active), "10. Modified includes requiredItemId");
-        working.doors[0].requiredItemId = "card";
+        working.doors[0].requiredItemId = "items/card";
         const std::string saved = world::SerializeLevelText(working);
         Expect(
-            world::ParseLevelText(saved).level.doors[0].requiredItemId == "card",
+            world::ParseLevelText(saved).level.doors[0].requiredItemId == "items/card",
             "10. Save preserves authored value");
     }
 
@@ -341,7 +350,7 @@ int main()
 
     {
         world::LevelDefinition level = parsed.level;
-        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "key"));
+        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "items/master_key"));
         level.pressurePlates.push_back(MakePlate(plateCenter, 0));
         level.dynamicBoxes.push_back(MakeBox(onPlate));
         physics::PhysicsWorld world;
@@ -352,7 +361,7 @@ int main()
         Expect(world.GetPressurePlates()[0].active, "plate is Active while Door is locked");
         Expect(!world.GetDoors()[0].desiredOpen, "13. locked Door ignores active linked plate");
         Expect(NearlyEqual(world.GetDoors()[0].openFraction, 0.0f), "locked Door stays closed");
-        Expect(level.doors[0].requiredItemId == "key", "32. authored requiredItemId unchanged after init");
+        Expect(level.doors[0].requiredItemId == "items/master_key", "32. authored requiredItemId unchanged after init");
         Expect(world.DoorBodyCount() == 1, "41. lock adds no Jolt body");
         Expect(
             physics::AuthoredPhysicsBodiesWithinBudget(
@@ -363,7 +372,7 @@ int main()
     }
 
     {
-        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "key")};
+        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         const std::vector<std::uint8_t> los = EmptyLos(1);
         Expect(
@@ -380,13 +389,13 @@ int main()
             gameplay::FindLockedDoorTargetIndex(spawn, 1.0f, nonKey, unlocked.unlocked, los)
                 == gameplay::kNoLockedDoorIndex,
             "16. non-key Door is not an unlock target");
-        const std::vector<world::DoorSpec> far{MakeDoor(farDoor, "key")};
+        const std::vector<world::DoorSpec> far{MakeDoor(farDoor, "items/master_key")};
         gameplay::DoorLockRunState farLocks = gameplay::MakeDoorLockRunState(far);
         Expect(
             gameplay::FindLockedDoorTargetIndex(spawn, 1.0f, far, farLocks.unlocked, los)
                 == gameplay::kNoLockedDoorIndex,
             "17. out-of-range Door is not target");
-        const std::vector<world::DoorSpec> behind{MakeDoor(behindDoor, "key")};
+        const std::vector<world::DoorSpec> behind{MakeDoor(behindDoor, "items/master_key")};
         gameplay::DoorLockRunState behindLocks = gameplay::MakeDoorLockRunState(behind);
         Expect(
             gameplay::FindLockedDoorTargetIndex(spawn, 1.0f, behind, behindLocks.unlocked, los)
@@ -402,8 +411,8 @@ int main()
 
     {
         const std::vector<world::DoorSpec> doors{
-            MakeDoor({spawn.x + 1.8f, spawn.y, spawn.z}, "key"),
-            MakeDoor({spawn.x + 1.2f, spawn.y, spawn.z}, "key")};
+            MakeDoor({spawn.x + 1.8f, spawn.y, spawn.z}, "items/master_key"),
+            MakeDoor({spawn.x + 1.2f, spawn.y, spawn.z}, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         const std::vector<std::uint8_t> los = EmptyLos(2);
         Expect(
@@ -413,8 +422,8 @@ int main()
 
     {
         const std::vector<world::DoorSpec> doors{
-            MakeDoor({spawn.x + 1.5f, spawn.y, spawn.z}, "key"),
-            MakeDoor({spawn.x + 1.5f, spawn.y, spawn.z}, "key")};
+            MakeDoor({spawn.x + 1.5f, spawn.y, spawn.z}, "items/master_key"),
+            MakeDoor({spawn.x + 1.5f, spawn.y, spawn.z}, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         const std::vector<std::uint8_t> los = EmptyLos(2);
         Expect(
@@ -426,46 +435,46 @@ int main()
         world::LevelDefinition level = parsed.level;
         const core::Vec3 boxCenter{spawn.x + 1.55f, spawn.y, spawn.z};
         level.dynamicBoxes.push_back(MakeBox(boxCenter));
-        level.doors.push_back(MakeDoor({spawn.x + 2.35f, spawn.y, spawn.z}, "key"));
+        level.doors.push_back(MakeDoor({spawn.x + 2.35f, spawn.y, spawn.z}, "items/master_key"));
         physics::PhysicsWorld world;
         Expect(StartWorld(world, level), "priority Initialize");
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(level.doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "seed key for priority");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed key for priority");
         gameplay::ItemPickupRunState pickups = gameplay::MakeClearedItemPickupRunState(0);
         world.SetGrabAim(spawn, 1.0f);
         world.Update(kStepSeconds);
         PressInteract(world, inventory, pickups, {}, gameplay::kNoItemPickupIndex, locks, level.doors, 0);
         Expect(world.GetGrabState().carrying, "21. Dynamic Box target + locked Door -> Grab only");
-        Expect(inventory.GetQuantity("key") == 1, "Grab does not consume key");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "Grab does not consume key");
         Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 0), "Grab does not unlock Door");
         PressInteract(world, inventory, pickups, {}, gameplay::kNoItemPickupIndex, locks, level.doors, 0);
         Expect(!world.GetGrabState().carrying, "20. carrying Dynamic Box + E -> Drop only");
-        Expect(inventory.GetQuantity("key") == 1, "Drop does not consume key");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "Drop does not consume key");
         Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 0), "Drop does not unlock Door");
     }
 
     {
         world::LevelDefinition level = parsed.level;
-        level.itemPickups.push_back(MakePickup({spawn.x + 1.55f, spawn.y, spawn.z}, "coin"));
-        level.doors.push_back(MakeDoor({spawn.x + 2.35f, spawn.y, spawn.z}, "key"));
+        level.itemPickups.push_back(MakePickup({spawn.x + 1.55f, spawn.y, spawn.z}, "items/coin"));
+        level.doors.push_back(MakeDoor({spawn.x + 2.35f, spawn.y, spawn.z}, "items/master_key"));
         physics::PhysicsWorld world;
         Expect(StartWorld(world, level), "pickup-priority Initialize");
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(level.doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "seed key under pickup");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed key under pickup");
         gameplay::ItemPickupRunState pickups = gameplay::MakeClearedItemPickupRunState(1);
         world.SetGrabAim(spawn, 1.0f);
         world.Update(kStepSeconds);
         PressInteract(world, inventory, pickups, level.itemPickups, 0, locks, level.doors, 0);
-        Expect(inventory.GetQuantity("coin") == 1, "22. Item Pickup target + locked Door -> Collect only");
-        Expect(inventory.GetQuantity("key") == 1, "collect does not consume key");
+        Expect(inventory.GetQuantity("items/coin") == 1, "22. Item Pickup target + locked Door -> Collect only");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "collect does not consume key");
         Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 0), "collect does not unlock Door");
         Expect(!gameplay::ItemPickupIsAvailable(pickups, 0), "pickup collected");
     }
 
     {
-        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "key")};
+        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         gameplay::Inventory inventory;
         Expect(
@@ -475,37 +484,37 @@ int main()
         Expect(inventory.Entries().empty(), "Inventory unchanged without key");
         Expect(LockedDoorPrompt("key", false) == "Requires key",
             "25. no-key prompt");
-        Expect(inventory.TryAdd("key", 1), "seed one key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed one key");
         Expect(LockedDoorPrompt("key", true) == "E Unlock Door (key)",
             "25. has-key prompt");
         Expect(
             gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0),
             "25. key x1 -> unlock succeeds");
-        Expect(inventory.GetQuantity("key") == 0, "25. consumes exactly one");
+        Expect(inventory.GetQuantity("items/master_key") == 0, "25. consumes exactly one");
         Expect(inventory.Entries().empty(), "27. consuming final key removes Inventory entry");
         Expect(gameplay::DoorIsRuntimeUnlocked(locks, 0), "Door unlocked");
-        Expect(doors[0].requiredItemId == "key", "29. unlock does not mutate authored requiredItemId");
+        Expect(doors[0].requiredItemId == "items/master_key", "29. unlock does not mutate authored requiredItemId");
     }
 
     {
         const std::vector<world::DoorSpec> doors{
-            MakeDoor(nearbyDoor, "key"), MakeDoor({spawn.x + 1.8f, spawn.y, spawn.z}, "key")};
+            MakeDoor(nearbyDoor, "items/master_key"), MakeDoor({spawn.x + 1.8f, spawn.y, spawn.z}, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 2), "seed key x2");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 2), "seed key x2");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "unlock Door A");
-        Expect(inventory.GetQuantity("key") == 1, "26. key x2 unlock leaves key x1");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "26. key x2 unlock leaves key x1");
         Expect(gameplay::DoorIsRuntimeUnlocked(locks, 0), "28. only targeted Door A unlocks");
         Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 1), "28. Door B stays locked");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, doors, 1), "unlock Door B");
-        Expect(inventory.GetQuantity("key") == 0, "second unlock consumes remaining key");
+        Expect(inventory.GetQuantity("items/master_key") == 0, "second unlock consumes remaining key");
         Expect(gameplay::DoorIsRuntimeUnlocked(locks, 1), "Door B unlocks independently");
         Expect(inventory.Entries().empty(), "final key entry removed");
     }
 
     {
         world::LevelDefinition level = parsed.level;
-        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "key"));
+        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "items/master_key"));
         level.pressurePlates.push_back(MakePlate(plateCenter, 0));
         level.dynamicBoxes.push_back(MakeBox(onPlate));
         physics::PhysicsWorld world;
@@ -515,7 +524,7 @@ int main()
         Expect(world.GetPressurePlates()[0].active, "plate Active before unlock");
         Expect(!world.GetDoors()[0].desiredOpen, "locked ignores plate");
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "seed unlock-open key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed unlock-open key");
         const world::LevelDefinition authoredBefore = level;
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, level.doors, 0), "unlock with plate");
         BindLocks(world, locks);
@@ -531,19 +540,19 @@ int main()
         physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(world, 0, onPlate, {}, {});
         BindLocks(world, locks);
         Expect(world.GetDoors()[0].desiredOpen, "33. subsequent plate OR opens without another key");
-        Expect(inventory.GetQuantity("key") == 0, "no additional key consumed");
+        Expect(inventory.GetQuantity("items/master_key") == 0, "no additional key consumed");
     }
 
     {
         world::LevelDefinition level = parsed.level;
-        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "key"));
+        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "items/master_key"));
         level.pressurePlates.push_back(MakePlate(plateCenter, 0));
         level.dynamicBoxes.push_back(MakeBox(offPlate));
         physics::PhysicsWorld world;
         Expect(StartWorld(world, level), "unlock-closed Initialize");
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(level.doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "seed unlock-closed key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed unlock-closed key");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, level.doors, 0), "unlock without plate");
         BindLocks(world, locks);
         Expect(!world.GetPressurePlates()[0].active, "plate Inactive");
@@ -553,7 +562,7 @@ int main()
 
     {
         world::LevelDefinition level = parsed.level;
-        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "key"));
+        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "items/master_key"));
         level.pressurePlates.push_back(MakePlate(plateCenter, 0));
         level.dynamicBoxes.push_back(MakeBox(onPlate));
         level.dynamicBoxes.push_back(MakeBox(offPlate));
@@ -561,7 +570,7 @@ int main()
         Expect(StartWorld(world, level), "obstruction after unlock");
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(level.doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "seed obstruction key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed obstruction key");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, level.doors, 0), "unlock for obstruction");
         BindLocks(world, locks);
         Expect(world.GetDoors()[0].desiredOpen, "unlocked starts open-desired");
@@ -580,21 +589,21 @@ int main()
     }
 
     {
-        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "key")};
+        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 2), "checkpoint seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 2), "checkpoint seed");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "unlock before checkpoint");
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
-        Expect(inventory.GetQuantity("key") == 1, "35. checkpoint preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "35. checkpoint preserves Inventory");
         Expect(gameplay::DoorIsRuntimeUnlocked(locks, 0), "35. checkpoint preserves unlocked Door");
         gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
         locks = gameplay::MakeDoorLockRunState(doors);
         Expect(inventory.Entries().empty(), "36. Restart clears Inventory");
         Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 0), "36. Restart relocks authored key Door");
         gameplay::Inventory applyInv;
-        Expect(applyInv.TryAdd("key", 1), "apply seed");
+        Expect(gameplay::AddTestItem(applyInv, registry, "items/master_key", 1), "apply seed");
         gameplay::DoorLockRunState applyLocks = gameplay::MakeDoorLockRunState(doors);
         Expect(gameplay::TryUnlockLockedDoor(applyInv, applyLocks, doors, 0), "unlock before apply");
         gameplay::ApplyInventoryLifecycle(
@@ -606,12 +615,12 @@ int main()
 
     {
         world::LevelDefinition level = parsed.level;
-        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "key"));
+        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "items/master_key"));
         physics::PhysicsWorld world;
         Expect(StartWorld(world, level), "rebuild lock Initialize");
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(level.doors);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "rebuild seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "rebuild seed");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, level.doors, 0), "unlock before rebuild");
         Expect(
             world.TryRebuild(level, level.initialSpawnVisualCenter, world::kPlayerVisualSize),
@@ -619,7 +628,7 @@ int main()
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
         BindLocks(world, locks);
-        Expect(inventory.GetQuantity("key") == 0, "38. rebuild preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 0, "38. rebuild preserves Inventory");
         Expect(gameplay::DoorIsRuntimeUnlocked(locks, 0), "38. rebuild preserves unlocked state");
         Expect(world.GetDoors()[0].unlocked, "PhysicsWorld receives preserved unlock flags");
         Expect(world.DoorBodyCount() == 1, "rebuild still one Door body");
@@ -627,12 +636,12 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "M56 seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "M56 seed");
         gameplay::InventoryUiState ui{};
         gameplay::OpenInventoryUi(ui, inventory);
         Expect(ui.open, "M56 opens");
-        Expect(inventory.GetQuantity("key") == 1, "39. UI reads production key");
-        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "key")};
+        Expect(inventory.GetQuantity("items/master_key") == 1, "39. UI reads production key");
+        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         Expect(
             gameplay::InventoryUiBlocksGameplay(true, true),
@@ -653,7 +662,7 @@ int main()
         extra.center = wall;
         extra.size = {0.6f, 3.0f, 2.4f};
         level.elevatedPlatforms.push_back(extra);
-        level.doors.push_back(MakeDoor(hiddenDoor, "key"));
+        level.doors.push_back(MakeDoor(hiddenDoor, "items/master_key"));
         physics::PhysicsWorld world;
         Expect(StartWorld(world, level), "LOS world Initialize");
         Expect(
@@ -663,11 +672,11 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "M54 seed");
-        Expect(inventory.GetQuantity("key") == 1, "43. M54 GetQuantity");
-        Expect(inventory.TryRemove("key", 1), "43. M54 TryRemove");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "M54 seed");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "43. M54 GetQuantity");
+        Expect(inventory.TryRemove("items/master_key", 1), "43. M54 TryRemove");
         Expect(inventory.Entries().empty(), "43. M54 empty after remove");
-        Expect(!inventory.TryRemove("key", 1), "43. M54 failed remove unchanged");
+        Expect(!inventory.TryRemove("items/master_key", 1), "43. M54 failed remove unchanged");
     }
 
     Expect(
@@ -676,50 +685,50 @@ int main()
 
     {
         world::LevelDefinition working = parsed.level;
-        working.itemPickups.push_back(MakePickup({2.0f, 0.5f, 0.0f}, "card"));
-        working.itemPickups.push_back(MakePickup({3.0f, 0.5f, 0.0f}, "card"));
-        working.itemPickups.push_back(MakePickup({4.0f, 0.5f, 0.0f}, "key"));
-        working.itemPickups.push_back(MakePickup({5.0f, 0.5f, 0.0f}, "red_key"));
+        working.itemPickups.push_back(MakePickup({2.0f, 0.5f, 0.0f}, "items/card"));
+        working.itemPickups.push_back(MakePickup({3.0f, 0.5f, 0.0f}, "items/card"));
+        working.itemPickups.push_back(MakePickup({4.0f, 0.5f, 0.0f}, "items/master_key"));
+        working.itemPickups.push_back(MakePickup({5.0f, 0.5f, 0.0f}, "items/red_key"));
         const std::vector<std::string> ids =
             world::UniqueAuthoredPickupItemIds(working.itemPickups);
         Expect(ids.size() == 3, "selector lists unique itemIds");
-        Expect(ids[0] == "card" && ids[1] == "key" && ids[2] == "red_key",
+        Expect(ids[0] == "items/card" && ids[1] == "items/master_key" && ids[2] == "items/red_key",
             "selector order is deterministic sorted itemId");
         working.doors.push_back(MakeDoor({4.0f, 1.5f, 0.0f}));
         working.doors[0].requiredItemId = ids[0];
-        Expect(working.doors[0].requiredItemId == "card", "selector writes itemId, not pickup index");
+        Expect(working.doors[0].requiredItemId == "items/card", "selector writes itemId, not pickup index");
         working.itemPickups.erase(working.itemPickups.begin());
-        Expect(working.doors[0].requiredItemId == "card",
+        Expect(working.doors[0].requiredItemId == "items/card",
             "deleting first matching pickup does not rewrite Door requirement");
         working.itemPickups.erase(working.itemPickups.begin());
-        Expect(working.doors[0].requiredItemId == "card",
+        Expect(working.doors[0].requiredItemId == "items/card",
             "required item survives after all matching pickups are deleted");
         Expect(world::DoorSpecIsValid(working.doors[0]), "orphan valid itemId remains valid");
     }
 
     {
         const std::vector<world::DoorSpec> doors{
-            MakeDoor(nearbyDoor, "card"),
-            MakeDoor({spawn.x + 1.8f, spawn.y, spawn.z}, "key"),
-            MakeDoor({spawn.x + 2.1f, spawn.y, spawn.z}, "red_key")};
+            MakeDoor(nearbyDoor, "items/card"),
+            MakeDoor({spawn.x + 1.8f, spawn.y, spawn.z}, "items/master_key"),
+            MakeDoor({spawn.x + 2.1f, spawn.y, spawn.z}, "items/red_key")};
         {
             gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
             gameplay::Inventory inventory;
-            Expect(inventory.TryAdd("key", 1), "seed key only");
+            Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed key only");
             Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "key cannot unlock card Door");
-            Expect(inventory.GetQuantity("key") == 1, "failed card unlock leaves key");
+            Expect(inventory.GetQuantity("items/master_key") == 1, "failed card unlock leaves key");
             Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 0), "card Door stays locked");
             Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 2), "key cannot unlock red_key Door");
         }
         {
             gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
             gameplay::Inventory inventory;
-            Expect(inventory.TryAdd("card", 1), "seed card only");
+            Expect(gameplay::AddTestItem(inventory, registry, "items/card", 1), "seed card only");
             Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 1), "card cannot unlock key Door");
-            Expect(inventory.GetQuantity("card") == 1, "failed key unlock leaves card");
+            Expect(inventory.GetQuantity("items/card") == 1, "failed key unlock leaves card");
             Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 2), "card cannot unlock red_key Door");
             Expect(gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "card unlocks card Door");
-            Expect(inventory.GetQuantity("card") == 0, "correct item consumes exactly one");
+            Expect(inventory.GetQuantity("items/card") == 0, "correct item consumes exactly one");
             Expect(inventory.Entries().empty(), "final card removal follows M54");
             Expect(gameplay::DoorIsRuntimeUnlocked(locks, 0), "only targeted card Door unlocks");
             Expect(!gameplay::DoorIsRuntimeUnlocked(locks, 1), "key Door still locked");
@@ -728,13 +737,13 @@ int main()
             Expect(LockedDoorPrompt("red_key", true) == "E Unlock Door (red_key)", "red_key owned prompt");
             gameplay::InventoryUiState ui{};
             gameplay::OpenInventoryUi(ui, inventory);
-            Expect(inventory.GetQuantity("card") == 0, "M56 reflects consumed card automatically");
+            Expect(inventory.GetQuantity("items/card") == 0, "M56 reflects consumed card automatically");
         }
     }
 
     {
         world::LevelDefinition level = parsed.level;
-        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "card"));
+        level.doors.push_back(MakeDoor({8.5f, 1.5f, 0.0f}, "items/card"));
         world::PressurePlateSpec plate = MakePlate(parsed.level.initialSpawnVisualCenter, 0, {2.0f, 2.0f, 2.0f});
         plate.activateByDynamicBox = false;
         plate.activateByPlayer = true;
@@ -748,11 +757,11 @@ int main()
         Expect(!world.GetPressurePlates()[0].visibleInGameplay, "invisible plate runtime flag");
         Expect(!world.GetDoors()[0].desiredOpen, "locked Door ignores active player plate");
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("card", 1), "seed card after standing on plate");
-        Expect(inventory.GetQuantity("card") == 1, "plate overlap does not auto-consume card");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/card", 1), "seed card after standing on plate");
+        Expect(inventory.GetQuantity("items/card") == 1, "plate overlap does not auto-consume card");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, level.doors, 0), "explicit E unlock");
         BindLocks(world, locks);
-        Expect(inventory.GetQuantity("card") == 0, "E consumes card");
+        Expect(inventory.GetQuantity("items/card") == 0, "E consumes card");
         Expect(world.GetDoors()[0].desiredOpen, "after unlock, already-active plate opens Door");
         Expect(world.DoorBodyCount() == 1, "no extra Jolt body for plate modes");
         Expect(
@@ -764,17 +773,17 @@ int main()
     }
 
     {
-        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "key")};
+        const std::vector<world::DoorSpec> doors{MakeDoor(nearbyDoor, "items/master_key")};
         gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
         gameplay::Inventory inventory;
         gameplay::GameplaySfxRequestState sfx{};
         Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "audio: missing item");
         Expect(sfx.doorUnlockCount == 0, "failed unlock emits no Door Unlock SFX request");
-        Expect(inventory.TryAdd("key", 1), "audio: seed key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "audio: seed key");
         Expect(gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "audio: successful unlock");
         gameplay::RecordGameplaySfx(sfx, gameplay::DoorUnlockSfx());
         Expect(sfx.doorUnlockCount == 1, "successful unlock emits exactly one Door Unlock request");
-        Expect(inventory.GetQuantity("key") == 0, "audio path still consumes exactly one item");
+        Expect(inventory.GetQuantity("items/master_key") == 0, "audio path still consumes exactly one item");
         Expect(!gameplay::TryUnlockLockedDoor(inventory, locks, doors, 0), "audio: already unlocked");
         Expect(sfx.doorUnlockCount == 1, "already-unlocked Door emits no replay");
         Expect(sfx.plateActivateCount == 0 && sfx.plateDeactivateCount == 0,

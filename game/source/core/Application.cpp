@@ -6,6 +6,10 @@
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
+#include "gameplay/InventoryView.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/GameplayDefinitionFile.h"
+#include "gameplay/ItemIdentity.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
@@ -277,10 +281,12 @@ editor::EditorPickingSet MakeLivePickingSet(
     const world::LevelDefinition& appliedLevel,
     const editor::EditorPickingWorldState& worldState,
     const render::StaticModelSceneStore* store,
-    const editor::DirectionalLightVisualization* directionalLightVisualization = nullptr)
+    const editor::DirectionalLightVisualization* directionalLightVisualization = nullptr,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr)
 {
     editor::EditorPickingSet set =
-        editor::BuildPickingSet(appliedLevel, worldState, directionalLightVisualization);
+        editor::BuildPickingSet(
+            appliedLevel, worldState, directionalLightVisualization, itemDefinitions);
     ApplyLoadedModelBoundsToPickingSet(set, store);
     return set;
 }
@@ -927,6 +933,28 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
 }
 #endif
 
+void LoadGameplayDefinitionCatalog(gameplay::GameplayDefinitionRegistry& registry)
+{
+    registry.Clear();
+    std::filesystem::path path;
+#if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
+    path = editor::AuthoringSourcePath(gameplay::kGameplayDefinitionsLogicalPath);
+#endif
+    if (path.empty())
+    {
+        path = platform::RuntimeAssetPath(std::string(gameplay::kGameplayDefinitionsLogicalPath));
+    }
+    if (path.empty())
+    {
+        return;
+    }
+    gameplay::ParseGameplayDefinitionsResult parsed = gameplay::LoadGameplayDefinitionsFile(path);
+    if (parsed.status == gameplay::LoadGameplayDefinitionsStatus::Loaded)
+    {
+        registry = std::move(parsed.registry);
+    }
+}
+
 int Application::Run()
 {
     Initialize();
@@ -1006,7 +1034,12 @@ int Application::Run()
                 deathWasActiveAtFrameStart))
         {
             const gameplay::InventoryUiInputAction inventoryAction =
-                gameplay::HandleInventoryUiInput(inventoryUi, inventory, inputState);
+                gameplay::HandleInventoryUiInput(
+                    inventoryUi,
+                    inventory,
+                    equipment,
+                    gameplayDefinitions,
+                    inputState);
             if (inventoryAction == gameplay::InventoryUiInputAction::Open)
             {
                 EmitGameplaySfx(gameplay::InventoryOpenSfx());
@@ -1301,7 +1334,8 @@ int Application::Run()
                                     inventory,
                                     itemPickupRunState,
                                     levelDefinition.itemPickups,
-                                    itemPickupTargetIndex))
+                                    itemPickupTargetIndex,
+                                    gameplayDefinitions))
                             {
                                 (void)gameplay::SpawnItemPickupCollectionFeedback(
                                     itemPickupCollectionFeedback,
@@ -1510,17 +1544,23 @@ int Application::Run()
                 }
 #endif
                 renderer.SyncStaticPropModels(
-                    levelDefinition, previewIdentity, &levelEditorState.workingCopy);
+                    levelDefinition,
+                    previewIdentity,
+                    &levelEditorState.workingCopy,
+                    &gameplayDefinitions);
             }
             const render::StaticModelSceneStore* modelStore = renderer.StaticPropModels();
             const editor::EditorPickingSet pickingSet = MakeLivePickingSet(
                 levelDefinition,
                 pickingWorld,
                 modelStore,
-                &levelEditorState.directionalLightVisualization);
+                &levelEditorState.directionalLightVisualization,
+                &gameplayDefinitions);
             editor::SelectedModelGhostRequest modelGhost =
                 editor::MakeSelectedModelGhostRequest(
-                    levelEditorState.selection, levelEditorState.workingCopy);
+                    levelEditorState.selection,
+                    levelEditorState.workingCopy,
+                    &gameplayDefinitions);
             if (modelGhost.visible && modelStore != nullptr)
             {
                 core::Vec3 loadedMin{};
@@ -1586,7 +1626,8 @@ int Application::Run()
                     levelEditorState.workingCopy,
                     levelEditorState.structuralMap,
                     levelEditorState.selection,
-                    levelEditorState.additionalSelections);
+                    levelEditorState.additionalSelections,
+                    &gameplayDefinitions);
             ApplyLoadedModelBoundsToPending(pendingAuthoring, modelStore);
             overlay.pendingAuthoring.clear();
             overlay.pendingAuthoring.reserve(pendingAuthoring.size());
@@ -1823,7 +1864,13 @@ int Application::Run()
             {
                 core::Vec3 center{};
                 core::Vec3 size{};
-                editor::ItemPickupEditorBounds(pickup, center, size);
+                editor::ItemPickupEditorBounds(
+                    pickup,
+                    center,
+                    size,
+                    editor::kStaticPropDefaultLocalMin,
+                    editor::kStaticPropDefaultLocalMax,
+                    &gameplayDefinitions);
                 overlay.pendingDeleteItemPickupCenters.push_back(center);
                 overlay.pendingDeleteItemPickupSizes.push_back(size);
             }
@@ -2135,14 +2182,17 @@ int Application::Run()
             }
 #endif
             renderer.SyncStaticPropModels(
-                levelDefinition, previewIdentity, &levelEditorState.workingCopy);
+                levelDefinition,
+                previewIdentity,
+                &levelEditorState.workingCopy,
+                &gameplayDefinitions);
         }
         else
         {
-            renderer.SyncStaticPropModels(levelDefinition);
+            renderer.SyncStaticPropModels(levelDefinition, {}, nullptr, &gameplayDefinitions);
         }
 #else
-        renderer.SyncStaticPropModels(levelDefinition);
+        renderer.SyncStaticPropModels(levelDefinition, {}, nullptr, &gameplayDefinitions);
 #endif
         renderer.DrawWorld(
             player,
@@ -2173,8 +2223,11 @@ int Application::Run()
             gameplay::FrozenRunCompleteSeconds(runCompleteState),
             render::InventoryPanelView{
                 inventoryUi.open,
-                inventory.Entries(),
-                inventoryUi.selectedItemId},
+                gameplay::BuildInventoryEquipmentView(
+                    inventory,
+                    equipment,
+                    inventoryUi,
+                    gameplayDefinitions)},
             render::ObjectiveHudView{
                 gameplay::ObjectiveHudIsVisible(
                     topLevelFlow,
@@ -2223,7 +2276,8 @@ int Application::Run()
                     && !editorActive
                     && !gameplay::ResultsHudShowsRunComplete(topLevelFlow, runCompleteState)
                     && !levelCompletionState.completed,
-                gameplay::kPlayerDeathTitle}
+                gameplay::kPlayerDeathTitle},
+            &gameplayDefinitions
         );
         if (gameplay::PauseMenuOverlayIsVisible(
                 topLevelFlow,
@@ -2432,7 +2486,9 @@ int Application::Run()
             levelEditorView,
             editorToolRunner,
             cookStageReload.IsPending(),
-            inventory);
+            inventory,
+            equipment,
+            gameplayDefinitions);
         if (levelEditorState.active)
         {
             // Keyboard move, wheel and world pick use this frame's ImGui capture
@@ -2704,7 +2760,8 @@ int Application::Run()
                             levelDefinition,
                             MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors),
                             renderer.StaticPropModels(),
-                            &levelEditorState.directionalLightVisualization),
+                            &levelEditorState.directionalLightVisualization,
+                            &gameplayDefinitions),
                         localMin,
                         localMax);
                 const bool canAdd = editor::CanIssueAuthoredLifecycleRequest(
@@ -2753,7 +2810,8 @@ int Application::Run()
                         levelDefinition,
                         MakeRuntimePickingWorldState(movingPlatform, dynamicBoxes, runtimeDoors),
                         renderer.StaticPropModels(),
-                        &levelEditorState.directionalLightVisualization),
+                        &levelEditorState.directionalLightVisualization,
+                        &gameplayDefinitions),
                     editor::EditorAddPlacementAnchor(levelEditorState.editorCamera));
                 editor::HandleAuthoredLifecycleRequest(
                     levelEditorState,
@@ -2844,7 +2902,8 @@ int Application::Run()
                         levelEditorState.workingCopy,
                         levelEditorState.structuralMap,
                         levelEditorState.selection,
-                        levelEditorState.additionalSelections);
+                        levelEditorState.additionalSelections,
+                        &gameplayDefinitions);
                 ApplyLoadedModelBoundsToPending(pendingVisuals, renderer.StaticPropModels());
                 const std::vector<editor::PendingPickProxy> pendingProxies =
                     editor::BuildPendingPickProxies(pendingVisuals);
@@ -2853,7 +2912,8 @@ int Application::Run()
                         ray,
                         MakeLivePickingSet(
                             levelDefinition, pickingWorld, renderer.StaticPropModels(),
-                            &levelEditorState.directionalLightVisualization),
+                            &levelEditorState.directionalLightVisualization,
+                            &gameplayDefinitions),
                         pendingProxies,
                         levelEditorState.structuralMap,
                         workingPick))
@@ -3021,7 +3081,9 @@ void Application::Initialize()
     gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
     gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
+    LoadGameplayDefinitionCatalog(gameplayDefinitions);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
+    gameplay::ApplyEquipmentLifecycle(equipment, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
@@ -3135,6 +3197,8 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     camera.SnapToTarget(player.Position());
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
+    gameplay::ApplyEquipmentLifecycle(
+        equipment, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
     // Fall/Manual respawn does not restore Health. Health-zero death uses
@@ -3176,6 +3240,7 @@ void Application::RestartRun()
     gameplay::ClearItemPickupCollectionFeedback(itemPickupCollectionFeedback);
     gameplay::ClearItemPickupCollectionHud(itemPickupCollectionHud);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
+    gameplay::ApplyEquipmentLifecycle(equipment, gameplay::InventoryLifecycleEvent::RestartRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::RestartRun, inventory);
     runTimerState = gameplay::RunTimerState{};
@@ -3245,6 +3310,7 @@ void Application::SetLevelEditorActive(bool active)
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
         gameplay::CloseInventoryUi(inventoryUi);
+        LoadGameplayDefinitionCatalog(gameplayDefinitions);
     }
 
     levelEditorState.active = active;
@@ -4056,6 +4122,8 @@ void Application::ResetGameplayAfterCommittedLevel()
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
+    gameplay::ApplyEquipmentLifecycle(
+        equipment, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel, inventory);
     runTimerState = gameplay::RunTimerState{};
@@ -4208,6 +4276,8 @@ void Application::ResetGameplayAfterLevelTransition()
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     gameplay::ApplyInventoryLifecycle(
         inventory, gameplay::InventoryLifecycleEvent::LevelTransition);
+    gameplay::ApplyEquipmentLifecycle(
+        equipment, gameplay::InventoryLifecycleEvent::LevelTransition);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::LevelTransition, inventory);
     runTimerState = gameplay::RunTimerState{};
@@ -4369,6 +4439,7 @@ void Application::ResetGameplayAfterPlayAgain()
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
+    gameplay::ApplyEquipmentLifecycle(equipment, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
     runTimerState = gameplay::RunTimerState{};

@@ -1,9 +1,12 @@
 #pragma once
 
-// Player-facing Inventory UI v1 (Milestone 56). Transient presentation only.
-// gameplay::Inventory remains the single source of truth for contents.
+// Player-facing Inventory UI v1 (Milestone 56 / 100). Transient presentation
+// only. gameplay::Inventory remains the source of truth for contents.
 // No ImGui, no item-use, no second Inventory storage, no GUIDs.
 
+#include "gameplay/Equipment.h"
+#include "gameplay/EquipmentSlot.h"
+#include "gameplay/GameplayDefinition.h"
 #include "gameplay/Inventory.h"
 #include "input/InputState.h"
 
@@ -14,11 +17,21 @@ namespace gameplay
 {
 inline constexpr bool kPlayerInventoryUiEnabled = true;
 
+enum class InventoryUiFocusKind
+{
+    ItemStack,
+    EquipmentSlot,
+};
+
 struct InventoryUiState
 {
     bool open = false;
-    // Stable itemId, never a pointer/span/index into Inventory storage.
+    InventoryUiFocusKind focus = InventoryUiFocusKind::ItemStack;
+    int selectedStackIndex = -1;
+    // Stable identity for the selected stack, never a pointer into storage.
     std::string selectedItemId;
+    EquipmentSlot selectedSlot = EquipmentSlot::Head;
+    bool equipmentFocus = false;
 };
 
 inline bool InventoryUiPausesSimulation(const InventoryUiState& ui)
@@ -43,11 +56,15 @@ enum class InventoryUiInputAction
     None,
     Open,
     Close,
+    Equip,
+    Unequip,
 };
 
 InventoryUiInputAction HandleInventoryUiInput(
     InventoryUiState& ui,
-    const Inventory& inventory,
+    Inventory& inventory,
+    Equipment& equipment,
+    const GameplayDefinitionRegistry& registry,
     const input::InputState& input);
 void ApplyInventoryUiLifecycle(
     InventoryUiState& ui,
@@ -56,5 +73,6 @@ void ApplyInventoryUiLifecycle(
 
 int FindInventoryUiSelectionIndex(
     const Inventory& inventory,
-    std::string_view selectedItemId);
+    std::string_view selectedItemId,
+    int preferredIndex = -1);
 }

@@ -16,6 +16,11 @@
 #include <cstdint>
 #include <vector>
 
+namespace gameplay
+{
+class GameplayDefinitionRegistry;
+}
+
 namespace editor
 {
 struct StructuralIndexMap;
@@ -215,7 +220,8 @@ bool GetGizmoPreviewBox(
     EditorSelection selection,
     core::Vec3& center,
     core::Vec3& size,
-    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
 
 float GizmoWorldLength(const render::CameraView& view, core::Vec3 origin);
 float GizmoVisualRadius(float axisLength);
@@ -293,13 +299,15 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
     const world::LevelDefinition& active,
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
-    EditorSelection selection);
+    EditorSelection selection,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
 std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
     const world::LevelDefinition& active,
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
     EditorSelection selection,
-    const std::vector<EditorSelection>& additionalSelections);
+    const std::vector<EditorSelection>& additionalSelections,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
 
 inline bool PendingAuthoringContains(
     const std::vector<PendingAuthoringVisual>& visuals,

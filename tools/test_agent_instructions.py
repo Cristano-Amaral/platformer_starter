@@ -28,6 +28,7 @@ CANONICAL_FILES = (
     "docs/milestones/MILESTONE_97.md",
     "docs/milestones/MILESTONE_98.md",
     "docs/milestones/MILESTONE_99.md",
+    "docs/milestones/MILESTONE_100.md",
     "game/assets/source/levels/level_01.level",
     "game/assets/source/levels/level_02.level",
 )
@@ -97,8 +98,8 @@ class AgentInstructionTests(unittest.TestCase):
         self.assertIn("docs/MILESTONES.md", text)
         self.assertIn("docs/ARCHITECTURE.md", text)
         self.assertIn("docs/milestones/MILESTONE_", text)
-        self.assertIn("docs/milestones/MILESTONE_99.md", text)
-        self.assertIn("milestone/99-item-database-editor", text)
+        self.assertIn("docs/milestones/MILESTONE_100.md", text)
+        self.assertIn("milestone/100-inventory-equipment-foundation", text)
         self.assertIn("level_01.level", text)
         self.assertIn("level_02.level", text)
         self.assertIn("manual acceptance", text.lower())

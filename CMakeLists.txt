@@ -136,13 +136,18 @@ add_executable(Platformer3D
     game/source/gameplay/Player.h
     game/source/gameplay/PlayerPresentation.h
     game/source/gameplay/CollectibleRunState.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
+    game/source/gameplay/EquipmentSlot.h
+    game/source/gameplay/ItemIdentity.h
+    game/source/gameplay/InventoryView.h
     game/source/gameplay/GameplayIdentity.h
     game/source/gameplay/GameplayStat.h
     game/source/gameplay/ItemDefinition.h
-    game/source/gameplay/GameplayDefinition.cpp
-    game/source/gameplay/GameplayDefinition.h
     game/source/gameplay/GameplayDefinitionFile.cpp
     game/source/gameplay/GameplayDefinitionFile.h
     game/source/gameplay/InventoryUi.cpp
@@ -858,9 +863,14 @@ target_compile_definitions(TerrainGroundCoverTest PRIVATE
 add_executable(InventoryTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/InventoryTest.cpp
+    game/source/gameplay/ItemIdentity.h
     game/source/platform/FileReplace.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
@@ -885,6 +895,28 @@ endif()
 target_compile_definitions(InventoryTest PRIVATE
     "PLATFORMER_LEVEL01_SOURCE_PATH=\"${PLATFORMER_LEVEL01_SOURCE_PATH}\""
 )
+
+# Milestone 100: Equipment slots and transactional equip/unequip.
+add_executable(EquipmentTest
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
+    game/source/gameplay/EquipmentSlot.h
+    game/source/gameplay/EquipmentTest.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/InventoryUi.cpp
+    game/source/gameplay/InventoryUi.h
+    game/source/gameplay/ItemDefinition.h
+    game/source/gameplay/ItemIdentity.h
+)
+target_include_directories(EquipmentTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EquipmentTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EquipmentTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 # Milestone 98: gameplay-definition identity, stats, registry, and catalog file.
 # Not shipped. No window, raylib, Jolt, or ImGui.
@@ -957,6 +989,10 @@ target_compile_definitions(ItemDatabaseEditorTest PRIVATE
 add_executable(InventoryUiTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/InventoryUi.cpp
@@ -1005,6 +1041,10 @@ add_executable(PhysicsRebuildTest
     game/source/editor/EditorSelectionSet.h
     game/source/editor/EditorGroupTranslate.h
     game/source/editor/EditorGroupRotate.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/PlayerHealth.h
@@ -1036,6 +1076,10 @@ target_compile_definitions(PhysicsRebuildTest PRIVATE
 add_executable(TerrainCollisionTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/physics/PhysicsCapacity.h
@@ -1068,6 +1112,10 @@ target_compile_definitions(TerrainCollisionTest PRIVATE
 add_executable(DynamicBoxGrabTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/physics/DynamicBoxGrab.h
@@ -1097,6 +1145,10 @@ target_compile_definitions(DynamicBoxGrabTest PRIVATE
 add_executable(PressurePlateTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/physics/DynamicBoxGrab.h
@@ -1135,6 +1187,10 @@ target_compile_definitions(PressurePlateTest PRIVATE
 add_executable(DoorTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/physics/DynamicBoxGrab.h
@@ -1175,6 +1231,10 @@ target_compile_definitions(DoorTest PRIVATE
 add_executable(ItemPickupTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -1217,6 +1277,10 @@ target_compile_definitions(ItemPickupTest PRIVATE
 add_executable(ItemPickupCollectionFeedbackTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -1239,6 +1303,10 @@ endif()
 add_executable(ItemPickupCollectionHudTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -1289,6 +1357,10 @@ add_executable(GameplayAudioTest
     game/source/gameplay/GameFlowState.h
     game/source/gameplay/GameplayAudio.h
     game/source/gameplay/GameplayAudioTest.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/InventoryUi.cpp
@@ -1345,6 +1417,10 @@ endif()
 add_executable(PlayerPresentationTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -1383,6 +1459,10 @@ endif()
 add_executable(LevelTransitionTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/InventoryUi.cpp
@@ -1432,6 +1512,10 @@ add_executable(GameFlowTest
     game/source/gameplay/PlayerHealth.h
     game/source/gameplay/PlayerDeath.h
     game/source/gameplay/GameFlowTest.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/InventoryUi.cpp
@@ -1522,6 +1606,8 @@ add_executable(LevelGoalVisualizationTest
     game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
@@ -1549,6 +1635,10 @@ add_executable(LockedDoorTest
     game/source/assets/StaticGlb.h
     game/source/gameplay/DoorLockRuntime.cpp
     game/source/gameplay/DoorLockRuntime.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/InventoryUi.cpp
@@ -1627,6 +1717,8 @@ add_executable(EditorPickingTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 target_include_directories(EditorPickingTest PRIVATE game/source)
 if(MSVC)
@@ -1670,6 +1762,8 @@ add_executable(EditorGizmoTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 if(WIN32)
     target_sources(EditorGizmoTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
@@ -1718,6 +1812,8 @@ add_executable(EditorViewportGridTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 target_include_directories(EditorViewportGridTest PRIVATE game/source)
 if(MSVC)
@@ -1847,6 +1943,8 @@ add_executable(AuthoringGroupsTest
     game/source/world/LevelWriter.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 if(WIN32)
     target_sources(AuthoringGroupsTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
@@ -1884,6 +1982,8 @@ add_executable(EditorPlacementTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 target_include_directories(EditorPlacementTest PRIVATE game/source)
 if(MSVC)
@@ -1930,6 +2030,8 @@ add_executable(StaticPropPlacementTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 target_include_directories(StaticPropPlacementTest PRIVATE game/source)
 if(MSVC)
@@ -1984,6 +2086,8 @@ add_executable(EditorQuickToolbarTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 if(WIN32)
     target_sources(EditorQuickToolbarTest PRIVATE game/source/platform/RuntimePathsWindows.cpp)
@@ -2027,6 +2131,8 @@ add_executable(CanonicalSceneCleanupTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 target_include_directories(CanonicalSceneCleanupTest PRIVATE game/source)
 if(MSVC)
@@ -2079,6 +2185,8 @@ add_executable(AuthoredLifecycleIntegrationTest
     game/source/world/LevelWriter.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 if(WIN32)
     target_sources(AuthoredLifecycleIntegrationTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
@@ -2118,6 +2226,8 @@ add_executable(StaticPropRenderTransformTest
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
 )
 target_include_directories(StaticPropRenderTransformTest PRIVATE game/source)
 if(MSVC)
@@ -2222,6 +2332,10 @@ add_executable(ModelSelectionPreviewTest
     game/source/editor/ModelSelectionPreviewTest.cpp
     game/source/editor/SelectedModelHighlight.h
     game/source/editor/StaticPropTransform.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -2244,6 +2358,10 @@ endif()
 add_executable(ItemPickupTargetHighlightTest
     game/source/assets/StaticGlb.cpp
     game/source/assets/StaticGlb.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
     game/source/gameplay/Inventory.cpp
     game/source/gameplay/Inventory.h
     game/source/gameplay/ItemPickupRuntime.cpp
@@ -2275,6 +2393,8 @@ add_executable(SelectedModelHighlightStateTest
     game/source/render/SelectedModelHighlightStateTest.cpp
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
@@ -2313,6 +2433,8 @@ add_executable(ItemPickupCollectionFeedbackDrawTest
     game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp
@@ -2350,6 +2472,8 @@ add_executable(LoadedModelMaterialsTest
     game/source/render/GroundCoverGpu.h
     game/source/render/StaticModelScene.cpp
     game/source/render/StaticModelScene.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
     game/source/world/LevelDefinition.cpp
     game/source/world/LevelDefinition.h
     game/source/world/StaticProp.cpp

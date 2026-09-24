@@ -1396,7 +1396,7 @@ int main()
                 true,
                 cameraAnchor),
             "seed Item Pickup for Duplicate");
-        dupState.workingCopy.itemPickups[0].itemId = "coin";
+        dupState.workingCopy.itemPickups[0].itemId = "items/coin";
         dupState.workingCopy.itemPickups[0].quantity = 3;
         dupState.workingCopy.itemPickups[0].modelIdentity = "models/test_static.glb";
         dupState.workingCopy.itemPickups[0].visualOffset = {0.0f, 0.5f, 0.0f};
@@ -1416,7 +1416,7 @@ int main()
             "Duplicate Item Pickup request");
         Expect(dupState.workingCopy.itemPickups.size() == 2, "Duplicate appends Item Pickup");
         Expect(
-            dupState.workingCopy.itemPickups[1].itemId == "coin"
+            dupState.workingCopy.itemPickups[1].itemId == "items/coin"
                 && dupState.workingCopy.itemPickups[1].quantity == 3
                 && dupState.workingCopy.itemPickups[1].modelIdentity
                     == dupState.workingCopy.itemPickups[0].modelIdentity
@@ -2059,10 +2059,10 @@ int main()
             field, state.selection, state.workingCopy.itemPickups[1].itemId, false);
         editor::SyncItemIdInspectorField(
             field, state.selection, state.workingCopy.itemPickups[1].itemId, true);
-        editor::CopyItemIdInspectorBuffer(field.buffer, "coin");
+        editor::CopyItemIdInspectorBuffer(field.buffer, "items/coin");
         editor::SyncItemIdInspectorField(
             field, state.selection, state.workingCopy.itemPickups[1].itemId, true);
-        Expect(std::strcmp(field.buffer, "coin") == 0,
+        Expect(std::strcmp(field.buffer, "items/coin") == 0,
             "PRIMARY Item ID buffer survives frames while focused");
         Expect(
             editor::CommitItemIdInspectorFieldOnFocusLoss(
@@ -2070,8 +2070,8 @@ int main()
                 == editor::ItemIdInspectorCommitResult::Accepted,
             "Inspector focus-loss commits PRIMARY Item ID");
         field.editing = false;
-        Expect(state.workingCopy.itemPickups[1].itemId == "coin", "PRIMARY keeps coin");
-        Expect(state.workingCopy.itemPickups[0].itemId == "key", "secondary Item Pickup is not bulk-edited");
+        Expect(state.workingCopy.itemPickups[1].itemId == "items/coin", "PRIMARY keeps coin");
+        Expect(state.workingCopy.itemPickups[0].itemId == "items/master_key", "secondary Item Pickup is not bulk-edited");
         Expect(state.selection.index == 1, "PRIMARY selection remains valid");
         Expect(
             state.additionalSelections.size() == 1 && state.additionalSelections[0].index == 0,
@@ -2086,11 +2086,11 @@ int main()
             world::LevelDefinitionHasRequiredAuthoredContent(state.workingCopy),
             "Apply validation accepts the edited workingCopy");
         const world::LevelDefinition applied = state.workingCopy;
-        Expect(applied.itemPickups[1].itemId == "coin" && applied.itemPickups[0].itemId == "key",
+        Expect(applied.itemPickups[1].itemId == "items/coin" && applied.itemPickups[0].itemId == "items/master_key",
             "Apply promotion preserves both Item IDs");
         SeedEditor(state, applied);
         Expect(!state.modified, "after Apply, workingCopy matches active");
-        Expect(state.workingCopy.itemPickups[1].itemId == "coin", "applied workingCopy keeps coin");
+        Expect(state.workingCopy.itemPickups[1].itemId == "items/coin", "applied workingCopy keeps coin");
 
         const std::string serialized = world::SerializeLevelText(applied);
         Expect(!serialized.empty(), "Save serialization accepts the edited level");
@@ -2098,8 +2098,8 @@ int main()
         Expect(reloaded.status == world::LoadLevelFileStatus::Loaded, "Save/reload parse succeeds");
         Expect(
             reloaded.level.itemPickups.size() == 2
-                && reloaded.level.itemPickups[0].itemId == "key"
-                && reloaded.level.itemPickups[1].itemId == "coin",
+                && reloaded.level.itemPickups[0].itemId == "items/master_key"
+                && reloaded.level.itemPickups[1].itemId == "items/coin",
             "Save/reload preserves PRIMARY coin and first key");
 
         editor::CopyItemIdInspectorBuffer(field.buffer, "Key");
@@ -2108,8 +2108,8 @@ int main()
                 state.workingCopy.itemPickups[1].itemId, field)
                 == editor::ItemIdInspectorCommitResult::Rejected,
             "invalid Inspector Item ID is still rejected");
-        Expect(state.workingCopy.itemPickups[1].itemId == "coin", "invalid ID does not revert coin");
-        Expect(std::strcmp(field.buffer, "coin") == 0, "invalid ID restores the committed buffer");
+        Expect(state.workingCopy.itemPickups[1].itemId == "items/coin", "invalid ID does not revert coin");
+        Expect(std::strcmp(field.buffer, "items/coin") == 0, "invalid ID restores the committed buffer");
     }
 
     // ---- M80 Group Rotate Apply/Save preserves authored results ----

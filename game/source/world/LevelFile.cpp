@@ -1,6 +1,7 @@
 #include "world/LevelFile.h"
 
 #include "assets/RuntimePng.h"
+#include "gameplay/ItemIdentity.h"
 #include "physics/PhysicsCapacity.h"
 
 #include <charconv>
@@ -170,14 +171,12 @@ bool ParseDoorRequiredItemToken(std::string_view token, std::string& requiredIte
         requiredItemId.clear();
         return true;
     }
-    if (token == "1")
+    const gameplay::AuthoredItemReferenceResolution resolved =
+        gameplay::ResolveAuthoredItemReference(token);
+    if (resolved.status == gameplay::AuthoredItemReferenceStatus::Resolved
+        || resolved.status == gameplay::AuthoredItemReferenceStatus::LegacyMapped)
     {
-        requiredItemId = std::string(kM57LegacyRequiredKeyItemId);
-        return true;
-    }
-    if (gameplay::IsValidItemId(token))
-    {
-        requiredItemId = std::string(token);
+        requiredItemId = resolved.identity;
         return true;
     }
     return false;
@@ -1011,6 +1010,21 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup");
             }
             pickup.itemId = std::string(tokens[5]);
+            pickup.legacyItemReference = false;
+            const gameplay::AuthoredItemReferenceResolution resolved =
+                gameplay::ResolveAuthoredItemReference(tokens[5]);
+            if (resolved.status == gameplay::AuthoredItemReferenceStatus::Resolved
+                || resolved.status == gameplay::AuthoredItemReferenceStatus::LegacyMapped)
+            {
+                pickup.itemId = resolved.identity;
+                pickup.legacyItemReference =
+                    resolved.status == gameplay::AuthoredItemReferenceStatus::LegacyMapped;
+            }
+            else
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup item identity");
+            }
             std::size_t identityStart = 6;
             if (tokens.size() > 6 && tokens[6] == kItemPickupVisualKeyword)
             {

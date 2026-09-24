@@ -1,11 +1,15 @@
 #pragma once
 
-// Application-owned per-run player inventory (Milestone 54).
+// Application-owned per-run player inventory (Milestone 54 / 100).
 // Runtime gameplay state only: never authored LevelDefinition data, never
 // serialized in Level Format v1, and never a physics or editor concern.
 //
-// itemId is a canonical identity token, not an ItemDefinition / catalog /
-// asset. There is no world pickup in M54.
+// Stack identity is the M98/M99 textual ItemDefinition identity items/<name>.
+// Authored metadata lives on ItemDefinition, not on Inventory stacks.
+// Legacy M54 short itemId tokens are not a second Item authority.
+
+#include "gameplay/GameplayDefinition.h"
+#include "gameplay/GameplayIdentity.h"
 
 #include <cstddef>
 #include <span>
@@ -28,15 +32,13 @@ inline constexpr bool kInventoryDevelopmentHarnessEnabled = false;
 
 struct InventoryEntry
 {
+    // Durable Item identity: items/<name>.
     std::string itemId;
     int quantity = 0;
 };
 
-// Canonical itemId:
-//   length 1..kMaxItemIdLength
-//   first character [a-z]
-//   remaining characters [a-z0-9_-]
-// Case-sensitive; no folding. Uppercase is rejected, not canonicalized.
+// Legacy M54 itemId grammar, retained only to recognize compatibility tokens.
+// Inventory add/remove requires items/<name>.
 inline bool IsValidItemId(std::string_view itemId)
 {
     if (itemId.empty() || itemId.size() > kMaxItemIdLength)
@@ -70,15 +72,52 @@ enum class InventoryLifecycleEvent
     LevelTransition,
 };
 
+enum class InventoryMutationStatus
+{
+    Ok,
+    InvalidQuantity,
+    QuantityOverflow,
+    MalformedIdentity,
+    MissingDefinition,
+    WrongCategory,
+    InvalidDefinition,
+};
+
+inline const char* InventoryMutationStatusName(InventoryMutationStatus status)
+{
+    switch (status)
+    {
+    case InventoryMutationStatus::Ok:
+        return "Ok";
+    case InventoryMutationStatus::InvalidQuantity:
+        return "InvalidQuantity";
+    case InventoryMutationStatus::QuantityOverflow:
+        return "QuantityOverflow";
+    case InventoryMutationStatus::MalformedIdentity:
+        return "MalformedIdentity";
+    case InventoryMutationStatus::MissingDefinition:
+        return "MissingDefinition";
+    case InventoryMutationStatus::WrongCategory:
+        return "WrongCategory";
+    case InventoryMutationStatus::InvalidDefinition:
+        return "InvalidDefinition";
+    }
+    return "MalformedIdentity";
+}
+
 class Inventory
 {
 public:
     int GetQuantity(std::string_view itemId) const;
     bool Has(std::string_view itemId, int quantity) const;
-    bool TryAdd(std::string_view itemId, int quantity);
+    InventoryMutationStatus TryAdd(
+        std::string_view itemId,
+        int quantity,
+        const GameplayDefinitionRegistry& registry);
     bool TryRemove(std::string_view itemId, int quantity);
     void Clear();
-    // Sorted unique entries. Do not retain the span across a mutation.
+    // Stacks grouped by identity (lexicographic), fill order within identity.
+    // Do not retain the span across a mutation.
     std::span<const InventoryEntry> Entries() const;
 
 private:

@@ -2,6 +2,8 @@
 // Consumes the M55 target result. No window, no second target search.
 
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "render/ItemPickupTargetHighlight.h"
 #include "world/ItemPickup.h"
@@ -37,7 +39,7 @@ bool Vec3Near(core::Vec3 a, core::Vec3 b, float tolerance = 1.0e-4f)
 
 world::ItemPickupSpec MakePickup(
     core::Vec3 position,
-    const char* itemId = "key",
+    const char* itemId = "items/master_key",
     const char* model = "")
 {
     world::ItemPickupSpec spec{};
@@ -54,6 +56,9 @@ world::ItemPickupSpec MakePickup(
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     Expect(
         world::ItemPickupSpec{}.showInteractionBounds
             == world::kDefaultItemPickupShowInteractionBounds
@@ -75,7 +80,7 @@ int main()
             && world::kDefaultItemPickupTargetHighlightGoldAmount == 0.70f,
         "5. targetHighlightGoldAmount defaults 0.70");
 
-    const world::ItemPickupSpec modeled = MakePickup({2.0f, 1.0f, 0.0f}, "key", "models/test_static.glb");
+    const world::ItemPickupSpec modeled = MakePickup({2.0f, 1.0f, 0.0f}, "items/master_key", "models/test_static.glb");
     const world::ItemPickupSpec fallback = []() {
         world::ItemPickupSpec spec = MakePickup({2.0f, 1.0f, 0.0f});
         spec.modelIdentity.clear();
@@ -221,7 +226,7 @@ int main()
     Expect(gameplay::kItemPickupLosBlockFraction == 0.98f, "33. LOS fraction unchanged");
     world::ItemPickupSpec tiedA = search;
     world::ItemPickupSpec tiedB = search;
-    tiedB.itemId = "coin";
+    tiedB.itemId = "items/coin";
     const std::vector<world::ItemPickupSpec> tied{tiedA, tiedB};
     gameplay::ItemPickupRunState tiedRun = gameplay::MakeClearedItemPickupRunState(2);
     const std::vector<std::uint8_t> tiedLos{0, 0};
@@ -229,8 +234,8 @@ int main()
         gameplay::FindItemPickupTargetIndex(spawn, 1.0f, tied, tiedRun.collected, tiedLos) == 0,
         "34. deterministic nearest/tie keeps lower session index");
     gameplay::Inventory inventory;
-    Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "35. collection unchanged");
-    Expect(inventory.GetQuantity("key") == 1, "36. Inventory unchanged");
+    Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry), "35. collection unchanged");
+    Expect(inventory.GetQuantity("items/master_key") == 1, "36. Inventory unchanged");
     Expect(pickups[0].showInteractionBounds == false, "collection does not mutate bounds flag");
     world::ItemPickupSpec zeroCollect = search;
     zeroCollect.targetHighlightIntensity = 0.0f;
@@ -243,9 +248,9 @@ int main()
             == 0,
         "33. intensity 0 preserves targeting");
     Expect(
-        gameplay::TryCollectItemPickup(zeroInventory, zeroRun, zeroCollectPickups, 0),
+        gameplay::TryCollectItemPickup(zeroInventory, zeroRun, zeroCollectPickups, 0, registry),
         "34. intensity 0 preserves collection");
-    Expect(zeroInventory.GetQuantity("key") == 1, "collection at intensity 0 still grants item");
+    Expect(zeroInventory.GetQuantity("items/master_key") == 1, "collection at intensity 0 still grants item");
     Expect(
         zeroCollectPickups[0].targetHighlightIntensity == 0.0f,
         "collection does not mutate targetHighlightIntensity");

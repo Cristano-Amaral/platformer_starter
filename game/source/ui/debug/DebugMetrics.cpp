@@ -7,8 +7,10 @@
 #include "editor/EditorLayout.h"
 #include "editor/EditorLayoutUi.h"
 #include "gameplay/GameplayDefinitionFile.h"
+#include "gameplay/Equipment.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/ItemDefinition.h"
+#include "gameplay/ItemIdentity.h"
 #include "imgui.h"
 
 #include <cstddef>
@@ -225,7 +227,9 @@ void DrawDebugMetrics(
     bool forceDefaultLayout,
     bool recoverOffscreenLayout,
     bool* open,
-    gameplay::Inventory* inventory)
+    gameplay::Inventory* inventory,
+    gameplay::Equipment* equipment,
+    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions)
 {
     ApplyEditorWindowPlacement(
         editor::kMetricsWindowName,
@@ -578,27 +582,44 @@ void DrawDebugMetrics(
         {
             for (const gameplay::InventoryEntry& entry : inventory->Entries())
             {
-                ImGui::Text("%s = %d", entry.itemId.c_str(), entry.quantity);
+                const char* resolution = "missing";
+                if (gameplayDefinitions != nullptr)
+                {
+                    const gameplay::GameplayReferenceResolution resolved =
+                        gameplayDefinitions->Resolve(
+                            gameplay::GameplayDefinitionReference{entry.itemId},
+                            gameplay::GameplayDefinitionCategory::Item);
+                    resolution = gameplay::GameplayReferenceStatusName(resolved.status);
+                }
+                ImGui::Text(
+                    "%s x%d (%s)",
+                    entry.itemId.c_str(),
+                    entry.quantity,
+                    resolution);
             }
         }
 
-        static char itemIdBuffer[64] = "key";
+        static char itemIdBuffer[64] = "items/master_key";
         static int quantity = 1;
         static char lastResult[96] = "";
-        ImGui::InputText("itemId", itemIdBuffer, sizeof(itemIdBuffer));
+        ImGui::InputText("identity", itemIdBuffer, sizeof(itemIdBuffer));
         ImGui::InputInt("quantity", &quantity);
-        const bool canMutate = inventory != nullptr;
+        const bool canMutate = inventory != nullptr && gameplayDefinitions != nullptr;
         ImGui::BeginDisabled(!canMutate);
         if (ImGui::Button("Add") && canMutate)
         {
-            const bool ok = inventory->TryAdd(itemIdBuffer, quantity);
+            const gameplay::InventoryMutationStatus status =
+                inventory->TryAdd(itemIdBuffer, quantity, *gameplayDefinitions);
             std::snprintf(
                 lastResult,
                 sizeof(lastResult),
-                ok ? "Add ok" : "Add failed (inventory unchanged)");
+                status == gameplay::InventoryMutationStatus::Ok
+                    ? "Add ok"
+                    : "Add failed: %s (unchanged)",
+                gameplay::InventoryMutationStatusName(status));
         }
         ImGui::SameLine();
-        if (ImGui::Button("Remove") && canMutate)
+        if (ImGui::Button("Remove") && inventory != nullptr)
         {
             const bool ok = inventory->TryRemove(itemIdBuffer, quantity);
             std::snprintf(
@@ -607,7 +628,7 @@ void DrawDebugMetrics(
                 ok ? "Remove ok" : "Remove failed (inventory unchanged)");
         }
         ImGui::SameLine();
-        if (ImGui::Button("Clear") && canMutate)
+        if (ImGui::Button("Clear") && inventory != nullptr)
         {
             inventory->Clear();
             std::snprintf(lastResult, sizeof(lastResult), "Cleared");
@@ -619,9 +640,43 @@ void DrawDebugMetrics(
         }
     }
 
+    if (ImGui::CollapsingHeader("Equipment (Test)", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::TextUnformatted("M100 Equipment identities. Stats are not applied to Player.");
+        if (equipment == nullptr)
+        {
+            ImGui::TextUnformatted("Equipment: unavailable");
+        }
+        else
+        {
+            for (const gameplay::EquipmentSlot slot : gameplay::kEquipmentSlots)
+            {
+                const std::string_view identity = equipment->GetEquipped(slot);
+                const char* resolution = identity.empty() ? "empty" : "missing";
+                if (!identity.empty() && gameplayDefinitions != nullptr)
+                {
+                    const gameplay::GameplayReferenceResolution resolved =
+                        gameplayDefinitions->Resolve(
+                            gameplay::GameplayDefinitionReference{std::string(identity)},
+                            gameplay::GameplayDefinitionCategory::Item);
+                    resolution = gameplay::GameplayReferenceStatusName(resolved.status);
+                }
+                ImGui::Text(
+                    "%s: %s (%s)",
+                    gameplay::EquipmentSlotName(slot).data(),
+                    identity.empty() ? "(empty)" : identity.data(),
+                    resolution);
+            }
+        }
+        ImGui::TextUnformatted(
+            "Legacy Item Pickup token key/1 maps to items/master_key. Canonical files stay readable.");
+    }
+
     DrawGameplayDefinitionsInspection();
 #else
     (void)inventory;
+    (void)equipment;
+    (void)gameplayDefinitions;
 #endif
 
     ImGui::End();
@@ -633,7 +688,15 @@ void DrawDebugMetrics(
 namespace ui
 {
 void DrawDebugMetrics(
-    const DebugMetricsSnapshot&, float, float, bool, bool, bool*, gameplay::Inventory*) {}
+    const DebugMetricsSnapshot&,
+    float,
+    float,
+    bool,
+    bool,
+    bool*,
+    gameplay::Inventory*,
+    gameplay::Equipment*,
+    const gameplay::GameplayDefinitionRegistry*) {}
 }
 
 #endif

@@ -2,6 +2,8 @@
 // oriented picking bounds, and gameplay targeting isolation. No window.
 
 #include "editor/AuthoredObjectLifecycle.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "editor/EditorGizmo.h"
 #include "editor/EditorMath.h"
 #include "editor/EditorPicking.h"
@@ -83,6 +85,28 @@ world::ItemPickupSpec MakePickup(
     return pickup;
 }
 
+gameplay::GameplayDefinitionRegistry MakeWorldModelPreviewRegistry()
+{
+    gameplay::GameplayDefinitionRegistry registry;
+    gameplay::RegisterTestItem(registry, "items/master_key", gameplay::ItemType::Key, false, 1);
+    gameplay::GameplayDefinition chest = gameplay::MakeTestItemDefinition(
+        "items/bau", gameplay::ItemType::Generic, true, 4);
+    chest.item.worldModelIdentity = "models/test_chest.glb";
+    (void)registry.Register(chest);
+    return registry;
+}
+
+bool GhostMatchesResolvedProp(
+    const editor::SelectedModelGhostRequest& ghost,
+    const world::StaticPropSpec& expected)
+{
+    return ghost.visible && ghost.demotePrimaryBox
+        && ghost.visual.modelIdentity == expected.modelIdentity
+        && Vec3Near(ghost.visual.position, expected.position)
+        && Vec3Near(ghost.visual.rotationDegrees, expected.rotationDegrees)
+        && Vec3Near(ghost.visual.scale, expected.scale);
+}
+
 const editor::PickingProxy* FindProxy(
     const editor::EditorPickingSet& set,
     editor::EditorObjectKind kind,
@@ -104,6 +128,9 @@ constexpr core::Vec3 kBarrelMax{1.7090f, 2.3821f, 1.7421f};
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     // Selected Static Prop gets a model ghost from workingCopy.
     {
         world::LevelDefinition working = MakeStubLevel();
@@ -152,7 +179,7 @@ int main()
     // Selected model-backed Item Pickup uses M58 visual transform.
     {
         world::LevelDefinition working = MakeStubLevel();
-        world::ItemPickupSpec pickup = MakePickup({2.0f, 1.0f, 0.0f}, "key", "models/test_static.glb");
+        world::ItemPickupSpec pickup = MakePickup({2.0f, 1.0f, 0.0f}, "items/master_key", "models/test_static.glb");
         pickup.visualOffset = {0.5f, 0.25f, -0.1f};
         pickup.visualRotationDegrees = {10.0f, 20.0f, 30.0f};
         pickup.visualScale = {2.0f, 0.5f, 1.5f};
@@ -421,7 +448,7 @@ int main()
     // Gameplay targeting still uses logical position.
     {
         const core::Vec3 spawn{0.0f, 0.8f, 0.0f};
-        world::ItemPickupSpec pickup = MakePickup({spawn.x + 1.5f, spawn.y, spawn.z}, "key", "models/test_static.glb");
+        world::ItemPickupSpec pickup = MakePickup({spawn.x + 1.5f, spawn.y, spawn.z}, "items/master_key", "models/test_static.glb");
         pickup.visualOffset = {8.0f, 4.0f, 3.0f};
         pickup.visualRotationDegrees = {90.0f, 45.0f, 10.0f};
         pickup.visualScale = {6.0f, 6.0f, 6.0f};
@@ -446,10 +473,131 @@ int main()
                 == gameplay::kNoItemPickupIndex,
             "LOS unchanged");
         gameplay::Inventory inventory;
-        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "collection unchanged");
-        Expect(inventory.GetQuantity("key") == 1, "Inventory unchanged");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry), "collection unchanged");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "Inventory unchanged");
         Expect(pickups[0].position.x == spawn.x + 1.5f, "collection does not rewrite gameplay position");
         Expect(pickups[0].visualOffset.x == 8.0f, "collection does not rewrite visualOffset");
+    }
+
+    // ItemDefinition World Model is the workingCopy preview authority.
+    {
+        const gameplay::GameplayDefinitionRegistry previewRegistry = MakeWorldModelPreviewRegistry();
+        world::LevelDefinition active = MakeStubLevel();
+        active.itemPickups.push_back(MakePickup({1.0f, 2.0f, 3.0f}, "items/master_key"));
+        world::LevelDefinition working = active;
+        const editor::EditorSelection pickup0{editor::EditorObjectKind::ItemPickup, 0};
+
+        Expect(
+            !editor::IsModelBackedSelection(pickup0, working, &previewRegistry),
+            "no World Model keeps primitive fallback");
+        Expect(
+            !editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry).visible,
+            "no World Model does not invent a model ghost");
+
+        working.itemPickups[0].itemId = "items/bau";
+        Expect(active.itemPickups[0].itemId == "items/master_key",
+            "ItemDefinition change stays on workingCopy until Apply");
+        Expect(active.itemPickups[0].modelIdentity.empty(),
+            "active leftover modelIdentity stays empty until Apply");
+
+        const world::StaticPropSpec previewed =
+            gameplay::ItemPickupResolvedVisualProp(working.itemPickups[0], &previewRegistry);
+        Expect(previewed.modelIdentity == "models/test_chest.glb",
+            "workingCopy ItemDefinition change resolves World Model without Apply");
+        const editor::SelectedModelGhostRequest definitionGhost =
+            editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry);
+        Expect(GhostMatchesResolvedProp(definitionGhost, previewed),
+            "workingCopy ItemDefinition change updates the editor ghost without Apply");
+        Expect(
+            editor::IsModelBackedSelection(pickup0, working, &previewRegistry),
+            "resolved World Model is the editor model preview, not primitive fallback");
+        Expect(
+            !editor::MakeSelectedModelGhostRequest(pickup0, working).visible,
+            "without the registry, leftover empty modelIdentity still has no ghost");
+
+        working.itemPickups[0].position.x = 4.0f;
+        const editor::SelectedModelGhostRequest translateGhost =
+            editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry);
+        Expect(
+            GhostMatchesResolvedProp(
+                translateGhost,
+                gameplay::ItemPickupResolvedVisualProp(working.itemPickups[0], &previewRegistry)),
+            "Translate pending workingCopy transform uses the resolved World Model");
+
+        working.itemPickups[0].visualRotationDegrees = {10.0f, 45.0f, 5.0f};
+        const editor::SelectedModelGhostRequest rotateGhost =
+            editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry);
+        Expect(
+            GhostMatchesResolvedProp(
+                rotateGhost,
+                gameplay::ItemPickupResolvedVisualProp(working.itemPickups[0], &previewRegistry)),
+            "Rotate pending workingCopy transform uses the resolved World Model");
+
+        working.itemPickups[0].visualScale = {2.0f, 0.5f, 1.25f};
+        const editor::SelectedModelGhostRequest scaleGhost =
+            editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry);
+        const world::StaticPropSpec scaledPreview =
+            gameplay::ItemPickupResolvedVisualProp(working.itemPickups[0], &previewRegistry);
+        Expect(
+            GhostMatchesResolvedProp(scaleGhost, scaledPreview),
+            "Scale pending workingCopy transform uses the resolved World Model");
+
+        editor::StructuralIndexMap map{};
+        editor::ResetStructuralIndexMap(map, active);
+        const std::vector<editor::PendingAuthoringVisual> pending =
+            editor::CollectPendingAuthoringVisuals(
+                active, working, map, pickup0, &previewRegistry);
+        Expect(!pending.empty() && pending[0].usesStaticPropTransform,
+            "pending Item Pickup preview uses the resolved model transform");
+        Expect(pending[0].staticProp.modelIdentity == "models/test_chest.glb",
+            "pending Item Pickup preview identity is the ItemDefinition World Model");
+        Expect(
+            Vec3Near(pending[0].staticProp.position, scaledPreview.position)
+                && Vec3Near(pending[0].staticProp.rotationDegrees, scaledPreview.rotationDegrees)
+                && Vec3Near(pending[0].staticProp.scale, scaledPreview.scale),
+            "pending Item Pickup transform matches the selected ghost");
+
+        core::Vec3 boxCenter{};
+        core::Vec3 boxSize{};
+        Expect(
+            editor::GetGizmoPreviewBox(
+                working, pickup0, boxCenter, boxSize, nullptr, &previewRegistry),
+            "gizmo preview box resolves for World Model pickups");
+        Expect(!Vec3Near(boxSize, world::kItemPickupVisualExtents),
+            "Translate preview box is the resolved model AABB, not the primitive cube");
+
+        active.itemPickups[0] = working.itemPickups[0];
+        const editor::SelectedModelGhostRequest appliedGhost =
+            editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry);
+        const world::StaticPropSpec appliedVisual =
+            gameplay::ItemPickupResolvedVisualProp(active.itemPickups[0], &previewRegistry);
+        Expect(GhostMatchesResolvedProp(appliedGhost, appliedVisual),
+            "Apply produces the same visual transform that was previewed");
+
+        editor::EditorPickingSet appliedSet = editor::BuildPickingSet(
+            active, editor::AuthoredPickingWorldState(active), nullptr, &previewRegistry);
+        const editor::PickingProxy* appliedProxy =
+            FindProxy(appliedSet, editor::EditorObjectKind::ItemPickup, 0);
+        Expect(appliedProxy != nullptr && appliedProxy->usesStaticPropTransform,
+            "applied World Model pickup uses model picking, not primitive fallback");
+        Expect(appliedProxy->staticProp.modelIdentity == "models/test_chest.glb",
+            "applied picking identity is the ItemDefinition World Model");
+
+        world::ItemPickupSpec leftover =
+            MakePickup({6.0f, 1.0f, 0.0f}, "items/master_key", "models/legacy_fallback.glb");
+        leftover.visualOffset = {0.0f, 0.25f, 0.0f};
+        leftover.visualRotationDegrees = {0.0f, 15.0f, 0.0f};
+        leftover.visualScale = {1.5f, 1.5f, 1.5f};
+        working.itemPickups[0] = leftover;
+        const world::StaticPropSpec leftoverVisual =
+            gameplay::ItemPickupResolvedVisualProp(leftover, &previewRegistry);
+        Expect(leftoverVisual.modelIdentity == "models/legacy_fallback.glb",
+            "legacy leftover modelIdentity remains valid when the ItemDefinition has no World Model");
+        Expect(
+            GhostMatchesResolvedProp(
+                editor::MakeSelectedModelGhostRequest(pickup0, working, &previewRegistry),
+                leftoverVisual),
+            "legacy visual fallback still drives the editor ghost");
     }
 
     // No authored schema / Level Format fields were added.

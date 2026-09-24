@@ -76,7 +76,8 @@ bool TryCollectItemPickup(
     Inventory& inventory,
     ItemPickupRunState& runState,
     std::span<const world::ItemPickupSpec> pickups,
-    int index)
+    int index,
+    const GameplayDefinitionRegistry& registry)
 {
     if (index < 0)
     {
@@ -96,7 +97,7 @@ bool TryCollectItemPickup(
     {
         return false;
     }
-    if (!inventory.TryAdd(spec.itemId, spec.quantity))
+    if (inventory.TryAdd(spec.itemId, spec.quantity, registry) != InventoryMutationStatus::Ok)
     {
         return false;
     }

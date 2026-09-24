@@ -11,6 +11,7 @@
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/ItemPickupCollectionHud.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "platform/RuntimePaths.h"
 #include "assets/StaticGlb.h"
 #include "render/ItemPickupTargetHighlight.h"
@@ -744,11 +745,11 @@ void DrawInventoryPanel(const InventoryPanelView& panel)
     }
 
     constexpr int kTitleSize = 28;
-    constexpr int kRowSize = 20;
-    constexpr int kDetailSize = 20;
+    constexpr int kRowSize = 18;
+    constexpr int kDetailSize = 18;
     constexpr int kHintSize = 16;
     constexpr int kPad = 20;
-    constexpr int kPanelWidth = 420;
+    constexpr int kPanelWidth = 520;
     constexpr Color kPanelFill{18, 20, 28, 220};
     constexpr Color kPanelEdge{210, 214, 224, 180};
     constexpr Color kTitle{244, 212, 84, 255};
@@ -756,11 +757,15 @@ void DrawInventoryPanel(const InventoryPanelView& panel)
     constexpr Color kSelectedFill{198, 188, 96, 70};
     constexpr Color kSelectedText{236, 214, 72, 255};
     constexpr Color kMuted{200, 208, 220, 255};
+    constexpr Color kMissing{220, 96, 72, 255};
+    constexpr Color kIcon{72, 148, 188, 255};
 
-    const int entryCount = static_cast<int>(panel.entries.size());
+    const gameplay::InventoryEquipmentView& contents = panel.contents;
+    const int entryCount = static_cast<int>(contents.stacks.size());
     const int listHeight = entryCount == 0 ? kRowSize : entryCount * (kRowSize + 4);
-    const int panelHeight = kPad + kTitleSize + 12 + listHeight + 16 + kDetailSize * 3 + 12
-        + kHintSize * 2 + kPad;
+    const int equipmentHeight = static_cast<int>(gameplay::kEquipmentSlotCount) * (kRowSize + 4);
+    const int panelHeight = kPad + kTitleSize + 12 + listHeight + 16 + kDetailSize * 4 + 12
+        + 20 + equipmentHeight + 12 + kHintSize * 3 + kPad;
     const int panelX = (GetScreenWidth() - kPanelWidth) / 2;
     const int panelY = (GetScreenHeight() - panelHeight) / 2;
 
@@ -772,6 +777,11 @@ void DrawInventoryPanel(const InventoryPanelView& panel)
     DrawText(title, panelX + (kPanelWidth - titleWidth) / 2, panelY + kPad, kTitleSize, kTitle);
 
     int y = panelY + kPad + kTitleSize + 12;
+    int selectedQuantity = 0;
+    std::string_view selectedName = "-";
+    bool selectedMissing = false;
+    bool selectedCanEquip = false;
+    std::string_view selectedIcon;
     if (entryCount == 0)
     {
         const char* emptyText = "Inventory is empty";
@@ -779,59 +789,108 @@ void DrawInventoryPanel(const InventoryPanelView& panel)
         DrawText(
             emptyText, panelX + (kPanelWidth - emptyWidth) / 2, y, kRowSize, kMuted);
         y += kRowSize + 16;
-        y += kDetailSize * 3;
     }
     else
     {
-        int selectedQuantity = 0;
-        std::string_view selectedId = panel.selectedItemId;
-        for (const gameplay::InventoryEntry& entry : panel.entries)
+        for (int index = 0; index < entryCount; ++index)
         {
-            const bool selected = entry.itemId == panel.selectedItemId;
+            const gameplay::InventorySlotView& entry = contents.stacks[static_cast<std::size_t>(index)];
+            const bool selected = !contents.equipmentFocus && contents.selectedStackIndex == index;
             if (selected)
             {
                 selectedQuantity = entry.quantity;
-                selectedId = entry.itemId;
+                selectedName = entry.displayName;
+                selectedMissing = entry.missingDefinition;
+                selectedCanEquip = entry.canEquip;
+                selectedIcon = entry.iconTextureIdentity;
                 DrawRectangle(panelX + 12, y - 2, kPanelWidth - 24, kRowSize + 4, kSelectedFill);
             }
             const char* marker = selected ? ">" : " ";
-            const char* line = TextFormat("%s %s", marker, entry.itemId.c_str());
-            DrawText(line, panelX + kPad, y, kRowSize, selected ? kSelectedText : kRow);
+            const Color color = entry.missingDefinition
+                ? kMissing
+                : (selected ? kSelectedText : kRow);
+            if (!entry.iconTextureIdentity.empty())
+            {
+                DrawRectangle(panelX + kPad, y + 2, 12, 12, kIcon);
+            }
+            const char* line = TextFormat(
+                "%s %s",
+                marker,
+                entry.displayName.c_str());
+            DrawText(line, panelX + kPad + 16, y, kRowSize, color);
             const char* qty = TextFormat("x%d", entry.quantity);
             const int qtyWidth = MeasureText(qty, kRowSize);
-            DrawText(qty, panelX + kPanelWidth - kPad - qtyWidth, y, kRowSize,
-                selected ? kSelectedText : kRow);
+            DrawText(qty, panelX + kPanelWidth - kPad - qtyWidth, y, kRowSize, color);
             y += kRowSize + 4;
         }
         y += 12;
-        DrawText("Selected:", panelX + kPad, y, kDetailSize, kMuted);
-        y += kDetailSize + 2;
-        char selectedBuf[48]{};
-        if (selectedId.empty())
-        {
-            std::snprintf(selectedBuf, sizeof(selectedBuf), "-");
-        }
-        else
-        {
-            std::snprintf(
-                selectedBuf,
-                sizeof(selectedBuf),
-                "%.*s",
-                static_cast<int>(selectedId.size()),
-                selectedId.data());
-        }
-        DrawText(selectedBuf, panelX + kPad, y, kDetailSize, kSelectedText);
-        y += kDetailSize + 2;
-        DrawText(
-            TextFormat("Quantity: %d", selectedQuantity),
-            panelX + kPad,
-            y,
-            kDetailSize,
-            kRow);
-        y += kDetailSize + 12;
     }
 
+    DrawText("Selected:", panelX + kPad, y, kDetailSize, kMuted);
+    y += kDetailSize + 2;
+    DrawText(
+        selectedMissing ? TextFormat("MISSING %.*s", static_cast<int>(selectedName.size()), selectedName.data())
+                        : TextFormat("%.*s", static_cast<int>(selectedName.size()), selectedName.data()),
+        panelX + kPad,
+        y,
+        kDetailSize,
+        selectedMissing ? kMissing : kSelectedText);
+    y += kDetailSize + 2;
+    DrawText(TextFormat("Quantity: %d", selectedQuantity), panelX + kPad, y, kDetailSize, kRow);
+    y += kDetailSize + 2;
+    if (!selectedIcon.empty())
+    {
+        DrawText(TextFormat("Icon: %.*s", static_cast<int>(selectedIcon.size()), selectedIcon.data()),
+            panelX + kPad, y, kHintSize, kMuted);
+    }
+    else
+    {
+        DrawText("Icon: none", panelX + kPad, y, kHintSize, kMuted);
+    }
+    y += kDetailSize + 12;
+
+    DrawText("EQUIPMENT", panelX + kPad, y, kDetailSize, kTitle);
+    y += kDetailSize + 4;
+    for (std::size_t index = 0; index < gameplay::kEquipmentSlotCount; ++index)
+    {
+        const gameplay::EquipmentSlotView& slot = contents.equipment[index];
+        const bool selected = contents.equipmentFocus && contents.selectedSlot == slot.slot;
+        if (selected)
+        {
+            DrawRectangle(panelX + 12, y - 2, kPanelWidth - 24, kRowSize + 4, kSelectedFill);
+        }
+        const Color color = slot.missingDefinition
+            ? kMissing
+            : (selected ? kSelectedText : kRow);
+        const char* marker = selected ? ">" : " ";
+        const char* line = TextFormat(
+            "%s %s: %s",
+            marker,
+            slot.slotName.c_str(),
+            slot.occupied ? slot.displayName.c_str() : "Empty");
+        DrawText(line, panelX + kPad, y, kRowSize, color);
+        if (slot.occupied && !slot.iconTextureIdentity.empty())
+        {
+            DrawRectangle(panelX + kPanelWidth - kPad - 12, y + 2, 12, 12, kIcon);
+        }
+        y += kRowSize + 4;
+    }
+    y += 8;
+
     DrawText("Arrows: Select", panelX + kPad, y, kHintSize, kMuted);
+    y += kHintSize + 2;
+    if (contents.equipmentFocus)
+    {
+        DrawText("E: Unequip selected slot", panelX + kPad, y, kHintSize, kMuted);
+    }
+    else if (selectedCanEquip)
+    {
+        DrawText("E: Equip selected Item", panelX + kPad, y, kHintSize, kMuted);
+    }
+    else
+    {
+        DrawText("E: Equip (disabled — not Equipment)", panelX + kPad, y, kHintSize, kMuted);
+    }
     y += kHintSize + 2;
     DrawText("Tab/Esc: Close", panelX + kPad, y, kHintSize, kMuted);
 }
@@ -1973,11 +2032,12 @@ Renderer::~Renderer()
 void Renderer::SyncStaticPropModels(
     const world::LevelDefinition& level,
     std::string_view extraIdentity,
-    const world::LevelDefinition* extraLevel)
+    const world::LevelDefinition* extraLevel,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     if (staticPropModels)
     {
-        staticPropModels->Sync(level, extraIdentity, extraLevel);
+        staticPropModels->Sync(level, extraIdentity, extraLevel, itemDefinitions);
     }
 }
 
@@ -2229,7 +2289,8 @@ void Renderer::DrawWorld(
         bool drawGameplayHud,
         bool hideInteractionPrompts,
         DamageVignetteView damageVignette,
-        DeathHudView deathHud)
+        DeathHudView deathHud,
+        const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     const Camera3D view = MakeCamera(cameraView);
     const bool subViewport = viewRect.width > 0 && viewRect.height > 0;
@@ -2403,17 +2464,20 @@ void Renderer::DrawWorld(
                 continue;
             }
             const world::ItemPickupSpec& pickup = level.itemPickups[index];
+            world::ItemPickupSpec presented = pickup;
+            presented.modelIdentity.assign(
+                gameplay::ResolveItemPickupWorldModel(pickup, itemDefinitions));
             const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
             core::Vec3 loadedMin{};
             core::Vec3 loadedMax{};
             bool haveLoadedBounds = false;
-            if (!pickup.modelIdentity.empty() && staticPropModels != nullptr)
+            if (!presented.modelIdentity.empty() && staticPropModels != nullptr)
             {
                 haveLoadedBounds = staticPropModels->TryGetLoadedLocalBounds(
-                    pickup.modelIdentity, loadedMin, loadedMax);
+                    presented.modelIdentity, loadedMin, loadedMax);
             }
             const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
-                pickup,
+                presented,
                 targeted,
                 false,
                 haveLoadedBounds,
@@ -2423,11 +2487,24 @@ void Renderer::DrawWorld(
             if (presentation.drawHud)
             {
                 pickupHudTarget = true;
+                const char* label = pickup.itemId.c_str();
+                if (itemDefinitions != nullptr)
+                {
+                    const gameplay::GameplayReferenceResolution resolved = itemDefinitions->Resolve(
+                        gameplay::GameplayDefinitionReference{pickup.itemId},
+                        gameplay::GameplayDefinitionCategory::Item);
+                    if (resolved.status == gameplay::GameplayReferenceStatus::Resolved
+                        && resolved.definition != nullptr
+                        && !resolved.definition->item.displayName.empty())
+                    {
+                        label = resolved.definition->item.displayName.c_str();
+                    }
+                }
                 std::snprintf(
                     pickupHudText,
                     sizeof(pickupHudText),
                     "E Pick Up %s x%d",
-                    pickup.itemId.c_str(),
+                    label,
                     pickup.quantity);
             }
             Color fill = kItemPickupFill;
@@ -2439,12 +2516,12 @@ void Renderer::DrawWorld(
             }
             const Color wire = targeted ? kItemPickupTargetWire : kWireColor;
             const bool overlayPass = gWorldSolidMode == WorldSolidMode::Combined;
-            if (!pickup.modelIdentity.empty() && staticPropModels)
+            if (!presented.modelIdentity.empty() && staticPropModels)
             {
                 if (gWorldSolidMode != WorldSolidMode::Wires)
                 {
                     const world::StaticPropSpec visual =
-                        world::ItemPickupPresentedVisualProp(pickup, elapsedSeconds);
+                        world::ItemPickupPresentedVisualProp(presented, elapsedSeconds);
                     if (gWorldModelOverride != nullptr)
                     {
                         staticPropModels->DrawProp(visual, *gWorldModelOverride);
@@ -2696,24 +2773,27 @@ void Renderer::DrawWorld(
                 continue;
             }
             const world::ItemPickupSpec& pickup = level.itemPickups[index];
+            world::ItemPickupSpec presented = pickup;
+            presented.modelIdentity.assign(
+                gameplay::ResolveItemPickupWorldModel(pickup, itemDefinitions));
             const bool targeted = itemPickupTargetIndex == static_cast<int>(index);
             core::Vec3 loadedMin{};
             core::Vec3 loadedMax{};
             bool haveLoadedBounds = false;
-            if (!pickup.modelIdentity.empty() && staticPropModels != nullptr)
+            if (!presented.modelIdentity.empty() && staticPropModels != nullptr)
             {
                 haveLoadedBounds = staticPropModels->TryGetLoadedLocalBounds(
-                    pickup.modelIdentity, loadedMin, loadedMax);
+                    presented.modelIdentity, loadedMin, loadedMax);
             }
             const ItemPickupTargetPresentation presentation = MakeItemPickupTargetPresentation(
-                pickup,
+                presented,
                 targeted,
                 false,
                 haveLoadedBounds,
                 loadedMin,
                 loadedMax,
                 elapsedSeconds);
-            if (!pickup.modelIdentity.empty() && staticPropModels)
+            if (!presented.modelIdentity.empty() && staticPropModels)
             {
                 if (presentation.drawModelHighlight)
                 {

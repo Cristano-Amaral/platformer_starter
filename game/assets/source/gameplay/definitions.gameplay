@@ -29,7 +29,7 @@ display_name "Bau"
 description "Bau"
 item_type Generic
 stackable true
-max_stack 4
+max_stack 10
 world_model "models/Chest by Quaternius - O72u4Drp8k.glb"
 icon "textures/test_textured_basecolor.png"
 modifier MaxHealth 10

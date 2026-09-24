@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "gameplay/GameplayDefinition.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/InventoryView.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/PlayerPresentation.h"
@@ -250,8 +252,7 @@ struct DoorDrawState
 struct InventoryPanelView
 {
     bool visible = false;
-    std::span<const gameplay::InventoryEntry> entries{};
-    std::string_view selectedItemId{};
+    gameplay::InventoryEquipmentView contents{};
 };
 
 // Compact Gameplay Level/objective HUD (Milestone 67). Presentation-only;
@@ -301,7 +302,8 @@ public:
     void SyncStaticPropModels(
         const world::LevelDefinition& level,
         std::string_view extraIdentity = {},
-        const world::LevelDefinition* extraLevel = nullptr);
+        const world::LevelDefinition* extraLevel = nullptr,
+        const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
     StaticModelSceneStore* StaticPropModels();
     const StaticModelSceneStore* StaticPropModels() const;
 
@@ -363,7 +365,8 @@ public:
         bool drawGameplayHud = true,
         bool hideInteractionPrompts = false,
         DamageVignetteView damageVignette = {},
-        DeathHudView deathHud = {});
+        DeathHudView deathHud = {},
+        const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
     void DrawMainMenu(bool playSelected);
     void DrawPauseMenu(bool resumeSelected);
     void DrawOrientationWidget(const OrientationWidgetOverlay& overlay);

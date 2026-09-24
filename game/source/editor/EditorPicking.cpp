@@ -6,6 +6,7 @@
 #include "editor/EditorMath.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/StaticPropTransform.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "world/RespawnWorld.h"
 
 #include <cmath>
@@ -205,7 +206,8 @@ EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& 
 EditorPickingSet BuildPickingSet(
     const world::LevelDefinition& appliedLevel,
     const EditorPickingWorldState& worldState,
-    const DirectionalLightVisualization* directionalLightVisualization)
+    const DirectionalLightVisualization* directionalLightVisualization,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     EditorPickingSet set{};
 
@@ -334,15 +336,21 @@ EditorPickingSet BuildPickingSet(
     for (std::size_t index = 0; index < appliedLevel.itemPickups.size(); ++index)
     {
         const world::ItemPickupSpec& pickup = appliedLevel.itemPickups[index];
-        if (!pickup.modelIdentity.empty())
+        if (gameplay::ItemPickupHasResolvedVisualModel(pickup, itemDefinitions))
         {
             PickingProxy proxy{};
             proxy.selection = {EditorObjectKind::ItemPickup, index};
             proxy.usesStaticPropTransform = true;
-            proxy.staticProp = world::ItemPickupVisualProp(pickup);
+            proxy.staticProp = gameplay::ItemPickupResolvedVisualProp(pickup, itemDefinitions);
             proxy.localMin = kStaticPropDefaultLocalMin;
             proxy.localMax = kStaticPropDefaultLocalMax;
-            ItemPickupEditorBounds(pickup, proxy.center, proxy.size);
+            ItemPickupEditorBounds(
+                pickup,
+                proxy.center,
+                proxy.size,
+                proxy.localMin,
+                proxy.localMax,
+                itemDefinitions);
             set.proxies.push_back(proxy);
             continue;
         }

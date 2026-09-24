@@ -115,6 +115,12 @@ KNOWN_ASSETS = (
         "kind": KIND_LEVEL_V1,
     },
     {
+        "id": "gameplay/definitions.gameplay",
+        "source": "gameplay/definitions.gameplay",
+        "cooked": "gameplay/definitions.gameplay",
+        "kind": KIND_COPY,
+    },
+    {
         "id": "sounds/item_pickup_collect.wav",
         "source": "sounds/item_pickup_collect.wav",
         "cooked": "sounds/item_pickup_collect.wav",

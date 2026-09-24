@@ -1,6 +1,9 @@
 #pragma once
 
 #include "gameplay/CollectibleRunState.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/GameplayDefinition.h"
+#include "gameplay/GameplayDefinitionFile.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
@@ -105,6 +108,8 @@ private:
     std::string currentRuntimeLevelId;
     gameplay::CollectibleRunState collectibleRunState;
     gameplay::Inventory inventory{};
+    gameplay::Equipment equipment{};
+    gameplay::GameplayDefinitionRegistry gameplayDefinitions{};
     gameplay::InventoryUiState inventoryUi{};
     gameplay::ItemPickupRunState itemPickupRunState{};
     gameplay::ItemPickupCollectionFeedbackState itemPickupCollectionFeedback{};

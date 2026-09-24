@@ -112,7 +112,8 @@ Tests:
 .\build\windows-vs2022\Development\PhysicsRebuildTest.exe   # repeated editor Apply rebuild cycle
 .\build\windows-vs2022\Development\DynamicBoxGrabTest.exe   # M51 Dynamic Box Grab / Carry
 .\build\windows-vs2022\Development\PressurePlateTest.exe    # M52 Pressure Plate overlap / activation
-.\build\windows-vs2022\Development\InventoryTest.exe        # M54 Inventory API / lifecycle
+.\build\windows-vs2022\Development\InventoryTest.exe        # M54/M100 Inventory API / lifecycle
+.\build\windows-vs2022\Development\EquipmentTest.exe        # M100 Equipment slots / equip-unequip
 .\build\windows-vs2022\Development\GameplayDefinitionTest.exe # M98/M99 gameplay definition identity / stats / catalog
 .\build\windows-vs2022\Development\ItemDatabaseEditorTest.exe # M99 Item Database editor seams / pickers / save
 .\build\windows-vs2022\Development\InventoryUiTest.exe      # M56 player Inventory UI / focus

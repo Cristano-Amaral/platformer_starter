@@ -7,6 +7,8 @@
 #include "gameplay/CollectibleRunState.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "gameplay/LevelCompletionState.h"
@@ -30,6 +32,7 @@
 namespace
 {
 int gFailures = 0;
+const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
 
 void Expect(bool condition, const char* name)
 {
@@ -44,7 +47,7 @@ world::ItemPickupSpec MakePickup(core::Vec3 position)
 {
     world::ItemPickupSpec spec{};
     spec.position = position;
-    spec.itemId = "key";
+    spec.itemId = "items/master_key";
     spec.quantity = 1;
     return spec;
 }
@@ -56,7 +59,7 @@ void MaybeRequestPickupSfx(
     std::span<const world::ItemPickupSpec> pickups,
     int index)
 {
-    if (!gameplay::TryCollectItemPickup(inventory, runState, pickups, index))
+    if (!gameplay::TryCollectItemPickup(inventory, runState, pickups, index, registry))
     {
         return;
     }
@@ -126,6 +129,8 @@ void StepHazardSfx(
 
 int main()
 {
+    gameplay::Equipment equipment;
+
     Expect(
         platform::kGameplaySfxVolume == 1.0f, "fixed gameplay SFX volume is 1.0");
     Expect(
@@ -145,22 +150,23 @@ int main()
                 && sfx.respawnCount == 0 && sfx.footstepCount == 0 && sfx.jumpCount == 0
                 && sfx.landingCount == 0,
             "successful pickup does not emit Collectible or survival/movement cues");
-        Expect(inventory.GetQuantity("key") == 1, "pickup collection still mutates Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "pickup collection still mutates Inventory");
         Expect(run.collected[0] == 1, "pickup collection still marks collected");
     }
 
     {
         world::ItemPickupSpec pickup = MakePickup({1.55f, 1.0f, 0.0f});
+        pickup.itemId = "items/coin";
         std::vector<world::ItemPickupSpec> pickups{pickup};
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", gameplay::kMaxItemQuantity), "seed inventory at cap");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/coin", gameplay::kMaxItemQuantity), "seed inventory at cap");
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         gameplay::GameplaySfxRequestState sfx{};
         MaybeRequestPickupSfx(inventory, run, sfx, pickups, 0);
         Expect(sfx.pickupCount == 0, "2. failed pickup emits no pickup audio");
         Expect(run.collected[0] == 0, "failed pickup leaves the world item");
         Expect(
-            inventory.GetQuantity("key") == gameplay::kMaxItemQuantity,
+            inventory.GetQuantity("items/coin") == gameplay::kMaxItemQuantity,
             "failed pickup does not change Inventory");
     }
 
@@ -743,7 +749,7 @@ int main()
     lockedDoor.center = {2.0f, 1.5f, 0.0f};
     lockedDoor.size = world::kDefaultDoorSize;
     lockedDoor.openDistance = world::kDefaultDoorOpenDistance;
-    lockedDoor.requiredItemId = "key";
+    lockedDoor.requiredItemId = "items/master_key";
     std::vector<world::DoorSpec> doors{lockedDoor};
     gameplay::DoorLockRunState locks = gameplay::MakeDoorLockRunState(doors);
     gameplay::Inventory doorInventory;
@@ -752,18 +758,18 @@ int main()
         !gameplay::TryUnlockLockedDoor(doorInventory, locks, doors, 0),
         "missing item fails unlock");
     Expect(doorSfx.doorUnlockCount == 0, "9. missing-item / failed unlock emits no Door Unlock request");
-    Expect(doorInventory.TryAdd("key", 1), "seed required item");
+    Expect(gameplay::AddTestItem(doorInventory, registry, "items/master_key", 1), "seed required item");
     Expect(gameplay::TryUnlockLockedDoor(doorInventory, locks, doors, 0), "successful item-gated unlock");
     gameplay::RecordGameplaySfx(doorSfx, gameplay::DoorUnlockSfx());
     Expect(
-        doorSfx.doorUnlockCount == 1 && doorInventory.GetQuantity("key") == 0
+        doorSfx.doorUnlockCount == 1 && doorInventory.GetQuantity("items/master_key") == 0
             && gameplay::DoorIsRuntimeUnlocked(locks, 0),
         "8. successful item-gated Door unlock emits exactly one Door Unlock request");
     Expect(
         !gameplay::TryUnlockLockedDoor(doorInventory, locks, doors, 0),
         "already-unlocked Door does not unlock again");
     Expect(doorSfx.doorUnlockCount == 1, "10. already-unlocked Door interaction emits no replay");
-    Expect(doors[0].requiredItemId == "key", "Door unlock audio does not mutate authored requiredItemId");
+    Expect(doors[0].requiredItemId == "items/master_key", "Door unlock audio does not mutate authored requiredItemId");
 
     world::LevelGoalSpec destinationGoal{{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}, "level_02"};
     world::LevelGoalSpec terminalGoal{{-21.0f, 3.8f, 0.0f}, {2.0f, 1.6f, 1.8f}, {}};
@@ -880,7 +886,7 @@ int main()
     Expect(
         authoredHazards[0].center.x == authoredBefore.center.x && !dirty
             && workingCopy[0].center.x == authoredBefore.center.x
-            && doors[0].requiredItemId == "key",
+            && doors[0].requiredItemId == "items/master_key",
         "23. M73 audio never mutates authored data, workingCopy, or Dirty");
 
     gameplay::TopLevelFlow menuFlow = gameplay::TopLevelFlow::MainMenu;
@@ -1089,14 +1095,14 @@ int main()
     input::InputState toggle{};
     toggle.toggleInventoryPressed = true;
     Expect(
-        gameplay::HandleInventoryUiInput(inventoryUi, inventory, toggle)
+        gameplay::HandleInventoryUiInput(inventoryUi, inventory, equipment, registry, toggle)
             == gameplay::InventoryUiInputAction::Open,
         "available Tab is the Inventory Open action");
     gameplay::RecordGameplaySfx(inventorySfx, gameplay::InventoryOpenSfx());
     Expect(inventoryUi.open, "Inventory is open");
     Expect(inventorySfx.inventoryOpenCount == 1, "10. closed -> open emits one InventoryOpen");
     Expect(
-        gameplay::HandleInventoryUiInput(inventoryUi, inventory, toggle)
+        gameplay::HandleInventoryUiInput(inventoryUi, inventory, equipment, registry, toggle)
             == gameplay::InventoryUiInputAction::Close,
         "available Tab while open is the Inventory Close action");
     gameplay::RecordGameplaySfx(inventorySfx, gameplay::InventoryCloseSfx());
@@ -1106,7 +1112,7 @@ int main()
     input::InputState cancel{};
     cancel.cancelPressed = true;
     Expect(
-        gameplay::HandleInventoryUiInput(inventoryUi, inventory, cancel)
+        gameplay::HandleInventoryUiInput(inventoryUi, inventory, equipment, registry, cancel)
             == gameplay::InventoryUiInputAction::None,
         "Esc while Inventory is closed is not an Inventory action");
     Expect(inventorySfx.inventoryOpenCount == 1 && inventorySfx.inventoryCloseCount == 1,

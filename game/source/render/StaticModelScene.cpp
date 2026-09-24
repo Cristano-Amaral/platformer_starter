@@ -1,6 +1,7 @@
 #include "render/StaticModelScene.h"
 
 #include "assets/StaticGlb.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "platform/RuntimePaths.h"
 #include "render/LoadedModelMaterials.h"
 #include "world/TerrainVegetation.h"
@@ -207,7 +208,8 @@ void StaticModelSceneStore::Shutdown()
 void StaticModelSceneStore::Sync(
     const world::LevelDefinition& level,
     std::string_view extraIdentity,
-    const world::LevelDefinition* extraLevel)
+    const world::LevelDefinition* extraLevel,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     if (gpu == nullptr)
     {
@@ -229,6 +231,15 @@ void StaticModelSceneStore::Sync(
             if (world::StaticPropIdentityIsValid(pickup.modelIdentity))
             {
                 needed.insert(pickup.modelIdentity);
+            }
+            if (itemDefinitions != nullptr)
+            {
+                const std::string_view resolved =
+                    gameplay::ResolveItemPickupWorldModel(pickup, itemDefinitions);
+                if (world::StaticPropIdentityIsValid(resolved))
+                {
+                    needed.insert(std::string(resolved));
+                }
             }
         }
         if (source.hasTerrain)

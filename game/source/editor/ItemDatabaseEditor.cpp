@@ -407,10 +407,63 @@ void DrawItemDatabaseEditor(
                 if (typeIndex >= 0 && typeIndex < static_cast<int>(gameplay::kItemTypeCount))
                 {
                     selected->item.type = static_cast<gameplay::ItemType>(typeIndex);
+                    if (selected->item.type == gameplay::ItemType::Equipment)
+                    {
+                        if (!selected->item.equipmentSlot.has_value())
+                        {
+                            selected->item.equipmentSlot = gameplay::EquipmentSlot::Head;
+                        }
+                    }
+                    else
+                    {
+                        selected->item.equipmentSlot.reset();
+                    }
                     RefreshItemDatabaseDirty(state);
                 }
             }
-            ImGui::TextDisabled("Item Type is classification only in M99.");
+            ImGui::TextDisabled("Item Type is classification. Equipment requires a Slot.");
+
+            if (selected->item.type == gameplay::ItemType::Equipment)
+            {
+                int slotIndex = selected->item.equipmentSlot.has_value()
+                    ? static_cast<int>(*selected->item.equipmentSlot)
+                    : 0;
+                const char* slotNames[] = {"Head", "Body", "MainHand", "OffHand", "Accessory"};
+                if (ImGui::Combo("Equipment Slot", &slotIndex, slotNames, IM_ARRAYSIZE(slotNames)))
+                {
+                    if (slotIndex >= 0
+                        && slotIndex < static_cast<int>(gameplay::kEquipmentSlotCount))
+                    {
+                        selected->item.equipmentSlot =
+                            static_cast<gameplay::EquipmentSlot>(slotIndex);
+                        RefreshItemDatabaseDirty(state);
+                    }
+                }
+            }
+            else
+            {
+                ImGui::BeginDisabled(true);
+                const char* noneSlot = "None";
+                int noneIndex = 0;
+                ImGui::Combo("Equipment Slot", &noneIndex, &noneSlot, 1);
+                ImGui::EndDisabled();
+                ImGui::TextDisabled("Equipment Slot is only authored on Equipment Items.");
+            }
+            if (selected->item.type == gameplay::ItemType::Equipment
+                && (!selected->item.equipmentSlot.has_value()
+                    || !gameplay::IsValidEquipmentSlot(*selected->item.equipmentSlot)))
+            {
+                ImGui::TextColored(
+                    ImVec4(0.92f, 0.42f, 0.32f, 1.0f),
+                    "Equipment Items require a typed Equipment Slot.");
+            }
+            if (selected->item.type != gameplay::ItemType::Equipment
+                && selected->item.equipmentSlot.has_value())
+            {
+                ImGui::TextColored(
+                    ImVec4(0.92f, 0.42f, 0.32f, 1.0f),
+                    "Non-Equipment Items cannot carry Equipment Slot metadata.");
+            }
 
             bool stackable = selected->item.stackable;
             if (ImGui::Checkbox("Stackable", &stackable))

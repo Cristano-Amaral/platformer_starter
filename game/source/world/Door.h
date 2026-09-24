@@ -5,6 +5,7 @@
 // never stored on this spec.
 
 #include "core/Vec3.h"
+#include "gameplay/ItemIdentity.h"
 #include "gameplay/Inventory.h"
 
 #include <cmath>
@@ -23,6 +24,8 @@ inline constexpr int kLevel01DoorCount = 0;
 // M57 trailing token "1" maps to this Inventory itemId. Canonical M57.1
 // writer emits the itemId itself, not "1".
 inline constexpr std::string_view kM57LegacyRequiredKeyItemId = "key";
+inline constexpr std::string_view kCanonicalRequiredKeyItemIdentity =
+    gameplay::kCanonicalKeyItemIdentity;
 
 struct DoorSpec
 {
@@ -54,7 +57,7 @@ inline bool DoorOpenDistanceIsValid(float openDistance)
 
 inline bool DoorRequiredItemIdIsValid(std::string_view requiredItemId)
 {
-    return requiredItemId.empty() || gameplay::IsValidItemId(requiredItemId);
+    return requiredItemId.empty() || gameplay::IsValidInventoryItemIdentity(requiredItemId);
 }
 
 inline bool DoorRequiresInventoryItem(const DoorSpec& spec)

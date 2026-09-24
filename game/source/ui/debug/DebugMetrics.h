@@ -9,6 +9,8 @@
 namespace gameplay
 {
 class Inventory;
+class Equipment;
+class GameplayDefinitionRegistry;
 }
 
 namespace ui
@@ -178,5 +180,7 @@ void DrawDebugMetrics(
     bool forceDefaultLayout,
     bool recoverOffscreenLayout,
     bool* open,
-    gameplay::Inventory* inventory = nullptr);
+    gameplay::Inventory* inventory = nullptr,
+    gameplay::Equipment* equipment = nullptr,
+    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions = nullptr);
 }

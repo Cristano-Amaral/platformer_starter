@@ -7,6 +7,7 @@
 
 #include "editor/EditorSelection.h"
 #include "editor/StaticPropTransform.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "world/ItemPickup.h"
 #include "world/LevelDefinition.h"
 #include "world/StaticProp.h"
@@ -25,7 +26,8 @@ struct SelectedModelGhostRequest
 
 inline bool IsModelBackedSelection(
     EditorSelection selection,
-    const world::LevelDefinition& workingCopy)
+    const world::LevelDefinition& workingCopy,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr)
 {
     if (selection.kind == EditorObjectKind::StaticProp
         && selection.index < workingCopy.staticProps.size())
@@ -35,16 +37,20 @@ inline bool IsModelBackedSelection(
     if (selection.kind == EditorObjectKind::ItemPickup
         && selection.index < workingCopy.itemPickups.size())
     {
-        return !workingCopy.itemPickups[selection.index].modelIdentity.empty();
+        return gameplay::ItemPickupHasResolvedVisualModel(
+            workingCopy.itemPickups[selection.index], itemDefinitions);
     }
     return false;
 }
 
 // Ghost transform is copied from workingCopy. Callers must not invent a
-// previewPosition / previewRotation / previewScale authority.
+// previewPosition / previewRotation / previewScale authority. Item Pickup
+// identity follows ItemPickupResolvedVisualProp (World Model, else leftover
+// authored modelIdentity).
 inline SelectedModelGhostRequest MakeSelectedModelGhostRequest(
     EditorSelection workingSelection,
-    const world::LevelDefinition& workingCopy)
+    const world::LevelDefinition& workingCopy,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr)
 {
     SelectedModelGhostRequest request{};
     if (workingSelection.kind == EditorObjectKind::StaticProp
@@ -65,11 +71,12 @@ inline SelectedModelGhostRequest MakeSelectedModelGhostRequest(
         && workingSelection.index < workingCopy.itemPickups.size())
     {
         const world::ItemPickupSpec& pickup = workingCopy.itemPickups[workingSelection.index];
-        if (pickup.modelIdentity.empty())
+        if (!gameplay::ItemPickupHasResolvedVisualModel(pickup, itemDefinitions))
         {
             return request;
         }
-        const world::StaticPropSpec visual = world::ItemPickupVisualProp(pickup);
+        const world::StaticPropSpec visual =
+            gameplay::ItemPickupResolvedVisualProp(pickup, itemDefinitions);
         if (!world::StaticPropTransformIsValid(visual))
         {
             return request;

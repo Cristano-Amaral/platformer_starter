@@ -181,6 +181,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
         inventory = (REPO_ROOT / "cmake" / "RuntimeAssets.cmake").read_text(encoding="utf-8")
         self.assertIn("levels/level_01.level", inventory)
         self.assertIn("levels/level_02.level", inventory)
+        self.assertIn("gameplay/definitions.gameplay", inventory)
         self.assertIn("models/player.glb", inventory)
         self.assertIn("textures/test_ground_cover_tuft.png", inventory)
         self.assertNotIn("levels/level_03.level", inventory)
@@ -199,6 +200,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "models/test_textured.glb",
                 "levels/level_01.level",
                 "levels/level_02.level",
+                "gameplay/definitions.gameplay",
                 "sounds/item_pickup_collect.wav",
                 "sounds/player_damage.wav",
                 "sounds/player_death.wav",
@@ -250,6 +252,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "models/test_textured.glb",
                 "levels/level_01.level",
                 "levels/level_02.level",
+                "gameplay/definitions.gameplay",
                 "sounds/item_pickup_collect.wav",
                 "sounds/player_damage.wav",
                 "sounds/player_death.wav",
@@ -339,6 +342,7 @@ class StageRuntimeAssetsTests(unittest.TestCase):
                 "models/test_textured.glb",
                 "levels/level_01.level",
                 "levels/level_02.level",
+                "gameplay/definitions.gameplay",
                 "sounds/item_pickup_collect.wav",
                 "sounds/player_damage.wav",
                 "sounds/player_death.wav",

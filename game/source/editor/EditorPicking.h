@@ -14,6 +14,11 @@
 #include <cstddef>
 #include <vector>
 
+namespace gameplay
+{
+class GameplayDefinitionRegistry;
+}
+
 namespace editor
 {
 struct Ray3
@@ -112,7 +117,8 @@ EditorPickingWorldState AuthoredPickingWorldState(const world::LevelDefinition& 
 EditorPickingSet BuildPickingSet(
     const world::LevelDefinition& appliedLevel,
     const EditorPickingWorldState& worldState,
-    const DirectionalLightVisualization* directionalLightVisualization = nullptr);
+    const DirectionalLightVisualization* directionalLightVisualization = nullptr,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr);
 
 // Nearest positive hit. Exact distance ties keep the earlier proxy, which is
 // the stable hierarchy order BuildPickingSet uses. No hit returns None.

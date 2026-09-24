@@ -1554,7 +1554,7 @@ int main()
                     == world::kDefaultItemPickupIdleSpinSpeedDegrees,
             "6. Add uses M59 defaults");
         Expect(added.selection.kind == EditorObjectKind::ItemPickup, "Add selects Item Pickup");
-        working.itemPickups[0].itemId = "coin";
+        working.itemPickups[0].itemId = "items/coin";
         working.itemPickups[0].quantity = 4;
         working.itemPickups[0].modelIdentity = "models/test_static.glb";
         working.itemPickups[0].visualOffset = {0.0f, 0.5f, 0.0f};
@@ -1985,7 +1985,7 @@ int main()
         const EditorSelection primary{EditorObjectKind::ItemPickup, 1};
         editor::ItemIdInspectorFieldState field{};
         editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, false);
-        Expect(std::strcmp(field.buffer, "key") == 0, "inactive sync loads workingCopy key");
+        Expect(std::strcmp(field.buffer, "items/master_key") == 0, "inactive sync loads workingCopy key");
 
         editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
         editor::CopyItemIdInspectorBuffer(field.buffer, "co");
@@ -1994,25 +1994,27 @@ int main()
             "active sync does not reload key over in-progress Item ID");
         Expect(
             editor::TryAcceptItemIdInspectorField(working.itemPickups[1].itemId, field)
-                == editor::ItemIdInspectorCommitResult::Accepted,
-            "valid prefix commits to PRIMARY workingCopy");
-        Expect(working.itemPickups[1].itemId == "co", "PRIMARY accepted co");
-        Expect(working.itemPickups[0].itemId == "key", "secondary Item Pickup stays key");
+                == editor::ItemIdInspectorCommitResult::Rejected,
+            "partial identity is not a valid items/<name> commit");
+        Expect(working.itemPickups[1].itemId == world::kDefaultItemPickupId,
+            "rejected prefix leaves the default identity");
+        Expect(working.itemPickups[0].itemId == world::kDefaultItemPickupId,
+            "secondary Item Pickup stays default");
 
-        editor::CopyItemIdInspectorBuffer(field.buffer, "coin");
+        editor::CopyItemIdInspectorBuffer(field.buffer, "items/coin");
         editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
-        Expect(std::strcmp(field.buffer, "coin") == 0, "later typing is kept while focused");
+        Expect(std::strcmp(field.buffer, "items/coin") == 0, "later typing is kept while focused");
         Expect(
             editor::CommitItemIdInspectorFieldOnFocusLoss(working.itemPickups[1].itemId, field)
                 == editor::ItemIdInspectorCommitResult::Accepted,
             "focus-loss commits coin");
-        Expect(working.itemPickups[1].itemId == "coin", "second Item Pickup retains coin");
-        Expect(working.itemPickups[0].itemId == "key", "first Item Pickup remains key");
+        Expect(working.itemPickups[1].itemId == "items/coin", "second Item Pickup retains coin");
+        Expect(working.itemPickups[0].itemId == "items/master_key", "first Item Pickup remains key");
         Expect(!world::AuthoredLevelDataEqual(working, baseline), "Dirty/authored state sees Item ID");
 
         const world::LevelDefinition applied = working;
-        Expect(applied.itemPickups[1].itemId == "coin", "Apply promotion keeps coin");
-        Expect(applied.itemPickups[0].itemId == "key", "Apply promotion keeps first key");
+        Expect(applied.itemPickups[1].itemId == "items/coin", "Apply promotion keeps coin");
+        Expect(applied.itemPickups[0].itemId == "items/master_key", "Apply promotion keeps first key");
 
         editor::SyncItemIdInspectorField(field, primary, working.itemPickups[1].itemId, true);
         editor::CopyItemIdInspectorBuffer(field.buffer, "Key");
@@ -2020,14 +2022,14 @@ int main()
             editor::TryAcceptItemIdInspectorField(working.itemPickups[1].itemId, field)
                 == editor::ItemIdInspectorCommitResult::Rejected,
             "invalid live Item ID is not written");
-        Expect(working.itemPickups[1].itemId == "coin", "rejected live edit leaves coin");
+        Expect(working.itemPickups[1].itemId == "items/coin", "rejected live edit leaves coin");
         Expect(
             editor::CommitItemIdInspectorFieldOnFocusLoss(working.itemPickups[1].itemId, field)
                 == editor::ItemIdInspectorCommitResult::Rejected,
             "invalid focus-loss restores last committed id");
-        Expect(std::strcmp(field.buffer, "coin") == 0, "invalid focus-loss restores buffer");
-        Expect(working.itemPickups[1].itemId == "coin", "invalid focus-loss leaves workingCopy");
-        Expect(working.itemPickups[0].itemId == "key", "invalid edit does not mutate the other pickup");
+        Expect(std::strcmp(field.buffer, "items/coin") == 0, "invalid focus-loss restores buffer");
+        Expect(working.itemPickups[1].itemId == "items/coin", "invalid focus-loss leaves workingCopy");
+        Expect(working.itemPickups[0].itemId == "items/master_key", "invalid edit does not mutate the other pickup");
     }
 
     {

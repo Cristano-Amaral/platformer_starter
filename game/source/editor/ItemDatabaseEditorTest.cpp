@@ -354,6 +354,33 @@ int main()
         Expect(editor::CollectItemIconTexturePickerItems(textures).empty(), "empty texture catalog collect");
     }
 
+    {
+        const std::filesystem::path root = MakeTempDir();
+        const std::filesystem::path path = root / "definitions.gameplay";
+        editor::ItemDatabaseEditorState state{};
+        gameplay::GameplayDefinition helmet;
+        helmet.identity = "items/iron_helmet";
+        helmet.category = gameplay::GameplayDefinitionCategory::Item;
+        helmet.item = gameplay::MakeDefaultItemDefinition("items/iron_helmet");
+        helmet.item.displayName = "Iron Helmet";
+        helmet.item.type = gameplay::ItemType::Equipment;
+        helmet.item.equipmentSlot = gameplay::EquipmentSlot::Head;
+        Expect(state.working.Register(helmet).status
+                == gameplay::RegisterGameplayDefinitionStatus::Registered,
+            "register equipment item");
+        state.loaded = true;
+        editor::RefreshItemDatabaseDirty(state);
+        Expect(editor::TrySaveItemDatabase(state, path, true) == editor::ItemDatabaseSaveStatus::Saved,
+            "save equipment slot");
+        const auto loaded = gameplay::LoadGameplayDefinitionsFile(path);
+        Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "reload equipment file");
+        const gameplay::GameplayDefinition* again = loaded.registry.Find("items/iron_helmet");
+        Expect(again != nullptr && again->item.type == gameplay::ItemType::Equipment
+                && again->item.equipmentSlot == gameplay::EquipmentSlot::Head,
+            "Item Database equipment_slot round-trip");
+        RemoveTree(root);
+    }
+
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d ItemDatabaseEditor test(s) failed.\n", gFailures);

@@ -2681,12 +2681,32 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                     {
                         door.requiredItemId = pickupIds.front();
                     }
+                    else
+                    {
+                        door.requiredItemId = std::string(gameplay::kCanonicalKeyItemIdentity);
+                    }
                 }
             }
             if (world::DoorRequiresInventoryItem(door))
             {
-                std::vector<std::string> itemIds =
+                std::vector<std::string> itemIds;
+                if (state.itemDatabase.loaded)
+                {
+                    for (const editor::ItemDefinitionPickerRow& row :
+                        editor::CollectItemDefinitionPickerRows(state.itemDatabase.working, {}))
+                    {
+                        itemIds.push_back(row.identity);
+                    }
+                }
+                const std::vector<std::string> pickupIds =
                     world::UniqueAuthoredPickupItemIds(level.itemPickups);
+                for (const std::string& pickupId : pickupIds)
+                {
+                    if (std::find(itemIds.begin(), itemIds.end(), pickupId) == itemIds.end())
+                    {
+                        itemIds.push_back(pickupId);
+                    }
+                }
                 bool currentListed = false;
                 for (const std::string& itemId : itemIds)
                 {
@@ -2696,7 +2716,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                         break;
                     }
                 }
-                if (!currentListed)
+                if (!currentListed && !door.requiredItemId.empty())
                 {
                     itemIds.insert(itemIds.begin(), door.requiredItemId);
                 }
@@ -2727,8 +2747,58 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             SyncItemIdInspectorField(
                 itemIdField, state.selection, pickup.itemId, itemIdWidgetWasActive);
             ImGui::PushID(static_cast<int>(state.selection.index));
+            static char itemDefinitionFilter[64] = "";
+            ImGui::InputText("Search Items", itemDefinitionFilter, sizeof(itemDefinitionFilter));
+            const std::vector<editor::ItemDefinitionPickerRow> itemRows =
+                editor::CollectItemDefinitionPickerRows(
+                    state.itemDatabase.working, itemDefinitionFilter);
+            bool currentInDatabase = false;
+            std::string currentLabel = pickup.itemId;
+            if (state.itemDatabase.loaded)
+            {
+                const gameplay::GameplayDefinition* current =
+                    state.itemDatabase.working.Find(pickup.itemId);
+                if (current != nullptr
+                    && current->category == gameplay::GameplayDefinitionCategory::Item)
+                {
+                    currentInDatabase = true;
+                    currentLabel = current->item.displayName.empty()
+                        ? pickup.itemId
+                        : (std::string(current->identity) + " — " + current->item.displayName);
+                }
+            }
+            if (!currentInDatabase)
+            {
+                ImGui::TextColored(
+                    ImVec4(0.92f, 0.42f, 0.32f, 1.0f),
+                    "Missing ItemDefinition: %s",
+                    pickup.itemId.c_str());
+            }
+            if (pickup.legacyItemReference)
+            {
+                ImGui::TextDisabled("Legacy pickup token mapped to %s", pickup.itemId.c_str());
+            }
+            if (ImGui::BeginCombo("Item Definition", currentLabel.c_str()))
+            {
+                if (itemRows.empty())
+                {
+                    ImGui::TextDisabled("No Item definitions match.");
+                }
+                for (const editor::ItemDefinitionPickerRow& row : itemRows)
+                {
+                    const bool selected = pickup.itemId == row.identity;
+                    const std::string label = row.identity + " — " + row.displayName;
+                    if (ImGui::Selectable(label.c_str(), selected))
+                    {
+                        pickup.itemId = row.identity;
+                        pickup.legacyItemReference = false;
+                        CopyItemIdInspectorBuffer(itemIdField.buffer, pickup.itemId);
+                    }
+                }
+                ImGui::EndCombo();
+            }
             const bool itemIdEdited = ImGui::InputText(
-                "Item ID", itemIdField.buffer, sizeof(itemIdField.buffer));
+                "Item Identity", itemIdField.buffer, sizeof(itemIdField.buffer));
             const bool itemIdDeactivated = ImGui::IsItemDeactivatedAfterEdit();
             const bool itemIdActive = ImGui::IsItemActive();
             ImGui::PopID();
@@ -2741,6 +2811,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 CommitItemIdInspectorFieldOnFocusLoss(pickup.itemId, itemIdField);
             }
             itemIdField.editing = itemIdActive;
+            ImGui::TextDisabled("Choose an ItemDefinition. Content Browser assets are not Items.");
             if (ImGui::InputInt("Quantity", &pickup.quantity))
             {
                 if (pickup.quantity < 1)
@@ -2753,7 +2824,7 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 }
             }
             ImGui::TextUnformatted(
-                pickup.modelIdentity.empty() ? "Model: (primitive fallback)" : "Model:");
+                pickup.modelIdentity.empty() ? "Legacy Model: (none)" : "Legacy Model:");
             if (!pickup.modelIdentity.empty())
             {
                 ImGui::TextWrapped("%s", pickup.modelIdentity.c_str());
@@ -2772,7 +2843,8 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             {
                 pickup.modelIdentity.clear();
             }
-            ImGui::TextUnformatted("Optional visual only. Empty uses the primitive fallback.");
+            ImGui::TextUnformatted(
+                "Legacy visual fallback only when the ItemDefinition has no World Model.");
             ImGui::Separator();
             ImGui::TextUnformatted("Visual");
             ImGui::TextUnformatted(

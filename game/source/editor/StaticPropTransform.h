@@ -5,6 +5,7 @@
 
 #include "editor/EditorMath.h"
 #include "editor/EditorPicking.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "world/ItemPickup.h"
 #include "world/StaticProp.h"
 
@@ -120,25 +121,24 @@ inline RayHit IntersectRayStaticProp(
 }
 
 // Editor visual bounds. Gameplay targeting still uses ItemPickupSpec::position.
+// Resolved identity matches ItemPickupResolvedVisualProp.
 inline void ItemPickupEditorBounds(
     const world::ItemPickupSpec& pickup,
     core::Vec3& outCenter,
     core::Vec3& outSize,
     core::Vec3 localMin = kStaticPropDefaultLocalMin,
-    core::Vec3 localMax = kStaticPropDefaultLocalMax)
+    core::Vec3 localMax = kStaticPropDefaultLocalMax,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions = nullptr)
 {
-    if (pickup.modelIdentity.empty())
+    const world::StaticPropSpec visual =
+        gameplay::ItemPickupResolvedVisualProp(pickup, itemDefinitions);
+    if (visual.modelIdentity.empty())
     {
         outCenter = pickup.position;
         outSize = world::kItemPickupVisualExtents;
         return;
     }
-    StaticPropWorldAabb(
-        world::ItemPickupVisualProp(pickup),
-        localMin,
-        localMax,
-        outCenter,
-        outSize);
+    StaticPropWorldAabb(visual, localMin, localMax, outCenter, outSize);
 }
 
 inline void AssignLoadedStaticPropLocalBounds(

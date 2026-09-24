@@ -46,7 +46,7 @@ world::ItemPickupSpec MakePickup(core::Vec3 position)
 {
     world::ItemPickupSpec pickup{};
     pickup.position = position;
-    pickup.itemId = "key";
+    pickup.itemId = "items/master_key";
     pickup.quantity = 1;
     pickup.visualScale = {1.0f, 1.0f, 1.0f};
     pickup.showInteractionBounds = true;
@@ -738,15 +738,15 @@ int main()
             working,
             {EditorObjectKind::StaticProp, 0},
             {{EditorObjectKind::StaticProp, 1}});
-        working.itemPickups[0].itemId = "card";
+        working.itemPickups[0].itemId = "items/card";
         editor::ItemIdInspectorFieldState field{};
-        editor::CopyItemIdInspectorBuffer(field.buffer, "key");
+        editor::CopyItemIdInspectorBuffer(field.buffer, "items/master_key");
         field.boundSelection = {EditorObjectKind::ItemPickup, 0};
         std::string dest = working.itemPickups[0].itemId;
         Expect(editor::TryAcceptItemIdInspectorField(dest, field)
                 == editor::ItemIdInspectorCommitResult::Accepted,
             "41. Item ID Inspector accept still works");
-        Expect(dest == "key", "41. Item ID write is PRIMARY-only");
+        Expect(dest == "items/master_key", "41. Item ID write is PRIMARY-only");
         Expect(working.authoringGroups.size() == 1, "41. Item ID edit does not touch groups");
     }
 

@@ -6,6 +6,8 @@
 #include "gameplay/PlayerHealth.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/InventoryUi.h"
 #include "input/InputState.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
@@ -69,6 +71,9 @@ bool Vec3Equal(core::Vec3 a, core::Vec3 b)
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     Expect(gameplay::kInitialRuntimeLevelId == world::kLevel01Id, "bootstrap identity is level_01");
     Expect(!gameplay::kRunCompleteShowsSessionBest, "results HUD omits incompatible session BEST");
     Expect(
@@ -291,7 +296,7 @@ int main()
         "Play Again starts at level_01 spawn");
 
     gameplay::Inventory inventory;
-    Expect(inventory.TryAdd("key", 2), "seed inventory before fresh run");
+    Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 2), "seed inventory before fresh run");
     gameplay::InventoryUiState ui{};
     gameplay::OpenInventoryUi(ui, inventory);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
@@ -332,7 +337,7 @@ int main()
 
     world::ItemPickupSpec pickup{};
     pickup.position = {1.0f, 1.0f, 0.0f};
-    pickup.itemId = "key";
+    pickup.itemId = "items/master_key";
     pickup.quantity = 1;
     gameplay::ItemPickupCollectionFeedbackState feedback{};
     Expect(gameplay::SpawnItemPickupCollectionFeedback(feedback, pickup, 0.0), "seed M61");
@@ -348,7 +353,7 @@ int main()
     lockedDoor.center = {0.0f, 1.5f, 0.0f};
     lockedDoor.size = world::kDefaultDoorSize;
     lockedDoor.openDistance = world::kDefaultDoorOpenDistance;
-    lockedDoor.requiredItemId = "key";
+    lockedDoor.requiredItemId = "items/master_key";
     gameplay::DoorLockRunState doors = gameplay::MakeDoorLockRunState(std::vector{lockedDoor});
     Expect(doors.unlocked[0] == 0, "locked door starts locked");
     doors.unlocked[0] = 1;
@@ -380,7 +385,7 @@ int main()
         "R keeps the current terminal identity");
     Expect(afterRestartId != world::kLevel01Id, "R does not load level_01 as Play Again");
     gameplay::Inventory restartInventory;
-    Expect(restartInventory.TryAdd("key", 1), "seed Restart Inventory");
+    Expect(gameplay::AddTestItem(restartInventory, registry, "items/master_key", 1), "seed Restart Inventory");
     gameplay::ApplyInventoryLifecycle(
         restartInventory, gameplay::InventoryLifecycleEvent::RestartRun);
     Expect(restartInventory.Entries().empty(), "existing Restart Inventory clear is preserved");
@@ -456,9 +461,9 @@ int main()
         "source-tree path is not the staged runtime convention");
 
     gameplay::Inventory carry;
-    Expect(carry.TryAdd("key", 1), "seed linked Inventory");
+    Expect(gameplay::AddTestItem(carry, registry, "items/master_key", 1), "seed linked Inventory");
     gameplay::ApplyInventoryLifecycle(carry, gameplay::InventoryLifecycleEvent::LevelTransition);
-    Expect(carry.GetQuantity("key") == 1, "linked Level transition still preserves Inventory");
+    Expect(carry.GetQuantity("items/master_key") == 1, "linked Level transition still preserves Inventory");
     gameplay::PlayerHealthState carryHealth{};
     gameplay::HazardContactState carryContact{};
     gameplay::InitializePlayerHealth(carryHealth);
@@ -554,12 +559,12 @@ int main()
         "Esc does not close the window on Main Menu");
 
     gameplay::Inventory menuInventory;
-    Expect(menuInventory.TryAdd("key", 1), "seed Inventory before Main Menu idle");
+    Expect(gameplay::AddTestItem(menuInventory, registry, "items/master_key", 1), "seed Inventory before Main Menu idle");
     gameplay::InventoryUiState menuUi{};
     Expect(
         !gameplay::InventoryUiIsAvailable(flow, false, false),
         "Tab/E stay inactive because Inventory UI is unavailable in Main Menu");
-    Expect(menuInventory.GetQuantity("key") == 1,
+    Expect(menuInventory.GetQuantity("items/master_key") == 1,
         "Main Menu idle does not apply a fresh-run Inventory reset");
     gameplay::PlayerHealthState menuHealth{};
     gameplay::HazardContactState menuContact{};
@@ -818,7 +823,7 @@ int main()
     gameplay::RunTimerState pauseTimer{};
     pauseTimer.elapsedSeconds = 7.25;
     gameplay::Inventory pauseInventory;
-    Expect(pauseInventory.TryAdd("key", 1), "seed Inventory before Pause");
+    Expect(gameplay::AddTestItem(pauseInventory, registry, "items/master_key", 1), "seed Inventory before Pause");
     gameplay::ItemPickupRunState pausePickups = gameplay::MakeClearedItemPickupRunState(1);
     pausePickups.collected[0] = 1;
     gameplay::DoorLockRunState pauseDoors{};
@@ -871,7 +876,7 @@ int main()
         pauseTimer.elapsedSeconds += 0.16;
     }
     Expect(pauseTimer.elapsedSeconds == pauseTimerCaptured, "paused timer does not advance");
-    Expect(pauseInventory.GetQuantity("key") == 1, "Pause preserves Inventory");
+    Expect(pauseInventory.GetQuantity("items/master_key") == 1, "Pause preserves Inventory");
     Expect(pausePickups.collected[0] == 1, "Pause preserves pickup collected flags");
     Expect(pauseDoors.unlocked[0] == 1, "Pause preserves Door unlock flags");
     Expect(pauseRuntimeId == world::kLevel01Id, "Pause preserves currentRuntimeLevelId");
@@ -928,7 +933,7 @@ int main()
         "Resume still blocks gameplay on the carry-through frame");
     Expect(gameplay::RunTimerAdvancesInFlow(pauseFlow, pause.active), "Resume allows the timer again");
     Expect(pauseTimer.elapsedSeconds == pauseTimerCaptured, "Resume preserves the frozen timer value");
-    Expect(pauseInventory.GetQuantity("key") == 1, "Resume preserves Inventory");
+    Expect(pauseInventory.GetQuantity("items/master_key") == 1, "Resume preserves Inventory");
     Expect(pausePickups.collected[0] == 1, "Resume preserves pickups");
     Expect(pauseDoors.unlocked[0] == 1, "Resume preserves Door unlock");
     Expect(pauseRuntimeId == world::kLevel01Id, "Resume preserves currentRuntimeLevelId");
@@ -1169,13 +1174,13 @@ int main()
         input::InputState toggle{};
         toggle.toggleInventoryPressed = true;
         Expect(
-            gameplay::HandleInventoryUiInput(audioUi, audioInventory, toggle)
+            gameplay::HandleInventoryUiInput(audioUi, audioInventory, equipment, registry, toggle)
                 == gameplay::InventoryUiInputAction::Open,
             "M75 Inventory Open is the HandleInventoryUiInput action");
         gameplay::RecordGameplaySfx(inventoryAudio, gameplay::InventoryOpenSfx());
         Expect(inventoryAudio.inventoryOpenCount == 1, "M75 InventoryOpen records one request");
         Expect(
-            gameplay::HandleInventoryUiInput(audioUi, audioInventory, toggle)
+            gameplay::HandleInventoryUiInput(audioUi, audioInventory, equipment, registry, toggle)
                 == gameplay::InventoryUiInputAction::Close,
             "M75 Inventory Close is the HandleInventoryUiInput action");
         gameplay::RecordGameplaySfx(inventoryAudio, gameplay::InventoryCloseSfx());

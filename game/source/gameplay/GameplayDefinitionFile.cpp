@@ -199,6 +199,7 @@ struct ItemFieldFlags
     bool type = false;
     bool stackable = false;
     bool maxStack = false;
+    bool equipmentSlot = false;
     bool worldModel = false;
     bool icon = false;
 };
@@ -501,6 +502,33 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
             current.item.maxStack = value;
             flags.maxStack = true;
         }
+        else if (tokens[0] == "equipment_slot")
+        {
+            if (tokens.size() != 2)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong field count");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.equipmentSlot)
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate equipment_slot");
+            }
+            const std::optional<EquipmentSlot> slot = EquipmentSlotFromName(tokens[1]);
+            if (!slot.has_value())
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid, lineNumber, "unknown equipment slot");
+            }
+            current.item.equipmentSlot = slot;
+            flags.equipmentSlot = true;
+        }
         else if (tokens[0] == "world_model")
         {
             std::string_view remainder;
@@ -717,6 +745,13 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
                 return result;
             }
             result.text += '\n';
+            if (definition.item.type == ItemType::Equipment
+                && definition.item.equipmentSlot.has_value())
+            {
+                result.text += "equipment_slot ";
+                result.text += EquipmentSlotName(*definition.item.equipmentSlot);
+                result.text += '\n';
+            }
             if (!definition.item.worldModelIdentity.empty())
             {
                 result.text += "world_model ";

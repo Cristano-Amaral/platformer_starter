@@ -450,7 +450,7 @@ int main()
     {
         const auto loaded = gameplay::LoadGameplayDefinitionsFile(PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH);
         Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "fixture file loads");
-        Expect(loaded.registry.Count() == 4, "fixture definition count");
+        Expect(loaded.registry.Count() == 5, "fixture definition count");
         const gameplay::GameplayDefinition* key = loaded.registry.Find("items/master_key");
         const gameplay::GameplayDefinition* potion = loaded.registry.Find("items/health_potion");
         const gameplay::GameplayDefinition* player = loaded.registry.Find("characters/player");
@@ -461,6 +461,8 @@ int main()
         Expect(player != nullptr && player->category == GameplayDefinitionCategory::Character, "fixture player");
         Expect(guard != nullptr && gameplay::GameplayDefinitionStat(*guard, GameplayStatId::Defense) == 2.0f,
             "fixture guard");
+        const gameplay::GameplayDefinition* bau = loaded.registry.Find("items/bau");
+        Expect(bau != nullptr && bau->item.stackable && bau->item.maxStack == 4, "fixture bau");
 
         gameplay::GameplayDefinitionReference valid;
         valid.identity = "items/master_key";
@@ -530,6 +532,17 @@ int main()
         item.modifiers.push_back({GameplayStatId::MaxHealth, std::numeric_limits<float>::quiet_NaN()});
         Expect(gameplay::ValidateItemDefinition(item) == gameplay::ValidateItemStatus::InvalidModifier,
             "NaN modifier");
+        item = gameplay::MakeDefaultItemDefinition("items/helmet");
+        item.type = ItemType::Equipment;
+        Expect(gameplay::ValidateItemDefinition(item) == gameplay::ValidateItemStatus::MissingEquipmentSlot,
+            "Equipment without slot is invalid");
+        item.equipmentSlot = gameplay::EquipmentSlot::Head;
+        Expect(gameplay::ValidateItemDefinition(item) == gameplay::ValidateItemStatus::Valid,
+            "Equipment with Head slot is valid");
+        item = gameplay::MakeDefaultItemDefinition("items/master_key");
+        item.equipmentSlot = gameplay::EquipmentSlot::Body;
+        Expect(gameplay::ValidateItemDefinition(item) == gameplay::ValidateItemStatus::UnexpectedEquipmentSlot,
+            "non-Equipment cannot carry a slot");
     }
 
     {
@@ -582,6 +595,61 @@ int main()
             "writer quotes icon");
         const auto rewritten = gameplay::WriteGameplayDefinitionsText(reparsed.registry);
         Expect(rewritten.ok && rewritten.text == written.text, "item writer output is stable");
+    }
+
+    {
+        const char* helmetText =
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\n"
+            "definition items/iron_helmet\n"
+            "display_name \"Iron Helmet\"\n"
+            "item_type Equipment\n"
+            "stackable false\n"
+            "max_stack 1\n"
+            "equipment_slot Head\n";
+        const auto parsedHelmet = gameplay::ParseGameplayDefinitionsText(helmetText);
+        Expect(parsedHelmet.status == gameplay::LoadGameplayDefinitionsStatus::Loaded,
+            "equipment_slot Head parses");
+        const gameplay::GameplayDefinition* helmet = parsedHelmet.registry.Find("items/iron_helmet");
+        Expect(helmet != nullptr && helmet->item.type == gameplay::ItemType::Equipment
+                && helmet->item.equipmentSlot == gameplay::EquipmentSlot::Head,
+            "Equipment slot persisted");
+        const auto writtenHelmet = gameplay::WriteGameplayDefinitionsText(parsedHelmet.registry);
+        Expect(writtenHelmet.ok && writtenHelmet.text.find("equipment_slot Head") != std::string::npos,
+            "writer emits equipment_slot");
+        const auto reparsedHelmet = gameplay::ParseGameplayDefinitionsText(writtenHelmet.text);
+        Expect(reparsedHelmet.status == gameplay::LoadGameplayDefinitionsStatus::Loaded
+                && reparsedHelmet.registry.Find("items/iron_helmet")->item.equipmentSlot
+                    == gameplay::EquipmentSlot::Head,
+            "equipment_slot round-trip");
+        Expect(
+            gameplay::ParseGameplayDefinitionsText(
+                "PLATFORMER_GAMEPLAY_DEFINITIONS\n"
+                "definition items/iron_helmet\n"
+                "display_name \"Iron Helmet\"\n"
+                "item_type Equipment\n"
+                "equipment_slot Helmet\n")
+                .status
+                == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+            "unknown equipment_slot token is invalid");
+        Expect(
+            gameplay::ParseGameplayDefinitionsText(
+                "PLATFORMER_GAMEPLAY_DEFINITIONS\n"
+                "definition items/iron_helmet\n"
+                "display_name \"Iron Helmet\"\n"
+                "item_type Generic\n"
+                "equipment_slot Head\n")
+                .status
+                == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+            "non-Equipment equipment_slot fails validation");
+        Expect(
+            gameplay::ParseGameplayDefinitionsText(
+                "PLATFORMER_GAMEPLAY_DEFINITIONS\n"
+                "definition items/iron_helmet\n"
+                "display_name \"Iron Helmet\"\n"
+                "item_type Equipment\n")
+                .status
+                == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+            "Equipment without equipment_slot fails validation");
     }
 
     {

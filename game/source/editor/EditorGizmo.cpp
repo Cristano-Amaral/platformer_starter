@@ -9,6 +9,7 @@
 #include "editor/EditorSelectionSet.h"
 #include "editor/EditorSnap.h"
 #include "editor/StaticPropTransform.h"
+#include "gameplay/ItemPickupRuntime.h"
 #include "world/RespawnWorld.h"
 #include "world/ItemPickup.h"
 #include "world/StaticProp.h"
@@ -748,7 +749,8 @@ bool GetGizmoPreviewBox(
     EditorSelection selection,
     core::Vec3& center,
     core::Vec3& size,
-    const DirectionalLightVisualization* directionalLightVisualization)
+    const DirectionalLightVisualization* directionalLightVisualization,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     switch (selection.kind)
     {
@@ -844,7 +846,12 @@ bool GetGizmoPreviewBox(
         if (selection.index < workingCopy.itemPickups.size())
         {
             ItemPickupEditorBounds(
-                workingCopy.itemPickups[selection.index], center, size);
+                workingCopy.itemPickups[selection.index],
+                center,
+                size,
+                kStaticPropDefaultLocalMin,
+                kStaticPropDefaultLocalMax,
+                itemDefinitions);
             return true;
         }
         break;
@@ -1417,10 +1424,12 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
     const world::LevelDefinition& active,
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
-    EditorSelection selection)
+    EditorSelection selection,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     static const std::vector<EditorSelection> kNoAdditional;
-    return CollectPendingAuthoringVisuals(active, workingCopy, map, selection, kNoAdditional);
+    return CollectPendingAuthoringVisuals(
+        active, workingCopy, map, selection, kNoAdditional, itemDefinitions);
 }
 
 std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
@@ -1428,7 +1437,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
     EditorSelection selection,
-    const std::vector<EditorSelection>& additionalSelections)
+    const std::vector<EditorSelection>& additionalSelections,
+    const gameplay::GameplayDefinitionRegistry* itemDefinitions)
 {
     std::vector<PendingAuthoringVisual> visuals;
     const EditorObjectKind kinds[] = {
@@ -1490,7 +1500,12 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
             visual.selected = EditorSelectionSetContains(
                 selection, additionalSelections, item);
             if (!GetGizmoPreviewBox(
-                    workingCopy, item, visual.boundsCenter, visual.boundsSize))
+                    workingCopy,
+                    item,
+                    visual.boundsCenter,
+                    visual.boundsSize,
+                    nullptr,
+                    itemDefinitions))
             {
                 continue;
             }
@@ -1523,10 +1538,12 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 visual.localMax = kStaticPropDefaultLocalMax;
             }
             if (kind == EditorObjectKind::ItemPickup
-                && !workingCopy.itemPickups[index].modelIdentity.empty())
+                && gameplay::ItemPickupHasResolvedVisualModel(
+                    workingCopy.itemPickups[index], itemDefinitions))
             {
                 visual.usesStaticPropTransform = true;
-                visual.staticProp = world::ItemPickupVisualProp(workingCopy.itemPickups[index]);
+                visual.staticProp = gameplay::ItemPickupResolvedVisualProp(
+                    workingCopy.itemPickups[index], itemDefinitions);
                 visual.localMin = kStaticPropDefaultLocalMin;
                 visual.localMax = kStaticPropDefaultLocalMax;
             }

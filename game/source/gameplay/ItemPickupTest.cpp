@@ -2,6 +2,8 @@
 // Targeting, TryAdd collection, M51 E priority, LOS, and run isolation.
 
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "physics/DynamicBoxGrab.h"
 #include "physics/PhysicsCapacity.h"
@@ -26,6 +28,7 @@
 namespace
 {
 int gFailures = 0;
+const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
 
 void Expect(bool condition, const std::string& name)
 {
@@ -90,7 +93,7 @@ void PressInteract(
     world.HandleGrabDrop();
     if (!wasCarrying && !world.GetGrabState().carrying)
     {
-        (void)gameplay::TryCollectItemPickup(inventory, runState, pickups, pickupTarget);
+        (void)gameplay::TryCollectItemPickup(inventory, runState, pickups, pickupTarget, registry);
     }
 }
 
@@ -128,6 +131,8 @@ int CountRecords(std::string_view text, std::string_view keyword)
 
 int main()
 {
+    gameplay::Equipment equipment;
+
     const world::ParseLevelFileResult parsed =
         world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     if (parsed.status != world::LoadLevelFileStatus::Loaded)
@@ -152,7 +157,7 @@ int main()
     {
         world::ItemPickupSpec pickup = MakePickup(nearby);
         Expect(world::ItemPickupSpecIsValid(pickup), "default pickup is valid");
-        Expect(pickup.itemId == "key", "default itemId is key");
+        Expect(pickup.itemId == "items/master_key", "default itemId is key");
         Expect(pickup.quantity == 1, "default quantity is 1");
         Expect(pickup.modelIdentity.empty(), "default has no model");
         Expect(pickup.visualOffset.x == 0.0f && pickup.visualOffset.y == 0.0f
@@ -210,7 +215,7 @@ int main()
     }
 
     {
-        world::ItemPickupSpec shifted = MakePickup(nearby, "key");
+        world::ItemPickupSpec shifted = MakePickup(nearby, "items/master_key");
         shifted.visualOffset = {4.0f, 8.0f, 3.0f};
         shifted.visualRotationDegrees = {90.0f, 45.0f, 15.0f};
         shifted.visualScale = {4.0f, 4.0f, 4.0f};
@@ -221,7 +226,7 @@ int main()
             gameplay::FindItemPickupTargetIndex(spawn, 1.0f, pickups, run.collected, los) == 0,
             "targeting uses gameplay position, not visualOffset");
         const world::ItemPickupSpec visualFar = []() {
-            world::ItemPickupSpec spec = MakePickup({100.0f, 1.0f, 0.0f}, "key");
+            world::ItemPickupSpec spec = MakePickup({100.0f, 1.0f, 0.0f}, "items/master_key");
             spec.visualOffset = {-98.45f, 0.0f, 0.0f};
             return spec;
         }();
@@ -231,8 +236,8 @@ int main()
                 == gameplay::kNoItemPickupIndex,
             "mesh-near visualOffset does not create a gameplay target");
         gameplay::Inventory inventory;
-        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "collect transformed pickup");
-        Expect(inventory.GetQuantity("key") == 1, "collection still grants itemId");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry), "collect transformed pickup");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "collection still grants itemId");
         Expect(pickups[0].visualOffset.y == 8.0f, "collection does not mutate authored visualOffset");
         Expect(pickups[0].visualScale.x == 4.0f, "collection does not mutate authored visualScale");
         Expect(pickups[0].position.x == nearby.x, "collection does not mutate gameplay position");
@@ -268,8 +273,8 @@ int main()
 
     {
         const std::vector<world::ItemPickupSpec> pickups{
-            MakePickup({spawn.x + 1.8f, spawn.y, spawn.z}, "coin"),
-            MakePickup({spawn.x + 1.2f, spawn.y, spawn.z}, "key")};
+            MakePickup({spawn.x + 1.8f, spawn.y, spawn.z}, "items/coin"),
+            MakePickup({spawn.x + 1.2f, spawn.y, spawn.z}, "items/master_key")};
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(2);
         const std::vector<std::uint8_t> los = EmptyLos(2);
         Expect(
@@ -279,8 +284,8 @@ int main()
 
     {
         const std::vector<world::ItemPickupSpec> pickups{
-            MakePickup({spawn.x + 1.5f, spawn.y, spawn.z}, "key"),
-            MakePickup({spawn.x + 1.5f, spawn.y, spawn.z}, "coin")};
+            MakePickup({spawn.x + 1.5f, spawn.y, spawn.z}, "items/master_key"),
+            MakePickup({spawn.x + 1.5f, spawn.y, spawn.z}, "items/coin")};
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(2);
         const std::vector<std::uint8_t> los = EmptyLos(2);
         Expect(
@@ -289,13 +294,13 @@ int main()
     }
 
     {
-        const std::vector<world::ItemPickupSpec> pickups{MakePickup(nearby, "key", 2)};
+        const std::vector<world::ItemPickupSpec> pickups{MakePickup(nearby, "items/master_key", 2)};
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         gameplay::Inventory inventory;
         Expect(
-            gameplay::TryCollectItemPickup(inventory, run, pickups, 0),
+            gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry),
             "21. collection uses production TryAdd");
-        Expect(inventory.GetQuantity("key") == 2, "TryAdd stored quantity");
+        Expect(inventory.GetQuantity("items/master_key") == 2, "TryAdd stored quantity");
         Expect(run.collected[0] == 1, "22. only that pickup is collected");
         Expect(!gameplay::ItemPickupIsAvailable(run, 0), "23. collected is untargetable");
         const std::vector<std::uint8_t> los = EmptyLos(1);
@@ -304,32 +309,33 @@ int main()
                 == gameplay::kNoItemPickupIndex,
             "collected pickup is not targeted");
         Expect(
-            !gameplay::TryCollectItemPickup(inventory, run, pickups, 0),
+            !gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry),
             "27. second collect of same pickup fails");
-        Expect(inventory.GetQuantity("key") == 2, "no double collection");
+        Expect(inventory.GetQuantity("items/master_key") == 2, "no double collection");
     }
 
     {
         const std::vector<world::ItemPickupSpec> pickups{
-            MakePickup(nearby, "key", gameplay::kMaxItemQuantity)};
+            MakePickup(nearby, "items/master_key", gameplay::kMaxItemQuantity)};
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "seed inventory near cap");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed inventory near cap");
         Expect(
-            !gameplay::TryCollectItemPickup(inventory, run, pickups, 0),
+            !gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry),
             "25. failed TryAdd leaves pickup");
         Expect(gameplay::ItemPickupIsAvailable(run, 0), "26. overflow does not consume pickup");
-        Expect(inventory.GetQuantity("key") == 1, "overflow does not partial-add");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "overflow does not partial-add");
     }
 
     {
         const std::vector<world::ItemPickupSpec> pickups{
-            MakePickup(nearby, "key"), MakePickup({spawn.x + 1.8f, spawn.y, spawn.z}, "coin")};
+            MakePickup(nearby, "items/master_key"),
+            MakePickup({spawn.x + 1.8f, spawn.y, spawn.z}, "items/coin")};
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(2);
         gameplay::Inventory inventory;
-        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "collect first only");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry), "collect first only");
         Expect(run.collected[0] == 1 && run.collected[1] == 0, "sibling pickup remains available");
-        Expect(inventory.Has("coin", 1) == false, "untargeted pickup is not added");
+        Expect(inventory.Has("items/coin", 1) == false, "untargeted pickup is not added");
     }
 
     {
@@ -340,7 +346,7 @@ int main()
             gameplay::MakeClearedItemPickupRunState(authored.itemPickups.size());
         gameplay::Inventory inventory;
         Expect(
-            gameplay::TryCollectItemPickup(inventory, run, authored.itemPickups, 0),
+            gameplay::TryCollectItemPickup(inventory, run, authored.itemPickups, 0, registry),
             "collect against authored snapshot");
         Expect(
             world::AuthoredLevelDataEqual(before, authored),
@@ -433,7 +439,7 @@ int main()
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         PressInteract(world, inventory, run, level.itemPickups, 0);
         Expect(!world.GetGrabState().carrying, "pickup-only E does not grab");
-        Expect(inventory.GetQuantity("key") == 1, "30. pickup E collects after no box target");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "30. pickup E collects after no box target");
         Expect(!gameplay::ItemPickupIsAvailable(run, 0), "collected after dedicated pickup press");
     }
 
@@ -444,14 +450,14 @@ int main()
         Expect(StartWorld(world, level), "rebuild isolation Initialize");
         gameplay::Inventory inventory;
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
-        Expect(gameplay::TryCollectItemPickup(inventory, run, level.itemPickups, 0), "collect before rebuild");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, level.itemPickups, 0, registry), "collect before rebuild");
         Expect(
             world.TryRebuild(
                 level, level.initialSpawnVisualCenter, world::kPlayerVisualSize),
             "TryRebuild with collected pickup");
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
-        Expect(inventory.GetQuantity("key") == 1, "36. rebuild preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "36. rebuild preserves Inventory");
         Expect(run.collected[0] == 1, "rebuild does not respawn collected pickup");
         Expect(level.itemPickups.size() == 1, "rebuild does not delete authored pickup");
     }
@@ -460,16 +466,16 @@ int main()
         gameplay::Inventory inventory;
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         const std::vector<world::ItemPickupSpec> pickups{MakePickup(nearby)};
-        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "collect before respawn policy");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry), "collect before respawn policy");
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
-        Expect(inventory.GetQuantity("key") == 1, "33. checkpoint respawn preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "33. checkpoint respawn preserves Inventory");
         Expect(run.collected[0] == 1, "checkpoint respawn preserves collected");
         gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::RestartRun);
         run = gameplay::MakeClearedItemPickupRunState(1);
         Expect(inventory.Entries().empty(), "34. Restart clears Inventory");
         Expect(gameplay::ItemPickupIsAvailable(run, 0), "Restart restores pickup available");
-        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0), "collect before apply reset");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, pickups, 0, registry), "collect before apply reset");
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
         run = gameplay::MakeClearedItemPickupRunState(1);
@@ -479,7 +485,7 @@ int main()
 
     {
         world::LevelDefinition level = parsed.level;
-        world::ItemPickupSpec pickup = MakePickup(nearby, "key");
+        world::ItemPickupSpec pickup = MakePickup(nearby, "items/master_key");
         pickup.modelIdentity = "models/test_static.glb";
         level.itemPickups.push_back(pickup);
         Expect(
@@ -487,7 +493,7 @@ int main()
             "40. authored pickup model blocks Delete Asset");
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         gameplay::Inventory inventory;
-        Expect(gameplay::TryCollectItemPickup(inventory, run, level.itemPickups, 0), "collect modeled pickup");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, level.itemPickups, 0, registry), "collect modeled pickup");
         Expect(
             world::LevelReferencesStaticPropIdentity(level, "models/test_static.glb"),
             "41. collected runtime does not weaken authored asset protection");
@@ -499,7 +505,7 @@ int main()
         Expect(!world::ItemPickupSpecIsValid(badPos), "non-finite position rejected");
         world::ItemPickupSpec badId = MakePickup(nearby, "Key");
         Expect(!world::ItemPickupSpecIsValid(badId), "invalid M54 itemId rejected");
-        world::ItemPickupSpec badQty = MakePickup(nearby, "key", 0);
+        world::ItemPickupSpec badQty = MakePickup(nearby, "items/master_key", 0);
         Expect(!world::ItemPickupSpecIsValid(badQty), "invalid quantity rejected");
         world::ItemPickupSpec badModel = MakePickup(nearby);
         badModel.modelIdentity = "not-a-model";
@@ -686,6 +692,35 @@ int main()
         Expect(
             idlePickups[0].idleAnimationEnabled && idlePickups[0].position.x == authoredPosition.x,
             "idle does not rewrite authored position used by targeting");
+    }
+
+    {
+        world::ItemPickupSpec missing = MakePickup(nearby, "items/missing_thing");
+        Expect(world::ItemPickupSpecIsValid(missing), "malformed-vs-missing: identity grammar is valid");
+        gameplay::ItemPickupRunState missingRun = gameplay::MakeClearedItemPickupRunState(1);
+        gameplay::Inventory missingInventory;
+        Expect(
+            !gameplay::TryCollectItemPickup(missingInventory, missingRun, {&missing, 1}, 0, registry),
+            "missing ItemDefinition does not collect");
+        Expect(gameplay::ItemPickupIsAvailable(missingRun, 0), "failed collect leaves pickup available");
+        Expect(missingInventory.Entries().empty(), "failed collect does not add a substitute item");
+
+        gameplay::GameplayDefinitionRegistry modeledRegistry;
+        Expect(gameplay::RegisterTestItem(
+                modeledRegistry, "items/modeled_key", gameplay::ItemType::Key, false, 1),
+            "register modeled key");
+        modeledRegistry.FindMutable("items/modeled_key")->item.worldModelIdentity =
+            "models/test_static.glb";
+        world::ItemPickupSpec authoredVisual = MakePickup(nearby, "items/modeled_key");
+        authoredVisual.modelIdentity = "models/test_authored.glb";
+        Expect(
+            gameplay::ResolveItemPickupWorldModel(authoredVisual, &modeledRegistry)
+                == "models/test_static.glb",
+            "ItemDefinition World Model is presentation authority");
+        Expect(
+            gameplay::ResolveItemPickupWorldModel(authoredVisual, nullptr)
+                == "models/test_authored.glb",
+            "legacy pickup modelIdentity is a narrow visual fallback");
     }
 
     if (gFailures != 0)

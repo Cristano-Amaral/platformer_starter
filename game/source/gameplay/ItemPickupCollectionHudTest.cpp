@@ -2,6 +2,8 @@
 // Trigger only after TryCollectItemPickup succeeds. No second targeting path.
 
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/ItemPickupCollectionHud.h"
 #include "gameplay/ItemPickupRuntime.h"
@@ -17,6 +19,7 @@
 namespace
 {
 int gFailures = 0;
+const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
 
 void Expect(bool condition, const std::string& name)
 {
@@ -29,7 +32,7 @@ void Expect(bool condition, const std::string& name)
 
 world::ItemPickupSpec MakePickup(
     core::Vec3 position,
-    std::string_view itemId = "key",
+    std::string_view itemId = "items/master_key",
     int quantity = 1)
 {
     world::ItemPickupSpec spec{};
@@ -48,7 +51,7 @@ bool CollectThenMaybeHud(
     int index,
     double elapsedSeconds)
 {
-    if (!gameplay::TryCollectItemPickup(inventory, runState, pickups, index))
+    if (!gameplay::TryCollectItemPickup(inventory, runState, pickups, index, registry))
     {
         return false;
     }
@@ -69,6 +72,8 @@ bool TextEquals(const char* buffer, const char* expected)
 
 int main()
 {
+    gameplay::Equipment equipment;
+
     const core::Vec3 nearby{1.55f, 1.0f, 0.0f};
     const core::Vec3 playerCenter{0.0f, 1.0f, 0.0f};
 
@@ -90,7 +95,7 @@ int main()
         "capacity is a small bounded Item-Pickup list");
 
     {
-        world::ItemPickupSpec pickup = MakePickup(nearby, "key", 2);
+        world::ItemPickupSpec pickup = MakePickup(nearby, "items/master_key", 2);
         std::vector<world::ItemPickupSpec> pickups{pickup};
         gameplay::Inventory inventory;
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
@@ -103,24 +108,24 @@ int main()
         Expect(
             gameplay::ActiveItemPickupCollectionHudCount(hud) == 1,
             "1. one active HUD entry");
-        Expect(std::strcmp(hud.entries[0].itemId, "key") == 0, "3. itemId is key");
+        Expect(std::strcmp(hud.entries[0].itemId, "items/master_key") == 0, "3. itemId is key");
         Expect(hud.entries[0].quantity == 2, "3. quantity is 2");
         char text[gameplay::kItemPickupCollectionHudTextCapacity]{};
-        gameplay::FormatItemPickupCollectionHudText(text, sizeof(text), "key", 2);
-        Expect(TextEquals(text, "Picked Up key x2"), "3. exact HUD text format");
+        gameplay::FormatItemPickupCollectionHudText(text, sizeof(text), "items/master_key", 2);
+        Expect(TextEquals(text, "Picked Up items/master_key x2"), "3. exact HUD text format");
         Expect(feedback.emittedCount == 1, "10. M61 burst still emits once");
         Expect(
             gameplay::ActiveItemPickupCollectionEffectCount(feedback) == 1,
             "10. M61 one active burst");
-        Expect(inventory.GetQuantity("key") == 2, "11. inventory increments once");
+        Expect(inventory.GetQuantity("items/master_key") == 2, "11. inventory increments once");
         Expect(run.collected[0] == 1, "11. pickup marked collected");
     }
 
     {
-        world::ItemPickupSpec pickup = MakePickup(nearby);
+        world::ItemPickupSpec pickup = MakePickup(nearby, "items/coin");
         std::vector<world::ItemPickupSpec> pickups{pickup};
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", gameplay::kMaxItemQuantity), "seed inventory at cap");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/coin", gameplay::kMaxItemQuantity), "seed inventory at cap");
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
         gameplay::ItemPickupCollectionHudState hud{};
         gameplay::ItemPickupCollectionFeedbackState feedback{};
@@ -134,7 +139,7 @@ int main()
         Expect(feedback.emittedCount == 0, "10. failed add emits no M61 burst");
         Expect(run.collected[0] == 0, "11. failed add leaves pickup");
         Expect(
-            inventory.GetQuantity("key") == gameplay::kMaxItemQuantity,
+            inventory.GetQuantity("items/coin") == gameplay::kMaxItemQuantity,
             "11. failed add does not mutate inventory");
     }
 
@@ -155,13 +160,13 @@ int main()
             !CollectThenMaybeHud(inventory, run, hud, nullptr, pickups, 0, 0.0),
             "2. already-collected emits none");
         Expect(hud.emittedCount == 1, "2. second collect does not emit HUD");
-        Expect(inventory.GetQuantity("key") == 1, "11. collected quantity stays 1");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "11. collected quantity stays 1");
     }
 
     {
-        world::ItemPickupSpec first = MakePickup(nearby, "coin", 1);
-        world::ItemPickupSpec second = MakePickup({2.55f, 1.0f, 0.0f}, "key", 3);
-        world::ItemPickupSpec third = MakePickup({3.55f, 1.0f, 0.0f}, "battery", 1);
+        world::ItemPickupSpec first = MakePickup(nearby, "items/coin", 1);
+        world::ItemPickupSpec second = MakePickup({2.55f, 1.0f, 0.0f}, "items/master_key", 3);
+        world::ItemPickupSpec third = MakePickup({3.55f, 1.0f, 0.0f}, "items/battery", 1);
         std::vector<world::ItemPickupSpec> pickups{first, second, third};
         gameplay::Inventory inventory;
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(3);
@@ -173,9 +178,9 @@ int main()
         Expect(
             gameplay::ActiveItemPickupCollectionHudCount(hud) == 3,
             "4. three independent HUD entries");
-        Expect(std::strcmp(hud.entries[0].itemId, "coin") == 0, "4. oldest is first append");
-        Expect(std::strcmp(hud.entries[1].itemId, "key") == 0, "4. middle keeps order");
-        Expect(std::strcmp(hud.entries[2].itemId, "battery") == 0, "4. newest is last append");
+        Expect(std::strcmp(hud.entries[0].itemId, "items/coin") == 0, "4. oldest is first append");
+        Expect(std::strcmp(hud.entries[1].itemId, "items/master_key") == 0, "4. middle keeps order");
+        Expect(std::strcmp(hud.entries[2].itemId, "items/battery") == 0, "4. newest is last append");
         Expect(hud.entries[1].quantity == 3, "4. middle quantity preserved");
     }
 

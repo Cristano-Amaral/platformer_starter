@@ -1,5 +1,8 @@
 #include "gameplay/Inventory.h"
 
+#include "gameplay/ItemDefinition.h"
+
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -14,10 +17,16 @@ bool QuantityInRange(int quantity)
     return quantity >= 1 && quantity <= kMaxItemQuantity;
 }
 
-// Insertion point in the lexicographically sorted unique-id vector.
-std::size_t LowerBoundIndex(
-    const std::vector<InventoryEntry>& entries,
-    std::string_view itemId)
+int EffectiveMaxStack(const ItemDefinition& item)
+{
+    if (!item.stackable)
+    {
+        return kMinItemMaxStack;
+    }
+    return item.maxStack;
+}
+
+std::size_t FirstStackIndex(const std::vector<InventoryEntry>& entries, std::string_view itemId)
 {
     std::size_t index = 0;
     while (index < entries.size() && entries[index].itemId < itemId)
@@ -26,73 +35,186 @@ std::size_t LowerBoundIndex(
     }
     return index;
 }
+
+std::size_t StackCountForIdentity(
+    const std::vector<InventoryEntry>& entries,
+    std::size_t first,
+    std::string_view itemId)
+{
+    std::size_t count = 0;
+    while (first + count < entries.size() && entries[first + count].itemId == itemId)
+    {
+        ++count;
+    }
+    return count;
+}
+
+const GameplayDefinition* ResolveInventoryItem(
+    std::string_view itemId,
+    const GameplayDefinitionRegistry& registry,
+    InventoryMutationStatus& status)
+{
+    ParsedGameplayIdentity parsed;
+    if (!TryParseGameplayIdentity(itemId, parsed))
+    {
+        status = InventoryMutationStatus::MalformedIdentity;
+        return nullptr;
+    }
+    if (parsed.category != GameplayDefinitionCategory::Item)
+    {
+        status = InventoryMutationStatus::WrongCategory;
+        return nullptr;
+    }
+
+    const GameplayReferenceResolution resolution = registry.Resolve(
+        GameplayDefinitionReference{std::string(itemId)},
+        GameplayDefinitionCategory::Item);
+    if (resolution.status == GameplayReferenceStatus::CategoryMismatch)
+    {
+        status = InventoryMutationStatus::WrongCategory;
+        return nullptr;
+    }
+    if (resolution.status != GameplayReferenceStatus::Resolved || resolution.definition == nullptr)
+    {
+        status = InventoryMutationStatus::MissingDefinition;
+        return nullptr;
+    }
+    if (ValidateItemDefinition(resolution.definition->item) != ValidateItemStatus::Valid)
+    {
+        status = InventoryMutationStatus::InvalidDefinition;
+        return nullptr;
+    }
+    status = InventoryMutationStatus::Ok;
+    return resolution.definition;
+}
 }
 
 int Inventory::GetQuantity(std::string_view itemId) const
 {
-    if (!IsValidItemId(itemId))
+    ParsedGameplayIdentity parsed;
+    if (!TryParseGameplayIdentity(itemId, parsed)
+        || parsed.category != GameplayDefinitionCategory::Item)
     {
         return 0;
     }
-    const std::size_t index = LowerBoundIndex(entries, itemId);
-    if (index == entries.size() || entries[index].itemId != itemId)
+    int total = 0;
+    const std::size_t first = FirstStackIndex(entries, itemId);
+    const std::size_t count = StackCountForIdentity(entries, first, itemId);
+    for (std::size_t index = 0; index < count; ++index)
     {
-        return 0;
+        total += entries[first + index].quantity;
     }
-    return entries[index].quantity;
+    return total;
 }
 
 bool Inventory::Has(std::string_view itemId, int quantity) const
 {
-    if (!IsValidItemId(itemId) || !QuantityInRange(quantity))
+    if (!QuantityInRange(quantity))
     {
         return false;
     }
     return GetQuantity(itemId) >= quantity;
 }
 
-bool Inventory::TryAdd(std::string_view itemId, int quantity)
+InventoryMutationStatus Inventory::TryAdd(
+    std::string_view itemId,
+    int quantity,
+    const GameplayDefinitionRegistry& registry)
 {
-    if (!IsValidItemId(itemId) || !QuantityInRange(quantity))
+    if (!QuantityInRange(quantity))
     {
-        return false;
+        return InventoryMutationStatus::InvalidQuantity;
     }
-    const std::size_t index = LowerBoundIndex(entries, itemId);
-    if (index == entries.size() || entries[index].itemId != itemId)
+
+    InventoryMutationStatus status = InventoryMutationStatus::MalformedIdentity;
+    const GameplayDefinition* definition = ResolveInventoryItem(itemId, registry, status);
+    if (definition == nullptr)
     {
-        entries.insert(entries.begin() + static_cast<std::ptrdiff_t>(index),
-            InventoryEntry{std::string(itemId), quantity});
-        return true;
+        return status;
     }
-    if (entries[index].quantity > kMaxItemQuantity - quantity)
+
+    const std::string identity(itemId);
+    const int current = GetQuantity(identity);
+    if (current > kMaxItemQuantity - quantity)
     {
-        return false;
+        return InventoryMutationStatus::QuantityOverflow;
     }
-    entries[index].quantity += quantity;
-    return true;
+
+    const int maxStack = EffectiveMaxStack(definition->item);
+    std::vector<InventoryEntry> next = entries;
+    const std::size_t first = FirstStackIndex(next, identity);
+    std::size_t count = StackCountForIdentity(next, first, identity);
+    int remaining = quantity;
+
+    for (std::size_t index = 0; index < count && remaining > 0; ++index)
+    {
+        InventoryEntry& stack = next[first + index];
+        const int room = maxStack - stack.quantity;
+        if (room <= 0)
+        {
+            continue;
+        }
+        const int added = remaining < room ? remaining : room;
+        stack.quantity += added;
+        remaining -= added;
+    }
+
+    std::size_t insertAt = first + count;
+    while (remaining > 0)
+    {
+        const int added = remaining < maxStack ? remaining : maxStack;
+        next.insert(
+            next.begin() + static_cast<std::ptrdiff_t>(insertAt),
+            InventoryEntry{identity, added});
+        remaining -= added;
+        ++insertAt;
+    }
+
+    entries = std::move(next);
+    return InventoryMutationStatus::Ok;
 }
 
 bool Inventory::TryRemove(std::string_view itemId, int quantity)
 {
-    if (!IsValidItemId(itemId) || !QuantityInRange(quantity))
+    if (!QuantityInRange(quantity))
     {
         return false;
     }
-    const std::size_t index = LowerBoundIndex(entries, itemId);
-    if (index == entries.size() || entries[index].itemId != itemId)
+    ParsedGameplayIdentity parsed;
+    if (!TryParseGameplayIdentity(itemId, parsed)
+        || parsed.category != GameplayDefinitionCategory::Item)
     {
         return false;
     }
-    if (entries[index].quantity < quantity)
+    if (GetQuantity(itemId) < quantity)
     {
         return false;
     }
-    if (entries[index].quantity == quantity)
+
+    std::vector<InventoryEntry> next = entries;
+    const std::size_t first = FirstStackIndex(next, itemId);
+    std::size_t count = StackCountForIdentity(next, first, itemId);
+    int remaining = quantity;
+    for (std::size_t index = 0; index < count && remaining > 0; ++index)
     {
-        entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
-        return true;
+        InventoryEntry& stack = next[first + index];
+        if (stack.quantity > remaining)
+        {
+            stack.quantity -= remaining;
+            remaining = 0;
+            break;
+        }
+        remaining -= stack.quantity;
+        stack.quantity = 0;
     }
-    entries[index].quantity -= quantity;
+
+    next.erase(
+        std::remove_if(
+            next.begin(),
+            next.end(),
+            [](const InventoryEntry& entry) { return entry.quantity <= 0; }),
+        next.end());
+    entries = std::move(next);
     return true;
 }
 

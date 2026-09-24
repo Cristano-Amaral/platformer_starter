@@ -505,13 +505,14 @@ is `3.2`. Opening direction is fixed **+Y**. An optional 9th token is the
 Inventory requirement:
 
 - omitted or `0` → no required item;
-- `1` → required item `key` (M57 compatibility);
-- a valid M54 `itemId` (`key`, `card`, `red_key`, …) → that item.
+- `key` or `1` → required item `items/master_key` (explicit M100 compatibility);
+- a valid ItemDefinition identity `items/<name>` → that item.
 
-`redKey` is rejected because `gameplay::IsValidItemId` requires lowercase.
-The writer emits `0` when empty and the canonical `itemId` when set (so a
-parsed `1` is saved as `key`). Do not author a Pickup index, lock id, or
-channel. Zero, one, or many records are valid. Canonical Level 01 has
+Unmapped M54 tokens such as `coin`, other numerics, malformed identities, and
+`characters/...` are rejected. There is no heuristic matching. The writer
+emits `0` when empty and the textual `items/<name>` identity when set (so a
+parsed `key` or `1` is saved as `items/master_key`). Do not author a Pickup
+index, lock id, channel, or Content Browser asset as the required item. Zero, one, or many records are valid. Canonical Level 01 has
 **zero** Doors. Runtime open fraction, desiredOpen, lock unlocked flags,
 obstruction, and live kinematic pose are **not** Level Format fields. Save
 writes the authored closed pose and required item token only.
@@ -519,8 +520,11 @@ writes the authored closed pose and required item token only.
 `item_pickup` is a repeatable authored world acquisition volume. Position is
 the world **gameplay** pickup location (interaction, facing, LOS, placement,
 Duplicate +1 X). `quantity` is a positive integer in the M54 Inventory range
-(`1..kMaxItemQuantity`). `itemId` uses the production M54 `IsValidItemId`
-rule (not a second parser-local grammar). An optional `visual` segment holds
+(`1..kMaxItemQuantity`). `itemId` is an ItemDefinition identity `items/<name>`.
+Legacy M54/M55 `key` and numeric `1` map deterministically to
+`items/master_key` on load. Unmapped short tokens such as `coin`, other
+numerics, malformed identities, and `characters/...` are rejected. Newly
+saved pickups always write `items/<name>`. An optional `visual` segment holds
 per-instance presentation: offset, Euler XYZ degrees, and visual scale.
 Omitted `visual` (legacy M55 records) means offset/rotation `0,0,0` and scale
 `1,1,1`. Visual scale is finite and `> 0` on every axis — the same rule as

@@ -7,6 +7,8 @@
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "world/Door.h"
 #include "world/DynamicBox.h"
 #include "world/LevelDefinition.h"
@@ -123,6 +125,9 @@ int CountRecords(std::string_view text, std::string_view keyword)
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     const world::ParseLevelFileResult parsed =
         world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     if (parsed.status != world::LoadLevelFileStatus::Loaded)
@@ -590,7 +595,7 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "inventory seed before Door update");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "inventory seed before Door update");
         world::LevelDefinition level = parsed.level;
         level.doors.push_back(MakeDoor(doorClosed));
         level.pressurePlates.push_back(MakePlate(plateCenter, 0));
@@ -599,7 +604,7 @@ int main()
         Expect(StartWorld(world, level), "inventory door isolation Initialize");
         Expect(world.GetDoors()[0].desiredOpen, "linked Door desiredOpen from plate");
         StepWorld(world, 30);
-        Expect(inventory.GetQuantity("key") == 1, "Door open does not consume Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "Door open does not consume Inventory");
         Expect(inventory.Entries().size() == 1, "Door update does not add Inventory entries");
     }
 

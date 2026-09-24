@@ -338,6 +338,37 @@ inline std::vector<std::string> FilterItemDatabaseIdentities(
     return identities;
 }
 
+struct ItemDefinitionPickerRow
+{
+    std::string identity;
+    std::string displayName;
+};
+
+inline std::vector<ItemDefinitionPickerRow> CollectItemDefinitionPickerRows(
+    const gameplay::GameplayDefinitionRegistry& registry,
+    std::string_view query)
+{
+    std::vector<ItemDefinitionPickerRow> rows;
+    for (const gameplay::GameplayDefinition& definition : registry.Definitions())
+    {
+        if (definition.category != gameplay::GameplayDefinitionCategory::Item)
+        {
+            continue;
+        }
+        if (!ItemDatabaseSearchMatches(definition, query))
+        {
+            continue;
+        }
+        ItemDefinitionPickerRow row;
+        row.identity = definition.identity;
+        row.displayName = definition.item.displayName.empty()
+            ? definition.identity
+            : definition.item.displayName;
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
+
 inline const char* ItemDatabaseSearchStatusText(
     const gameplay::GameplayDefinitionRegistry& registry,
     const std::vector<std::string>& filtered)

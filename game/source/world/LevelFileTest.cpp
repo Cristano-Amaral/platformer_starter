@@ -357,12 +357,14 @@ int main()
     }
     Expect(loadedLevel02.level.collectibles.size() == 1, "level_02 has one Collectible");
     Expect(loadedLevel02.level.itemPickups.size() == 1, "level_02 has one Key Item Pickup");
-    Expect(loadedLevel02.level.itemPickups[0].itemId == "key", "level_02 pickup is key");
+    Expect(loadedLevel02.level.itemPickups[0].itemId == "items/master_key",
+        "level_02 pickup maps legacy key to items/master_key");
     Expect(loadedLevel02.level.dynamicBoxes.size() == 1, "level_02 has one Dynamic Box");
     Expect(loadedLevel02.level.pressurePlates.size() == 1, "level_02 has one Pressure Plate");
     Expect(loadedLevel02.level.pressurePlates[0].visibleInGameplay, "level_02 plate is visible");
     Expect(loadedLevel02.level.doors.size() == 2, "level_02 has key Door and plate Door");
-    Expect(loadedLevel02.level.doors[0].requiredItemId == "key", "level_02 first Door requires key");
+    Expect(loadedLevel02.level.doors[0].requiredItemId == "items/master_key",
+        "level_02 first Door maps legacy key to items/master_key");
     Expect(loadedLevel02.level.doors[1].requiredItemId.empty(), "level_02 second Door is plate-driven");
     Expect(world::IsWritableLevelDefinition(loadedLevel02.level), "level_02 is writable");
 
@@ -1511,7 +1513,7 @@ int main()
             const world::ParseLevelFileResult one = world::ParseLevelText(onePickup);
             Expect(one.status == world::LoadLevelFileStatus::Loaded, "one item_pickup loads");
             Expect(one.level.itemPickups.size() == 1, "one item_pickup count");
-            Expect(one.level.itemPickups[0].itemId == "key", "one item_pickup itemId");
+            Expect(one.level.itemPickups[0].itemId == "items/master_key", "one item_pickup itemId");
             Expect(one.level.itemPickups[0].quantity == 1, "one item_pickup quantity");
             Expect(one.level.itemPickups[0].position.x == 2.0f, "one item_pickup position x");
             Expect(one.level.itemPickups[0].modelIdentity.empty(), "one item_pickup has no model");
@@ -1541,9 +1543,37 @@ int main()
                 "one item_pickup round trip");
             Expect(writtenOne.find("collected") == std::string::npos,
                 "writer omits collected runtime state");
+            Expect(one.level.itemPickups[0].legacyItemReference, "legacy key pickup is flagged");
+            Expect(writtenOne.find("items/master_key") != std::string::npos,
+                "writer emits items/master_key for mapped key");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 items/master_key\n")
+                    .status
+                    == world::LoadLevelFileStatus::Loaded,
+                "textual ItemDefinition identity loads");
+            Expect(
+                !world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 items/master_key\n")
+                    .level.itemPickups[0].legacyItemReference,
+                "textual identity is not a legacy mapping");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 1\n").status
+                    == world::LoadLevelFileStatus::Loaded
+                    && world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 1\n")
+                            .level.itemPickups[0]
+                            .itemId
+                        == "items/master_key",
+                "numeric 1 maps to items/master_key");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 coin\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "unmapped M54 coin pickup is rejected");
+            Expect(
+                world::ParseLevelText(canonical + "item_pickup 2 0.5 0 1 characters/player\n").status
+                    == world::LoadLevelFileStatus::Invalid,
+                "characters/... pickup is rejected");
 
             const std::string modeled =
-                canonical + "item_pickup 3 1 0 2 coin models/test_static.glb\n";
+                canonical + "item_pickup 3 1 0 2 items/coin models/test_static.glb\n";
             const world::ParseLevelFileResult modeledParsed = world::ParseLevelText(modeled);
             Expect(modeledParsed.status == world::LoadLevelFileStatus::Loaded,
                 "item_pickup with model loads");
@@ -1558,11 +1588,11 @@ int main()
 
             const std::string twoPickups = canonical
                 + "item_pickup 2 0.5 0 1 key\n"
-                  "item_pickup 4 0.5 0 5 coin\n";
+                  "item_pickup 4 0.5 0 5 items/coin\n";
             const world::ParseLevelFileResult two = world::ParseLevelText(twoPickups);
             Expect(two.status == world::LoadLevelFileStatus::Loaded, "two item_pickup load");
             Expect(two.level.itemPickups.size() == 2, "two item_pickup count");
-            Expect(two.level.itemPickups[1].itemId == "coin", "encounter order second itemId");
+            Expect(two.level.itemPickups[1].itemId == "items/coin", "encounter order second itemId");
 
             Expect(
                 world::ParseLevelText(canonical + "item_pickup nan 0.5 0 1 key\n").status
@@ -1589,7 +1619,7 @@ int main()
 
             const std::string visualPickup =
                 canonical
-                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 "
+                + "item_pickup 5 1 0 2 items/coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 "
                   "models/test_static.glb\n";
             const world::ParseLevelFileResult visualParsed = world::ParseLevelText(visualPickup);
             Expect(visualParsed.status == world::LoadLevelFileStatus::Loaded,
@@ -1692,7 +1722,7 @@ int main()
 
             const std::string boundsOff =
                 canonical
-                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 0 "
+                + "item_pickup 5 1 0 2 items/coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 0 "
                   "models/test_static.glb\n";
             const world::ParseLevelFileResult boundsOffParsed = world::ParseLevelText(boundsOff);
             Expect(boundsOffParsed.status == world::LoadLevelFileStatus::Loaded,
@@ -1713,7 +1743,7 @@ int main()
 
             const std::string boundsOn =
                 canonical
-                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
+                + "item_pickup 5 1 0 2 items/coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
                   "models/test_static.glb\n";
             const world::ParseLevelFileResult boundsOnParsed = world::ParseLevelText(boundsOn);
             Expect(boundsOnParsed.status == world::LoadLevelFileStatus::Loaded,
@@ -1785,7 +1815,7 @@ int main()
 
             const std::string highlightRecord =
                 canonical
-                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
+                + "item_pickup 5 1 0 2 items/coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
                   "highlight 0.25 models/test_static.glb\n";
             const world::ParseLevelFileResult highlightParsed =
                 world::ParseLevelText(highlightRecord);
@@ -1886,7 +1916,7 @@ int main()
 
             const std::string goldIdleRecord =
                 canonical
-                + "item_pickup 5 1 0 2 coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
+                + "item_pickup 5 1 0 2 items/coin visual 0 0.5 0 0 90 0 0.15 0.2 0.25 bounds 1 "
                   "highlight 0.25 gold 0.5 idle 1 0.2 2 90 models/test_static.glb\n";
             const world::ParseLevelFileResult goldIdleParsed =
                 world::ParseLevelText(goldIdleRecord);

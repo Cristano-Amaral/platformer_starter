@@ -1,4 +1,6 @@
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/InventoryUi.h"
 #include "gameplay/LevelCompletionState.h"
 #include "gameplay/LevelTransition.h"
@@ -53,6 +55,9 @@ bool Vec3Equal(core::Vec3 a, core::Vec3 b)
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     Expect(world::IsValidLevelIdToken("level_01"), "level_01 identity is valid");
     Expect(world::IsValidLevelIdToken("level_02"), "level_02 identity is valid");
     Expect(world::IsValidNextLevelId(""), "empty destination is terminal");
@@ -206,9 +211,9 @@ int main()
     world::LevelDefinition current = level01.level;
     const world::LevelDefinition original = current;
     gameplay::Inventory inventory;
-    Expect(inventory.TryAdd("key", 2), "seed inventory before transition");
-    Expect(inventory.TryRemove("key", 1), "consume one key before transition");
-    Expect(inventory.GetQuantity("key") == 1, "consumed inventory remainder remains");
+    Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 2), "seed inventory before transition");
+    Expect(inventory.TryRemove("items/master_key", 1), "consume one key before transition");
+    Expect(inventory.GetQuantity("items/master_key") == 1, "consumed inventory remainder remains");
 
     const std::filesystem::path staged02 = scratch / "assets" / "levels" / "level_02.level";
     WriteAll(staged02, world::SerializeLevelText(level02.level));
@@ -226,7 +231,7 @@ int main()
     Expect(original.id == "level_01", "original snapshot is unchanged");
 
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::LevelTransition);
-    Expect(inventory.GetQuantity("key") == 1, "successful transition preserves remaining Inventory");
+    Expect(inventory.GetQuantity("items/master_key") == 1, "successful transition preserves remaining Inventory");
     gameplay::PlayerHealthState health{};
     gameplay::HazardContactState contact{};
     gameplay::InitializePlayerHealth(health);
@@ -241,7 +246,7 @@ int main()
     gameplay::ApplyInventoryUiLifecycle(
         ui, gameplay::InventoryLifecycleEvent::LevelTransition, inventory);
     Expect(!ui.open, "transition closes Inventory UI");
-    Expect(inventory.GetQuantity("key") == 1, "UI close does not clear Inventory");
+    Expect(inventory.GetQuantity("items/master_key") == 1, "UI close does not clear Inventory");
 
     Expect(
         Vec3Equal(current.initialSpawnVisualCenter, level02.level.initialSpawnVisualCenter),
@@ -315,7 +320,7 @@ int main()
         "logical id never names the cooked tree");
 
     gameplay::Inventory restartInventory;
-    Expect(restartInventory.TryAdd("key", 1), "restart inventory seed");
+    Expect(gameplay::AddTestItem(restartInventory, registry, "items/master_key", 1), "restart inventory seed");
     gameplay::ApplyInventoryLifecycle(
         restartInventory, gameplay::InventoryLifecycleEvent::RestartRun);
     Expect(restartInventory.Entries().empty(), "Restart still clears Inventory");

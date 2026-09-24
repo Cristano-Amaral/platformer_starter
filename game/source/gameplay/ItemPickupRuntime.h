@@ -4,6 +4,7 @@
 // physics-owned, not serialized. Collection uses gameplay::Inventory::TryAdd.
 
 #include "core/Vec3.h"
+#include "gameplay/GameplayDefinition.h"
 #include "gameplay/Inventory.h"
 #include "world/ItemPickup.h"
 
@@ -49,9 +50,52 @@ int FindItemPickupTargetIndex(
     std::span<const std::uint8_t> losBlocked);
 
 // TryAdd first. Only on success mark collected. No partial quantity.
+// Missing/wrong-category/malformed ItemDefinition leaves the pickup available.
 bool TryCollectItemPickup(
     Inventory& inventory,
     ItemPickupRunState& runState,
     std::span<const world::ItemPickupSpec> pickups,
-    int index);
+    int index,
+    const GameplayDefinitionRegistry& registry);
+
+// ItemDefinition World Model is presentation authority. Authored pickup
+// modelIdentity is a narrow legacy visual fallback only.
+inline std::string_view ResolveItemPickupWorldModel(
+    const world::ItemPickupSpec& spec,
+    const GameplayDefinitionRegistry* registry)
+{
+    if (registry != nullptr)
+    {
+        const GameplayReferenceResolution resolution = registry->Resolve(
+            GameplayDefinitionReference{spec.itemId},
+            GameplayDefinitionCategory::Item);
+        if (resolution.status == GameplayReferenceStatus::Resolved && resolution.definition != nullptr
+            && !resolution.definition->item.worldModelIdentity.empty())
+        {
+            return resolution.definition->item.worldModelIdentity;
+        }
+    }
+    return spec.modelIdentity;
+}
+
+inline bool ItemPickupHasResolvedVisualModel(
+    const world::ItemPickupSpec& spec,
+    const GameplayDefinitionRegistry* registry)
+{
+    return !ResolveItemPickupWorldModel(spec, registry).empty();
+}
+
+// One visual composition for workingCopy preview, Translate/Rotate/Scale
+// ghosts, editor picking/bounds, and post-Apply DrawProp (idle excluded):
+// identity = ItemDefinition World Model, else leftover authored modelIdentity;
+// origin = position + visualOffset; rotation = visualRotationDegrees;
+// scale = visualScale. Empty identity keeps the primitive fallback.
+inline world::StaticPropSpec ItemPickupResolvedVisualProp(
+    const world::ItemPickupSpec& spec,
+    const GameplayDefinitionRegistry* registry)
+{
+    world::ItemPickupSpec presented = spec;
+    presented.modelIdentity.assign(ResolveItemPickupWorldModel(spec, registry));
+    return world::ItemPickupVisualProp(presented);
+}
 }

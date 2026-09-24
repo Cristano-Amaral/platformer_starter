@@ -7,6 +7,8 @@
 #include "physics/PhysicsWorldTestAccess.h"
 #include "gameplay/DoorLockRuntime.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "world/DynamicBox.h"
 #include "world/Door.h"
 #include "world/LevelDefinition.h"
@@ -101,6 +103,9 @@ int ActiveCount(const std::vector<physics::PressurePlateRuntimeState>& plates)
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     const world::ParseLevelFileResult parsed =
         world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     if (parsed.status != world::LoadLevelFileStatus::Loaded)
@@ -348,7 +353,7 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("battery", 1), "inventory seed before plate update");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/battery", 1), "inventory seed before plate update");
         world::LevelDefinition level = parsed.level;
         level.pressurePlates.push_back(MakePlate(plateCenter));
         level.dynamicBoxes.push_back(MakeBox(offPlate));
@@ -358,11 +363,11 @@ int main()
         physics::PhysicsWorldTestAccess::SetDynamicBoxRuntimeMotion(
             world, 0, onPlate, {}, {});
         Expect(world.GetPressurePlates()[0].active, "plate Active for inventory isolation");
-        Expect(inventory.GetQuantity("battery") == 1,
+        Expect(inventory.GetQuantity("items/battery") == 1,
             "Pressure Plate Active does not mutate Inventory");
         world.ResetDynamicBoxes();
         Expect(!world.GetPressurePlates()[0].active, "plate Inactive after authored reset");
-        Expect(inventory.GetQuantity("battery") == 1,
+        Expect(inventory.GetQuantity("items/battery") == 1,
             "Pressure Plate Inactive does not mutate Inventory");
     }
 

@@ -1,11 +1,11 @@
 #pragma once
 
-// Narrow Inspector Item ID buffer sync/commit. Extracted from the Development
-// ImGui InputText path so focus-loss commit can be regression-tested without
-// ImGui. Not a property-editing framework, ItemDefinition system, or catalog.
+// Narrow Inspector Item identity buffer sync/commit. Extracted from the
+// Development Item Pickup inspector so focus-loss commit can be regression-
+// tested without ImGui. Accepts items/<name> only. Not a catalog.
 
 #include "editor/EditorSelection.h"
-#include "gameplay/Inventory.h"
+#include "gameplay/ItemIdentity.h"
 
 #include <cstdio>
 #include <string>
@@ -13,7 +13,8 @@
 
 namespace editor
 {
-inline constexpr std::size_t kItemIdInspectorBufferSize = gameplay::kMaxItemIdLength + 1;
+inline constexpr std::size_t kItemIdInspectorBufferSize =
+    gameplay::kMaxGameplayIdentityLength + 1;
 
 struct ItemIdInspectorFieldState
 {
@@ -45,7 +46,7 @@ inline void CopyItemIdInspectorBuffer(char* buffer, std::string_view itemId)
 
 // Reload from workingCopy when PRIMARY identity changes or the widget is not
 // the active editor. While the same PRIMARY Item Pickup is being edited, keep
-// the buffer so typed text is not clobbered by the last committed id.
+// the buffer so typed text is not clobbered by the last committed identity.
 inline void SyncItemIdInspectorField(
     ItemIdInspectorFieldState& field,
     EditorSelection primary,
@@ -62,14 +63,11 @@ inline void SyncItemIdInspectorField(
     field.editing = widgetActive && primary.kind == EditorObjectKind::ItemPickup;
 }
 
-// Live InputText path: write workingCopy only when the buffer is a valid M54
-// itemId. Invalid intermediates leave both dest and buffer unchanged so the
-// user can keep typing.
 inline ItemIdInspectorCommitResult TryAcceptItemIdInspectorField(
     std::string& destItemId,
     const ItemIdInspectorFieldState& field)
 {
-    if (!gameplay::IsValidItemId(std::string_view{field.buffer}))
+    if (!gameplay::IsValidInventoryItemIdentity(std::string_view{field.buffer}))
     {
         return ItemIdInspectorCommitResult::Rejected;
     }
@@ -81,8 +79,6 @@ inline ItemIdInspectorCommitResult TryAcceptItemIdInspectorField(
     return ItemIdInspectorCommitResult::Accepted;
 }
 
-// Focus-loss path: accept a valid id, otherwise restore the buffer from the
-// last committed workingCopy value. Duplicate itemIds remain legal.
 inline ItemIdInspectorCommitResult CommitItemIdInspectorFieldOnFocusLoss(
     std::string& destItemId,
     ItemIdInspectorFieldState& field)

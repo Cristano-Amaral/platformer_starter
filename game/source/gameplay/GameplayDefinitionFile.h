@@ -3,8 +3,9 @@
 // Authored gameplay-definition catalog (Milestone 98).
 // One textual file. Not Level Format, not JSON, and not a cooked runtime asset.
 // Source location: game/assets/source/gameplay/definitions.gameplay
-// Development inspection resolves that path through the authoring root.
-// Gameplay simulation does not load this file.
+// Development inspection and F2 Item Database edit that authoring path.
+// Runtime gameplay loads the same catalog: authoring source in Development,
+// staged gameplay/definitions.gameplay in Debug/Release.
 
 #include "gameplay/GameplayDefinition.h"
 

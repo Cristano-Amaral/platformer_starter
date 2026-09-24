@@ -5,6 +5,7 @@
 // Modifiers are authored, not applied to Player, Inventory, or Item Pickup.
 
 #include "assets/RuntimePng.h"
+#include "gameplay/EquipmentSlot.h"
 #include "gameplay/GameplayIdentity.h"
 #include "gameplay/GameplayStat.h"
 
@@ -175,6 +176,8 @@ struct ItemDefinition
     ItemType type = ItemType::Generic;
     bool stackable = false;
     int maxStack = kMinItemMaxStack;
+    // Present only when type == Equipment. Empty for every other type.
+    std::optional<EquipmentSlot> equipmentSlot;
     std::string worldModelIdentity;
     std::string iconTextureIdentity;
     std::vector<GameplayStatModifier> modifiers;
@@ -188,6 +191,7 @@ inline ItemDefinition MakeDefaultItemDefinition(std::string_view identity)
     item.type = ItemType::Generic;
     item.stackable = false;
     item.maxStack = kMinItemMaxStack;
+    item.equipmentSlot.reset();
     item.worldModelIdentity.clear();
     item.iconTextureIdentity.clear();
     item.modifiers.clear();
@@ -204,6 +208,8 @@ enum class ValidateItemStatus
     InvalidIcon,
     InvalidModifier,
     TooManyModifiers,
+    MissingEquipmentSlot,
+    UnexpectedEquipmentSlot,
 };
 
 inline const char* ValidateItemStatusName(ValidateItemStatus status)
@@ -226,6 +232,10 @@ inline const char* ValidateItemStatusName(ValidateItemStatus status)
         return "InvalidModifier";
     case ValidateItemStatus::TooManyModifiers:
         return "TooManyModifiers";
+    case ValidateItemStatus::MissingEquipmentSlot:
+        return "MissingEquipmentSlot";
+    case ValidateItemStatus::UnexpectedEquipmentSlot:
+        return "UnexpectedEquipmentSlot";
     }
     return "InvalidDisplayName";
 }
@@ -243,6 +253,17 @@ inline ValidateItemStatus ValidateItemDefinition(const ItemDefinition& item)
     if (!IsValidItemStack(item.stackable, item.maxStack))
     {
         return ValidateItemStatus::InvalidStack;
+    }
+    if (item.type == ItemType::Equipment)
+    {
+        if (!item.equipmentSlot.has_value() || !IsValidEquipmentSlot(*item.equipmentSlot))
+        {
+            return ValidateItemStatus::MissingEquipmentSlot;
+        }
+    }
+    else if (item.equipmentSlot.has_value())
+    {
+        return ValidateItemStatus::UnexpectedEquipmentSlot;
     }
     if (!item.worldModelIdentity.empty() && !IsValidItemWorldModelIdentity(item.worldModelIdentity))
     {
@@ -270,6 +291,7 @@ inline bool ItemDefinitionsEqual(const ItemDefinition& a, const ItemDefinition& 
 {
     if (a.displayName != b.displayName || a.description != b.description || a.type != b.type
         || a.stackable != b.stackable || a.maxStack != b.maxStack
+        || a.equipmentSlot != b.equipmentSlot
         || a.worldModelIdentity != b.worldModelIdentity
         || a.iconTextureIdentity != b.iconTextureIdentity
         || a.modifiers.size() != b.modifiers.size())

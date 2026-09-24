@@ -1,5 +1,8 @@
+#include "gameplay/Equipment.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/InventoryUi.h"
+#include "gameplay/InventoryView.h"
 #include "gameplay/ItemPickupRuntime.h"
 #include "input/InputState.h"
 #include "world/ItemPickup.h"
@@ -14,6 +17,7 @@
 namespace
 {
 int gFailures = 0;
+gameplay::Equipment gEquipment;
 
 void Expect(bool condition, const char* name)
 {
@@ -38,23 +42,20 @@ input::InputState PressCancel()
     return input;
 }
 
-input::InputState PressPrevious()
+gameplay::InventoryUiInputAction HandleUi(
+    gameplay::InventoryUiState& ui,
+    gameplay::Inventory& inventory,
+    const gameplay::GameplayDefinitionRegistry& registry,
+    const input::InputState& input)
 {
-    input::InputState input;
-    input.inventoryPreviousPressed = true;
-    return input;
-}
-
-input::InputState PressNext()
-{
-    input::InputState input;
-    input.inventoryNextPressed = true;
-    return input;
+    return gameplay::HandleInventoryUiInput(ui, inventory, gEquipment, registry, input);
 }
 }
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+
     Expect(gameplay::kPlayerInventoryUiEnabled, "32. player Inventory UI is always enabled");
     Expect(!gameplay::kInventoryDevelopmentHarnessEnabled,
         "33. this test binary excludes the Development Inventory harness");
@@ -68,7 +69,7 @@ int main()
     {
         gameplay::Inventory inventory;
         Expect(
-            gameplay::HandleInventoryUiInput(ui, inventory, PressToggle())
+            HandleUi(ui, inventory, registry, PressToggle())
                 == gameplay::InventoryUiInputAction::Open,
             "2. semantic toggle opens Inventory");
         Expect(ui.selectedItemId.empty(), "6. empty Inventory has no selection");
@@ -79,18 +80,19 @@ int main()
     {
         gameplay::Inventory inventory;
         Expect(
-            gameplay::HandleInventoryUiInput(ui, inventory, PressToggle())
+            HandleUi(ui, inventory, registry, PressToggle())
                 == gameplay::InventoryUiInputAction::Close,
             "3. semantic toggle closes Inventory");
     }
 
     {
+        gameplay::Inventory empty;
         Expect(
-            gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressToggle())
+            HandleUi(ui, empty, registry, PressToggle())
                 == gameplay::InventoryUiInputAction::Open,
             "5. empty Inventory opens safely");
         Expect(
-            gameplay::HandleInventoryUiInput(ui, gameplay::Inventory{}, PressCancel())
+            HandleUi(ui, empty, registry, PressCancel())
                 == gameplay::InventoryUiInputAction::Close,
             "4. Esc closes Inventory");
         Expect(
@@ -100,100 +102,94 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("coin", 5), "seed coin");
-        Expect(inventory.TryAdd("key", 3), "seed key");
-        Expect(inventory.Entries().size() == 2, "two logical entries");
-        Expect(inventory.Entries()[0].itemId == "coin", "8. M54 order: coin before key");
-        Expect(inventory.Entries()[1].itemId == "key", "M54 order: key second");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/bau", 5), "seed bau");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "seed key");
+        Expect(inventory.Entries().size() == 3, "bau splits plus key");
+        Expect(inventory.Entries()[0].itemId == "items/bau", "8. grouped order: bau before master_key");
+        Expect(inventory.Entries().back().itemId == "items/master_key", "grouped order: master_key last");
 
         gameplay::InventoryUiState panel{};
         gameplay::OpenInventoryUi(panel, inventory);
         Expect(panel.open, "non-empty open succeeds");
-        Expect(panel.selectedItemId == "coin", "7. non-empty open selects first deterministic entry");
+        Expect(panel.selectedItemId == "items/bau", "7. non-empty open selects first deterministic entry");
 
         gameplay::NavigateInventorySelection(panel, inventory, 1);
-        Expect(panel.selectedItemId == "key", "10. next navigation");
-        Expect(inventory.GetQuantity(panel.selectedItemId) == 3,
+        Expect(panel.selectedItemId == "items/bau", "10. next stays on next bau stack");
+        Expect(inventory.GetQuantity(panel.selectedItemId) == 5,
             "16. selected details reflect production quantity");
 
         gameplay::NavigateInventorySelection(panel, inventory, -1);
-        Expect(panel.selectedItemId == "coin", "9. previous navigation");
-
-        gameplay::NavigateInventorySelection(panel, inventory, -1);
-        Expect(panel.selectedItemId == "key", "11. previous wraps first -> last");
-        gameplay::NavigateInventorySelection(panel, inventory, 1);
-        Expect(panel.selectedItemId == "coin", "11b. next wraps last -> first");
+        Expect(panel.selectedItemId == "items/bau", "9. previous navigation");
     }
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("coin", 1), "preserve seed coin");
-        Expect(inventory.TryAdd("key", 1), "preserve seed key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/bau", 1), "preserve seed bau");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "preserve seed key");
         gameplay::InventoryUiState panel{};
-        panel.selectedItemId = "key";
+        panel.selectedItemId = "items/master_key";
         gameplay::OpenInventoryUi(panel, inventory);
-        Expect(panel.selectedItemId == "key", "12. previously selected itemId is preserved");
+        Expect(panel.selectedItemId == "items/master_key", "12. previously selected itemId is preserved");
     }
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("coin", 1), "repair seed coin");
-        Expect(inventory.TryAdd("key", 1), "repair seed key");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/bau", 1), "repair seed bau");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "repair seed key");
         gameplay::InventoryUiState panel{};
         panel.open = true;
-        panel.selectedItemId = "key";
-        Expect(inventory.TryRemove("key", 1), "remove selected item");
+        panel.selectedItemId = "items/master_key";
+        Expect(inventory.TryRemove("items/master_key", 1), "remove selected item");
         gameplay::RepairInventorySelection(panel, inventory);
-        Expect(panel.selectedItemId == "coin", "13. removed selected item repairs to first entry");
+        Expect(panel.selectedItemId == "items/bau", "13. removed selected item repairs to first entry");
         Expect(gameplay::FindInventoryUiSelectionIndex(inventory, panel.selectedItemId) == 0,
             "15. repair stores itemId, not a dangling index");
         inventory.Clear();
         gameplay::RepairInventorySelection(panel, inventory);
         Expect(panel.selectedItemId.empty(), "14. cleared Inventory clears selection");
         gameplay::NavigateInventorySelection(panel, inventory, 1);
-        Expect(panel.selectedItemId.empty(), "empty navigation is a no-op");
+        Expect(!panel.selectedItemId.empty() || panel.equipmentFocus,
+            "empty inventory navigation focuses equipment");
     }
 
     {
         gameplay::Inventory inventory;
         world::ItemPickupSpec pickup{};
         pickup.position = {2.0f, 0.5f, 0.0f};
-        pickup.itemId = "key";
+        pickup.itemId = "items/master_key";
         pickup.quantity = 1;
         gameplay::ItemPickupRunState run = gameplay::MakeClearedItemPickupRunState(1);
-        Expect(gameplay::TryCollectItemPickup(inventory, run, {&pickup, 1}, 0),
-            "M55 collect key x1");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, {&pickup, 1}, 0, registry),
+            "M100 collect key x1");
         gameplay::InventoryUiState panel{};
         gameplay::OpenInventoryUi(panel, inventory);
-        Expect(panel.selectedItemId == "key", "17. collected item appears with no UI copy");
-        Expect(inventory.GetQuantity("key") == 1, "UI reads production quantity 1");
+        Expect(panel.selectedItemId == "items/master_key", "17. collected item appears with no UI copy");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "UI reads production quantity 1");
 
-        pickup.quantity = 2;
+        pickup.quantity = 1;
         run = gameplay::MakeClearedItemPickupRunState(1);
-        Expect(gameplay::TryCollectItemPickup(inventory, run, {&pickup, 1}, 0),
-            "M55 collect key x2");
+        Expect(gameplay::TryCollectItemPickup(inventory, run, {&pickup, 1}, 0, registry),
+            "M100 collect second non-stackable key");
         gameplay::RepairInventorySelection(panel, inventory);
-        Expect(inventory.Entries().size() == 1, "18. repeated additions stay one entry");
-        Expect(inventory.GetQuantity("key") == 3, "merged M54 quantity is 3");
-        Expect(panel.selectedItemId == "key", "selection preserved across merge");
+        Expect(inventory.Entries().size() == 2, "18. non-stackable second unit is another stack");
+        Expect(inventory.GetQuantity("items/master_key") == 2, "two keys");
+        Expect(panel.selectedItemId == "items/master_key", "selection preserved across add");
 
         world::ItemPickupSpec coin{};
         coin.position = {4.0f, 0.5f, 0.0f};
-        coin.itemId = "coin";
+        coin.itemId = "items/coin";
         coin.quantity = 5;
         gameplay::ItemPickupRunState coinRun = gameplay::MakeClearedItemPickupRunState(1);
-        Expect(gameplay::TryCollectItemPickup(inventory, coinRun, {&coin, 1}, 0),
-            "M55 collect coin x5");
-        Expect(inventory.Entries().size() == 2, "coin is its own entry");
-        Expect(inventory.Entries()[0].itemId == "coin" && inventory.Entries()[0].quantity == 5,
-            "M54 order after coin: coin then key");
-        Expect(inventory.GetQuantity("key") == 3, "key quantity unchanged");
+        Expect(gameplay::TryCollectItemPickup(inventory, coinRun, {&coin, 1}, 0, registry),
+            "M100 collect coin x5");
+        Expect(inventory.GetQuantity("items/coin") == 5, "coin quantity");
+        Expect(inventory.GetQuantity("items/master_key") == 2, "key quantity unchanged");
     }
 
     {
         gameplay::InventoryUiState panel{};
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "block seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "block seed");
         gameplay::OpenInventoryUi(panel, inventory);
         Expect(gameplay::InventoryUiBlocksGameplay(true, true), "21. open suppresses Grab/Drop");
         Expect(gameplay::InventoryUiPausesSimulation(panel), "20. open suppresses jump/movement");
@@ -204,7 +200,7 @@ int main()
         closeAndInteract.moveX = 1.0f;
         const bool wasOpen = panel.open;
         Expect(
-            gameplay::HandleInventoryUiInput(panel, inventory, closeAndInteract)
+            HandleUi(panel, inventory, registry, closeAndInteract)
                 == gameplay::InventoryUiInputAction::Close,
             "closing Tab is Inventory Close, not a raw-key cue");
         Expect(!panel.open, "24. closing resumes (UI closed)");
@@ -218,22 +214,22 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 2), "checkpoint seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "checkpoint seed");
         gameplay::InventoryUiState panel{};
         panel.open = true;
-        panel.selectedItemId = "key";
+        panel.selectedItemId = "items/master_key";
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
         gameplay::ApplyInventoryUiLifecycle(
             panel, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
-        Expect(inventory.GetQuantity("key") == 2, "26. checkpoint preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "26. checkpoint preserves Inventory");
         Expect(panel.open, "checkpoint does not force-close UI");
-        Expect(panel.selectedItemId == "key", "checkpoint preserves valid selection");
+        Expect(panel.selectedItemId == "items/master_key", "checkpoint preserves valid selection");
     }
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 1), "restart seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "restart seed");
         gameplay::InventoryUiState panel{};
         gameplay::OpenInventoryUi(panel, inventory);
         gameplay::ApplyInventoryLifecycle(
@@ -243,7 +239,7 @@ int main()
         Expect(inventory.Entries().empty(), "27. Restart clears Inventory");
         Expect(!panel.open, "Restart closes UI");
         Expect(panel.selectedItemId.empty(), "Restart clears selection");
-        gameplay::HandleInventoryUiInput(panel, inventory, PressToggle());
+        HandleUi(panel, inventory, registry, PressToggle());
         Expect(panel.open, "reopen after Restart is empty-safe");
         Expect(panel.selectedItemId.empty(), "reopened empty has no selection");
         gameplay::CloseInventoryUi(panel);
@@ -251,10 +247,10 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("coin", 4), "apply seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/bau", 4), "apply seed");
         gameplay::InventoryUiState panel{};
         panel.open = true;
-        panel.selectedItemId = "coin";
+        panel.selectedItemId = "items/bau";
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::ApplyCommittedLevel);
         gameplay::ApplyInventoryUiLifecycle(
@@ -266,47 +262,75 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 3), "rebuild seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "rebuild seed");
         gameplay::InventoryUiState panel{};
         panel.open = true;
-        panel.selectedItemId = "key";
+        panel.selectedItemId = "items/master_key";
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
         gameplay::ApplyInventoryUiLifecycle(
             panel, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild, inventory);
-        Expect(inventory.GetQuantity("key") == 3, "29. PhysicsWorld rebuild preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "29. PhysicsWorld rebuild preserves Inventory");
         Expect(panel.open, "rebuild preserves open UI");
-        Expect(panel.selectedItemId == "key", "rebuild preserves valid selection");
+        Expect(panel.selectedItemId == "items/master_key", "rebuild preserves valid selection");
     }
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 2), "transition seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/master_key", 1), "transition seed");
         gameplay::InventoryUiState panel{};
         panel.open = true;
-        panel.selectedItemId = "key";
+        panel.selectedItemId = "items/master_key";
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::LevelTransition);
         gameplay::ApplyInventoryUiLifecycle(
             panel, gameplay::InventoryLifecycleEvent::LevelTransition, inventory);
-        Expect(inventory.GetQuantity("key") == 2, "level transition preserves Inventory");
+        Expect(inventory.GetQuantity("items/master_key") == 1, "level transition preserves Inventory");
         Expect(!panel.open, "level transition closes UI");
     }
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("battery", 1), "harness coexistence seed");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/battery", 1), "harness coexistence seed");
         gameplay::InventoryUiState panel{};
         gameplay::OpenInventoryUi(panel, inventory);
-        Expect(inventory.TryAdd("battery", 2), "31. harness-style TryAdd is the same Inventory");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/battery", 2),
+            "31. harness-style TryAdd is the same Inventory");
         Expect(inventory.GetQuantity(panel.selectedItemId) == 3,
             "player UI and Development harness share production Inventory");
-        Expect(inventory.TryRemove("battery", 1), "harness-style TryRemove");
-        Expect(inventory.GetQuantity("battery") == 2, "shared Inventory after Remove");
+        Expect(inventory.TryRemove("items/battery", 1), "harness-style TryRemove");
+        Expect(inventory.GetQuantity("items/battery") == 2, "shared Inventory after Remove");
     }
 
     Expect(!gameplay::kInventoryDevelopmentHarnessEnabled,
         "34. player UI module does not enable ImGui Development harness");
+
+    {
+        gameplay::Inventory inventory;
+        Expect(gameplay::AddTestItem(inventory, registry, "items/helmet", 1), "equip seed");
+        gameplay::Equipment equipment;
+        gameplay::InventoryUiState panel{};
+        gameplay::OpenInventoryUi(panel, inventory);
+        Expect(panel.selectedItemId == "items/helmet", "equipment UI selects helmet");
+        const gameplay::InventoryEquipmentView view =
+            gameplay::BuildInventoryEquipmentView(inventory, equipment, panel, registry);
+        Expect(view.stacks.size() == 1 && view.stacks[0].canEquip, "resolved selected equipment is eligible");
+        Expect(equipment.Equip(inventory, "items/helmet", registry)
+                == gameplay::EquipmentTransactionStatus::Ok,
+            "selected eligible item equips");
+        Expect(inventory.GetQuantity("items/helmet") == 0, "equip consumes inventory quantity");
+        Expect(equipment.GetEquipped(gameplay::EquipmentSlot::Head) == "items/helmet",
+            "Head slot owns the helmet");
+        Expect(equipment.Unequip(inventory, gameplay::EquipmentSlot::Head, registry)
+                == gameplay::EquipmentTransactionStatus::Ok,
+            "unequip returns the item");
+        Expect(inventory.GetQuantity("items/helmet") == 1, "unequip restores inventory quantity");
+        Expect(equipment.GetEquipped(gameplay::EquipmentSlot::Head).empty(), "Head slot is empty after unequip");
+        const gameplay::InventoryEquipmentView missingView =
+            gameplay::BuildInventoryEquipmentView(
+                inventory, equipment, panel, gameplay::GameplayDefinitionRegistry{});
+        Expect(missingView.stacks[0].missingDefinition, "UI view-model marks missing definition");
+    }
 
     {
         const world::ParseLevelFileResult parsed =

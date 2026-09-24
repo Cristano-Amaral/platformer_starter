@@ -15,6 +15,8 @@
 #include "physics/PhysicsWorldTestAccess.h"
 #include "gameplay/GameplayAudio.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "gameplay/PlayerHealth.h"
 #include "world/DynamicBox.h"
 #include "world/GreyboxWorld.h"
@@ -177,6 +179,9 @@ bool ApplyCycle(physics::PhysicsWorld& world, const world::LevelDefinition& leve
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     const world::ParseLevelFileResult parsed =
         world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     if (parsed.status != world::LoadLevelFileStatus::Loaded)
@@ -853,7 +858,7 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("key", 3), "inventory seed before TryRebuild");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/coin", 3), "inventory seed before TryRebuild");
         physics::PhysicsWorld rebuildWorld;
         Expect(rebuildWorld.Initialize(parsed.level), "inventory isolation Initialize");
         Expect(
@@ -868,7 +873,7 @@ int main()
             "TryRebuild alone does not own Inventory");
         gameplay::ApplyInventoryLifecycle(
             inventory, gameplay::InventoryLifecycleEvent::PhysicsWorldRebuild);
-        Expect(inventory.GetQuantity("key") == 3, "PhysicsWorld rebuild preserves Inventory");
+        Expect(inventory.GetQuantity("items/coin") == 3, "PhysicsWorld rebuild preserves Inventory");
         Expect(inventory.Entries().size() == 1, "rebuild does not duplicate inventory entries");
         gameplay::PlayerHealthState rebuildHealth{};
         gameplay::HazardContactState rebuildContact{};

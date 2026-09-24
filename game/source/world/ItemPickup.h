@@ -9,6 +9,7 @@
 // system, or generic Transform.
 
 #include "core/Vec3.h"
+#include "gameplay/ItemIdentity.h"
 #include "gameplay/Inventory.h"
 #include "world/StaticProp.h"
 
@@ -28,7 +29,7 @@ inline constexpr core::Vec3 kItemPickupVisualExtents{
     kItemPickupVisualSize,
     kItemPickupVisualSize};
 inline constexpr int kDefaultItemPickupQuantity = 1;
-inline constexpr std::string_view kDefaultItemPickupId = "key";
+inline constexpr std::string_view kDefaultItemPickupId = gameplay::kCanonicalKeyItemIdentity;
 inline constexpr core::Vec3 kDefaultItemPickupVisualOffset{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultItemPickupVisualRotationDegrees{0.0f, 0.0f, 0.0f};
 inline constexpr core::Vec3 kDefaultItemPickupVisualScale{1.0f, 1.0f, 1.0f};
@@ -63,6 +64,9 @@ struct ItemPickupSpec
     core::Vec3 position{};
     std::string itemId{kDefaultItemPickupId};
     int quantity = kDefaultItemPickupQuantity;
+    // True when the authored token was a mapped legacy key/1 record.
+    // Diagnostic only; never serialized.
+    bool legacyItemReference = false;
     // Empty: primitive fallback. Non-empty: canonical models/<file>.glb.
     std::string modelIdentity;
     core::Vec3 visualOffset{};
@@ -151,7 +155,8 @@ inline bool ItemPickupIdleSpinSpeedIsValid(float spinSpeedDegrees)
 
 inline bool ItemPickupSpecIsValid(const ItemPickupSpec& spec)
 {
-    return ItemPickupPositionIsValid(spec.position) && gameplay::IsValidItemId(spec.itemId)
+    return ItemPickupPositionIsValid(spec.position)
+        && gameplay::IsValidInventoryItemIdentity(spec.itemId)
         && ItemPickupQuantityIsValid(spec.quantity)
         && ItemPickupModelIdentityIsValid(spec.modelIdentity)
         && ItemPickupVisualOffsetIsValid(spec.visualOffset)
@@ -245,7 +250,7 @@ inline std::vector<std::string> UniqueAuthoredPickupItemIds(
     ids.reserve(pickups.size());
     for (const ItemPickupSpec& pickup : pickups)
     {
-        if (!gameplay::IsValidItemId(pickup.itemId))
+        if (!gameplay::IsValidInventoryItemIdentity(pickup.itemId))
         {
             continue;
         }

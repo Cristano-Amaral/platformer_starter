@@ -6,6 +6,8 @@
 #include "physics/PhysicsWorld.h"
 #include "physics/PhysicsWorldTestAccess.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/Equipment.h"
+#include "gameplay/InventoryTestSupport.h"
 #include "world/DynamicBox.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -106,6 +108,9 @@ void AimAndUpdate(physics::PhysicsWorld& world, float facingX)
 
 int main()
 {
+    const gameplay::GameplayDefinitionRegistry registry = gameplay::MakeStandardTestItemRegistry();
+    gameplay::Equipment equipment;
+
     const world::ParseLevelFileResult parsed =
         world::LoadLevelFile(PLATFORMER_LEVEL01_SOURCE_PATH);
     if (parsed.status != world::LoadLevelFileStatus::Loaded)
@@ -488,7 +493,7 @@ int main()
 
     {
         gameplay::Inventory inventory;
-        Expect(inventory.TryAdd("coin", 2), "inventory seed before Grab");
+        Expect(gameplay::AddTestItem(inventory, registry, "items/coin", 2), "inventory seed before Grab");
         world::LevelDefinition level = parsed.level;
         level.dynamicBoxes.push_back(MakeBox(inRangeCenter));
         physics::PhysicsWorld world;
@@ -496,10 +501,10 @@ int main()
         AimAndUpdate(world, 1.0f);
         world.HandleGrabDrop();
         Expect(world.GetGrabState().carrying, "Grab succeeded for inventory isolation");
-        Expect(inventory.GetQuantity("coin") == 2, "Grab does not add Inventory");
+        Expect(inventory.GetQuantity("items/coin") == 2, "Grab does not add Inventory");
         world.HandleGrabDrop();
         Expect(!world.GetGrabState().carrying, "Drop succeeded for inventory isolation");
-        Expect(inventory.GetQuantity("coin") == 2, "Drop does not remove Inventory");
+        Expect(inventory.GetQuantity("items/coin") == 2, "Drop does not remove Inventory");
         Expect(inventory.Entries().size() == 1, "Carry does not add Inventory entries");
     }
 

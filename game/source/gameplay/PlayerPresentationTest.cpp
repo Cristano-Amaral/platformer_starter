@@ -211,7 +211,7 @@ int main()
 
     world::ItemPickupSpec pickup{};
     pickup.position = {2.0f, 0.8f, 0.0f};
-    pickup.itemId = "key";
+    pickup.itemId = "items/master_key";
     pickup.quantity = 1;
     std::vector<world::ItemPickupSpec> pickups{pickup};
     std::vector<std::uint8_t> collected{0};
