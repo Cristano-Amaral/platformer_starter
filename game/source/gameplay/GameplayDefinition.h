@@ -7,6 +7,7 @@
 #include "gameplay/GameplayIdentity.h"
 #include "gameplay/GameplayStat.h"
 #include "gameplay/ItemDefinition.h"
+#include "gameplay/CharacterDefinition.h"
 
 #include <array>
 #include <cstddef>
@@ -32,12 +33,14 @@ struct GameplayDefinition
     std::array<float, kGameplayStatCount> statValue{};
     // Meaningful only when category is Item. Characters keep the default payload.
     ItemDefinition item{};
+    CharacterDefinition character{};
 };
 
 inline bool GameplayDefinitionHasStat(const GameplayDefinition& definition, GameplayStatId id)
 {
     const auto index = static_cast<std::size_t>(id);
-    return index < kGameplayStatCount && definition.hasStat[index];
+    return index < kGameplayStatCount && (definition.category == GameplayDefinitionCategory::Character
+        ? definition.character.hasBaseStat[index] : definition.hasStat[index]);
 }
 
 inline std::optional<float> GameplayDefinitionStat(
@@ -48,7 +51,9 @@ inline std::optional<float> GameplayDefinitionStat(
     {
         return std::nullopt;
     }
-    return definition.statValue[static_cast<std::size_t>(id)];
+    const auto index = static_cast<std::size_t>(id);
+    return definition.category == GameplayDefinitionCategory::Character
+        ? definition.character.baseStatValue[index] : definition.statValue[index];
 }
 
 // One slot per stat. A second assignment is Duplicate and does not overwrite.
@@ -65,6 +70,7 @@ enum class RegisterGameplayDefinitionStatus
     CategoryMismatch,
     InvalidStat,
     InvalidItem,
+    InvalidCharacter,
 };
 
 struct RegisterGameplayDefinitionResult
@@ -89,6 +95,8 @@ inline const char* RegisterGameplayDefinitionStatusName(RegisterGameplayDefiniti
         return "InvalidStat";
     case RegisterGameplayDefinitionStatus::InvalidItem:
         return "InvalidItem";
+    case RegisterGameplayDefinitionStatus::InvalidCharacter:
+        return "InvalidCharacter";
     }
     return "MalformedIdentity";
 }

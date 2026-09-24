@@ -51,7 +51,7 @@ void DrawGameplayDefinitionsInspection()
     static std::string pathText;
     static Probe probes[3];
 
-    if (!ImGui::CollapsingHeader("Gameplay Definitions (M98/M99)", ImGuiTreeNodeFlags_DefaultOpen))
+    if (!ImGui::CollapsingHeader("Gameplay Definitions (M98-M101)", ImGuiTreeNodeFlags_DefaultOpen))
     {
         return;
     }
@@ -154,9 +154,19 @@ void DrawGameplayDefinitionsInspection()
                     static_cast<double>(modifier.addend));
             }
         }
+        else
+        {
+            const std::string_view typeName = gameplay::CharacterTypeName(definition.character.type);
+            ImGui::Text("    display: %s", definition.character.displayName.c_str());
+            ImGui::Text("    type: %.*s", static_cast<int>(typeName.size()), typeName.data());
+            if (!definition.character.worldModelIdentity.empty())
+                ImGui::Text("    world model: %s", definition.character.worldModelIdentity.c_str());
+        }
         for (std::size_t index = 0; index < gameplay::kGameplayStatCount; ++index)
         {
-            if (!definition.hasStat[index])
+            const auto value = gameplay::GameplayDefinitionStat(
+                definition, static_cast<gameplay::GameplayStatId>(index));
+            if (!value.has_value())
             {
                 continue;
             }
@@ -166,7 +176,7 @@ void DrawGameplayDefinitionsInspection()
                 "    %.*s = %.6g",
                 static_cast<int>(statName.size()),
                 statName.data(),
-                definition.statValue[index]);
+                *value);
         }
     }
 

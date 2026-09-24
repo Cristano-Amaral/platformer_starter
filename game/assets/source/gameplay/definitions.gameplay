@@ -14,11 +14,17 @@ stackable false
 max_stack 1
 stat MaxHealth 25
 definition characters/player
+display_name "Player"
+description "Primary player character definition."
+character_type Player
 stat MaxHealth 100
 stat MoveSpeed 6
 stat JumpStrength 8
 stat GravityScale 1
 definition characters/guard
+display_name "Guard"
+description "Guard character definition."
+character_type Enemy
 stat MaxHealth 40
 stat MoveSpeed 3
 stat AttackPower 8

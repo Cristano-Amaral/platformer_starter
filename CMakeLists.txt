@@ -125,6 +125,8 @@ add_executable(Platformer3D
     game/source/editor/EditorWorkspace.h
     game/source/editor/ItemDatabaseEditor.cpp
     game/source/editor/ItemDatabaseEditor.h
+    game/source/editor/CharacterDatabaseEditor.cpp
+    game/source/editor/CharacterDatabaseEditor.h
     game/source/editor/ItemIdInspectorEdit.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
@@ -147,6 +149,7 @@ add_executable(Platformer3D
     game/source/gameplay/InventoryView.h
     game/source/gameplay/GameplayIdentity.h
     game/source/gameplay/GameplayStat.h
+    game/source/gameplay/CharacterDefinition.h
     game/source/gameplay/ItemDefinition.h
     game/source/gameplay/GameplayDefinitionFile.cpp
     game/source/gameplay/GameplayDefinitionFile.h
@@ -981,6 +984,37 @@ else()
     target_compile_options(ItemDatabaseEditorTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_compile_definitions(ItemDatabaseEditorTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH}\""
+)
+
+# Milestone 101: Character Database editor and typed Character payload seams.
+add_executable(CharacterDatabaseEditorTest
+    game/source/editor/CharacterDatabaseEditor.h
+    game/source/editor/CharacterDatabaseEditorTest.cpp
+    game/source/editor/ItemDatabaseEditor.h
+    game/source/editor/TerrainPickerCard.h
+    game/source/gameplay/CharacterDefinition.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/gameplay/GameplayDefinitionFile.h
+    game/source/gameplay/GameplayIdentity.h
+    game/source/gameplay/GameplayStat.h
+    game/source/gameplay/ItemDefinition.h
+    game/source/platform/FileReplace.h
+)
+if(WIN32)
+    target_sources(CharacterDatabaseEditorTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(CharacterDatabaseEditorTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(CharacterDatabaseEditorTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(CharacterDatabaseEditorTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(CharacterDatabaseEditorTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(CharacterDatabaseEditorTest PRIVATE
     "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH}\""
 )
 

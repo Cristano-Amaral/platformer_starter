@@ -32,6 +32,7 @@
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
 #include "editor/ItemDatabaseEditor.h"
+#include "editor/CharacterDatabaseEditor.h"
 #include "editor/ItemIdInspectorEdit.h"
 #include "editor/PressurePlateLocalLightTargets.h"
 #include "editor/DirectionalLightAuthoring.h"
@@ -255,6 +256,7 @@ struct LevelEditorState
     // frames so Metrics (drawn before the button) also snaps to defaults.
     int forceDefaultLayoutFrames = 0;
     ItemDatabaseEditorState itemDatabase{};
+    CharacterDatabaseEditorState characterDatabase{};
     LevelEditorApplyStatus lastApplyStatus = LevelEditorApplyStatus::NotAttempted;
     LevelEditorSaveStatus lastSaveStatus = LevelEditorSaveStatus::NotAttempted;
     LevelEditorReloadStatus lastReloadStatus = LevelEditorReloadStatus::NotAttempted;

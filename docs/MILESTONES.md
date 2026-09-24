@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 100 — Inventory & Equipment Foundation**
+**Milestone 101 — Character Database & Character Editor Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_100.md`](milestones/MILESTONE_100.md)
+Canonical file: [`docs/milestones/MILESTONE_101.md`](milestones/MILESTONE_101.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -204,6 +204,7 @@ Historical milestone files do not override current implemented behavior.
 | 98 | [Milestone 98 — Gameplay Definition Foundation](milestones/MILESTONE_98.md) | implemented, awaiting manual acceptance |
 | 99 | [Milestone 99 — Item Database & Item Editor](milestones/MILESTONE_99.md) | implemented, awaiting manual acceptance |
 | 100 | [Milestone 100 — Inventory & Equipment Foundation](milestones/MILESTONE_100.md) | implemented, awaiting manual acceptance |
+| 101 | [Milestone 101 — Character Database & Character Editor Foundation](milestones/MILESTONE_101.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

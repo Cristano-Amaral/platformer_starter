@@ -80,6 +80,10 @@ gameplay::GameplayDefinition MakeDefinition(
     {
         definition.item = gameplay::MakeDefaultItemDefinition(parsed.text);
     }
+    else
+    {
+        definition.character = gameplay::MakeDefaultCharacterDefinition(parsed.text);
+    }
     for (const auto& [stat, value] : stats)
     {
         Expect(
@@ -462,7 +466,7 @@ int main()
         Expect(guard != nullptr && gameplay::GameplayDefinitionStat(*guard, GameplayStatId::Defense) == 2.0f,
             "fixture guard");
         const gameplay::GameplayDefinition* bau = loaded.registry.Find("items/bau");
-        Expect(bau != nullptr && bau->item.stackable && bau->item.maxStack == 4, "fixture bau");
+        Expect(bau != nullptr && bau->item.stackable && bau->item.maxStack == 10, "fixture bau");
 
         gameplay::GameplayDefinitionReference valid;
         valid.identity = "items/master_key";

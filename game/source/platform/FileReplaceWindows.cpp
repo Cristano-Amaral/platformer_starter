@@ -42,13 +42,23 @@ bool ReplaceFileWithTemporary(
         // No backup file. REPLACEFILE_WRITE_THROUGH is documented as
         // unsupported, so flags stay 0. Durability of the temp contents is
         // the caller's flush/close of the temp stream, not this flag.
-        return ReplaceFileW(
+        if (ReplaceFileW(
                    finalPath.c_str(),
                    temporaryPath.c_str(),
                    nullptr,
                    0,
                    nullptr,
                    nullptr)
+            != FALSE)
+        {
+            return true;
+        }
+        // ReplaceFileW can reject files on some temporary/test volumes even
+        // though an atomic same-volume replacement is available.
+        return MoveFileExW(
+                   temporaryPath.c_str(),
+                   finalPath.c_str(),
+                   MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
             != FALSE;
     }
 

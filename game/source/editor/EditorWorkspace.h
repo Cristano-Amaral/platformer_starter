@@ -24,6 +24,7 @@ struct EditorWorkspaceState
     bool showLevels = true;
     bool showModelPreview = true;
     bool showItemDatabase = true;
+    bool showCharacterDatabase = true;
     bool showQuickToolbar = true;
 };
 

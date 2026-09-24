@@ -114,8 +114,9 @@ Tests:
 .\build\windows-vs2022\Development\PressurePlateTest.exe    # M52 Pressure Plate overlap / activation
 .\build\windows-vs2022\Development\InventoryTest.exe        # M54/M100 Inventory API / lifecycle
 .\build\windows-vs2022\Development\EquipmentTest.exe        # M100 Equipment slots / equip-unequip
-.\build\windows-vs2022\Development\GameplayDefinitionTest.exe # M98/M99 gameplay definition identity / stats / catalog
+.\build\windows-vs2022\Development\GameplayDefinitionTest.exe # M98-M101 gameplay definition identity / stats / catalog
 .\build\windows-vs2022\Development\ItemDatabaseEditorTest.exe # M99 Item Database editor seams / pickers / save
+.\build\windows-vs2022\Development\CharacterDatabaseEditorTest.exe # M101 Character Database seams / save-reload
 .\build\windows-vs2022\Development\InventoryUiTest.exe      # M56 player Inventory UI / focus
 .\build\windows-vs2022\Development\ItemPickupTest.exe       # M55/M58 Item Pickup targeting / visual transform
 .\build\windows-vs2022\Development\ItemPickupCollectionFeedbackTest.exe # M61 collection feedback trigger/lifecycle

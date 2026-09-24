@@ -14,12 +14,16 @@ SetGameplayStatStatus TrySetGameplayStat(
     {
         return SetGameplayStatStatus::InvalidValue;
     }
-    if (definition.hasStat[index])
+    auto& hasStat = definition.category == GameplayDefinitionCategory::Character
+        ? definition.character.hasBaseStat : definition.hasStat;
+    auto& statValue = definition.category == GameplayDefinitionCategory::Character
+        ? definition.character.baseStatValue : definition.statValue;
+    if (hasStat[index])
     {
         return SetGameplayStatStatus::Duplicate;
     }
-    definition.hasStat[index] = true;
-    definition.statValue[index] = value;
+    hasStat[index] = true;
+    statValue[index] = value;
     return SetGameplayStatStatus::Set;
 }
 
@@ -42,7 +46,9 @@ RegisterGameplayDefinitionResult GameplayDefinitionRegistry::Register(
     }
     for (std::size_t index = 0; index < kGameplayStatCount; ++index)
     {
-        if (definition.hasStat[index] && !IsValidGameplayStatValue(definition.statValue[index]))
+        const std::optional<float> value = GameplayDefinitionStat(
+            definition, static_cast<GameplayStatId>(index));
+        if (value.has_value() && !IsValidGameplayStatValue(*value))
         {
             result.status = RegisterGameplayDefinitionStatus::InvalidStat;
             result.error = "invalid stat value";
@@ -56,6 +62,16 @@ RegisterGameplayDefinitionResult GameplayDefinitionRegistry::Register(
         {
             result.status = RegisterGameplayDefinitionStatus::InvalidItem;
             result.error = ValidateItemStatusName(itemStatus);
+            return result;
+        }
+    }
+    else
+    {
+        const ValidateCharacterStatus characterStatus = ValidateCharacterDefinition(definition.character);
+        if (characterStatus != ValidateCharacterStatus::Valid)
+        {
+            result.status = RegisterGameplayDefinitionStatus::InvalidCharacter;
+            result.error = ValidateCharacterStatusName(characterStatus);
             return result;
         }
     }

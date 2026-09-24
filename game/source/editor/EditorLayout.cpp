@@ -163,6 +163,10 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         std::max(kMargin, (height - itemDatabaseHeight) * 0.5f),
         itemDatabaseWidth,
         itemDatabaseHeight};
+    defaults.characterDatabase = defaults.itemDatabase;
+    defaults.characterDatabase.name = kCharacterDatabaseWindowName;
+    defaults.characterDatabase.x = std::max(kMargin, defaults.itemDatabase.x + 24.0f);
+    defaults.characterDatabase.y = std::max(kMargin, defaults.itemDatabase.y + 24.0f);
 
     defaults.metrics = ClampEditorWindowPlacement(defaults.metrics, width, height);
     defaults.hierarchy = ClampEditorWindowPlacement(defaults.hierarchy, width, height);
@@ -173,6 +177,7 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
     defaults.levels = ClampEditorWindowPlacement(defaults.levels, width, height);
     defaults.modelPreview = ClampEditorWindowPlacement(defaults.modelPreview, width, height);
     defaults.itemDatabase = ClampEditorWindowPlacement(defaults.itemDatabase, width, height);
+    defaults.characterDatabase = ClampEditorWindowPlacement(defaults.characterDatabase, width, height);
     defaults.toolOutput = ClampEditorWindowPlacement(defaults.toolOutput, width, height);
     return defaults;
 }
@@ -245,6 +250,10 @@ const EditorWindowPlacement* FindDefaultPlacement(
     if (std::strcmp(windowName, kItemDatabaseWindowName) == 0)
     {
         return &defaults.itemDatabase;
+    }
+    if (std::strcmp(windowName, kCharacterDatabaseWindowName) == 0)
+    {
+        return &defaults.characterDatabase;
     }
     if (std::strcmp(windowName, kToolOutputWindowName) == 0)
     {

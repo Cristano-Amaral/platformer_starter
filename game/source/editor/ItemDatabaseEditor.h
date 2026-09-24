@@ -163,7 +163,7 @@ inline bool GameplayDefinitionsEqual(
     {
         return gameplay::ItemDefinitionsEqual(a.item, b.item);
     }
-    return true;
+    return gameplay::CharacterDefinitionsEqual(a.character, b.character);
 }
 
 inline bool GameplayRegistriesEqual(
