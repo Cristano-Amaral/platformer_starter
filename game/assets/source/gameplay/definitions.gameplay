@@ -1,7 +1,17 @@
 PLATFORMER_GAMEPLAY_DEFINITIONS
 definition items/master_key
+display_name "master_key"
+description ""
+item_type Generic
+stackable false
+max_stack 1
 stat InteractionRange 2.5
 definition items/health_potion
+display_name "health_potion"
+description ""
+item_type Generic
+stackable false
+max_stack 1
 stat MaxHealth 25
 definition characters/player
 stat MaxHealth 100
@@ -14,3 +24,13 @@ stat MoveSpeed 3
 stat AttackPower 8
 stat Defense 2
 stat InteractionRange 1.5
+definition items/bau
+display_name "Bau"
+description "Bau"
+item_type Generic
+stackable true
+max_stack 4
+world_model "models/Chest by Quaternius - O72u4Drp8k.glb"
+icon "textures/test_textured_basecolor.png"
+modifier MaxHealth 10
+modifier GravityScale 6

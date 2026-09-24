@@ -60,6 +60,7 @@ int main()
         Expect(workspace.showContentBrowser, "Content Browser default visible");
         Expect(workspace.showLevels, "Levels default visible");
         Expect(workspace.showModelPreview, "Model Preview default visible");
+        Expect(workspace.showItemDatabase, "Item Database default visible");
         Expect(editor::AllEditorPanelsVisible(workspace), "defaults include Object Palette");
         workspace.showObjectPalette = false;
         Expect(!editor::AllEditorPanelsVisible(workspace), "hiding Object Palette is independent");
@@ -68,6 +69,7 @@ int main()
         Expect(workspace.showContentBrowser, "Reset restores Content Browser");
         Expect(workspace.showLevels, "Reset restores Levels");
         Expect(workspace.showModelPreview, "Reset restores Model Preview");
+        Expect(workspace.showItemDatabase, "Reset restores Item Database");
         Expect(editor::AllEditorPanelsVisible(workspace), "Reset restores all default panels");
     }
 

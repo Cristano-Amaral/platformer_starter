@@ -1,7 +1,10 @@
 #include "gameplay/GameplayDefinitionFile.h"
 
+#include "platform/FileReplace.h"
+
 #include <array>
 #include <charconv>
+#include <cmath>
 #include <fstream>
 #include <system_error>
 #include <vector>
@@ -20,6 +23,12 @@ ParseGameplayDefinitionsResult MakeStatus(
     result.errorLine = line;
     result.error = std::move(error);
     return result;
+}
+
+void BestEffortRemove(const std::filesystem::path& path)
+{
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
 }
 
 std::string_view TrimAsciiSpace(std::string_view line)
@@ -80,6 +89,23 @@ bool ParseFiniteFloat(std::string_view token, float& value)
     return true;
 }
 
+bool ParseBoundedInt(std::string_view token, int& value)
+{
+    if (token.empty())
+    {
+        return false;
+    }
+    int parsed = 0;
+    const std::from_chars_result result =
+        std::from_chars(token.data(), token.data() + token.size(), parsed);
+    if (result.ec != std::errc{} || result.ptr != token.data() + token.size())
+    {
+        return false;
+    }
+    value = parsed;
+    return true;
+}
+
 bool AppendFloat(std::string& out, float value)
 {
     std::array<char, 64> buffer{};
@@ -93,9 +119,94 @@ bool AppendFloat(std::string& out, float value)
     return true;
 }
 
+bool AppendInt(std::string& out, int value)
+{
+    std::array<char, 32> buffer{};
+    const std::to_chars_result result =
+        std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    if (result.ec != std::errc{})
+    {
+        return false;
+    }
+    out.append(buffer.data(), static_cast<std::size_t>(result.ptr - buffer.data()));
+    return true;
+}
+
+bool ParseQuotedString(std::string_view remainder, std::string& value)
+{
+    remainder = TrimAsciiSpace(remainder);
+    if (remainder.size() < 2 || remainder.front() != '"' || remainder.back() != '"')
+    {
+        return false;
+    }
+    const std::string_view inner = remainder.substr(1, remainder.size() - 2);
+    for (const char character : inner)
+    {
+        if (!ItemAuthoredTextCharIsAllowed(character))
+        {
+            return false;
+        }
+    }
+    value.assign(inner);
+    return true;
+}
+
+bool ConsumeKeywordRemainder(
+    std::string_view line,
+    std::string_view keyword,
+    std::string_view& remainder)
+{
+    if (!line.starts_with(keyword))
+    {
+        return false;
+    }
+    remainder = line.substr(keyword.size());
+    if (!remainder.empty() && remainder.front() != ' ' && remainder.front() != '\t')
+    {
+        return false;
+    }
+    remainder = TrimAsciiSpace(remainder);
+    return true;
+}
+
+// Quoted remainder is the writer form. Unquoted remainder is the rest of the
+// line as one identity, so catalog paths that contain spaces still parse.
+bool ParseIdentityRemainder(std::string_view remainder, std::string& value)
+{
+    if (remainder.empty())
+    {
+        return false;
+    }
+    if (remainder.front() == '"')
+    {
+        return ParseQuotedString(remainder, value);
+    }
+    value.assign(remainder);
+    return true;
+}
+
+void AppendQuotedString(std::string& out, std::string_view value)
+{
+    out.push_back('"');
+    out.append(value);
+    out.push_back('"');
+}
+
+struct ItemFieldFlags
+{
+    bool displayName = false;
+    bool description = false;
+    bool type = false;
+    bool stackable = false;
+    bool maxStack = false;
+    bool worldModel = false;
+    bool icon = false;
+};
+
 RegisterGameplayDefinitionResult FinishDefinition(
     GameplayDefinitionRegistry& registry,
     GameplayDefinition& current,
+    ItemFieldFlags& flags,
     bool& haveCurrent)
 {
     RegisterGameplayDefinitionResult result;
@@ -104,10 +215,28 @@ RegisterGameplayDefinitionResult FinishDefinition(
     {
         return result;
     }
-    result = registry.Register(current);
+    if (current.category == GameplayDefinitionCategory::Item)
+    {
+        if (!flags.displayName)
+        {
+            current.item.displayName = DefaultItemDisplayName(current.identity);
+        }
+        result = registry.Register(current);
+    }
+    else
+    {
+        current.item = {};
+        result = registry.Register(current);
+    }
     haveCurrent = false;
     current = {};
+    flags = {};
     return result;
+}
+
+bool RequireItem(const GameplayDefinition& current, bool haveCurrent)
+{
+    return haveCurrent && current.category == GameplayDefinitionCategory::Item;
 }
 }
 
@@ -131,6 +260,7 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
 
     GameplayDefinitionRegistry registry;
     GameplayDefinition current;
+    ItemFieldFlags flags;
     bool haveCurrent = false;
     bool sawHeader = false;
     int lineNumber = 0;
@@ -183,7 +313,7 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong field count");
             }
             const RegisterGameplayDefinitionResult finished =
-                FinishDefinition(registry, current, haveCurrent);
+                FinishDefinition(registry, current, flags, haveCurrent);
             if (finished.status != RegisterGameplayDefinitionStatus::Registered)
             {
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, finished.error);
@@ -201,6 +331,12 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
             current = {};
             current.identity = parsed.text;
             current.category = parsed.category;
+            if (parsed.category == GameplayDefinitionCategory::Item)
+            {
+                current.item = MakeDefaultItemDefinition(parsed.text);
+                current.item.displayName.clear();
+            }
+            flags = {};
             haveCurrent = true;
         }
         else if (tokens[0] == "stat")
@@ -236,6 +372,218 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                     LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid stat value");
             }
         }
+        else if (tokens[0] == "display_name")
+        {
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.displayName)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate display_name");
+            }
+            const std::size_t keywordEnd = line.find("display_name");
+            std::string value;
+            if (keywordEnd == std::string_view::npos
+                || !ParseQuotedString(line.substr(keywordEnd + std::string_view("display_name").size()), value)
+                || !IsValidItemDisplayName(value))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid display name");
+            }
+            current.item.displayName = std::move(value);
+            flags.displayName = true;
+        }
+        else if (tokens[0] == "description")
+        {
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.description)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate description");
+            }
+            const std::size_t keywordEnd = line.find("description");
+            std::string value;
+            if (keywordEnd == std::string_view::npos
+                || !ParseQuotedString(line.substr(keywordEnd + std::string_view("description").size()), value)
+                || !IsValidItemDescription(value))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid description");
+            }
+            current.item.description = std::move(value);
+            flags.description = true;
+        }
+        else if (tokens[0] == "item_type")
+        {
+            if (tokens.size() != 2)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong field count");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.type)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate item_type");
+            }
+            const std::optional<ItemType> type = ItemTypeFromName(tokens[1]);
+            if (!type.has_value())
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "unknown item type");
+            }
+            current.item.type = *type;
+            flags.type = true;
+        }
+        else if (tokens[0] == "stackable")
+        {
+            if (tokens.size() != 2)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong field count");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.stackable)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate stackable");
+            }
+            if (tokens[1] == "true")
+            {
+                current.item.stackable = true;
+            }
+            else if (tokens[1] == "false")
+            {
+                current.item.stackable = false;
+            }
+            else
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid stackable");
+            }
+            flags.stackable = true;
+        }
+        else if (tokens[0] == "max_stack")
+        {
+            if (tokens.size() != 2)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong field count");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.maxStack)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate max_stack");
+            }
+            int value = 0;
+            if (!ParseBoundedInt(tokens[1], value))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid max stack");
+            }
+            current.item.maxStack = value;
+            flags.maxStack = true;
+        }
+        else if (tokens[0] == "world_model")
+        {
+            std::string_view remainder;
+            std::string identity;
+            if (!ConsumeKeywordRemainder(line, "world_model", remainder)
+                || !ParseIdentityRemainder(remainder, identity))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid world model");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.worldModel)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate world_model");
+            }
+            if (!IsValidItemWorldModelIdentity(identity))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid world model");
+            }
+            current.item.worldModelIdentity = std::move(identity);
+            flags.worldModel = true;
+        }
+        else if (tokens[0] == "icon")
+        {
+            std::string_view remainder;
+            std::string identity;
+            if (!ConsumeKeywordRemainder(line, "icon", remainder)
+                || !ParseIdentityRemainder(remainder, identity))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid icon");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (flags.icon)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate icon");
+            }
+            if (!IsValidItemIconTextureIdentity(identity))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid icon");
+            }
+            current.item.iconTextureIdentity = std::move(identity);
+            flags.icon = true;
+        }
+        else if (tokens[0] == "modifier")
+        {
+            if (tokens.size() != 3)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong field count");
+            }
+            if (!RequireItem(current, haveCurrent))
+            {
+                return MakeStatus(
+                    LoadGameplayDefinitionsStatus::Invalid,
+                    lineNumber,
+                    haveCurrent ? "item field on Character" : "item field without definition");
+            }
+            if (current.item.modifiers.size() >= kMaxItemModifiers)
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "too many modifiers");
+            }
+            const std::optional<GameplayStatId> stat = GameplayStatIdFromName(tokens[1]);
+            if (!stat.has_value())
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "unknown stat");
+            }
+            float addend = 0.0f;
+            if (!ParseFiniteFloat(tokens[2], addend) || !IsValidGameplayStatAddend(addend))
+            {
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid modifier");
+            }
+            current.item.modifiers.push_back(GameplayStatModifier{*stat, addend});
+        }
         else
         {
             return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "unknown keyword");
@@ -251,7 +599,8 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
         return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, 1, "wrong magic");
     }
 
-    const RegisterGameplayDefinitionResult finished = FinishDefinition(registry, current, haveCurrent);
+    const RegisterGameplayDefinitionResult finished =
+        FinishDefinition(registry, current, flags, haveCurrent);
     if (finished.status != RegisterGameplayDefinitionStatus::Registered)
     {
         return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, finished.error);
@@ -338,6 +687,64 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
         result.text += definition.identity;
         result.text += '\n';
 
+        if (definition.category == GameplayDefinitionCategory::Item)
+        {
+            if (ValidateItemDefinition(definition.item) != ValidateItemStatus::Valid)
+            {
+                result.ok = false;
+                result.text.clear();
+                result.error = "invalid item";
+                return result;
+            }
+            result.text += "display_name ";
+            AppendQuotedString(result.text, definition.item.displayName);
+            result.text += '\n';
+            result.text += "description ";
+            AppendQuotedString(result.text, definition.item.description);
+            result.text += '\n';
+            result.text += "item_type ";
+            result.text += ItemTypeName(definition.item.type);
+            result.text += '\n';
+            result.text += "stackable ";
+            result.text += definition.item.stackable ? "true" : "false";
+            result.text += '\n';
+            result.text += "max_stack ";
+            if (!AppendInt(result.text, definition.item.maxStack))
+            {
+                result.ok = false;
+                result.text.clear();
+                result.error = "invalid item";
+                return result;
+            }
+            result.text += '\n';
+            if (!definition.item.worldModelIdentity.empty())
+            {
+                result.text += "world_model ";
+                AppendQuotedString(result.text, definition.item.worldModelIdentity);
+                result.text += '\n';
+            }
+            if (!definition.item.iconTextureIdentity.empty())
+            {
+                result.text += "icon ";
+                AppendQuotedString(result.text, definition.item.iconTextureIdentity);
+                result.text += '\n';
+            }
+            for (const GameplayStatModifier& modifier : definition.item.modifiers)
+            {
+                result.text += "modifier ";
+                result.text += GameplayStatName(modifier.stat);
+                result.text += ' ';
+                if (!AppendFloat(result.text, modifier.addend))
+                {
+                    result.ok = false;
+                    result.text.clear();
+                    result.error = "invalid modifier";
+                    return result;
+                }
+                result.text += '\n';
+            }
+        }
+
         for (std::size_t index = 0; index < kGameplayStatCount; ++index)
         {
             if (!definition.hasStat[index])
@@ -365,6 +772,71 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
             }
             result.text += '\n';
         }
+    }
+
+    result.ok = true;
+    return result;
+}
+
+std::filesystem::path GameplayDefinitionsTemporaryPath(const std::filesystem::path& path)
+{
+    if (path.empty())
+    {
+        return {};
+    }
+    std::filesystem::path temporary = path;
+    temporary += std::string(kGameplayDefinitionsTemporarySuffix);
+    return temporary;
+}
+
+SaveGameplayDefinitionsResult SaveGameplayDefinitionsFile(
+    const std::filesystem::path& path,
+    const GameplayDefinitionRegistry& registry)
+{
+    SaveGameplayDefinitionsResult result;
+    const WriteGameplayDefinitionsResult written = WriteGameplayDefinitionsText(registry);
+    if (!written.ok)
+    {
+        result.error = written.error.empty() ? "invalid catalog" : written.error;
+        return result;
+    }
+    if (path.empty() || !path.is_absolute())
+    {
+        result.error = "path must be absolute";
+        return result;
+    }
+
+    const std::filesystem::path temporaryPath = GameplayDefinitionsTemporaryPath(path);
+    if (temporaryPath.empty())
+    {
+        result.error = "temporary path unavailable";
+        return result;
+    }
+
+    {
+        std::ofstream stream(temporaryPath, std::ios::binary | std::ios::out | std::ios::trunc);
+        if (!stream)
+        {
+            result.error = "temporary open failed";
+            return result;
+        }
+        stream.write(written.text.data(), static_cast<std::streamsize>(written.text.size()));
+        stream.flush();
+        const bool writeOk = static_cast<bool>(stream);
+        stream.close();
+        if (!writeOk || stream.fail())
+        {
+            BestEffortRemove(temporaryPath);
+            result.error = "temporary write failed";
+            return result;
+        }
+    }
+
+    if (!platform::ReplaceFileWithTemporary(temporaryPath, path))
+    {
+        BestEffortRemove(temporaryPath);
+        result.error = "replace failed";
+        return result;
     }
 
     result.ok = true;

@@ -1457,7 +1457,9 @@ int Application::Run()
                 levelEditorState);
             worldViewRect = MakeWorldViewRect(editorViewport);
             const bool applyLook =
-                !debugUi.WantsMouseCapture() && !levelEditorState.gizmo.dragging
+                !debugUi.WantsMouseCapture()
+                && !editor::ItemDatabaseUiBlocksPointer(levelEditorState.itemDatabase)
+                && !levelEditorState.gizmo.dragging
                 && editor::PointInEditorContentViewport(
                     editorInput.mouseX, editorInput.mouseY, editorViewport);
             editor::UpdateEditorCamera(
@@ -1926,7 +1928,8 @@ int Application::Run()
                     || (groundCoverBrush
                         && editor::TerrainGroundCoverUiBlocksPointer(
                             levelEditorState.terrainGroundCover))
-                    || editor::TerrainPaintUiBlocksPointer(levelEditorState.terrainPaint);
+                    || editor::TerrainPaintUiBlocksPointer(levelEditorState.terrainPaint)
+                    || editor::ItemDatabaseUiBlocksPointer(levelEditorState.itemDatabase);
                 overlay.terrainBrushPreviewKind = groundCoverBrush ? 2 : (vegetationBrush ? 1 : 0);
                 if (!brushPointerBlocked)
                 {
@@ -2444,7 +2447,8 @@ int Application::Run()
                 editorInput.mouseX,
                 editorInput.mouseY,
                 editorViewport,
-                imguiWantsMouse);
+                imguiWantsMouse)
+                || editor::ItemDatabaseUiBlocksPointer(levelEditorState.itemDatabase);
             const bool keyboardCaptured =
                 debugUi.WantsKeyboardCapture() || debugUi.WantsTextInput();
             if (editor::EditorViewportPlacementIsActive(

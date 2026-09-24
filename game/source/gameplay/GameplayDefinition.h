@@ -6,6 +6,7 @@
 
 #include "gameplay/GameplayIdentity.h"
 #include "gameplay/GameplayStat.h"
+#include "gameplay/ItemDefinition.h"
 
 #include <array>
 #include <cstddef>
@@ -29,6 +30,8 @@ struct GameplayDefinition
     GameplayDefinitionCategory category = GameplayDefinitionCategory::Item;
     std::array<bool, kGameplayStatCount> hasStat{};
     std::array<float, kGameplayStatCount> statValue{};
+    // Meaningful only when category is Item. Characters keep the default payload.
+    ItemDefinition item{};
 };
 
 inline bool GameplayDefinitionHasStat(const GameplayDefinition& definition, GameplayStatId id)
@@ -61,6 +64,7 @@ enum class RegisterGameplayDefinitionStatus
     MalformedIdentity,
     CategoryMismatch,
     InvalidStat,
+    InvalidItem,
 };
 
 struct RegisterGameplayDefinitionResult
@@ -83,6 +87,8 @@ inline const char* RegisterGameplayDefinitionStatusName(RegisterGameplayDefiniti
         return "CategoryMismatch";
     case RegisterGameplayDefinitionStatus::InvalidStat:
         return "InvalidStat";
+    case RegisterGameplayDefinitionStatus::InvalidItem:
+        return "InvalidItem";
     }
     return "MalformedIdentity";
 }
@@ -137,6 +143,7 @@ class GameplayDefinitionRegistry
 {
 public:
     RegisterGameplayDefinitionResult Register(const GameplayDefinition& definition);
+    bool Remove(std::string_view identity);
     void Clear();
 
     std::size_t Count() const;
@@ -144,6 +151,7 @@ public:
 
     // Exact identity match. Missing and malformed identities return nullptr.
     const GameplayDefinition* Find(std::string_view identity) const;
+    GameplayDefinition* FindMutable(std::string_view identity);
     std::optional<std::size_t> FindIndex(std::string_view identity) const;
 
     // expectedCategory, when set, must match the identity prefix and the stored

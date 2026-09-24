@@ -400,16 +400,21 @@ int main()
     {
         editor::EditorWorkspaceState workspace{};
         Expect(workspace.showModelPreview, "Model Preview defaults visible");
+        Expect(workspace.showItemDatabase, "Item Database defaults visible");
         Expect(editor::AllEditorPanelsVisible(workspace), "defaults include Model Preview");
         workspace.showModelPreview = false;
         Expect(!editor::AllEditorPanelsVisible(workspace), "hiding Model Preview is independent");
         editor::ResetEditorWorkspaceVisibility(workspace);
         Expect(workspace.showModelPreview, "Reset restores Model Preview");
+        Expect(workspace.showItemDatabase, "Reset restores Item Database");
         const editor::EditorLayoutDefaults defaults =
             editor::ComputeDefaultEditorLayout(1280.0f, 720.0f);
         Expect(
             editor::FindDefaultPlacement(defaults, editor::kModelPreviewWindowName) != nullptr,
             "Model Preview has a default layout pose");
+        Expect(
+            editor::FindDefaultPlacement(defaults, editor::kItemDatabaseWindowName) != nullptr,
+            "Item Database has a default layout pose");
         Expect(
             std::strcmp(defaults.modelPreview.name, editor::kModelPreviewWindowName) == 0,
             "layout name is Model Preview");

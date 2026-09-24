@@ -8,6 +8,7 @@
 #include "editor/EditorLayoutUi.h"
 #include "gameplay/GameplayDefinitionFile.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/ItemDefinition.h"
 #include "imgui.h"
 
 #include <cstddef>
@@ -48,7 +49,7 @@ void DrawGameplayDefinitionsInspection()
     static std::string pathText;
     static Probe probes[3];
 
-    if (!ImGui::CollapsingHeader("Gameplay Definitions (M98)", ImGuiTreeNodeFlags_DefaultOpen))
+    if (!ImGui::CollapsingHeader("Gameplay Definitions (M98/M99)", ImGuiTreeNodeFlags_DefaultOpen))
     {
         return;
     }
@@ -121,6 +122,36 @@ void DrawGameplayDefinitionsInspection()
             definition.identity.c_str(),
             static_cast<int>(category.size()),
             category.data());
+        if (definition.category == gameplay::GameplayDefinitionCategory::Item)
+        {
+            const std::string_view typeName = gameplay::ItemTypeName(definition.item.type);
+            ImGui::Text(
+                "    display: %s",
+                definition.item.displayName.empty() ? "(none)" : definition.item.displayName.c_str());
+            ImGui::Text(
+                "    type: %.*s  stackable: %s  maxStack: %d",
+                static_cast<int>(typeName.size()),
+                typeName.data(),
+                definition.item.stackable ? "true" : "false",
+                definition.item.maxStack);
+            if (!definition.item.worldModelIdentity.empty())
+            {
+                ImGui::Text("    world model: %s", definition.item.worldModelIdentity.c_str());
+            }
+            if (!definition.item.iconTextureIdentity.empty())
+            {
+                ImGui::Text("    icon: %s", definition.item.iconTextureIdentity.c_str());
+            }
+            for (const gameplay::GameplayStatModifier& modifier : definition.item.modifiers)
+            {
+                const std::string_view statName = gameplay::GameplayStatName(modifier.stat);
+                ImGui::Text(
+                    "    modifier %.*s %+g",
+                    static_cast<int>(statName.size()),
+                    statName.data(),
+                    static_cast<double>(modifier.addend));
+            }
+        }
         for (std::size_t index = 0; index < gameplay::kGameplayStatCount; ++index)
         {
             if (!definition.hasStat[index])

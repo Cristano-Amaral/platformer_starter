@@ -123,6 +123,8 @@ add_executable(Platformer3D
     game/source/editor/EditorToolRunner.h
     game/source/editor/EditorWorkspace.cpp
     game/source/editor/EditorWorkspace.h
+    game/source/editor/ItemDatabaseEditor.cpp
+    game/source/editor/ItemDatabaseEditor.h
     game/source/editor/ItemIdInspectorEdit.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
@@ -138,6 +140,7 @@ add_executable(Platformer3D
     game/source/gameplay/Inventory.h
     game/source/gameplay/GameplayIdentity.h
     game/source/gameplay/GameplayStat.h
+    game/source/gameplay/ItemDefinition.h
     game/source/gameplay/GameplayDefinition.cpp
     game/source/gameplay/GameplayDefinition.h
     game/source/gameplay/GameplayDefinitionFile.cpp
@@ -893,7 +896,14 @@ add_executable(GameplayDefinitionTest
     game/source/gameplay/GameplayDefinitionTest.cpp
     game/source/gameplay/GameplayIdentity.h
     game/source/gameplay/GameplayStat.h
+    game/source/gameplay/ItemDefinition.h
+    game/source/platform/FileReplace.h
 )
+if(WIN32)
+    target_sources(GameplayDefinitionTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(GameplayDefinitionTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
 target_include_directories(GameplayDefinitionTest PRIVATE game/source)
 if(MSVC)
     target_compile_options(GameplayDefinitionTest PRIVATE /W4 /permissive-)
@@ -904,6 +914,41 @@ file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay"
     PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH)
 target_compile_definitions(GameplayDefinitionTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH}\""
+)
+
+# Milestone 99: Item Database editor seams. No window, raylib, or ImGui.
+add_executable(ItemDatabaseEditorTest
+    game/source/assets/SourceTextureCatalog.cpp
+    game/source/assets/SourceTextureCatalog.h
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/StaticGlb.h
+    game/source/assets/StaticModelCatalog.cpp
+    game/source/assets/StaticModelCatalog.h
+    game/source/editor/ItemDatabaseEditor.h
+    game/source/editor/ItemDatabaseEditorTest.cpp
+    game/source/editor/TerrainPickerCard.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/gameplay/GameplayDefinitionFile.h
+    game/source/gameplay/GameplayIdentity.h
+    game/source/gameplay/GameplayStat.h
+    game/source/gameplay/ItemDefinition.h
+    game/source/platform/FileReplace.h
+)
+if(WIN32)
+    target_sources(ItemDatabaseEditorTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(ItemDatabaseEditorTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(ItemDatabaseEditorTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(ItemDatabaseEditorTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ItemDatabaseEditorTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(ItemDatabaseEditorTest PRIVATE
     "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH}\""
 )
 

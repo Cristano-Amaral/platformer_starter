@@ -1,5 +1,7 @@
 #include "gameplay/GameplayDefinition.h"
 
+#include <cstddef>
+
 namespace gameplay
 {
 SetGameplayStatStatus TrySetGameplayStat(
@@ -47,6 +49,16 @@ RegisterGameplayDefinitionResult GameplayDefinitionRegistry::Register(
             return result;
         }
     }
+    if (parsed.category == GameplayDefinitionCategory::Item)
+    {
+        const ValidateItemStatus itemStatus = ValidateItemDefinition(definition.item);
+        if (itemStatus != ValidateItemStatus::Valid)
+        {
+            result.status = RegisterGameplayDefinitionStatus::InvalidItem;
+            result.error = ValidateItemStatusName(itemStatus);
+            return result;
+        }
+    }
     if (Find(parsed.text) != nullptr)
     {
         result.status = RegisterGameplayDefinitionStatus::DuplicateIdentity;
@@ -58,6 +70,17 @@ RegisterGameplayDefinitionResult GameplayDefinitionRegistry::Register(
     result.status = RegisterGameplayDefinitionStatus::Registered;
     result.error.clear();
     return result;
+}
+
+bool GameplayDefinitionRegistry::Remove(std::string_view identity)
+{
+    const std::optional<std::size_t> index = FindIndex(identity);
+    if (!index.has_value())
+    {
+        return false;
+    }
+    definitions.erase(definitions.begin() + static_cast<std::ptrdiff_t>(*index));
+    return true;
 }
 
 void GameplayDefinitionRegistry::Clear()
@@ -76,6 +99,16 @@ const std::vector<GameplayDefinition>& GameplayDefinitionRegistry::Definitions()
 }
 
 const GameplayDefinition* GameplayDefinitionRegistry::Find(std::string_view identity) const
+{
+    const std::optional<std::size_t> index = FindIndex(identity);
+    if (!index.has_value())
+    {
+        return nullptr;
+    }
+    return &definitions[*index];
+}
+
+GameplayDefinition* GameplayDefinitionRegistry::FindMutable(std::string_view identity)
 {
     const std::optional<std::size_t> index = FindIndex(identity);
     if (!index.has_value())

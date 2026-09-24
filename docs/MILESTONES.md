@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 98 — Gameplay Definition Foundation**
+**Milestone 99 — Item Database & Item Editor**
 
-Canonical file: [`docs/milestones/MILESTONE_98.md`](milestones/MILESTONE_98.md)
+Canonical file: [`docs/milestones/MILESTONE_99.md`](milestones/MILESTONE_99.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -202,6 +202,7 @@ Historical milestone files do not override current implemented behavior.
 | 96 | [Milestone 96 — Terrain Grass / Ground Cover Foundation](milestones/MILESTONE_96.md) | implemented, awaiting manual acceptance |
 | 97 | [Milestone 97 — Terrain Rendering / Material Visual Upgrade](milestones/MILESTONE_97.md) | implemented, awaiting manual acceptance |
 | 98 | [Milestone 98 — Gameplay Definition Foundation](milestones/MILESTONE_98.md) | implemented, awaiting manual acceptance |
+| 99 | [Milestone 99 — Item Database & Item Editor](milestones/MILESTONE_99.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

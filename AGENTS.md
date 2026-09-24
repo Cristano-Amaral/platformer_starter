@@ -29,15 +29,15 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 98 — Gameplay Definition Foundation.
+Current milestone: Milestone 99 — Item Database & Item Editor.
 
-Canonical file: [`docs/milestones/MILESTONE_98.md`](docs/milestones/MILESTONE_98.md)
+Canonical file: [`docs/milestones/MILESTONE_99.md`](docs/milestones/MILESTONE_99.md)
 
-Branch: `milestone/98-gameplay-definition-foundation`
+Branch: `milestone/99-item-database-editor`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 99.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 100.
 
-Earlier milestone status, including Milestone 90 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
+Earlier milestone status, including Milestone 98 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
 Current architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 

@@ -613,6 +613,8 @@ int main()
             "levels has a default placement");
         Expect(editor::FindDefaultPlacement(defaults, editor::kModelPreviewWindowName) != nullptr,
             "model preview has a default placement");
+        Expect(editor::FindDefaultPlacement(defaults, editor::kItemDatabaseWindowName) != nullptr,
+            "item database has a default placement");
         Expect(defaults.contentBrowser.y > defaults.hierarchy.y, "content browser sits below hierarchy");
         Expect(defaults.levels.y > defaults.hierarchy.y, "levels sits below hierarchy");
         Expect(defaults.contentBrowser.y > defaults.levels.y, "content browser sits below levels");

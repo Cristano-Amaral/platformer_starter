@@ -4385,6 +4385,7 @@ LevelEditorRequest DrawEditorMenuBar(
         ImGui::MenuItem("Levels", nullptr, &state.workspace.showLevels);
         ImGui::MenuItem("Content Browser", nullptr, &state.workspace.showContentBrowser);
         ImGui::MenuItem("Model Preview", nullptr, &state.workspace.showModelPreview);
+        ImGui::MenuItem("Item Database", nullptr, &state.workspace.showItemDatabase);
         ImGui::MenuItem("Quick Toolbar", nullptr, &state.workspace.showQuickToolbar);
 #endif
 #if defined(PLATFORMER_ENABLE_EDITOR_TOOLS)
@@ -5188,6 +5189,16 @@ LevelEditorRequest DrawLevelEditor(
     if (state.workspace.showModelPreview)
     {
         DrawModelPreview(state, view);
+    }
+    if (state.workspace.showItemDatabase)
+    {
+        DrawItemDatabaseEditor(
+            state.itemDatabase,
+            view,
+            state.contentBrowser.catalog,
+            state.contentBrowser.textureCatalog,
+            IsLevelAuthoringAvailable(),
+            &state.workspace.showItemDatabase);
     }
 #endif
     if (!state.workspace.showLevelEditor)

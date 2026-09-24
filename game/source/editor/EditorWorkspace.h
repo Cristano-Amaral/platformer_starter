@@ -3,7 +3,8 @@
 // Milestone 36 workspace visibility plus Milestone 43 Quick Toolbar chrome.
 // showToolOutput owns the Development Tool Output window. showContentBrowser
 // owns the Development Content Browser. showLevels owns the Development Levels
-// list. showModelPreview owns the Development Model Preview. showQuickToolbar is Development authoring chrome, not a
+// list. showModelPreview owns the Development Model Preview. showItemDatabase
+// owns the Development Item Database. showQuickToolbar is Development authoring chrome, not a
 // floating panel. Debug keeps the M36 editor without Build, without the Quick
 // Toolbar, without the Content Browser, and without Model Preview.
 
@@ -22,6 +23,7 @@ struct EditorWorkspaceState
     bool showContentBrowser = true;
     bool showLevels = true;
     bool showModelPreview = true;
+    bool showItemDatabase = true;
     bool showQuickToolbar = true;
 };
 

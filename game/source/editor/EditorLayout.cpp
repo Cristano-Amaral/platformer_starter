@@ -23,6 +23,8 @@ constexpr float kObjectPaletteHeight = 200.0f;
 constexpr float kContentBrowserHeight = 180.0f;
 constexpr float kLevelsHeight = 160.0f;
 constexpr float kModelPreviewHeight = 220.0f;
+constexpr float kItemDatabaseWidth = 720.0f;
+constexpr float kItemDatabaseHeight = 480.0f;
 
 float Clamped(float value, float minimum, float maximum)
 {
@@ -153,6 +155,14 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
         previewY,
         previewWidth,
         previewHeight};
+    const float itemDatabaseWidth = std::min(kItemDatabaseWidth, std::max(420.0f, width * 0.55f));
+    const float itemDatabaseHeight = std::min(kItemDatabaseHeight, height * 0.70f);
+    defaults.itemDatabase = {
+        kItemDatabaseWindowName,
+        std::max(kMargin, (width - itemDatabaseWidth) * 0.5f),
+        std::max(kMargin, (height - itemDatabaseHeight) * 0.5f),
+        itemDatabaseWidth,
+        itemDatabaseHeight};
 
     defaults.metrics = ClampEditorWindowPlacement(defaults.metrics, width, height);
     defaults.hierarchy = ClampEditorWindowPlacement(defaults.hierarchy, width, height);
@@ -162,6 +172,7 @@ EditorLayoutDefaults ComputeDefaultEditorLayout(float viewportWidth, float viewp
     defaults.contentBrowser = ClampEditorWindowPlacement(defaults.contentBrowser, width, height);
     defaults.levels = ClampEditorWindowPlacement(defaults.levels, width, height);
     defaults.modelPreview = ClampEditorWindowPlacement(defaults.modelPreview, width, height);
+    defaults.itemDatabase = ClampEditorWindowPlacement(defaults.itemDatabase, width, height);
     defaults.toolOutput = ClampEditorWindowPlacement(defaults.toolOutput, width, height);
     return defaults;
 }
@@ -230,6 +241,10 @@ const EditorWindowPlacement* FindDefaultPlacement(
     if (std::strcmp(windowName, kModelPreviewWindowName) == 0)
     {
         return &defaults.modelPreview;
+    }
+    if (std::strcmp(windowName, kItemDatabaseWindowName) == 0)
+    {
+        return &defaults.itemDatabase;
     }
     if (std::strcmp(windowName, kToolOutputWindowName) == 0)
     {

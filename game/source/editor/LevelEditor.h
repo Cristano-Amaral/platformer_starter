@@ -31,6 +31,7 @@
 #include "editor/TerrainGroundCover.h"
 #include "editor/EditorHierarchy.h"
 #include "editor/EditorWorkspace.h"
+#include "editor/ItemDatabaseEditor.h"
 #include "editor/ItemIdInspectorEdit.h"
 #include "editor/PressurePlateLocalLightTargets.h"
 #include "editor/DirectionalLightAuthoring.h"
@@ -253,6 +254,7 @@ struct LevelEditorState
     // Set by Reset Editor Layout; DebugUi consumes it over the following
     // frames so Metrics (drawn before the button) also snaps to defaults.
     int forceDefaultLayoutFrames = 0;
+    ItemDatabaseEditorState itemDatabase{};
     LevelEditorApplyStatus lastApplyStatus = LevelEditorApplyStatus::NotAttempted;
     LevelEditorSaveStatus lastSaveStatus = LevelEditorSaveStatus::NotAttempted;
     LevelEditorReloadStatus lastReloadStatus = LevelEditorReloadStatus::NotAttempted;

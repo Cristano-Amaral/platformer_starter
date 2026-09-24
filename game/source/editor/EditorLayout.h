@@ -21,6 +21,7 @@ inline constexpr const char* kObjectPaletteWindowName = "Object Palette";
 inline constexpr const char* kContentBrowserWindowName = "Content Browser";
 inline constexpr const char* kLevelsWindowName = "Levels";
 inline constexpr const char* kModelPreviewWindowName = "Model Preview";
+inline constexpr const char* kItemDatabaseWindowName = "Item Database";
 
 struct EditorWindowPlacement
 {
@@ -42,6 +43,7 @@ struct EditorLayoutDefaults
     EditorWindowPlacement contentBrowser{};
     EditorWindowPlacement levels{};
     EditorWindowPlacement modelPreview{};
+    EditorWindowPlacement itemDatabase{};
 };
 
 // Joins an already-resolved user-data root. Empty/relative roots yield empty.

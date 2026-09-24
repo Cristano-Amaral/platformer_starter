@@ -123,4 +123,23 @@ inline bool TryParseGameplayIdentity(std::string_view token, ParsedGameplayIdent
     out = std::move(parsed);
     return true;
 }
+
+inline std::string MakeGameplayIdentity(GameplayDefinitionCategory category, std::string_view name)
+{
+    if (!IsValidGameplayDefinitionName(name))
+    {
+        return {};
+    }
+    const std::string_view prefix = GameplayDefinitionCategoryPrefix(category);
+    if (prefix.empty())
+    {
+        return {};
+    }
+    std::string identity;
+    identity.reserve(prefix.size() + 1 + name.size());
+    identity.append(prefix);
+    identity.push_back('/');
+    identity.append(name);
+    return identity;
+}
 }
