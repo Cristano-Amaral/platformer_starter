@@ -24,7 +24,7 @@ void DrawCharacterDatabaseEditor(
     const std::filesystem::path path = AuthoringSourcePath(gameplay::kGameplayDefinitionsLogicalPath);
     if (!state.loaded && authoringAvailable && !path.empty())
         ApplyLoadedCharacterDatabase(state, gameplay::LoadGameplayDefinitionsFile(path));
-    ImGui::TextUnformatted("Reusable Character definitions. Metadata only; Player runtime is unchanged.");
+    ImGui::TextUnformatted("Reusable Character definitions and typed locomotion animation bindings.");
     ImGui::Text("Status: %s%s", state.dirty ? "Dirty - " : "", state.statusMessage.c_str());
     ImGui::BeginDisabled(!authoringAvailable || !state.loaded || !state.dirty);
     if (ImGui::Button("Save")) TrySaveCharacterDatabase(state, path, authoringAvailable);
@@ -106,6 +106,28 @@ void DrawCharacterDatabaseEditor(
             for (const auto& model : modelCatalog.Entries()) if (ImGui::Selectable(model.displayName.c_str()))
             { TryAssignCharacterWorldModel(*selected, model.canonicalIdentity); RefreshCharacterDatabaseDirty(state); }
             ImGui::EndCombo();
+        }
+        ImGui::Separator(); ImGui::TextUnformatted("Locomotion Animations");
+        const char* labels[] = {"Idle Clip", "Move Clip", "Jump Clip"};
+        auto slots = {CharacterAnimationSlot::Idle, CharacterAnimationSlot::Move,
+            CharacterAnimationSlot::Jump};
+        int slotIndex = 0;
+        for (CharacterAnimationSlot slot : slots)
+        {
+            std::string* value = slot == CharacterAnimationSlot::Idle
+                ? &selected->character.animations.idle : slot == CharacterAnimationSlot::Move
+                ? &selected->character.animations.move : &selected->character.animations.jump;
+            char clip[gameplay::kMaxCharacterAnimationClipNameLength + 1]{};
+            std::snprintf(clip, sizeof(clip), "%s", value->c_str());
+            if (ImGui::InputText(labels[slotIndex], clip, sizeof(clip)))
+            {
+                if (clip[0] == '\0') TryClearCharacterAnimation(*selected, slot);
+                else (void)TryAssignCharacterAnimation(*selected, slot, clip);
+                RefreshCharacterDatabaseDirty(state);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", value->empty() ? "None" : "Authored (validated at runtime)");
+            ++slotIndex;
         }
         ImGui::Separator(); ImGui::TextUnformatted("Base Stats (authored only)");
         for (std::size_t index = 0; index < gameplay::kGameplayStatCount; ++index)

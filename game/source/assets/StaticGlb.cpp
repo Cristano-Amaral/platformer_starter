@@ -365,7 +365,7 @@ StaticGlbValidation Ok()
 {
     StaticGlbValidation result{};
     result.status = StaticGlbStatus::Ok;
-    result.message = "static GLB is compatible";
+    result.message = "GLB is compatible";
     return result;
 }
 
@@ -639,14 +639,32 @@ StaticGlbValidation ValidateStaticGlbBytes(std::span<const std::uint8_t> data)
     }
 
     JsonSlice animations{};
-    if (FindObjectMember(json, "animations", animations) && !ArrayIsEmpty(animations.text))
-    {
-        return Fail(StaticGlbStatus::Incompatible, "animated GLB files are not supported");
-    }
+    const bool hasAnimations = FindObjectMember(json, "animations", animations)
+        && !ArrayIsEmpty(animations.text);
     JsonSlice skins{};
-    if (FindObjectMember(json, "skins", skins) && !ArrayIsEmpty(skins.text))
+    const bool hasSkins = FindObjectMember(json, "skins", skins) && !ArrayIsEmpty(skins.text);
+    if (hasAnimations != hasSkins)
     {
-        return Fail(StaticGlbStatus::Incompatible, "skeletal / skinned GLB files are not supported");
+        return Fail(StaticGlbStatus::Incompatible,
+            "animated character GLB must contain both a skin and animation clips");
+    }
+    if (hasAnimations)
+    {
+        std::size_t skinCount = 0;
+        if (!ForEachArrayObject(skins.text, [&skinCount](std::string_view item) {
+                ++skinCount;
+                JsonSlice joints{};
+                JsonSlice inverseBind{};
+                return item.front() == '{' && FindObjectMember(item, "joints", joints)
+                    && ArrayIsNonEmpty(joints.text)
+                    && FindObjectMember(item, "inverseBindMatrices", inverseBind);
+            }) || skinCount != 1)
+            return Fail(StaticGlbStatus::Incompatible,
+                "animated character GLB must contain exactly one skin with joints and inverse bind matrices");
+        if (json.find("CUBICSPLINE") != std::string_view::npos
+            || json.find("\"path\":\"weights\"") != std::string_view::npos)
+            return Fail(StaticGlbStatus::Incompatible,
+                "animated character GLB uses unsupported cubic or morph animation");
     }
 
     JsonSlice buffers{};

@@ -11,6 +11,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -20,6 +21,7 @@ enum class CharacterType { Player = 0, Enemy, NPC, Animal };
 inline constexpr std::size_t kCharacterTypeCount = 4;
 inline constexpr std::size_t kMaxCharacterDisplayNameLength = 64;
 inline constexpr std::size_t kMaxCharacterDescriptionLength = 200;
+inline constexpr std::size_t kMaxCharacterAnimationClipNameLength = 64;
 inline constexpr std::array<std::string_view, kCharacterTypeCount> kCharacterTypeNames = {
     "Player", "Enemy", "NPC", "Animal"};
 
@@ -51,6 +53,54 @@ inline bool IsValidCharacterDescription(std::string_view text)
         && std::all_of(text.begin(), text.end(), ItemAuthoredTextCharIsAllowed);
 }
 
+inline bool IsValidCharacterAnimationClipName(std::string_view text)
+{
+    return !text.empty() && text.size() <= kMaxCharacterAnimationClipNameLength
+        && text.front() != ' ' && text.back() != ' '
+        && std::all_of(text.begin(), text.end(), ItemAuthoredTextCharIsAllowed);
+}
+
+struct CharacterLocomotionAnimations
+{
+    std::string idle;
+    std::string move;
+    std::string jump;
+};
+
+enum class CharacterAnimationBindingStatus { None, Resolved, Missing };
+
+inline CharacterAnimationBindingStatus ResolveCharacterAnimationBinding(
+    std::string_view binding, std::span<const std::string_view> availableClips)
+{
+    if (binding.empty()) return CharacterAnimationBindingStatus::None;
+    return std::find(availableClips.begin(), availableClips.end(), binding) != availableClips.end()
+        ? CharacterAnimationBindingStatus::Resolved : CharacterAnimationBindingStatus::Missing;
+}
+
+struct CharacterLocomotionBindingResolution
+{
+    CharacterAnimationBindingStatus idle = CharacterAnimationBindingStatus::None;
+    CharacterAnimationBindingStatus move = CharacterAnimationBindingStatus::None;
+    CharacterAnimationBindingStatus jump = CharacterAnimationBindingStatus::None;
+
+    bool AllResolved() const
+    {
+        return idle == CharacterAnimationBindingStatus::Resolved
+            && move == CharacterAnimationBindingStatus::Resolved
+            && jump == CharacterAnimationBindingStatus::Resolved;
+    }
+};
+
+inline CharacterLocomotionBindingResolution ResolveCharacterLocomotionBindings(
+    const CharacterLocomotionAnimations& bindings,
+    std::span<const std::string_view> availableClips)
+{
+    return {
+        ResolveCharacterAnimationBinding(bindings.idle, availableClips),
+        ResolveCharacterAnimationBinding(bindings.move, availableClips),
+        ResolveCharacterAnimationBinding(bindings.jump, availableClips)};
+}
+
 inline std::string DefaultCharacterDisplayName(std::string_view identity)
 {
     ParsedGameplayIdentity parsed;
@@ -65,6 +115,7 @@ struct CharacterDefinition
     std::string description;
     CharacterType type = CharacterType::NPC;
     std::string worldModelIdentity;
+    CharacterLocomotionAnimations animations{};
     std::array<bool, kGameplayStatCount> hasBaseStat{};
     std::array<float, kGameplayStatCount> baseStatValue{};
 };
@@ -78,7 +129,8 @@ inline CharacterDefinition MakeDefaultCharacterDefinition(std::string_view ident
 
 enum class ValidateCharacterStatus
 {
-    Valid, InvalidDisplayName, InvalidDescription, InvalidType, InvalidWorldModel, InvalidBaseStat,
+    Valid, InvalidDisplayName, InvalidDescription, InvalidType, InvalidWorldModel,
+    InvalidAnimationBinding, InvalidBaseStat,
 };
 
 inline const char* ValidateCharacterStatusName(ValidateCharacterStatus status)
@@ -90,6 +142,7 @@ inline const char* ValidateCharacterStatusName(ValidateCharacterStatus status)
     case ValidateCharacterStatus::InvalidDescription: return "InvalidDescription";
     case ValidateCharacterStatus::InvalidType: return "InvalidType";
     case ValidateCharacterStatus::InvalidWorldModel: return "InvalidWorldModel";
+    case ValidateCharacterStatus::InvalidAnimationBinding: return "InvalidAnimationBinding";
     case ValidateCharacterStatus::InvalidBaseStat: return "InvalidBaseStat";
     }
     return "InvalidBaseStat";
@@ -103,6 +156,12 @@ inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefini
     if (!character.worldModelIdentity.empty()
         && !IsValidItemWorldModelIdentity(character.worldModelIdentity))
         return ValidateCharacterStatus::InvalidWorldModel;
+    const auto validBinding = [](const std::string& binding) {
+        return binding.empty() || IsValidCharacterAnimationClipName(binding);
+    };
+    if (!validBinding(character.animations.idle) || !validBinding(character.animations.move)
+        || !validBinding(character.animations.jump))
+        return ValidateCharacterStatus::InvalidAnimationBinding;
     for (std::size_t index = 0; index < kGameplayStatCount; ++index)
     {
         if (character.hasBaseStat[index] && !IsValidGameplayStatValue(character.baseStatValue[index]))
@@ -114,7 +173,11 @@ inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefini
 inline bool CharacterDefinitionsEqual(const CharacterDefinition& a, const CharacterDefinition& b)
 {
     return a.displayName == b.displayName && a.description == b.description && a.type == b.type
-        && a.worldModelIdentity == b.worldModelIdentity && a.hasBaseStat == b.hasBaseStat
+        && a.worldModelIdentity == b.worldModelIdentity
+        && a.animations.idle == b.animations.idle
+        && a.animations.move == b.animations.move
+        && a.animations.jump == b.animations.jump
+        && a.hasBaseStat == b.hasBaseStat
         && a.baseStatValue == b.baseStatValue;
 }
 }

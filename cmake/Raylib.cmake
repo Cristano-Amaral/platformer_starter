@@ -14,3 +14,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(raylib)
+
+# M103 uses raylib's GLB vertex bone streams and per-draw bone-matrix upload.
+# The engine owns playback/state selection and the project shaders own skinning.
+target_compile_definitions(raylib PRIVATE SUPPORT_GPU_SKINNING=1)

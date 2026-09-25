@@ -186,6 +186,31 @@ inline bool TryClearCharacterWorldModel(gameplay::GameplayDefinition& definition
     return true;
 }
 
+enum class CharacterAnimationSlot { Idle, Move, Jump };
+
+inline bool TryAssignCharacterAnimation(
+    gameplay::GameplayDefinition& definition, CharacterAnimationSlot slot, std::string_view clip)
+{
+    if (definition.category != gameplay::GameplayDefinitionCategory::Character
+        || !gameplay::IsValidCharacterAnimationClipName(clip)) return false;
+    std::string* target = slot == CharacterAnimationSlot::Idle
+        ? &definition.character.animations.idle : slot == CharacterAnimationSlot::Move
+        ? &definition.character.animations.move : &definition.character.animations.jump;
+    target->assign(clip);
+    return true;
+}
+
+inline bool TryClearCharacterAnimation(
+    gameplay::GameplayDefinition& definition, CharacterAnimationSlot slot)
+{
+    if (definition.category != gameplay::GameplayDefinitionCategory::Character) return false;
+    std::string* target = slot == CharacterAnimationSlot::Idle
+        ? &definition.character.animations.idle : slot == CharacterAnimationSlot::Move
+        ? &definition.character.animations.move : &definition.character.animations.jump;
+    target->clear();
+    return true;
+}
+
 inline ItemDatabaseSaveStatus TrySaveCharacterDatabase(
     CharacterDatabaseEditorState& state, const std::filesystem::path& path, bool authoringAvailable)
 {

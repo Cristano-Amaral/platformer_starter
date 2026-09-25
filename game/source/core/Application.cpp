@@ -682,6 +682,7 @@ const char* CollectibleIndexLabel(int collectibleIndex)
 
 ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     const gameplay::Player& player,
+    const gameplay::PlayerPresentationState& playerPresentation,
     const gameplay::PlatformerCamera& camera,
     const physics::PhysicsWorld& physicsWorld,
     const input::InputState& inputState,
@@ -714,6 +715,14 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.horizontalVelocity = player.HorizontalVelocity();
     snapshot.verticalVelocity = player.VerticalVelocity();
     snapshot.grounded = player.IsGrounded();
+    snapshot.playerCharacterIdentity = gameplay::kDefaultPlayerCharacterIdentity.data();
+    snapshot.playerCharacterModelResolved = renderer.IsPlayerModelLoaded();
+    snapshot.playerSkeletonJointCount = renderer.PlayerSkeletonJointCount();
+    snapshot.playerAnimationBindingsResolved = renderer.PlayerAnimationBindingsResolved();
+    snapshot.playerAnimationState = gameplay::PlayerAnimationStateName(playerPresentation.animation.state);
+    snapshot.playerAnimationClip = renderer.PlayerCurrentClipName();
+    snapshot.playerAnimationTime = playerPresentation.animation.playbackTimeSeconds;
+    snapshot.playerAnimationBlend = gameplay::PlayerAnimationBlendAmount(playerPresentation.animation);
 
     snapshot.moveX = inputState.moveX;
     snapshot.jumpPressed = inputState.jumpPressed;
@@ -1158,6 +1167,12 @@ int Application::Run()
                 acceptedMoveZ);
             playerPresentation.facingYawDegrees = gameplay::UpdatePlayerFacingYaw(
                 playerPresentation.facingYawDegrees, acceptedMoveX, acceptedMoveZ);
+            gameplay::UpdatePlayerAnimation(
+                playerPresentation.animation,
+                player.IsGrounded(),
+                player.HorizontalVelocity(),
+                gameplay::kPlayerFacingMoveEpsilon,
+                deltaSeconds);
 
             hazardContactThisFrame =
                 world::FindHazardIndexContaining(player.Position(), levelDefinition.hazards)
@@ -2472,6 +2487,7 @@ int Application::Run()
         editor::LevelEditorRequest editorRequest = debugUi.Draw(
             MakeDebugMetricsSnapshot(
                 player,
+                playerPresentation,
                 camera,
                 physicsWorld,
                 inputState,
@@ -3105,7 +3121,7 @@ void Application::Initialize()
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
-    renderer.LoadRuntimeAssets();
+    renderer.LoadRuntimeAssets(&gameplayDefinitions);
 #if defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
     renderer.SetTerrainAuthoringCookedRoot(editor::CookedAssetsRoot(editor::RepositoryRoot()));
     renderer.SetTerrainAuthoringSourceRoot(editor::AuthoringSourceRoot());

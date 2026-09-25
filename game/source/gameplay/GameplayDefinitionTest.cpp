@@ -766,6 +766,25 @@ int main()
         Expect(key->item.type == gameplay::ItemType::Generic, "M98 item type default Generic");
         Expect(player != nullptr && player->category == GameplayDefinitionCategory::Character,
             "M98 character compatibility");
+        Expect(player != nullptr && player->character.worldModelIdentity == "models/player.glb"
+            && player->character.animations.idle == "Idle"
+            && player->character.animations.move == "Move"
+            && player->character.animations.jump == "Jump",
+            "M103 canonical Player presentation and typed bindings");
+        const std::string_view availableClips[] = {"Idle", "Move", "Jump"};
+        Expect(player != nullptr
+            && gameplay::ResolveCharacterLocomotionBindings(
+                player->character.animations, availableClips).AllResolved(),
+            "M103 typed clip bindings resolve");
+        const std::string_view missingClips[] = {"Idle", "Jump"};
+        const auto missingBinding = gameplay::ResolveCharacterLocomotionBindings(
+            player->character.animations, missingClips);
+        Expect(missingBinding.move == gameplay::CharacterAnimationBindingStatus::Missing
+            && !missingBinding.AllResolved(), "missing authored clip is diagnosed");
+        gameplay::CharacterLocomotionAnimations none{};
+        Expect(gameplay::ResolveCharacterLocomotionBindings(none, availableClips).idle
+            == gameplay::CharacterAnimationBindingStatus::None,
+            "empty optional binding is None");
         Expect(player->item.displayName.empty(), "M98 character has empty item payload");
     }
 

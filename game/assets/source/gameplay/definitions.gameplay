@@ -17,6 +17,10 @@ definition characters/player
 display_name "Player"
 description "Primary player character definition."
 character_type Player
+world_model "models/player.glb"
+animation_idle "Idle"
+animation_move "Move"
+animation_jump "Jump"
 stat MaxHealth 100
 stat MoveSpeed 6
 stat JumpStrength 8

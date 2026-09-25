@@ -1,5 +1,6 @@
 #include "render/Renderer.h"
 
+#include "animation/SkeletalAnimation.h"
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
 #include "editor/EditorViewportGrid.h"
@@ -289,6 +290,15 @@ void DrawPlayerPresentationModel(
     const Model& model,
     const gameplay::PlayerVisualTransform& visual)
 {
+    int skinningLocation = -1;
+    int skinningEnabled = 1;
+    if (gWorldModelOverride != nullptr && gWorldModelOverride->shader.id != 0)
+    {
+        skinningLocation = GetShaderLocation(gWorldModelOverride->shader, "skinningEnabled");
+        if (skinningLocation >= 0)
+            SetShaderValue(gWorldModelOverride->shader, skinningLocation,
+                &skinningEnabled, SHADER_UNIFORM_INT);
+    }
     rlDrawRenderBatchActive();
     rlPushMatrix();
     rlTranslatef(visual.position.x, visual.position.y, visual.position.z);
@@ -297,6 +307,12 @@ void DrawPlayerPresentationModel(
     DrawModelPreservingMaterials(
         model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE, gWorldModelOverride);
     rlPopMatrix();
+    if (skinningLocation >= 0)
+    {
+        skinningEnabled = 0;
+        SetShaderValue(gWorldModelOverride->shader, skinningLocation,
+            &skinningEnabled, SHADER_UNIFORM_INT);
+    }
     RestoreGreyboxImmediateState();
 }
 
@@ -2009,6 +2025,13 @@ void DrawPauseMenuOverlay(bool resumeSelected)
 struct Renderer::PlayerModelGpuState
 {
     Model model{};
+    ModelAnimation* animations = nullptr;
+    int animationCount = 0;
+    int idleAnimation = -1;
+    int moveAnimation = -1;
+    int jumpAnimation = -1;
+    std::string modelIdentity;
+    std::string currentClip;
     gameplay::PlayerPresentationModelLifetime lifetime{};
     bool loaded = false;
     bool failed = false;
@@ -2075,7 +2098,7 @@ void Renderer::SetTerrainAuthoringSourceRoot(const std::filesystem::path& source
     }
 }
 
-void Renderer::LoadRuntimeAssets()
+void Renderer::LoadRuntimeAssets(const gameplay::GameplayDefinitionRegistry* gameplayDefinitions)
 {
     if (worldLighting == nullptr)
     {
@@ -2093,7 +2116,17 @@ void Renderer::LoadRuntimeAssets()
     }
     gameplay::NotePlayerPresentationLoadAttempt(playerModelGpu->lifetime);
 
-    const std::filesystem::path path = platform::RuntimeAssetPath(gameplay::kPlayerModelLogicalId);
+    const gameplay::GameplayDefinition* playerDefinition = gameplayDefinitions != nullptr
+        ? gameplayDefinitions->Find(gameplay::kDefaultPlayerCharacterIdentity) : nullptr;
+    const std::string_view modelIdentity = playerDefinition != nullptr
+        ? playerDefinition->character.worldModelIdentity : std::string_view{};
+    if (playerDefinition == nullptr || modelIdentity.empty())
+    {
+        playerModelGpu->failed = true;
+        LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
+        return;
+    }
+    const std::filesystem::path path = platform::RuntimeAssetPath(modelIdentity);
     if (path.empty() || !path.is_absolute())
     {
         playerModelGpu->failed = true;
@@ -2123,7 +2156,42 @@ void Renderer::LoadRuntimeAssets()
         return;
     }
     PrepareLoadedModelMaterials(model);
+    int animationCount = 0;
+    ModelAnimation* animations = LoadModelAnimations(path.string().c_str(), &animationCount);
+    std::vector<std::string_view> availableClips;
+    availableClips.reserve(animationCount > 0 ? static_cast<std::size_t>(animationCount) : 0);
+    if (animations != nullptr)
+        for (int index = 0; index < animationCount; ++index)
+            availableClips.emplace_back(animations[index].name);
+    const gameplay::CharacterLocomotionBindingResolution bindingResolution =
+        gameplay::ResolveCharacterLocomotionBindings(
+            playerDefinition->character.animations, availableClips);
+    const auto findAnimation = [animations, animationCount](std::string_view name) {
+        if (name.empty()) return -1;
+        for (int index = 0; index < animationCount; ++index)
+            if (name == animations[index].name) return index;
+        return -1;
+    };
+    const int idle = findAnimation(playerDefinition->character.animations.idle);
+    const int move = findAnimation(playerDefinition->character.animations.move);
+    const int jump = findAnimation(playerDefinition->character.animations.jump);
+    if (model.skeleton.boneCount <= 0 || model.skeleton.boneCount > 64
+        || animations == nullptr || !bindingResolution.AllResolved()
+        || idle < 0 || move < 0 || jump < 0)
+    {
+        if (animations != nullptr) UnloadModelAnimations(animations, animationCount);
+        UnloadModel(model);
+        playerModelGpu->failed = true;
+        LogPlayerModelLoadFailureOnce(playerModelGpu->missingLogged);
+        return;
+    }
     playerModelGpu->model = model;
+    playerModelGpu->animations = animations;
+    playerModelGpu->animationCount = animationCount;
+    playerModelGpu->idleAnimation = idle;
+    playerModelGpu->moveAnimation = move;
+    playerModelGpu->jumpAnimation = jump;
+    playerModelGpu->modelIdentity.assign(modelIdentity);
     playerModelGpu->loaded = true;
     playerModelGpu->failed = false;
 }
@@ -2134,6 +2202,10 @@ void Renderer::UnloadRuntimeAssets()
     {
         if (playerModelGpu->loaded)
         {
+            if (playerModelGpu->animations != nullptr)
+                UnloadModelAnimations(playerModelGpu->animations, playerModelGpu->animationCount);
+            playerModelGpu->animations = nullptr;
+            playerModelGpu->animationCount = 0;
             UnloadModel(playerModelGpu->model);
             playerModelGpu->model = {};
             playerModelGpu->loaded = false;
@@ -2163,6 +2235,22 @@ void Renderer::UnloadRuntimeAssets()
 bool Renderer::IsPlayerModelLoaded() const
 {
     return playerModelGpu != nullptr && playerModelGpu->loaded;
+}
+
+int Renderer::PlayerSkeletonJointCount() const
+{
+    return IsPlayerModelLoaded() ? playerModelGpu->model.skeleton.boneCount : 0;
+}
+
+bool Renderer::PlayerAnimationBindingsResolved() const
+{
+    return IsPlayerModelLoaded() && playerModelGpu->idleAnimation >= 0
+        && playerModelGpu->moveAnimation >= 0 && playerModelGpu->jumpAnimation >= 0;
+}
+
+const char* Renderer::PlayerCurrentClipName() const
+{
+    return playerModelGpu != nullptr ? playerModelGpu->currentClip.c_str() : "";
 }
 
 std::size_t Renderer::PlayerModelLoadCount() const
@@ -2304,6 +2392,41 @@ void Renderer::DrawWorld(
     bool doorHudTarget = false;
     bool pickupHudTarget = false;
     char pickupHudText[64]{};
+
+    if (IsPlayerModelLoaded() && PlayerAnimationBindingsResolved())
+    {
+        const auto animationIndex = [this](gameplay::PlayerAnimationState state) {
+            if (state == gameplay::PlayerAnimationState::Move) return playerModelGpu->moveAnimation;
+            if (state == gameplay::PlayerAnimationState::Jump) return playerModelGpu->jumpAnimation;
+            return playerModelGpu->idleAnimation;
+        };
+        const int currentIndex = animationIndex(playerPresentation.animation.state);
+        const int previousIndex = animationIndex(playerPresentation.animation.previousState);
+        const auto frameFor = [](const ModelAnimation& clip, float seconds, bool loop) {
+            const float lastFrame = static_cast<float>(clip.keyframeCount > 0
+                ? clip.keyframeCount - 1 : 0);
+            const float durationSeconds = lastFrame / 60.0f;
+            return animation::ResolvePlaybackTime(
+                seconds,
+                durationSeconds,
+                loop ? animation::PlaybackMode::Loop : animation::PlaybackMode::Clamp) * 60.0f;
+        };
+        const bool currentLoop = playerPresentation.animation.state
+            != gameplay::PlayerAnimationState::Jump;
+        const bool previousLoop = playerPresentation.animation.previousState
+            != gameplay::PlayerAnimationState::Jump;
+        const ModelAnimation& current = playerModelGpu->animations[currentIndex];
+        const ModelAnimation& previous = playerModelGpu->animations[previousIndex];
+        const float blend = gameplay::PlayerAnimationBlendAmount(playerPresentation.animation);
+        UpdateModelAnimationEx(
+            playerModelGpu->model,
+            previous,
+            frameFor(previous, playerPresentation.animation.previousPlaybackTimeSeconds, previousLoop),
+            current,
+            frameFor(current, playerPresentation.animation.playbackTimeSeconds, currentLoop),
+            blend);
+        playerModelGpu->currentClip = current.name;
+    }
 
     if (terrainGpu)
     {

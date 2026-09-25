@@ -353,6 +353,19 @@ void DrawDebugMetrics(
         ImGui::Text("grounded: %s", BoolText(snapshot.grounded));
     }
 
+    if (ImGui::CollapsingHeader("Player animation", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Character: %s", snapshot.playerCharacterIdentity);
+        ImGui::Text("Model resolved: %s", BoolText(snapshot.playerCharacterModelResolved));
+        ImGui::Text("Skeleton joints: %d", snapshot.playerSkeletonJointCount);
+        ImGui::Text("Idle / Move / Jump bindings: %s",
+            snapshot.playerAnimationBindingsResolved ? "Resolved" : "Missing / invalid");
+        ImGui::Text("State: %s", snapshot.playerAnimationState);
+        ImGui::Text("Clip: %s", snapshot.playerAnimationClip[0] ? snapshot.playerAnimationClip : "None");
+        ImGui::Text("Playback: %.3f s", snapshot.playerAnimationTime);
+        ImGui::Text("Cross-fade: %.2f", snapshot.playerAnimationBlend);
+    }
+
     if (ImGui::CollapsingHeader("Input", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("moveX: %.0f", snapshot.moveX);

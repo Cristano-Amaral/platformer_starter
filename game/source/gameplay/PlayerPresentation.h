@@ -5,6 +5,7 @@
 // Character, ECS component, scene graph, or animation state machine.
 
 #include "core/Vec3.h"
+#include "gameplay/PlayerAnimation.h"
 
 #include <cmath>
 #include <cstddef>
@@ -39,6 +40,7 @@ inline constexpr PlayerPresentationConfig kDefaultPlayerPresentationConfig{};
 struct PlayerPresentationState
 {
     float facingYawDegrees = kPlayerInitialFacingYawDegrees;
+    PlayerAnimationPlayback animation{};
 };
 
 struct PlayerVisualTransform
@@ -95,6 +97,7 @@ inline PlayerVisualTransform BuildPlayerVisualTransform(
 inline void ResetPlayerPresentationForLifecycle(PlayerPresentationState& state)
 {
     state.facingYawDegrees = kPlayerInitialFacingYawDegrees;
+    ResetPlayerAnimation(state.animation);
 }
 
 inline bool PlayerPresentationShouldAttemptModelLoad(

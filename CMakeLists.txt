@@ -63,6 +63,8 @@ add_executable(Platformer3D
     game/source/assets/StaticModelCatalog.cpp
     game/source/assets/StaticModelCatalog.h
     game/source/assets/StaticModelDelete.cpp
+    game/source/animation/SkeletalAnimation.cpp
+    game/source/animation/SkeletalAnimation.h
     game/source/assets/StaticModelDelete.h
     game/source/editor/AuthoredLifecycleCommands.cpp
     game/source/editor/AuthoredLifecycleCommands.h
@@ -139,6 +141,7 @@ add_executable(Platformer3D
     game/source/gameplay/PlayerCharacterStats.cpp
     game/source/gameplay/PlayerCharacterStats.h
     game/source/gameplay/PlayerPresentation.h
+    game/source/gameplay/PlayerAnimation.h
     game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/GameplayDefinition.cpp
     game/source/gameplay/GameplayDefinition.h
@@ -418,6 +421,38 @@ file(TO_CMAKE_PATH
     PLATFORMER_TEST_GROUND_COVER_TUFT_PNG)
 target_compile_definitions(StaticGlbImportTest PRIVATE
     "PLATFORMER_TEST_STATIC_GLB=\"${PLATFORMER_TEST_STATIC_GLB}\""
+)
+
+# Milestone 103: backend-independent skeleton sampling, skin matrices, and
+# typed Player locomotion playback/state selection.
+add_executable(SkeletalAnimationTest
+    game/source/animation/SkeletalAnimation.cpp
+    game/source/animation/SkeletalAnimation.h
+    game/source/animation/SkeletalAnimationTest.cpp
+    game/source/gameplay/PlayerAnimation.h
+)
+target_include_directories(SkeletalAnimationTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(SkeletalAnimationTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(SkeletalAnimationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Exercises the actual raylib GLB animation loader used during game startup.
+# This specifically protects the canonical asset/runtime-loader compatibility
+# boundary, which backend-independent animation tests cannot cover.
+add_executable(PlayerAnimationAssetTest
+    game/source/animation/PlayerAnimationAssetTest.cpp
+)
+target_link_libraries(PlayerAnimationAssetTest PRIVATE raylib)
+target_include_directories(PlayerAnimationAssetTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(PlayerAnimationAssetTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(PlayerAnimationAssetTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(PlayerAnimationAssetTest PRIVATE
+    "PLATFORMER_PLAYER_GLB=\"${PLATFORMER_PLAYER_GLB}\""
 )
 
 # Milestone 84: imported Base Color / Base Color Texture presentation. CPU only.

@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 102 — Character Stats & Player Definition Integration**
+**Milestone 103 — Character Animation Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_102.md`](milestones/MILESTONE_102.md)
+Canonical file: [`docs/milestones/MILESTONE_103.md`](milestones/MILESTONE_103.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -206,9 +206,10 @@ Historical milestone files do not override current implemented behavior.
 | 100 | [Milestone 100 — Inventory & Equipment Foundation](milestones/MILESTONE_100.md) | implemented, awaiting manual acceptance |
 | 101 | [Milestone 101 — Character Database & Character Editor Foundation](milestones/MILESTONE_101.md) | implemented, awaiting manual acceptance |
 | 102 | [Milestone 102 — Character Stats & Player Definition Integration](milestones/MILESTONE_102.md) | implemented, awaiting manual acceptance |
+| 103 | [Milestone 103 — Character Animation Foundation](milestones/MILESTONE_103.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 
-Animation, enemies, collectibles, level editor, audio, save system,
+Enemies, additional character consumers, collectibles, level editor, audio, save system,
 profiling/optimization, Raspberry Pi validation, Android port, iOS
 feasibility/backend work.

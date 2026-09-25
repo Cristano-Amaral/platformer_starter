@@ -1,6 +1,6 @@
 #pragma once
 
-// Static GLB container and compatibility checks shared by M47 import and
+// GLB container and compatibility checks shared by model import and
 // catalog discovery. This is not a general glTF toolkit and not a runtime
 // loader. Cooker copy remains byte-identical after a file passes these gates.
 

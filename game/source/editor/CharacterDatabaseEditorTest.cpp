@@ -52,6 +52,12 @@ int main()
     hero->character.type = gameplay::CharacterType::Player;
     Expect(editor::TryAssignCharacterWorldModel(
         *hero, "models/Character Model With Spaces.glb"), "assign path-safe model");
+    Expect(editor::TryAssignCharacterAnimation(
+        *hero, editor::CharacterAnimationSlot::Idle, "Idle"), "assign Idle clip");
+    Expect(editor::TryAssignCharacterAnimation(
+        *hero, editor::CharacterAnimationSlot::Move, "Run Forward"), "assign Move clip");
+    Expect(editor::TryAssignCharacterAnimation(
+        *hero, editor::CharacterAnimationSlot::Jump, "Jump"), "assign Jump clip");
     Expect(gameplay::TrySetGameplayStat(*hero, GameplayStatId::MaxHealth, 125.0f)
             == gameplay::SetGameplayStatStatus::Set, "typed base stat");
     Expect(gameplay::TrySetGameplayStat(*hero, GameplayStatId::MoveSpeed, 7.5f)
@@ -76,6 +82,9 @@ int main()
         "typed Character persisted");
     Expect(again != nullptr && again->character.worldModelIdentity
             == "models/Character Model With Spaces.glb", "missing model identity preserved");
+    Expect(again != nullptr && again->character.animations.idle == "Idle"
+            && again->character.animations.move == "Run Forward"
+            && again->character.animations.jump == "Jump", "typed animation bindings persisted");
     Expect(again != nullptr && gameplay::GameplayDefinitionStat(*again, GameplayStatId::MaxHealth) == 125.0f,
         "typed base stat persisted");
     const auto written = gameplay::WriteGameplayDefinitionsText(saved.registry);

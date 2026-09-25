@@ -32,6 +32,14 @@ struct DebugMetricsSnapshot
     float horizontalVelocity = 0.0f;
     float verticalVelocity = 0.0f;
     bool grounded = false;
+    const char* playerCharacterIdentity = "characters/player";
+    bool playerCharacterModelResolved = false;
+    int playerSkeletonJointCount = 0;
+    bool playerAnimationBindingsResolved = false;
+    const char* playerAnimationState = "Idle";
+    const char* playerAnimationClip = "";
+    float playerAnimationTime = 0.0f;
+    float playerAnimationBlend = 1.0f;
 
     float moveX = 0.0f;
     bool jumpPressed = false;

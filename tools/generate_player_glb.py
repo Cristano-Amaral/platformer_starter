@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the project-owned Milestone 83 player placeholder GLB.
+"""Generate the project-owned skinned Player GLB with M103 locomotion clips.
 
 This is original in-repo geometry, not a marketplace character and not a
 third-party mesh. The runtime never reads this generator or source/; cook
@@ -17,6 +17,8 @@ glTF / engine convention:
     +Y up
     model local +Z is the authored forward (nose)
     presentation yaw 0 faces world +Z; +X movement uses yaw +90 deg
+    one root joint intentionally keeps the canonical placeholder small while
+    exercising the complete skin/inverse-bind/animation/runtime path
 """
 
 from __future__ import annotations
@@ -109,7 +111,21 @@ def build_glb() -> bytes:
     body_p, body_n, body_i, body_verts, body_indices = pack_mesh(body_boxes)
     nose_p, nose_n, nose_i, nose_verts, nose_indices = pack_mesh(nose_boxes)
 
-    chunks = [body_p, body_n, pad4(body_i, b"\x00"), nose_p, nose_n, pad4(nose_i, b"\x00")]
+    body_joints = bytes(body_verts * 4)
+    nose_joints = bytes(nose_verts * 4)
+    body_weights = struct.pack("<" + "f" * body_verts * 4, *([1.0, 0.0, 0.0, 0.0] * body_verts))
+    nose_weights = struct.pack("<" + "f" * nose_verts * 4, *([1.0, 0.0, 0.0, 0.0] * nose_verts))
+    inverse_bind = struct.pack("<16f", 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+    times = struct.pack("<3f", 0.0, 0.5, 1.0)
+    idle_translation = struct.pack("<9f", 0, 0, 0, 0, 0.025, 0, 0, 0, 0)
+    move_translation = struct.pack("<9f", 0, 0, 0, 0, 0.06, 0, 0, 0, 0)
+    jump_translation = struct.pack("<9f", 0, 0, 0, 0, 0.14, 0, 0, 0.14, 0)
+    move_rotation = struct.pack(
+        "<12f", 0, 0, 0, 1, 0, 0, 0.0871557, 0.9961947, 0, 0, 0, 1)
+    chunks = [body_p, body_n, pad4(body_i, b"\x00"), body_joints, body_weights,
+              nose_p, nose_n, pad4(nose_i, b"\x00"), nose_joints, nose_weights,
+              inverse_bind, times, idle_translation, move_translation, jump_translation,
+              move_rotation]
     offsets = []
     cursor = 0
     for chunk in chunks:
@@ -129,23 +145,28 @@ def build_glb() -> bytes:
     gltf = {
         "asset": {
             "version": "2.0",
-            "generator": "Platformer3D M83 project-owned player placeholder",
+            "generator": "Platformer3D M103 project-owned animated player",
         },
         "scene": 0,
-        "scenes": [{"nodes": [0]}],
-        "nodes": [{"mesh": 0, "name": "player"}],
+        "scenes": [{"nodes": [0, 2]}],
+        "nodes": [
+            {"mesh": 0, "skin": 0, "name": "player"},
+            {"name": "Root"},
+            {"name": "Armature", "children": [1]},
+        ],
+        "skins": [{"name": "PlayerSkin", "joints": [1], "inverseBindMatrices": 10, "skeleton": 1}],
         "meshes": [
             {
                 "name": "player",
                 "primitives": [
                     {
-                        "attributes": {"POSITION": 0, "NORMAL": 1},
+                        "attributes": {"POSITION": 0, "NORMAL": 1, "JOINTS_0": 3, "WEIGHTS_0": 4},
                         "indices": 2,
                         "material": 0,
                     },
                     {
-                        "attributes": {"POSITION": 3, "NORMAL": 4},
-                        "indices": 5,
+                        "attributes": {"POSITION": 5, "NORMAL": 6, "JOINTS_0": 8, "WEIGHTS_0": 9},
+                        "indices": 7,
                         "material": 1,
                     },
                 ],
@@ -192,28 +213,19 @@ def build_glb() -> bytes:
                 "count": body_indices,
                 "type": "SCALAR",
             },
-            {
-                "bufferView": 3,
-                "componentType": 5126,
-                "count": nose_verts,
-                "type": "VEC3",
-                "min": nose_pos_min,
-                "max": nose_pos_max,
-            },
-            {
-                "bufferView": 4,
-                "componentType": 5126,
-                "count": nose_verts,
-                "type": "VEC3",
-                "min": nose_norm_min,
-                "max": nose_norm_max,
-            },
-            {
-                "bufferView": 5,
-                "componentType": 5123,
-                "count": nose_indices,
-                "type": "SCALAR",
-            },
+            {"bufferView": 3, "componentType": 5121, "count": body_verts, "type": "VEC4"},
+            {"bufferView": 4, "componentType": 5126, "count": body_verts, "type": "VEC4"},
+            {"bufferView": 5, "componentType": 5126, "count": nose_verts, "type": "VEC3", "min": nose_pos_min, "max": nose_pos_max},
+            {"bufferView": 6, "componentType": 5126, "count": nose_verts, "type": "VEC3", "min": nose_norm_min, "max": nose_norm_max},
+            {"bufferView": 7, "componentType": 5123, "count": nose_indices, "type": "SCALAR"},
+            {"bufferView": 8, "componentType": 5121, "count": nose_verts, "type": "VEC4"},
+            {"bufferView": 9, "componentType": 5126, "count": nose_verts, "type": "VEC4"},
+            {"bufferView": 10, "componentType": 5126, "count": 1, "type": "MAT4"},
+            {"bufferView": 11, "componentType": 5126, "count": 3, "type": "SCALAR", "min": [0.0], "max": [1.0]},
+            {"bufferView": 12, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 13, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 14, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 15, "componentType": 5126, "count": 3, "type": "VEC4"},
         ],
         "bufferViews": [
             {"buffer": 0, "byteOffset": offsets[0], "byteLength": len(body_p), "target": 34962},
@@ -224,16 +236,38 @@ def build_glb() -> bytes:
                 "byteLength": len(body_i),
                 "target": 34963,
             },
-            {"buffer": 0, "byteOffset": offsets[3], "byteLength": len(nose_p), "target": 34962},
-            {"buffer": 0, "byteOffset": offsets[4], "byteLength": len(nose_n), "target": 34962},
+            {"buffer": 0, "byteOffset": offsets[3], "byteLength": len(body_joints), "target": 34962},
+            {"buffer": 0, "byteOffset": offsets[4], "byteLength": len(body_weights), "target": 34962},
+            {"buffer": 0, "byteOffset": offsets[5], "byteLength": len(nose_p), "target": 34962},
+            {"buffer": 0, "byteOffset": offsets[6], "byteLength": len(nose_n), "target": 34962},
             {
                 "buffer": 0,
-                "byteOffset": offsets[5],
+                "byteOffset": offsets[7],
                 "byteLength": len(nose_i),
                 "target": 34963,
             },
+            {"buffer": 0, "byteOffset": offsets[8], "byteLength": len(nose_joints), "target": 34962},
+            {"buffer": 0, "byteOffset": offsets[9], "byteLength": len(nose_weights), "target": 34962},
+            {"buffer": 0, "byteOffset": offsets[10], "byteLength": len(inverse_bind)},
+            {"buffer": 0, "byteOffset": offsets[11], "byteLength": len(times)},
+            {"buffer": 0, "byteOffset": offsets[12], "byteLength": len(idle_translation)},
+            {"buffer": 0, "byteOffset": offsets[13], "byteLength": len(move_translation)},
+            {"buffer": 0, "byteOffset": offsets[14], "byteLength": len(jump_translation)},
+            {"buffer": 0, "byteOffset": offsets[15], "byteLength": len(move_rotation)},
         ],
         "buffers": [{"byteLength": len(blob)}],
+        "animations": [
+            {"name": "Idle", "samplers": [{"input": 11, "output": 12, "interpolation": "LINEAR"}],
+             "channels": [{"sampler": 0, "target": {"node": 1, "path": "translation"}}]},
+            {"name": "Move", "samplers": [
+                {"input": 11, "output": 13, "interpolation": "LINEAR"},
+                {"input": 11, "output": 15, "interpolation": "LINEAR"}],
+             "channels": [
+                {"sampler": 0, "target": {"node": 1, "path": "translation"}},
+                {"sampler": 1, "target": {"node": 1, "path": "rotation"}}]},
+            {"name": "Jump", "samplers": [{"input": 11, "output": 14, "interpolation": "LINEAR"}],
+             "channels": [{"sampler": 0, "target": {"node": 1, "path": "translation"}}]},
+        ],
     }
     json_bytes = pad4(json.dumps(gltf, separators=(",", ":")).encode("utf-8"), b" ")
     bin_bytes = pad4(blob, b"\x00")

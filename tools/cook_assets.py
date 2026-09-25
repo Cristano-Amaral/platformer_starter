@@ -633,11 +633,27 @@ def validate_static_glb(data: bytes) -> None:
     if not isinstance(meshes, list) or not meshes:
         raise CookError("static GLB must contain at least one mesh")
     animations = payload_json.get("animations")
-    if isinstance(animations, list) and animations:
-        raise CookError("animated GLB files are not supported")
     skins = payload_json.get("skins")
-    if isinstance(skins, list) and skins:
-        raise CookError("skeletal / skinned GLB files are not supported")
+    has_animations = isinstance(animations, list) and bool(animations)
+    has_skins = isinstance(skins, list) and bool(skins)
+    if has_animations != has_skins:
+        raise CookError("animated character GLB must contain both a skin and animation clips")
+    if has_animations:
+        if len(skins) != 1:
+            raise CookError("animated character GLB must contain exactly one skin")
+        skin = skins[0]
+        if not isinstance(skin, dict) or not skin.get("joints") or "inverseBindMatrices" not in skin:
+            raise CookError("animated character skin requires joints and inverse bind matrices")
+        for animation in animations:
+            if not isinstance(animation, dict) or not animation.get("name"):
+                raise CookError("animated character clips must be named")
+            for sampler in animation.get("samplers") or []:
+                if sampler.get("interpolation", "LINEAR") not in ("LINEAR", "STEP"):
+                    raise CookError("animated character uses unsupported interpolation")
+            for channel in animation.get("channels") or []:
+                path = (channel.get("target") or {}).get("path")
+                if path not in ("translation", "rotation", "scale"):
+                    raise CookError("animated character uses unsupported channel path")
     for buffer in payload_json.get("buffers") or []:
         if isinstance(buffer, dict) and buffer.get("uri"):
             raise CookError("GLB must be self-contained (no external buffer URIs)")

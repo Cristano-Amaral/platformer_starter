@@ -203,6 +203,9 @@ struct ItemFieldFlags
     bool worldModel = false;
     bool icon = false;
     bool characterType = false;
+    bool animationIdle = false;
+    bool animationMove = false;
+    bool animationJump = false;
 };
 
 RegisterGameplayDefinitionResult FinishDefinition(
@@ -593,6 +596,27 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 current.character.worldModelIdentity = std::move(identity);
             flags.worldModel = true;
         }
+        else if (tokens[0] == "animation_idle" || tokens[0] == "animation_move"
+            || tokens[0] == "animation_jump")
+        {
+            if (!RequireCharacter(current, haveCurrent))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber,
+                    haveCurrent ? "animation field on Item" : "animation field without definition");
+            std::string_view remainder;
+            std::string clip;
+            if (!ConsumeKeywordRemainder(line, tokens[0], remainder)
+                || !ParseIdentityRemainder(remainder, clip)
+                || !IsValidCharacterAnimationClipName(clip))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid animation binding");
+            bool* flag = tokens[0] == "animation_idle" ? &flags.animationIdle
+                : tokens[0] == "animation_move" ? &flags.animationMove : &flags.animationJump;
+            if (*flag) return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate animation binding");
+            *flag = true;
+            std::string* target = tokens[0] == "animation_idle" ? &current.character.animations.idle
+                : tokens[0] == "animation_move" ? &current.character.animations.move
+                : &current.character.animations.jump;
+            *target = std::move(clip);
+        }
         else if (tokens[0] == "icon")
         {
             std::string_view remainder;
@@ -840,6 +864,16 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
                 AppendQuotedString(result.text, definition.character.worldModelIdentity);
                 result.text += '\n';
             }
+            const auto appendAnimation = [&result](std::string_view field, const std::string& clip) {
+                if (clip.empty()) return;
+                result.text += field;
+                result.text += ' ';
+                AppendQuotedString(result.text, clip);
+                result.text += '\n';
+            };
+            appendAnimation("animation_idle", definition.character.animations.idle);
+            appendAnimation("animation_move", definition.character.animations.move);
+            appendAnimation("animation_jump", definition.character.animations.jump);
         }
 
         for (std::size_t index = 0; index < kGameplayStatCount; ++index)

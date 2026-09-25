@@ -297,7 +297,7 @@ public:
     Renderer(Renderer&&) = delete;
     Renderer& operator=(Renderer&&) = delete;
 
-    void LoadRuntimeAssets();
+    void LoadRuntimeAssets(const gameplay::GameplayDefinitionRegistry* gameplayDefinitions = nullptr);
     void UnloadRuntimeAssets();
     void SyncStaticPropModels(
         const world::LevelDefinition& level,
@@ -329,6 +329,9 @@ public:
 
     bool IsPlayerModelLoaded() const;
     std::size_t PlayerModelLoadCount() const;
+    int PlayerSkeletonJointCount() const;
+    bool PlayerAnimationBindingsResolved() const;
+    const char* PlayerCurrentClipName() const;
 
     void BeginFrame();
     void DrawWorld(
