@@ -28,7 +28,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     bool cookStageReloadPending,
     gameplay::Inventory& inventory,
     gameplay::Equipment& equipment,
-    const gameplay::GameplayDefinitionRegistry& gameplayDefinitions)
+    const gameplay::GameplayDefinitionRegistry& gameplayDefinitions,
+    const gameplay::PlayerCharacterStats& playerCharacterStats)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -67,7 +68,8 @@ editor::LevelEditorRequest DebugUi::Draw(
             &levelEditorState.workspace.showMetrics,
             &inventory,
             &equipment,
-            &gameplayDefinitions);
+            &gameplayDefinitions,
+            &playerCharacterStats);
         recoveredMetricsLayout = true;
     }
 

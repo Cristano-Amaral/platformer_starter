@@ -136,6 +136,8 @@ add_executable(Platformer3D
     game/source/gameplay/PlatformerCamera.h
     game/source/gameplay/Player.cpp
     game/source/gameplay/Player.h
+    game/source/gameplay/PlayerCharacterStats.cpp
+    game/source/gameplay/PlayerCharacterStats.h
     game/source/gameplay/PlayerPresentation.h
     game/source/gameplay/CollectibleRunState.h
     game/source/gameplay/GameplayDefinition.cpp
@@ -919,6 +921,26 @@ if(MSVC)
     target_compile_options(EquipmentTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(EquipmentTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Milestone 98: gameplay-definition identity, stats, registry, and catalog file.
+# Milestone 102: Player Character base stats and equipped Item addends.
+add_executable(PlayerCharacterStatsTest
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/Equipment.h
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinition.h
+    game/source/gameplay/Inventory.cpp
+    game/source/gameplay/Inventory.h
+    game/source/gameplay/PlayerCharacterStats.cpp
+    game/source/gameplay/PlayerCharacterStats.h
+    game/source/gameplay/PlayerCharacterStatsTest.cpp
+)
+target_include_directories(PlayerCharacterStatsTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(PlayerCharacterStatsTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(PlayerCharacterStatsTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 98: gameplay-definition identity, stats, registry, and catalog file.

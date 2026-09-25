@@ -2,7 +2,7 @@
 
 // Typed Item payload for M98 Item-category gameplay definitions (Milestone 99).
 // Authored identity remains items/<name>. Item Type is classification only.
-// Modifiers are authored, not applied to Player, Inventory, or Item Pickup.
+// Modifiers are authored here; M102 applies those on equipped Items to Player stats.
 
 #include "assets/RuntimePng.h"
 #include "gameplay/EquipmentSlot.h"

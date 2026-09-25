@@ -11,6 +11,7 @@ namespace gameplay
 class Inventory;
 class Equipment;
 class GameplayDefinitionRegistry;
+struct PlayerCharacterStats;
 }
 
 namespace ui
@@ -182,5 +183,6 @@ void DrawDebugMetrics(
     bool* open,
     gameplay::Inventory* inventory = nullptr,
     gameplay::Equipment* equipment = nullptr,
-    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions = nullptr);
+    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions = nullptr,
+    const gameplay::PlayerCharacterStats* playerCharacterStats = nullptr);
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 // Typed player Equipment state (Milestone 100). Owns Item identities only.
-// Stat modifiers are not applied to Player/Character in M100.
+// M102 resolves modifiers from these identities; Equipment still owns no metadata.
 
 #include "gameplay/EquipmentSlot.h"
 #include "gameplay/GameplayDefinition.h"

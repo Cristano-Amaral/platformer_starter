@@ -5,6 +5,7 @@
 #include "gameplay/Equipment.h"
 #include "gameplay/GameplayDefinition.h"
 #include "gameplay/Inventory.h"
+#include "gameplay/PlayerCharacterStats.h"
 #include "ui/debug/DebugMetrics.h"
 #include "ui/debug/DebugUiBackend.h"
 
@@ -29,7 +30,8 @@ public:
         bool cookStageReloadPending,
         gameplay::Inventory& inventory,
         gameplay::Equipment& equipment,
-        const gameplay::GameplayDefinitionRegistry& gameplayDefinitions);
+        const gameplay::GameplayDefinitionRegistry& gameplayDefinitions,
+        const gameplay::PlayerCharacterStats& playerCharacterStats);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.

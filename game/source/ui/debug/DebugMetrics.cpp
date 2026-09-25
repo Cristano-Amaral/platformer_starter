@@ -11,6 +11,7 @@
 #include "gameplay/Inventory.h"
 #include "gameplay/ItemDefinition.h"
 #include "gameplay/ItemIdentity.h"
+#include "gameplay/PlayerCharacterStats.h"
 #include "imgui.h"
 
 #include <cstddef>
@@ -239,7 +240,8 @@ void DrawDebugMetrics(
     bool* open,
     gameplay::Inventory* inventory,
     gameplay::Equipment* equipment,
-    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions)
+    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions,
+    const gameplay::PlayerCharacterStats* playerCharacterStats)
 {
     ApplyEditorWindowPlacement(
         editor::kMetricsWindowName,
@@ -652,7 +654,7 @@ void DrawDebugMetrics(
 
     if (ImGui::CollapsingHeader("Equipment (Test)", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::TextUnformatted("M100 Equipment identities. Stats are not applied to Player.");
+        ImGui::TextUnformatted("Equipped Item identities contribute additive Player stats.");
         if (equipment == nullptr)
         {
             ImGui::TextUnformatted("Equipment: unavailable");
@@ -682,11 +684,39 @@ void DrawDebugMetrics(
             "Legacy Item Pickup token key/1 maps to items/master_key. Canonical files stay readable.");
     }
 
+    if (ImGui::CollapsingHeader("Player Character Stats", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (playerCharacterStats == nullptr)
+        {
+            ImGui::TextUnformatted("Player character stats unavailable.");
+        }
+        else
+        {
+            ImGui::Text("Definition: %s", playerCharacterStats->characterIdentity.c_str());
+            ImGui::Text(
+                "Resolution: %s",
+                gameplay::GameplayReferenceStatusName(playerCharacterStats->characterResolution));
+            ImGui::TextUnformatted("Stat                 Base       Equipment    Effective");
+            for (std::size_t index = 0; index < gameplay::kGameplayStatCount; ++index)
+            {
+                const auto stat = static_cast<gameplay::GameplayStatId>(index);
+                const gameplay::RuntimeCharacterStat& value = playerCharacterStats->values[index];
+                ImGui::Text(
+                    "%-18s %10.3f %10.3f %10.3f",
+                    gameplay::GameplayStatName(stat).data(),
+                    value.base,
+                    value.equipmentAdditive,
+                    value.effective);
+            }
+        }
+    }
+
     DrawGameplayDefinitionsInspection();
 #else
     (void)inventory;
     (void)equipment;
     (void)gameplayDefinitions;
+    (void)playerCharacterStats;
 #endif
 
     ImGui::End();
@@ -706,7 +736,8 @@ void DrawDebugMetrics(
     bool*,
     gameplay::Inventory*,
     gameplay::Equipment*,
-    const gameplay::GameplayDefinitionRegistry*) {}
+    const gameplay::GameplayDefinitionRegistry*,
+    const gameplay::PlayerCharacterStats*) {}
 }
 
 #endif

@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 101 — Character Database & Character Editor Foundation.
+Current milestone: Milestone 102 — Character Stats & Player Definition Integration.
 
-Canonical file: [`docs/milestones/MILESTONE_101.md`](docs/milestones/MILESTONE_101.md)
+Canonical file: [`docs/milestones/MILESTONE_102.md`](docs/milestones/MILESTONE_102.md)
 
-Branch: `milestone/101-character-database-editor`
+Branch: `milestone/102-character-stats-player-integration`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 102.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 103.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

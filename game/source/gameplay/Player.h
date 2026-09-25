@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Vec3.h"
+#include "gameplay/PlayerCharacterStats.h"
 #include "input/InputState.h"
 #include "physics/PhysicsWorld.h"
 
@@ -24,6 +25,8 @@ public:
         physics::PhysicsWorld& physicsWorld);
     void ApplyPhysicsState(const physics::PlayerPhysicsState& state);
     void ResetMovementState();
+    void SetMovementParameters(const PlayerMovementParameters& parameters);
+    const PlayerMovementParameters& MovementParameters() const;
 
     const core::Vec3& Position() const;
     const core::Vec3& Size() const;
@@ -74,5 +77,6 @@ private:
     core::Vec3 groundNormal{};
     float groundSlopeAngleDegrees = 0.0f;
     bool currentSupportWalkable = false;
+    PlayerMovementParameters movementParameters{};
 };
 }

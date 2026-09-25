@@ -61,7 +61,7 @@ PlayerUpdateResult Player::Update(
     // that is inherited when walking off a ledge.
     if (!grounded)
     {
-        verticalVelocity -= kGravity * deltaSeconds;
+        verticalVelocity -= kGravity * movementParameters.gravityScale * deltaSeconds;
     }
 
     physicsWorld.MovePlayer({horizontalVelocity, verticalVelocity}, deltaSeconds);
@@ -151,7 +151,7 @@ bool Player::TryJump()
         return false;
     }
 
-    verticalVelocity = kJumpSpeed;
+    verticalVelocity = movementParameters.jumpSpeed;
     grounded = false;
     coyoteAvailable = false;
     jumpBufferRemaining = 0.0f;
@@ -160,7 +160,7 @@ bool Player::TryJump()
 
 void Player::UpdateHorizontalVelocity(float moveX, float deltaSeconds)
 {
-    const float desiredVelocityX = moveX * kMaxMoveSpeed;
+    const float desiredVelocityX = moveX * movementParameters.maxMoveSpeed;
     if (moveX != 0.0f)
     {
         facingX = moveX > 0.0f ? 1.0f : -1.0f;
@@ -172,7 +172,20 @@ void Player::UpdateHorizontalVelocity(float moveX, float deltaSeconds)
         horizontalVelocity = MoveToward(horizontalVelocity, 0.0f, kDeceleration * deltaSeconds);
     }
 
-    horizontalVelocity = Clamp(horizontalVelocity, -kMaxMoveSpeed, kMaxMoveSpeed);
+    horizontalVelocity = Clamp(
+        horizontalVelocity,
+        -movementParameters.maxMoveSpeed,
+        movementParameters.maxMoveSpeed);
+}
+
+void Player::SetMovementParameters(const PlayerMovementParameters& parameters)
+{
+    movementParameters = parameters;
+}
+
+const PlayerMovementParameters& Player::MovementParameters() const
+{
+    return movementParameters;
 }
 
 void Player::UpdateCoyoteState(float deltaSeconds)

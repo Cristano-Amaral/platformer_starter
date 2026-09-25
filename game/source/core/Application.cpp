@@ -1054,6 +1054,10 @@ int Application::Run()
                 EmitGameplaySfx(gameplay::InventoryCloseSfx());
             }
         }
+        playerCharacterStats = gameplay::CalculatePlayerCharacterStats(
+            gameplay::kDefaultPlayerCharacterIdentity, gameplayDefinitions, equipment);
+        player.SetMovementParameters(
+            gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
         const bool inventoryBlocksGameplay =
             gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
         const bool runCompleteBlocksGameplay =
@@ -2498,7 +2502,8 @@ int Application::Run()
             cookStageReload.IsPending(),
             inventory,
             equipment,
-            gameplayDefinitions);
+            gameplayDefinitions,
+            playerCharacterStats);
         if (levelEditorState.active)
         {
             // Keyboard move, wheel and world pick use this frame's ImGui capture
@@ -3094,6 +3099,9 @@ void Application::Initialize()
     LoadGameplayDefinitionCatalog(gameplayDefinitions);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyEquipmentLifecycle(equipment, gameplay::InventoryLifecycleEvent::NewRun);
+    playerCharacterStats = gameplay::CalculatePlayerCharacterStats(
+        gameplay::kDefaultPlayerCharacterIdentity, gameplayDefinitions, equipment);
+    player.SetMovementParameters(gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 

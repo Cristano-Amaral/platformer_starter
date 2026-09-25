@@ -1,7 +1,7 @@
 #pragma once
 
 // Typed authored Character payload (Milestone 101). Definition metadata only;
-// it is not a runtime Character instance and is not consumed by Player.
+// M102 projects Player base stats from it without creating a Character instance.
 
 #include "gameplay/GameplayIdentity.h"
 #include "gameplay/GameplayStat.h"

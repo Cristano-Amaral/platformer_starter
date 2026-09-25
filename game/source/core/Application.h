@@ -110,6 +110,7 @@ private:
     gameplay::Inventory inventory{};
     gameplay::Equipment equipment{};
     gameplay::GameplayDefinitionRegistry gameplayDefinitions{};
+    gameplay::PlayerCharacterStats playerCharacterStats{};
     gameplay::InventoryUiState inventoryUi{};
     gameplay::ItemPickupRunState itemPickupRunState{};
     gameplay::ItemPickupCollectionFeedbackState itemPickupCollectionFeedback{};
