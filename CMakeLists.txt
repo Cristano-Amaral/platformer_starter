@@ -438,6 +438,21 @@ else()
     target_compile_options(SkeletalAnimationTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# Milestone 104: equipment selection, joint resolution, and attachment transforms.
+add_executable(EquipmentAttachmentTest
+    game/source/animation/SkeletalAnimation.cpp
+    game/source/gameplay/Equipment.cpp
+    game/source/gameplay/EquipmentAttachmentTest.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/Inventory.cpp
+)
+target_include_directories(EquipmentAttachmentTest PRIVATE game/source)
+if(MSVC)
+    target_compile_options(EquipmentAttachmentTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(EquipmentAttachmentTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # Exercises the actual raylib GLB animation loader used during game startup.
 # This specifically protects the canonical asset/runtime-loader compatibility
 # boundary, which backend-independent animation tests cannot cover.

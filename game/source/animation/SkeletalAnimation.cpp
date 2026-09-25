@@ -157,13 +157,24 @@ bool EvaluateSkinMatrices(const Skeleton& skeleton,
     const std::vector<JointTransform>& pose, std::vector<Matrix4>& skin)
 {
     if (!ValidateSkeleton(skeleton) || pose.size()!=skeleton.joints.size()) return false;
-    std::vector<Matrix4> global(pose.size()); skin.resize(pose.size());
+    std::vector<Matrix4> global;
+    if (!EvaluateJointGlobalMatrices(skeleton, pose, global)) return false;
+    skin.resize(pose.size());
+    for (std::size_t i=0;i<pose.size();++i)
+        skin[i]=Multiply(global[i],skeleton.joints[i].inverseBind);
+    return true;
+}
+
+bool EvaluateJointGlobalMatrices(const Skeleton& skeleton,
+    const std::vector<JointTransform>& pose, std::vector<Matrix4>& global)
+{
+    if (!ValidateSkeleton(skeleton) || pose.size()!=skeleton.joints.size()) return false;
+    global.resize(pose.size());
     for (std::size_t i=0;i<pose.size();++i)
     {
         const Matrix4 local=TransformMatrix(pose[i]);
         const int parent=skeleton.joints[i].parent;
         global[i]=parent < 0 ? local : Multiply(global[static_cast<std::size_t>(parent)],local);
-        skin[i]=Multiply(global[i],skeleton.joints[i].inverseBind);
     }
     return true;
 }

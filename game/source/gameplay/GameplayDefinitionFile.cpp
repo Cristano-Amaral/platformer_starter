@@ -200,6 +200,10 @@ struct ItemFieldFlags
     bool stackable = false;
     bool maxStack = false;
     bool equipmentSlot = false;
+    bool attachmentJoint = false;
+    bool attachmentTranslation = false;
+    bool attachmentRotation = false;
+    bool attachmentScale = false;
     bool worldModel = false;
     bool icon = false;
     bool characterType = false;
@@ -566,6 +570,39 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
             current.item.equipmentSlot = slot;
             flags.equipmentSlot = true;
         }
+        else if (tokens[0] == "attachment_joint")
+        {
+            std::string_view remainder; std::string joint;
+            if (!RequireItem(current, haveCurrent))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber,
+                    haveCurrent ? "attachment field on Character" : "attachment field without definition");
+            if (flags.attachmentJoint || !ConsumeKeywordRemainder(line, "attachment_joint", remainder)
+                || !ParseQuotedString(remainder, joint))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate attachment_joint");
+            if (!current.item.equipmentAttachment.has_value()) current.item.equipmentAttachment.emplace();
+            current.item.equipmentAttachment->jointName = std::move(joint);
+            flags.attachmentJoint = true;
+        }
+        else if (tokens[0] == "attachment_translation" || tokens[0] == "attachment_rotation"
+            || tokens[0] == "attachment_scale")
+        {
+            if (!RequireItem(current, haveCurrent))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber,
+                    haveCurrent ? "attachment field on Character" : "attachment field without definition");
+            if (tokens.size() != 4)
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "wrong attachment field count");
+            bool* flag = tokens[0] == "attachment_translation" ? &flags.attachmentTranslation
+                : tokens[0] == "attachment_rotation" ? &flags.attachmentRotation : &flags.attachmentScale;
+            core::Vec3 value{};
+            if (*flag || !ParseFiniteFloat(tokens[1], value.x) || !ParseFiniteFloat(tokens[2], value.y)
+                || !ParseFiniteFloat(tokens[3], value.z))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate attachment transform");
+            if (!current.item.equipmentAttachment.has_value()) current.item.equipmentAttachment.emplace();
+            if (tokens[0] == "attachment_translation") current.item.equipmentAttachment->translation = value;
+            else if (tokens[0] == "attachment_rotation") current.item.equipmentAttachment->rotationDegrees = value;
+            else current.item.equipmentAttachment->scale = value;
+            *flag = true;
+        }
         else if (tokens[0] == "world_model")
         {
             std::string_view remainder;
@@ -812,6 +849,25 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
                 result.text += "equipment_slot ";
                 result.text += EquipmentSlotName(*definition.item.equipmentSlot);
                 result.text += '\n';
+            }
+            if (definition.item.equipmentAttachment.has_value())
+            {
+                const EquipmentAttachmentDefinition& attachment = *definition.item.equipmentAttachment;
+                result.text += "attachment_joint ";
+                AppendQuotedString(result.text, attachment.jointName);
+                result.text += '\n';
+                const auto appendVec3 = [&result](std::string_view field, core::Vec3 value) {
+                    result.text += field; result.text += ' ';
+                    return AppendFloat(result.text, value.x) && (result.text += ' ', true)
+                        && AppendFloat(result.text, value.y) && (result.text += ' ', true)
+                        && AppendFloat(result.text, value.z) && (result.text += '\n', true);
+                };
+                if (!appendVec3("attachment_translation", attachment.translation)
+                    || !appendVec3("attachment_rotation", attachment.rotationDegrees)
+                    || !appendVec3("attachment_scale", attachment.scale))
+                {
+                    result.ok = false; result.text.clear(); result.error = "invalid attachment"; return result;
+                }
             }
             if (!definition.item.worldModelIdentity.empty())
             {

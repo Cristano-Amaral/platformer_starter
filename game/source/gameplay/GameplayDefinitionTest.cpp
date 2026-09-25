@@ -454,7 +454,7 @@ int main()
     {
         const auto loaded = gameplay::LoadGameplayDefinitionsFile(PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH);
         Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "fixture file loads");
-        Expect(loaded.registry.Count() == 5, "fixture definition count");
+        Expect(loaded.registry.Count() == 6, "fixture definition count");
         const gameplay::GameplayDefinition* key = loaded.registry.Find("items/master_key");
         const gameplay::GameplayDefinition* potion = loaded.registry.Find("items/health_potion");
         const gameplay::GameplayDefinition* player = loaded.registry.Find("characters/player");
@@ -762,6 +762,7 @@ int main()
         Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "fixture still loads");
         const gameplay::GameplayDefinition* key = loaded.registry.Find("items/master_key");
         const gameplay::GameplayDefinition* player = loaded.registry.Find("characters/player");
+        const gameplay::GameplayDefinition* sword = loaded.registry.Find("items/training_sword");
         Expect(key != nullptr && key->item.displayName == "master_key", "M98 item gets default display name");
         Expect(key->item.type == gameplay::ItemType::Generic, "M98 item type default Generic");
         Expect(player != nullptr && player->category == GameplayDefinitionCategory::Character,
@@ -786,6 +787,30 @@ int main()
             == gameplay::CharacterAnimationBindingStatus::None,
             "empty optional binding is None");
         Expect(player->item.displayName.empty(), "M98 character has empty item payload");
+        Expect(sword != nullptr && sword->item.equipmentAttachment.has_value()
+            && sword->item.equipmentAttachment->jointName == "Root"
+            && sword->item.equipmentAttachment->translation.x == 0.45f,
+            "M104 canonical typed attachment parses");
+        const auto written = gameplay::WriteGameplayDefinitionsText(loaded.registry);
+        const auto reparsed = gameplay::ParseGameplayDefinitionsText(written.text);
+        const gameplay::GameplayDefinition* roundTripSword = reparsed.registry.Find("items/training_sword");
+        Expect(written.ok && reparsed.status == gameplay::LoadGameplayDefinitionsStatus::Loaded
+            && roundTripSword != nullptr && roundTripSword->item.equipmentAttachment
+                == sword->item.equipmentAttachment,
+            "M104 attachment deterministic write/parse round trip");
+        const auto badAttachment = gameplay::ParseGameplayDefinitionsText(
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\n"
+            "definition items/bad\nitem_type Equipment\nequipment_slot MainHand\n"
+            "attachment_joint \"Root\"\nattachment_scale 1 0 1\n");
+        Expect(badAttachment.status == gameplay::LoadGameplayDefinitionsStatus::Invalid
+            && badAttachment.error == "InvalidEquipmentAttachment",
+            "M104 malformed attachment diagnosed");
+        const auto wrongCategoryAttachment = gameplay::ParseGameplayDefinitionsText(
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\n"
+            "definition items/bad\nitem_type Generic\nattachment_joint \"Root\"\n");
+        Expect(wrongCategoryAttachment.status == gameplay::LoadGameplayDefinitionsStatus::Invalid
+            && wrongCategoryAttachment.error == "UnexpectedEquipmentAttachment",
+            "M104 attachment is Equipment-only");
     }
 
     if (gFailures != 0)

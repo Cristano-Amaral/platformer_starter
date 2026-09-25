@@ -48,6 +48,23 @@ project-owned Player state
 Renderer / PlatformerCamera / DebugMetrics
 ```
 
+## Visible equipment attachments (Milestone 104)
+
+`gameplay::Equipment` remains the sole authority for occupied equipment slots. An Equipment
+`ItemDefinition` may optionally author `attachment_joint`, `attachment_translation`,
+`attachment_rotation` (Euler XYZ degrees), and positive `attachment_scale`; its existing optional
+`world_model` is the rigid visual. The fields are rejected on non-Equipment items and are omitted
+for definitions without an attachment.
+
+The Player renderer evaluates the M103 pose first, then iterates `kEquipmentSlots` in canonical
+order. Each occupied identity resolves through the gameplay-definition registry and static-model
+cache. The final column-vector transform is `character world * animated joint global * authored
+local TRS`. Missing definitions, models, attachment authoring, joints, Player model, or animation
+data omit the visual without changing Inventory, Equipment, or effective stats. The same attachment
+draw is part of the shared world-geometry lambda, so main and directional-shadow passes use the
+same final transform. This is a bounded rigid-attachment path, not a scene graph, generalized socket
+framework, or skinned-equipment system.
+
 Jolt CharacterVirtual is the authoritative Player collision and physical-position backend. There is no second custom Player AABB collision path.
 
 Player owns gameplay policy: semantic movement intent, horizontal acceleration/deceleration relative to supporting ground, vertical gameplay velocity, jump, coyote time, jump buffer, and last facing along X. PhysicsWorld owns Jolt runtime state, CharacterVirtual, static greybox bodies, the kinematic moving platform, authored Dynamic Box bodies, individual Dynamic Box kill-plane recovery, Milestone 51 runtime-only Grab / Carry, Milestone 52 Pressure Plate overlap queries (applied authored AABBs vs current Dynamic Box runtime bounds; no Jolt sensor bodies), and Milestone 53 kinematic Door bodies whose desired-open is the OR of linked applied Pressure Plate Active flags **and** the Application-owned M57 runtime unlocked flag (locked key Doors stay closed).

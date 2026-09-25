@@ -2,6 +2,7 @@
 
 #include "core/Vec3.h"
 #include "gameplay/GameplayDefinition.h"
+#include "gameplay/Equipment.h"
 #include "gameplay/Inventory.h"
 #include "gameplay/InventoryView.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
@@ -337,6 +338,7 @@ public:
     void DrawWorld(
         const gameplay::Player& player,
         const gameplay::PlayerPresentationState& playerPresentation,
+        const gameplay::Equipment& equipment,
         const CameraView& cameraView,
         const world::LevelDefinition& level,
         const std::vector<DynamicBoxDrawState>& dynamicBoxes,

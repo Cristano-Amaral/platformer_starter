@@ -7,6 +7,7 @@
 #include "gameplay/GameFlowState.h"
 #include "gameplay/Player.h"
 #include "gameplay/PlayerPresentation.h"
+#include "gameplay/EquipmentAttachment.h"
 #include "gameplay/ItemPickupCollectionFeedback.h"
 #include "gameplay/GameplayObjectiveHud.h"
 #include "gameplay/PlayerHealth.h"
@@ -2346,6 +2347,7 @@ void Renderer::BeginFrame()
 void Renderer::DrawWorld(
         const gameplay::Player& player,
         const gameplay::PlayerPresentationState& playerPresentation,
+        const gameplay::Equipment& equipment,
         const CameraView& cameraView,
     const world::LevelDefinition& level,
     const std::vector<DynamicBoxDrawState>& dynamicBoxes,
@@ -2714,6 +2716,40 @@ void Renderer::DrawWorld(
                 gameplay::kDefaultPlayerPresentationConfig,
                 playerPresentation.facingYawDegrees);
             DrawPlayerPresentationModel(playerModelGpu->model, visual);
+
+            if (itemDefinitions != nullptr && staticPropModels != nullptr
+                && playerModelGpu->model.currentPose != nullptr)
+            {
+                animation::JointTransform character{};
+                character.translation = visual.position;
+                character.rotation = gameplay::EulerXyzDegrees({0.0f, visual.yawDegrees, 0.0f});
+                character.scale = visual.scale;
+                const animation::Matrix4 characterWorld = animation::TransformMatrix(character);
+                for (gameplay::EquipmentSlot slot : gameplay::kEquipmentSlots)
+                {
+                    const std::string_view identity = equipment.GetEquipped(slot);
+                    if (identity.empty()) continue;
+                    const gameplay::GameplayDefinition* definition = itemDefinitions->Find(identity);
+                    if (definition == nullptr || definition->category != gameplay::GameplayDefinitionCategory::Item
+                        || definition->item.worldModelIdentity.empty()
+                        || !definition->item.equipmentAttachment.has_value()) continue;
+                    const auto& attachment = *definition->item.equipmentAttachment;
+                    int joint = -1;
+                    for (int index = 0; index < playerModelGpu->model.skeleton.boneCount; ++index)
+                        if (attachment.jointName == playerModelGpu->model.skeleton.bones[index].name)
+                        { joint = index; break; }
+                    if (joint < 0 || !staticPropModels->HasModel(definition->item.worldModelIdentity)) continue;
+                    const Transform& pose = playerModelGpu->model.currentPose[joint];
+                    animation::JointTransform jointTransform{};
+                    jointTransform.translation = {pose.translation.x, pose.translation.y, pose.translation.z};
+                    jointTransform.rotation = {pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w};
+                    jointTransform.scale = {pose.scale.x, pose.scale.y, pose.scale.z};
+                    const animation::Matrix4 finalTransform = gameplay::ComposeEquipmentAttachmentTransform(
+                        characterWorld, animation::TransformMatrix(jointTransform), attachment);
+                    staticPropModels->DrawAttachment(
+                        definition->item.worldModelIdentity, finalTransform, gWorldModelOverride);
+                }
+            }
         }
         else if (gameplay::ShouldDrawPlayerGameplayPrimitive(playerModelLoaded))
         {

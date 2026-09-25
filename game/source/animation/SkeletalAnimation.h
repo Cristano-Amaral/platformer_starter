@@ -86,4 +86,8 @@ bool EvaluateSkinMatrices(
     const Skeleton& skeleton,
     const std::vector<JointTransform>& localPose,
     std::vector<Matrix4>& skinMatrices);
+bool EvaluateJointGlobalMatrices(
+    const Skeleton& skeleton,
+    const std::vector<JointTransform>& localPose,
+    std::vector<Matrix4>& globalMatrices);
 }

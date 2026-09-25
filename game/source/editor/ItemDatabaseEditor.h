@@ -800,6 +800,24 @@ inline bool TryClearItemWorldModel(gameplay::GameplayDefinition& item)
     return true;
 }
 
+inline bool TrySetItemEquipmentAttachment(
+    gameplay::GameplayDefinition& item,
+    const gameplay::EquipmentAttachmentDefinition& attachment)
+{
+    if (item.category != gameplay::GameplayDefinitionCategory::Item
+        || item.item.type != gameplay::ItemType::Equipment
+        || !gameplay::IsValidEquipmentAttachment(attachment)) return false;
+    item.item.equipmentAttachment = attachment;
+    return true;
+}
+
+inline bool TryClearItemEquipmentAttachment(gameplay::GameplayDefinition& item)
+{
+    if (item.category != gameplay::GameplayDefinitionCategory::Item) return false;
+    item.item.equipmentAttachment.reset();
+    return true;
+}
+
 inline bool TryAssignItemIconTexture(gameplay::GameplayDefinition& item, std::string_view identity)
 {
     if (item.category != gameplay::GameplayDefinitionCategory::Item

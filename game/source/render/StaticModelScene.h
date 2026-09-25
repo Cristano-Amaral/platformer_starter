@@ -4,6 +4,7 @@
 // Model. Independent of thumbnail PNG cache and Model Preview.
 
 #include "core/Vec3.h"
+#include "animation/SkeletalAnimation.h"
 #include "gameplay/GameplayDefinition.h"
 #include "render/LoadedModelMaterials.h"
 #include "world/LevelDefinition.h"
@@ -53,6 +54,8 @@ public:
 
     void DrawProp(const world::StaticPropSpec& spec) const;
     void DrawProp(const world::StaticPropSpec& spec, const ModelDrawOverride& override) const;
+    void DrawAttachment(std::string_view identity, const animation::Matrix4& transform,
+        const ModelDrawOverride* override = nullptr) const;
     // Repeated instances of palette models already cached by Sync. One Model
     // per identity. Compatible instances are one DrawMeshInstanced per mesh
     // when the active world shader exposes instanceTransform. Otherwise the

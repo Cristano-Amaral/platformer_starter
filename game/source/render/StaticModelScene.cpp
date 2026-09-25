@@ -254,6 +254,13 @@ void StaticModelSceneStore::Sync(
         }
     };
     collectIdentities(level);
+    if (itemDefinitions != nullptr)
+    {
+        for (const gameplay::GameplayDefinition& definition : itemDefinitions->Definitions())
+            if (definition.category == gameplay::GameplayDefinitionCategory::Item
+                && gameplay::IsValidItemWorldModelIdentity(definition.item.worldModelIdentity))
+                needed.insert(definition.item.worldModelIdentity);
+    }
     if (extraLevel != nullptr)
     {
         collectIdentities(*extraLevel);
@@ -329,6 +336,22 @@ void StaticModelSceneStore::Sync(
         entry.model = model;
         entry.hasModel = true;
     }
+}
+
+void StaticModelSceneStore::DrawAttachment(std::string_view identity,
+    const animation::Matrix4& transform, const ModelDrawOverride* override) const
+{
+    if (gpu == nullptr) return;
+    const auto it = gpu->entries.find(std::string(identity));
+    if (it == gpu->entries.end() || !it->second.hasModel) return;
+    ++gpu->drawSubmissions;
+    gpu->submittedIdentities.emplace_back(identity);
+    BeginIsolatedModelDraw();
+    rlPushMatrix();
+    rlMultMatrixf(transform.values);
+    DrawModelPreservingMaterials(it->second.model, Vector3{}, 1.0f, WHITE, override);
+    rlPopMatrix();
+    RestoreGreyboxImmediateState();
 }
 
 bool StaticModelSceneStore::HasModel(std::string_view identity) const

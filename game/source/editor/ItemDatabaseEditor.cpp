@@ -417,6 +417,7 @@ void DrawItemDatabaseEditor(
                     else
                     {
                         selected->item.equipmentSlot.reset();
+                        selected->item.equipmentAttachment.reset();
                     }
                     RefreshItemDatabaseDirty(state);
                 }
@@ -464,6 +465,47 @@ void DrawItemDatabaseEditor(
                     ImVec4(0.92f, 0.42f, 0.32f, 1.0f),
                     "Non-Equipment Items cannot carry Equipment Slot metadata.");
             }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Equipment Attachment");
+            if (selected->item.type == gameplay::ItemType::Equipment)
+            {
+                bool enabled = selected->item.equipmentAttachment.has_value();
+                if (ImGui::Checkbox("Visible Attachment", &enabled))
+                {
+                    if (enabled)
+                    {
+                        gameplay::EquipmentAttachmentDefinition attachment{};
+                        attachment.jointName = "Root";
+                        selected->item.equipmentAttachment = attachment;
+                    }
+                    else selected->item.equipmentAttachment.reset();
+                    RefreshItemDatabaseDirty(state);
+                }
+                if (selected->item.equipmentAttachment.has_value())
+                {
+                    auto& attachment = *selected->item.equipmentAttachment;
+                    char joint[gameplay::kMaxEquipmentAttachmentJointNameLength + 1]{};
+                    std::snprintf(joint, sizeof(joint), "%s", attachment.jointName.c_str());
+                    if (ImGui::InputText("Joint / Bone", joint, sizeof(joint)))
+                    { attachment.jointName = joint; RefreshItemDatabaseDirty(state); }
+                    ImGui::TextDisabled("Canonical Player joints: Root");
+                    float translation[3]{attachment.translation.x, attachment.translation.y, attachment.translation.z};
+                    if (ImGui::InputFloat3("Translation", translation))
+                    { attachment.translation={translation[0],translation[1],translation[2]}; RefreshItemDatabaseDirty(state); }
+                    float rotation[3]{attachment.rotationDegrees.x, attachment.rotationDegrees.y, attachment.rotationDegrees.z};
+                    if (ImGui::InputFloat3("Rotation XYZ (deg)", rotation))
+                    { attachment.rotationDegrees={rotation[0],rotation[1],rotation[2]}; RefreshItemDatabaseDirty(state); }
+                    float scale[3]{attachment.scale.x, attachment.scale.y, attachment.scale.z};
+                    if (ImGui::InputFloat3("Scale", scale))
+                    { attachment.scale={scale[0],scale[1],scale[2]}; RefreshItemDatabaseDirty(state); }
+                    if (!gameplay::IsValidEquipmentAttachment(attachment))
+                        ImGui::TextColored(ImVec4(0.92f,0.42f,0.32f,1.0f), "Attachment is invalid or unresolved.");
+                    else ImGui::TextUnformatted("Authored: resolved at runtime against Player skeleton.");
+                }
+                else ImGui::TextUnformatted("None");
+            }
+            else ImGui::TextDisabled("Only Equipment Items may author an attachment.");
 
             bool stackable = selected->item.stackable;
             if (ImGui::Checkbox("Stackable", &stackable))

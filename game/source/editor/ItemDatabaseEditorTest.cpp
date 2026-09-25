@@ -365,6 +365,13 @@ int main()
         helmet.item.displayName = "Iron Helmet";
         helmet.item.type = gameplay::ItemType::Equipment;
         helmet.item.equipmentSlot = gameplay::EquipmentSlot::Head;
+        gameplay::EquipmentAttachmentDefinition helmetAttachment{};
+        helmetAttachment.jointName = "Root";
+        helmetAttachment.translation = {0.0f, 1.0f, 0.0f};
+        helmetAttachment.rotationDegrees = {0.0f, 90.0f, 0.0f};
+        helmetAttachment.scale = {0.5f, 0.5f, 0.5f};
+        Expect(editor::TrySetItemEquipmentAttachment(helmet, helmetAttachment),
+            "author equipment attachment");
         Expect(state.working.Register(helmet).status
                 == gameplay::RegisterGameplayDefinitionStatus::Registered,
             "register equipment item");
@@ -378,6 +385,8 @@ int main()
         Expect(again != nullptr && again->item.type == gameplay::ItemType::Equipment
                 && again->item.equipmentSlot == gameplay::EquipmentSlot::Head,
             "Item Database equipment_slot round-trip");
+        Expect(again != nullptr && again->item.equipmentAttachment == helmetAttachment,
+            "Item Database attachment Save/Reload round-trip");
         RemoveTree(root);
     }
 

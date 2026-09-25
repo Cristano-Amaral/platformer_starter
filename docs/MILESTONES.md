@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 103 — Character Animation Foundation**
+**Milestone 104 — Equipment Sockets & Visible Equipment Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_103.md`](milestones/MILESTONE_103.md)
+Canonical file: [`docs/milestones/MILESTONE_104.md`](milestones/MILESTONE_104.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -206,7 +206,8 @@ Historical milestone files do not override current implemented behavior.
 | 100 | [Milestone 100 — Inventory & Equipment Foundation](milestones/MILESTONE_100.md) | implemented, awaiting manual acceptance |
 | 101 | [Milestone 101 — Character Database & Character Editor Foundation](milestones/MILESTONE_101.md) | implemented, awaiting manual acceptance |
 | 102 | [Milestone 102 — Character Stats & Player Definition Integration](milestones/MILESTONE_102.md) | implemented, awaiting manual acceptance |
-| 103 | [Milestone 103 — Character Animation Foundation](milestones/MILESTONE_103.md) | implemented, awaiting manual acceptance |
+| 103 | [Milestone 103 — Character Animation Foundation](milestones/MILESTONE_103.md) | complete |
+| 104 | [Milestone 104 — Equipment Sockets & Visible Equipment Foundation](milestones/MILESTONE_104.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

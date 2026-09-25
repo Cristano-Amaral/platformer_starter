@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 103 — Character Animation Foundation.
+Current milestone: Milestone 104 — Equipment Sockets & Visible Equipment Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_103.md`](docs/milestones/MILESTONE_103.md)
+Canonical file: [`docs/milestones/MILESTONE_104.md`](docs/milestones/MILESTONE_104.md)
 
-Branch: `milestone/103-character-animation-foundation`
+Branch: `milestone/104-equipment-sockets-visible-equipment`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 104.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 105.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

@@ -685,6 +685,18 @@ void DrawDebugMetrics(
                             gameplay::GameplayDefinitionReference{std::string(identity)},
                             gameplay::GameplayDefinitionCategory::Item);
                     resolution = gameplay::GameplayReferenceStatusName(resolved.status);
+                    if (resolved.definition != nullptr)
+                    {
+                        const auto& item = resolved.definition->item;
+                        ImGui::Text("  model: %s",
+                            item.worldModelIdentity.empty() ? "None" : item.worldModelIdentity.c_str());
+                        if (item.equipmentAttachment.has_value())
+                        {
+                            ImGui::Text("  joint: %s (runtime-resolved; rendered when model + joint resolve)",
+                                item.equipmentAttachment->jointName.c_str());
+                        }
+                        else ImGui::TextUnformatted("  joint: None; rendered: no");
+                    }
                 }
                 ImGui::Text(
                     "%s: %s (%s)",

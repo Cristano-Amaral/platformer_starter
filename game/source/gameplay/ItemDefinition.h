@@ -8,8 +8,10 @@
 #include "gameplay/EquipmentSlot.h"
 #include "gameplay/GameplayIdentity.h"
 #include "gameplay/GameplayStat.h"
+#include "core/Vec3.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -33,6 +35,53 @@ inline constexpr int kMaxItemMaxStack = 99;
 inline constexpr std::size_t kMaxItemDisplayNameLength = 64;
 inline constexpr std::size_t kMaxItemDescriptionLength = 200;
 inline constexpr std::size_t kMaxItemModifiers = 32;
+inline constexpr std::size_t kMaxEquipmentAttachmentJointNameLength = 64;
+
+struct EquipmentAttachmentDefinition
+{
+    std::string jointName;
+    core::Vec3 translation{};
+    // Euler XYZ degrees, composed after translation and before scale.
+    core::Vec3 rotationDegrees{};
+    core::Vec3 scale{1.0f, 1.0f, 1.0f};
+};
+
+inline bool IsValidEquipmentAttachmentJointName(std::string_view name)
+{
+    if (name.empty() || name.size() > kMaxEquipmentAttachmentJointNameLength
+        || name.front() == ' ' || name.back() == ' ')
+        return false;
+    for (char character : name)
+    {
+        const unsigned char byte = static_cast<unsigned char>(character);
+        if (byte < 32 || byte > 126 || character == '"' || character == '\\') return false;
+    }
+    return true;
+}
+
+inline bool IsFiniteVec3(core::Vec3 value)
+{
+    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
+
+inline bool IsValidEquipmentAttachment(const EquipmentAttachmentDefinition& attachment)
+{
+    return IsValidEquipmentAttachmentJointName(attachment.jointName)
+        && IsFiniteVec3(attachment.translation) && IsFiniteVec3(attachment.rotationDegrees)
+        && IsFiniteVec3(attachment.scale) && attachment.scale.x > 0.0f
+        && attachment.scale.y > 0.0f && attachment.scale.z > 0.0f;
+}
+
+inline bool operator==(const EquipmentAttachmentDefinition& a,
+    const EquipmentAttachmentDefinition& b)
+{
+    return a.jointName == b.jointName && a.translation.x == b.translation.x
+        && a.translation.y == b.translation.y && a.translation.z == b.translation.z
+        && a.rotationDegrees.x == b.rotationDegrees.x
+        && a.rotationDegrees.y == b.rotationDegrees.y
+        && a.rotationDegrees.z == b.rotationDegrees.z && a.scale.x == b.scale.x
+        && a.scale.y == b.scale.y && a.scale.z == b.scale.z;
+}
 
 inline constexpr std::array<std::string_view, kItemTypeCount> kItemTypeNames = {
     "Generic",
@@ -178,6 +227,7 @@ struct ItemDefinition
     int maxStack = kMinItemMaxStack;
     // Present only when type == Equipment. Empty for every other type.
     std::optional<EquipmentSlot> equipmentSlot;
+    std::optional<EquipmentAttachmentDefinition> equipmentAttachment;
     std::string worldModelIdentity;
     std::string iconTextureIdentity;
     std::vector<GameplayStatModifier> modifiers;
@@ -192,6 +242,7 @@ inline ItemDefinition MakeDefaultItemDefinition(std::string_view identity)
     item.stackable = false;
     item.maxStack = kMinItemMaxStack;
     item.equipmentSlot.reset();
+    item.equipmentAttachment.reset();
     item.worldModelIdentity.clear();
     item.iconTextureIdentity.clear();
     item.modifiers.clear();
@@ -210,6 +261,8 @@ enum class ValidateItemStatus
     TooManyModifiers,
     MissingEquipmentSlot,
     UnexpectedEquipmentSlot,
+    InvalidEquipmentAttachment,
+    UnexpectedEquipmentAttachment,
 };
 
 inline const char* ValidateItemStatusName(ValidateItemStatus status)
@@ -236,6 +289,10 @@ inline const char* ValidateItemStatusName(ValidateItemStatus status)
         return "MissingEquipmentSlot";
     case ValidateItemStatus::UnexpectedEquipmentSlot:
         return "UnexpectedEquipmentSlot";
+    case ValidateItemStatus::InvalidEquipmentAttachment:
+        return "InvalidEquipmentAttachment";
+    case ValidateItemStatus::UnexpectedEquipmentAttachment:
+        return "UnexpectedEquipmentAttachment";
     }
     return "InvalidDisplayName";
 }
@@ -260,11 +317,16 @@ inline ValidateItemStatus ValidateItemDefinition(const ItemDefinition& item)
         {
             return ValidateItemStatus::MissingEquipmentSlot;
         }
+        if (item.equipmentAttachment.has_value()
+            && !IsValidEquipmentAttachment(*item.equipmentAttachment))
+            return ValidateItemStatus::InvalidEquipmentAttachment;
     }
     else if (item.equipmentSlot.has_value())
     {
         return ValidateItemStatus::UnexpectedEquipmentSlot;
     }
+    else if (item.equipmentAttachment.has_value())
+        return ValidateItemStatus::UnexpectedEquipmentAttachment;
     if (!item.worldModelIdentity.empty() && !IsValidItemWorldModelIdentity(item.worldModelIdentity))
     {
         return ValidateItemStatus::InvalidWorldModel;
@@ -292,6 +354,7 @@ inline bool ItemDefinitionsEqual(const ItemDefinition& a, const ItemDefinition& 
     if (a.displayName != b.displayName || a.description != b.description || a.type != b.type
         || a.stackable != b.stackable || a.maxStack != b.maxStack
         || a.equipmentSlot != b.equipmentSlot
+        || a.equipmentAttachment != b.equipmentAttachment
         || a.worldModelIdentity != b.worldModelIdentity
         || a.iconTextureIdentity != b.iconTextureIdentity
         || a.modifiers.size() != b.modifiers.size())

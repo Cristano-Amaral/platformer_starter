@@ -25,6 +25,18 @@ stat MaxHealth 100
 stat MoveSpeed 6
 stat JumpStrength 8
 stat GravityScale 1
+definition items/training_sword
+display_name "Training Sword"
+description "Visible rigid equipment attachment test item."
+item_type Equipment
+stackable false
+max_stack 1
+equipment_slot MainHand
+attachment_joint "Root"
+attachment_translation 0.45 0.75 0
+attachment_rotation 0 0 90
+attachment_scale 0.35 0.35 0.35
+world_model "models/test_static.glb"
 definition characters/guard
 display_name "Guard"
 description "Guard character definition."

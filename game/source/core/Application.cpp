@@ -2226,6 +2226,7 @@ int Application::Run()
         renderer.DrawWorld(
             player,
             playerPresentation,
+            equipment,
             cameraView,
             levelDefinition,
             dynamicDraw,
