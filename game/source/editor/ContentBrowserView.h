@@ -23,6 +23,7 @@ enum class ContentBrowserCollection
     Favorites,
     Models,
     Textures,
+    Animations,
     Folders,
 };
 

@@ -210,6 +210,12 @@ struct ItemFieldFlags
     bool animationIdle = false;
     bool animationMove = false;
     bool animationJump = false;
+    bool animationIdleAsset = false;
+    bool animationMoveAsset = false;
+    bool animationJumpAsset = false;
+    bool sourceAsset = false;
+    bool sourceClip = false;
+    bool playback = false;
 };
 
 RegisterGameplayDefinitionResult FinishDefinition(
@@ -232,13 +238,19 @@ RegisterGameplayDefinitionResult FinishDefinition(
         }
         result = registry.Register(current);
     }
-    else
+    else if (current.category == GameplayDefinitionCategory::Character)
     {
         current.item = {};
         if (!flags.displayName)
         {
             current.character.displayName = DefaultCharacterDisplayName(current.identity);
         }
+        result = registry.Register(current);
+    }
+    else
+    {
+        current.item = {};
+        current.character = {};
         result = registry.Register(current);
     }
     haveCurrent = false;
@@ -255,6 +267,11 @@ bool RequireItem(const GameplayDefinition& current, bool haveCurrent)
 bool RequireCharacter(const GameplayDefinition& current, bool haveCurrent)
 {
     return haveCurrent && current.category == GameplayDefinitionCategory::Character;
+}
+
+bool RequireAnimation(const GameplayDefinition& current, bool haveCurrent)
+{
+    return haveCurrent && current.category == GameplayDefinitionCategory::Animation;
 }
 }
 
@@ -354,7 +371,7 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 current.item = MakeDefaultItemDefinition(parsed.text);
                 current.item.displayName.clear();
             }
-            else
+            else if (parsed.category == GameplayDefinitionCategory::Character)
             {
                 current.character = MakeDefaultCharacterDefinition(parsed.text);
                 current.character.displayName.clear();
@@ -654,6 +671,53 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 : &current.character.animations.jump;
             *target = std::move(clip);
         }
+        else if (tokens[0] == "animation_idle_asset" || tokens[0] == "animation_move_asset"
+            || tokens[0] == "animation_jump_asset")
+        {
+            if (!RequireCharacter(current, haveCurrent))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber,
+                    haveCurrent ? "animation asset binding on non-Character" : "animation asset binding without definition");
+            std::string_view remainder;
+            std::string identity;
+            if (!ConsumeKeywordRemainder(line, tokens[0], remainder)
+                || !ParseIdentityRemainder(remainder, identity) || !IsValidAnimationIdentity(identity))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid animation asset binding");
+            bool* flag = tokens[0] == "animation_idle_asset" ? &flags.animationIdleAsset
+                : tokens[0] == "animation_move_asset" ? &flags.animationMoveAsset : &flags.animationJumpAsset;
+            if (*flag) return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate animation asset binding");
+            *flag = true;
+            std::string* target = tokens[0] == "animation_idle_asset" ? &current.character.animations.idleAsset
+                : tokens[0] == "animation_move_asset" ? &current.character.animations.moveAsset
+                : &current.character.animations.jumpAsset;
+            *target = std::move(identity);
+        }
+        else if (tokens[0] == "source_asset")
+        {
+            std::string_view remainder; std::string identity;
+            if (!RequireAnimation(current, haveCurrent) || flags.sourceAsset
+                || !ConsumeKeywordRemainder(line, "source_asset", remainder)
+                || !ParseIdentityRemainder(remainder, identity) || !IsValidItemWorldModelIdentity(identity))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate animation source asset");
+            current.animation.sourceAssetIdentity = std::move(identity); flags.sourceAsset = true;
+        }
+        else if (tokens[0] == "source_clip")
+        {
+            std::string_view remainder; std::string clip;
+            if (!RequireAnimation(current, haveCurrent) || flags.sourceClip
+                || !ConsumeKeywordRemainder(line, "source_clip", remainder)
+                || !ParseIdentityRemainder(remainder, clip) || !IsValidAnimationClipName(clip))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate animation source clip");
+            current.animation.sourceClipName = std::move(clip); flags.sourceClip = true;
+        }
+        else if (tokens[0] == "playback")
+        {
+            if (!RequireAnimation(current, haveCurrent) || flags.playback || tokens.size() != 2
+                || (tokens[1] != "Loop" && tokens[1] != "Clamp"))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate animation playback");
+            current.animation.playbackMode = tokens[1] == "Loop"
+                ? animation::PlaybackMode::Loop : animation::PlaybackMode::Clamp;
+            flags.playback = true;
+        }
         else if (tokens[0] == "icon")
         {
             std::string_view remainder;
@@ -896,7 +960,7 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
                 result.text += '\n';
             }
         }
-        else
+        else if (definition.category == GameplayDefinitionCategory::Character)
         {
             if (ValidateCharacterDefinition(definition.character) != ValidateCharacterStatus::Valid)
             {
@@ -930,6 +994,24 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
             appendAnimation("animation_idle", definition.character.animations.idle);
             appendAnimation("animation_move", definition.character.animations.move);
             appendAnimation("animation_jump", definition.character.animations.jump);
+            appendAnimation("animation_idle_asset", definition.character.animations.idleAsset);
+            appendAnimation("animation_move_asset", definition.character.animations.moveAsset);
+            appendAnimation("animation_jump_asset", definition.character.animations.jumpAsset);
+        }
+        else
+        {
+            if (!ValidateAnimationDefinition(definition.animation))
+            {
+                result.ok = false; result.text.clear(); result.error = "invalid animation"; return result;
+            }
+            result.text += "source_asset ";
+            AppendQuotedString(result.text, definition.animation.sourceAssetIdentity);
+            result.text += '\n';
+            result.text += "source_clip ";
+            AppendQuotedString(result.text, definition.animation.sourceClipName);
+            result.text += '\n';
+            result.text += "playback ";
+            result.text += definition.animation.playbackMode == animation::PlaybackMode::Loop ? "Loop\n" : "Clamp\n";
         }
 
         for (std::size_t index = 0; index < kGameplayStatCount; ++index)

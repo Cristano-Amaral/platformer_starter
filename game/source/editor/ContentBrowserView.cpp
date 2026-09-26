@@ -83,6 +83,8 @@ const char* ContentBrowserCollectionName(ContentBrowserCollection collection)
         return "Models";
     case ContentBrowserCollection::Textures:
         return "Textures";
+    case ContentBrowserCollection::Animations:
+        return "Animations";
     case ContentBrowserCollection::Folders:
         return "Folders";
     }
@@ -103,6 +105,10 @@ ContentBrowserCollection ParseContentBrowserCollection(std::string_view text)
     if (NamesEqualIgnoreCase(trimmed, "Textures"))
     {
         return ContentBrowserCollection::Textures;
+    }
+    if (NamesEqualIgnoreCase(trimmed, "Animations"))
+    {
+        return ContentBrowserCollection::Animations;
     }
     if (NamesEqualIgnoreCase(trimmed, "Folders"))
     {

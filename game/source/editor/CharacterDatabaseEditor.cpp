@@ -25,6 +25,7 @@ void DrawCharacterDatabaseEditor(
     if (!state.loaded && authoringAvailable && !path.empty())
         ApplyLoadedCharacterDatabase(state, gameplay::LoadGameplayDefinitionsFile(path));
     ImGui::TextUnformatted("Reusable Character definitions and typed locomotion animation bindings.");
+    ImGui::TextDisabled("Save persists edits; returning to gameplay promotes the saved definitions.");
     ImGui::Text("Status: %s%s", state.dirty ? "Dirty - " : "", state.statusMessage.c_str());
     ImGui::BeginDisabled(!authoringAvailable || !state.loaded || !state.dirty);
     if (ImGui::Button("Save")) TrySaveCharacterDatabase(state, path, authoringAvailable);
@@ -127,6 +128,32 @@ void DrawCharacterDatabaseEditor(
             }
             ImGui::SameLine();
             ImGui::TextDisabled("%s", value->empty() ? "None" : "Authored (validated at runtime)");
+            std::string* assetValue = slot == CharacterAnimationSlot::Idle
+                ? &selected->character.animations.idleAsset : slot == CharacterAnimationSlot::Move
+                ? &selected->character.animations.moveAsset : &selected->character.animations.jumpAsset;
+            ImGui::PushID(slotIndex);
+            if (ImGui::BeginCombo("Reusable Asset", assetValue->empty() ? "None (embedded clip)" : assetValue->c_str()))
+            {
+                if (ImGui::Selectable("None (embedded clip)"))
+                { TryClearCharacterAnimationAsset(*selected, slot); RefreshCharacterDatabaseDirty(state); }
+                for (const auto& candidate : state.working.Definitions())
+                {
+                    if (candidate.category != gameplay::GameplayDefinitionCategory::Animation) continue;
+                    if (ImGui::Selectable(candidate.identity.c_str(), *assetValue == candidate.identity))
+                    { TryAssignCharacterAnimationAsset(*selected, slot, candidate.identity); RefreshCharacterDatabaseDirty(state); }
+                }
+                ImGui::EndCombo();
+            }
+            if (!assetValue->empty())
+            {
+                const auto* asset = state.working.Find(*assetValue);
+                if (asset == nullptr || asset->category != gameplay::GameplayDefinitionCategory::Animation)
+                    ImGui::TextColored(ImVec4(.92f,.45f,.28f,1), "Missing reusable identity");
+                else
+                    ImGui::TextDisabled("Source: %s | Clip: %s | compatibility checked at runtime",
+                        asset->animation.sourceAssetIdentity.c_str(), asset->animation.sourceClipName.c_str());
+            }
+            ImGui::PopID();
             ++slotIndex;
         }
         ImGui::Separator(); ImGui::TextUnformatted("Base Stats (authored only)");

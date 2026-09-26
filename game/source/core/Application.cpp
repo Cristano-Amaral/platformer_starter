@@ -721,6 +721,9 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.playerAnimationBindingsResolved = renderer.PlayerAnimationBindingsResolved();
     snapshot.playerAnimationState = gameplay::PlayerAnimationStateName(playerPresentation.animation.state);
     snapshot.playerAnimationClip = renderer.PlayerCurrentClipName();
+    snapshot.playerAnimationIdentity = renderer.PlayerCurrentAnimationIdentity();
+    snapshot.playerAnimationSource = renderer.PlayerCurrentAnimationSource();
+    snapshot.playerAnimationStatus = renderer.PlayerCurrentAnimationStatus();
     snapshot.playerAnimationTime = playerPresentation.animation.playbackTimeSeconds;
     snapshot.playerAnimationBlend = gameplay::PlayerAnimationBlendAmount(playerPresentation.animation);
 
@@ -3346,6 +3349,7 @@ void Application::SetLevelEditorActive(bool active)
         input::SetMouseLookActive(false);
         gameplay::CloseInventoryUi(inventoryUi);
         LoadGameplayDefinitionCatalog(gameplayDefinitions);
+        renderer.ReloadPlayerPresentationAssets(&gameplayDefinitions);
     }
 
     levelEditorState.active = active;

@@ -9,6 +9,8 @@ SetGameplayStatStatus TrySetGameplayStat(
     GameplayStatId id,
     float value)
 {
+    if (definition.category == GameplayDefinitionCategory::Animation)
+        return SetGameplayStatStatus::InvalidValue;
     const auto index = static_cast<std::size_t>(id);
     if (index >= kGameplayStatCount || !IsValidGameplayStatValue(value))
     {
@@ -65,7 +67,7 @@ RegisterGameplayDefinitionResult GameplayDefinitionRegistry::Register(
             return result;
         }
     }
-    else
+    else if (parsed.category == GameplayDefinitionCategory::Character)
     {
         const ValidateCharacterStatus characterStatus = ValidateCharacterDefinition(definition.character);
         if (characterStatus != ValidateCharacterStatus::Valid)
@@ -74,6 +76,12 @@ RegisterGameplayDefinitionResult GameplayDefinitionRegistry::Register(
             result.error = ValidateCharacterStatusName(characterStatus);
             return result;
         }
+    }
+    else if (!ValidateAnimationDefinition(definition.animation))
+    {
+        result.status = RegisterGameplayDefinitionStatus::InvalidAnimation;
+        result.error = "invalid animation";
+        return result;
     }
     if (Find(parsed.text) != nullptr)
     {

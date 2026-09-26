@@ -454,7 +454,7 @@ int main()
     {
         const auto loaded = gameplay::LoadGameplayDefinitionsFile(PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH);
         Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "fixture file loads");
-        Expect(loaded.registry.Count() == 6, "fixture definition count");
+        Expect(loaded.registry.Count() == 9, "fixture definition count");
         const gameplay::GameplayDefinition* key = loaded.registry.Find("items/master_key");
         const gameplay::GameplayDefinition* potion = loaded.registry.Find("items/health_potion");
         const gameplay::GameplayDefinition* player = loaded.registry.Find("characters/player");

@@ -121,6 +121,15 @@ inline void ClearPlayerPresentationModelLifetime(PlayerPresentationModelLifetime
     lifetime = {};
 }
 
+// An authoritative CharacterDefinition promotion is the bounded exception to
+// the normal load-once policy. It permits one new model/animation resolution;
+// frame updates still cannot trigger repeated loads.
+inline void PreparePlayerPresentationModelDefinitionRefresh(
+    PlayerPresentationModelLifetime& lifetime)
+{
+    lifetime.loadAttempted = false;
+}
+
 inline bool ShouldDrawPlayerPresentationModel(bool modelLoaded)
 {
     return modelLoaded;

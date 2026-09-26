@@ -2025,12 +2025,24 @@ void DrawPauseMenuOverlay(bool resumeSelected)
 
 struct Renderer::PlayerModelGpuState
 {
+    struct AnimationSlot
+    {
+        ModelAnimation* animations = nullptr;
+        int animationCount = 0;
+        int index = -1;
+        animation::PlaybackMode playback = animation::PlaybackMode::Loop;
+        std::string assetIdentity;
+        std::string sourceAsset;
+        std::string sourceClip;
+        std::string status = "None";
+        bool ownsAnimations = false;
+    };
     Model model{};
     ModelAnimation* animations = nullptr;
     int animationCount = 0;
-    int idleAnimation = -1;
-    int moveAnimation = -1;
-    int jumpAnimation = -1;
+    AnimationSlot idle{};
+    AnimationSlot move{};
+    AnimationSlot jump{};
     std::string modelIdentity;
     std::string currentClip;
     gameplay::PlayerPresentationModelLifetime lifetime{};
@@ -2107,6 +2119,13 @@ void Renderer::LoadRuntimeAssets(const gameplay::GameplayDefinitionRegistry* gam
     }
     worldLighting->Load();
 
+    LoadPlayerPresentationAssets(gameplayDefinitions);
+}
+
+void Renderer::LoadPlayerPresentationAssets(
+    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions)
+{
+
     if (playerModelGpu == nullptr)
     {
         playerModelGpu = std::make_unique<PlayerModelGpuState>();
@@ -2159,27 +2178,67 @@ void Renderer::LoadRuntimeAssets(const gameplay::GameplayDefinitionRegistry* gam
     PrepareLoadedModelMaterials(model);
     int animationCount = 0;
     ModelAnimation* animations = LoadModelAnimations(path.string().c_str(), &animationCount);
-    std::vector<std::string_view> availableClips;
-    availableClips.reserve(animationCount > 0 ? static_cast<std::size_t>(animationCount) : 0);
-    if (animations != nullptr)
-        for (int index = 0; index < animationCount; ++index)
-            availableClips.emplace_back(animations[index].name);
-    const gameplay::CharacterLocomotionBindingResolution bindingResolution =
-        gameplay::ResolveCharacterLocomotionBindings(
-            playerDefinition->character.animations, availableClips);
     const auto findAnimation = [animations, animationCount](std::string_view name) {
         if (name.empty()) return -1;
         for (int index = 0; index < animationCount; ++index)
             if (name == animations[index].name) return index;
         return -1;
     };
-    const int idle = findAnimation(playerDefinition->character.animations.idle);
-    const int move = findAnimation(playerDefinition->character.animations.move);
-    const int jump = findAnimation(playerDefinition->character.animations.jump);
-    if (model.skeleton.boneCount <= 0 || model.skeleton.boneCount > 64
-        || animations == nullptr || !bindingResolution.AllResolved()
-        || idle < 0 || move < 0 || jump < 0)
+    auto makeEmbedded = [&](std::string_view clip, animation::PlaybackMode playback) {
+        PlayerModelGpuState::AnimationSlot slot;
+        slot.animations = animations; slot.animationCount = animationCount;
+        slot.index = findAnimation(clip); slot.playback = playback;
+        slot.sourceAsset.assign(modelIdentity); slot.sourceClip.assign(clip);
+        slot.status = slot.index >= 0 ? "Resolved" : "Missing source clip";
+        return slot;
+    };
+    auto exactCompatible = [&model](const Model& sourceModel, const ModelAnimation& candidate) {
+        if (candidate.boneCount != model.skeleton.boneCount
+            || sourceModel.skeleton.boneCount != model.skeleton.boneCount
+            || sourceModel.skeleton.bones == nullptr) return false;
+        for (int bone = 0; bone < candidate.boneCount; ++bone)
+            if (sourceModel.skeleton.bones[bone].parent != model.skeleton.bones[bone].parent
+                || std::string_view(sourceModel.skeleton.bones[bone].name) != model.skeleton.bones[bone].name) return false;
+        return true;
+    };
+    auto resolveSlot = [&](std::string_view assetIdentity, std::string_view embeddedClip,
+        animation::PlaybackMode embeddedPlayback) {
+        auto slot = makeEmbedded(embeddedClip, embeddedPlayback);
+        if (assetIdentity.empty()) return slot;
+        slot = {}; slot.assetIdentity.assign(assetIdentity);
+        const gameplay::GameplayDefinition* asset = gameplayDefinitions->Find(assetIdentity);
+        if (asset == nullptr || asset->category != gameplay::GameplayDefinitionCategory::Animation
+            || !gameplay::ValidateAnimationDefinition(asset->animation))
+        { slot.status = "Malformed or missing animation identity"; return slot; }
+        slot.sourceAsset = asset->animation.sourceAssetIdentity;
+        slot.sourceClip = asset->animation.sourceClipName;
+        slot.playback = asset->animation.playbackMode;
+        const std::filesystem::path sourcePath = platform::RuntimeAssetPath(slot.sourceAsset);
+        std::error_code sourceError;
+        if (sourcePath.empty() || !std::filesystem::is_regular_file(sourcePath, sourceError))
+        { slot.status = "Missing source asset"; return slot; }
+        slot.animations = LoadModelAnimations(sourcePath.string().c_str(), &slot.animationCount);
+        slot.ownsAnimations = slot.animations != nullptr;
+        for (int index = 0; index < slot.animationCount; ++index)
+            if (slot.sourceClip == slot.animations[index].name) { slot.index = index; break; }
+        if (slot.index < 0) { slot.status = "Missing source clip"; return slot; }
+        Model sourceModel = LoadModel(sourcePath.string().c_str());
+        const bool compatible = exactCompatible(sourceModel, slot.animations[slot.index]);
+        UnloadModel(sourceModel);
+        if (!compatible) { slot.index = -1; slot.status = "Incompatible skeleton"; return slot; }
+        slot.status = "Resolved";
+        return slot;
+    };
+    auto idleSlot = resolveSlot(playerDefinition->character.animations.idleAsset,
+        playerDefinition->character.animations.idle, animation::PlaybackMode::Loop);
+    auto moveSlot = resolveSlot(playerDefinition->character.animations.moveAsset,
+        playerDefinition->character.animations.move, animation::PlaybackMode::Loop);
+    auto jumpSlot = resolveSlot(playerDefinition->character.animations.jumpAsset,
+        playerDefinition->character.animations.jump, animation::PlaybackMode::Clamp);
+    if (model.skeleton.boneCount <= 0 || model.skeleton.boneCount > 64)
     {
+        for (auto* slot : {&idleSlot, &moveSlot, &jumpSlot})
+            if (slot->ownsAnimations) UnloadModelAnimations(slot->animations, slot->animationCount);
         if (animations != nullptr) UnloadModelAnimations(animations, animationCount);
         UnloadModel(model);
         playerModelGpu->failed = true;
@@ -2189,32 +2248,44 @@ void Renderer::LoadRuntimeAssets(const gameplay::GameplayDefinitionRegistry* gam
     playerModelGpu->model = model;
     playerModelGpu->animations = animations;
     playerModelGpu->animationCount = animationCount;
-    playerModelGpu->idleAnimation = idle;
-    playerModelGpu->moveAnimation = move;
-    playerModelGpu->jumpAnimation = jump;
+    playerModelGpu->idle = std::move(idleSlot);
+    playerModelGpu->move = std::move(moveSlot);
+    playerModelGpu->jump = std::move(jumpSlot);
+    playerModelGpu->currentClip = playerModelGpu->idle.sourceClip;
     playerModelGpu->modelIdentity.assign(modelIdentity);
     playerModelGpu->loaded = true;
-    playerModelGpu->failed = false;
+    playerModelGpu->failed = !PlayerAnimationBindingsResolved();
+}
+
+void Renderer::ReloadPlayerPresentationAssets(
+    const gameplay::GameplayDefinitionRegistry* gameplayDefinitions)
+{
+    UnloadPlayerPresentationAssets();
+    gameplay::PreparePlayerPresentationModelDefinitionRefresh(playerModelGpu->lifetime);
+    LoadPlayerPresentationAssets(gameplayDefinitions);
+}
+
+void Renderer::UnloadPlayerPresentationAssets()
+{
+    if (playerModelGpu == nullptr)
+    {
+        return;
+    }
+    if (playerModelGpu->loaded)
+    {
+        for (auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+            if (slot->ownsAnimations && slot->animations != nullptr)
+                UnloadModelAnimations(slot->animations, slot->animationCount);
+        if (playerModelGpu->animations != nullptr)
+            UnloadModelAnimations(playerModelGpu->animations, playerModelGpu->animationCount);
+        UnloadModel(playerModelGpu->model);
+    }
+    *playerModelGpu = {};
 }
 
 void Renderer::UnloadRuntimeAssets()
 {
-    if (playerModelGpu != nullptr)
-    {
-        if (playerModelGpu->loaded)
-        {
-            if (playerModelGpu->animations != nullptr)
-                UnloadModelAnimations(playerModelGpu->animations, playerModelGpu->animationCount);
-            playerModelGpu->animations = nullptr;
-            playerModelGpu->animationCount = 0;
-            UnloadModel(playerModelGpu->model);
-            playerModelGpu->model = {};
-            playerModelGpu->loaded = false;
-        }
-        playerModelGpu->failed = false;
-        playerModelGpu->missingLogged = false;
-        gameplay::ClearPlayerPresentationModelLifetime(playerModelGpu->lifetime);
-    }
+    UnloadPlayerPresentationAssets();
     if (staticPropModels)
     {
         staticPropModels->Shutdown();
@@ -2245,13 +2316,37 @@ int Renderer::PlayerSkeletonJointCount() const
 
 bool Renderer::PlayerAnimationBindingsResolved() const
 {
-    return IsPlayerModelLoaded() && playerModelGpu->idleAnimation >= 0
-        && playerModelGpu->moveAnimation >= 0 && playerModelGpu->jumpAnimation >= 0;
+    return IsPlayerModelLoaded() && playerModelGpu->idle.index >= 0
+        && playerModelGpu->move.index >= 0 && playerModelGpu->jump.index >= 0;
 }
 
 const char* Renderer::PlayerCurrentClipName() const
 {
     return playerModelGpu != nullptr ? playerModelGpu->currentClip.c_str() : "";
+}
+
+const char* Renderer::PlayerCurrentAnimationIdentity() const
+{
+    if (playerModelGpu == nullptr) return "";
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+        if (slot->sourceClip == playerModelGpu->currentClip) return slot->assetIdentity.c_str();
+    return "";
+}
+
+const char* Renderer::PlayerCurrentAnimationSource() const
+{
+    if (playerModelGpu == nullptr) return "";
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+        if (slot->sourceClip == playerModelGpu->currentClip) return slot->sourceAsset.c_str();
+    return "";
+}
+
+const char* Renderer::PlayerCurrentAnimationStatus() const
+{
+    if (playerModelGpu == nullptr) return "None";
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+        if (slot->sourceClip == playerModelGpu->currentClip) return slot->status.c_str();
+    return "None";
 }
 
 std::size_t Renderer::PlayerModelLoadCount() const
@@ -2395,39 +2490,44 @@ void Renderer::DrawWorld(
     bool pickupHudTarget = false;
     char pickupHudText[64]{};
 
-    if (IsPlayerModelLoaded() && PlayerAnimationBindingsResolved())
+    if (IsPlayerModelLoaded())
     {
-        const auto animationIndex = [this](gameplay::PlayerAnimationState state) {
-            if (state == gameplay::PlayerAnimationState::Move) return playerModelGpu->moveAnimation;
-            if (state == gameplay::PlayerAnimationState::Jump) return playerModelGpu->jumpAnimation;
-            return playerModelGpu->idleAnimation;
+        const auto animationSlot = [this](gameplay::PlayerAnimationState state) {
+            if (state == gameplay::PlayerAnimationState::Move) return &playerModelGpu->move;
+            if (state == gameplay::PlayerAnimationState::Jump) return &playerModelGpu->jump;
+            return &playerModelGpu->idle;
         };
-        const int currentIndex = animationIndex(playerPresentation.animation.state);
-        const int previousIndex = animationIndex(playerPresentation.animation.previousState);
-        const auto frameFor = [](const ModelAnimation& clip, float seconds, bool loop) {
+        const auto* currentSlot = animationSlot(playerPresentation.animation.state);
+        const auto* previousSlot = animationSlot(playerPresentation.animation.previousState);
+        playerModelGpu->currentClip = currentSlot->sourceClip;
+        if (!PlayerAnimationBindingsResolved())
+        {
+            // Keep the loaded Character in its safe bind pose. An invalid reusable
+            // assignment never falls through to the embedded clip or enters sampling.
+        }
+        else
+        {
+        const auto frameFor = [](const ModelAnimation& clip, float seconds, animation::PlaybackMode mode) {
             const float lastFrame = static_cast<float>(clip.keyframeCount > 0
                 ? clip.keyframeCount - 1 : 0);
             const float durationSeconds = lastFrame / 60.0f;
             return animation::ResolvePlaybackTime(
                 seconds,
                 durationSeconds,
-                loop ? animation::PlaybackMode::Loop : animation::PlaybackMode::Clamp) * 60.0f;
+                mode) * 60.0f;
         };
-        const bool currentLoop = playerPresentation.animation.state
-            != gameplay::PlayerAnimationState::Jump;
-        const bool previousLoop = playerPresentation.animation.previousState
-            != gameplay::PlayerAnimationState::Jump;
-        const ModelAnimation& current = playerModelGpu->animations[currentIndex];
-        const ModelAnimation& previous = playerModelGpu->animations[previousIndex];
+        const ModelAnimation& current = currentSlot->animations[currentSlot->index];
+        const ModelAnimation& previous = previousSlot->animations[previousSlot->index];
         const float blend = gameplay::PlayerAnimationBlendAmount(playerPresentation.animation);
         UpdateModelAnimationEx(
             playerModelGpu->model,
             previous,
-            frameFor(previous, playerPresentation.animation.previousPlaybackTimeSeconds, previousLoop),
+            frameFor(previous, playerPresentation.animation.previousPlaybackTimeSeconds, previousSlot->playback),
             current,
-            frameFor(current, playerPresentation.animation.playbackTimeSeconds, currentLoop),
+            frameFor(current, playerPresentation.animation.playbackTimeSeconds, currentSlot->playback),
             blend);
-        playerModelGpu->currentClip = current.name;
+            playerModelGpu->currentClip = current.name;
+        }
     }
 
     if (terrainGpu)

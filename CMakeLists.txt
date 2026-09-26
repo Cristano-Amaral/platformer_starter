@@ -65,6 +65,8 @@ add_executable(Platformer3D
     game/source/assets/StaticModelDelete.cpp
     game/source/animation/SkeletalAnimation.cpp
     game/source/animation/SkeletalAnimation.h
+    game/source/animation/AnimationLibrary.cpp
+    game/source/animation/AnimationLibrary.h
     game/source/assets/StaticModelDelete.h
     game/source/editor/AuthoredLifecycleCommands.cpp
     game/source/editor/AuthoredLifecycleCommands.h
@@ -414,6 +416,9 @@ file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/models/player.glb"
     PLATFORMER_PLAYER_GLB)
 file(TO_CMAKE_PATH
+    "${CMAKE_SOURCE_DIR}/game/assets/source/models/humanoid_animations.glb"
+    PLATFORMER_REUSABLE_ANIMATION_GLB)
+file(TO_CMAKE_PATH
     "${CMAKE_SOURCE_DIR}/game/assets/source/textures/test_checker.png"
     PLATFORMER_TEST_CHECKER_PNG)
 file(TO_CMAKE_PATH
@@ -436,6 +441,29 @@ if(MSVC)
     target_compile_options(SkeletalAnimationTest PRIVATE /W4 /permissive-)
 else()
     target_compile_options(SkeletalAnimationTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(AnimationLibraryTest
+    game/source/animation/AnimationLibrary.cpp
+    game/source/animation/AnimationLibraryTest.cpp
+    game/source/animation/SkeletalAnimation.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/platform/FileReplace.h
+)
+if(WIN32)
+    target_sources(AnimationLibraryTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(AnimationLibraryTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_include_directories(AnimationLibraryTest PRIVATE game/source)
+target_compile_definitions(AnimationLibraryTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""
+    "PLATFORMER_SOURCE_ASSET_ROOT=\"${CMAKE_SOURCE_DIR}/game/assets/source\"")
+if(MSVC)
+    target_compile_options(AnimationLibraryTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(AnimationLibraryTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Milestone 104: equipment selection, joint resolution, and attachment transforms.
@@ -468,6 +496,7 @@ else()
 endif()
 target_compile_definitions(PlayerAnimationAssetTest PRIVATE
     "PLATFORMER_PLAYER_GLB=\"${PLATFORMER_PLAYER_GLB}\""
+    "PLATFORMER_REUSABLE_ANIMATION_GLB=\"${PLATFORMER_REUSABLE_ANIMATION_GLB}\""
 )
 
 # Milestone 84: imported Base Color / Base Color Texture presentation. CPU only.
@@ -730,6 +759,19 @@ add_executable(StaticModelPreviewTest
     game/source/world/StaticProp.cpp
     game/source/world/StaticProp.h
 )
+foreach(content_browser_target IN ITEMS ContentBrowserTest ContentBrowserThumbnailTest
+        ContentBrowserAssetLibraryTest StaticModelPreviewTest)
+    target_sources(${content_browser_target} PRIVATE
+        game/source/animation/AnimationLibrary.cpp
+        game/source/animation/SkeletalAnimation.cpp
+        game/source/gameplay/GameplayDefinition.cpp
+        game/source/gameplay/GameplayDefinitionFile.cpp)
+    if(WIN32)
+        target_sources(${content_browser_target} PRIVATE game/source/platform/FileReplaceWindows.cpp)
+    else()
+        target_sources(${content_browser_target} PRIVATE game/source/platform/FileReplacePosix.cpp)
+    endif()
+endforeach()
 if(WIN32)
     target_sources(StaticModelPreviewTest PRIVATE
         game/source/platform/RuntimePathsWindows.cpp

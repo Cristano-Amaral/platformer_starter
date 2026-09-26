@@ -38,6 +38,9 @@ struct DebugMetricsSnapshot
     bool playerAnimationBindingsResolved = false;
     const char* playerAnimationState = "Idle";
     const char* playerAnimationClip = "";
+    const char* playerAnimationIdentity = "";
+    const char* playerAnimationSource = "";
+    const char* playerAnimationStatus = "None";
     float playerAnimationTime = 0.0f;
     float playerAnimationBlend = 1.0f;
 

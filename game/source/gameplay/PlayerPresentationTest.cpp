@@ -196,6 +196,13 @@ int main()
     (void)gameplay::BuildPlayerVisualTransform(
         followPos, gameplay::kDefaultPlayerPresentationConfig, 0.0f);
     Expect(lifetime.loadCount == 1, "19c. visual transform does not load a model");
+    gameplay::PreparePlayerPresentationModelDefinitionRefresh(lifetime);
+    Expect(gameplay::PlayerPresentationShouldAttemptModelLoad(lifetime),
+        "19d. promoted CharacterDefinition permits one presentation refresh");
+    gameplay::NotePlayerPresentationLoadAttempt(lifetime);
+    Expect(lifetime.loadCount == 2
+            && !gameplay::PlayerPresentationShouldAttemptModelLoad(lifetime),
+        "19e. definition refresh reloads once and restores load-once policy");
 
     Expect(gameplay::ShouldDrawPlayerPresentationModel(true), "20. successful load draws the model");
     Expect(

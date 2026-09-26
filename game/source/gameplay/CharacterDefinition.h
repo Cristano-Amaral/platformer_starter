@@ -4,6 +4,7 @@
 // M102 projects Player base stats from it without creating a Character instance.
 
 #include "gameplay/GameplayIdentity.h"
+#include "gameplay/AnimationDefinition.h"
 #include "gameplay/GameplayStat.h"
 #include "gameplay/ItemDefinition.h"
 
@@ -65,6 +66,9 @@ struct CharacterLocomotionAnimations
     std::string idle;
     std::string move;
     std::string jump;
+    std::string idleAsset;
+    std::string moveAsset;
+    std::string jumpAsset;
 };
 
 enum class CharacterAnimationBindingStatus { None, Resolved, Missing };
@@ -162,6 +166,12 @@ inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefini
     if (!validBinding(character.animations.idle) || !validBinding(character.animations.move)
         || !validBinding(character.animations.jump))
         return ValidateCharacterStatus::InvalidAnimationBinding;
+    const auto validAsset = [](const std::string& identity) {
+        return identity.empty() || IsValidAnimationIdentity(identity);
+    };
+    if (!validAsset(character.animations.idleAsset) || !validAsset(character.animations.moveAsset)
+        || !validAsset(character.animations.jumpAsset))
+        return ValidateCharacterStatus::InvalidAnimationBinding;
     for (std::size_t index = 0; index < kGameplayStatCount; ++index)
     {
         if (character.hasBaseStat[index] && !IsValidGameplayStatValue(character.baseStatValue[index]))
@@ -177,6 +187,9 @@ inline bool CharacterDefinitionsEqual(const CharacterDefinition& a, const Charac
         && a.animations.idle == b.animations.idle
         && a.animations.move == b.animations.move
         && a.animations.jump == b.animations.jump
+        && a.animations.idleAsset == b.animations.idleAsset
+        && a.animations.moveAsset == b.animations.moveAsset
+        && a.animations.jumpAsset == b.animations.jumpAsset
         && a.hasBaseStat == b.hasBaseStat
         && a.baseStatValue == b.baseStatValue;
 }

@@ -2,6 +2,7 @@
 
 #include "assets/RuntimePng.h"
 #include "assets/StaticGlb.h"
+#include "gameplay/GameplayDefinitionFile.h"
 
 #include <algorithm>
 #include <cctype>
@@ -50,10 +51,23 @@ ContentBrowserAssetEntry MakeTextureEntry(
     return asset;
 }
 
+ContentBrowserAssetEntry MakeAnimationEntry(const animation::AnimationCatalogEntry& entry,
+    const ContentBrowserOrganization& organization)
+{
+    ContentBrowserAssetEntry asset{};
+    asset.kind = ContentBrowserAssetKind::Animation;
+    asset.canonicalIdentity = entry.identity;
+    asset.assetType = "skeletal_animation";
+    asset.displayName = entry.identity.substr(entry.identity.find('/') + 1);
+    asset.logicalFolder = ContentBrowserAssignedFolder(organization, entry.identity);
+    asset.favorite = ContentBrowserIsFavorite(organization, entry.identity);
+    return asset;
+}
+
 std::vector<std::string> KnownIdentities(const ContentBrowserState& state)
 {
     std::vector<std::string> identities;
-    identities.reserve(state.catalog.Count() + state.textureCatalog.Count());
+    identities.reserve(state.catalog.Count() + state.textureCatalog.Count() + state.animationCatalog.Count());
     for (const assets::StaticModelCatalogEntry& entry : state.catalog.Entries())
     {
         identities.push_back(entry.canonicalIdentity);
@@ -62,6 +76,7 @@ std::vector<std::string> KnownIdentities(const ContentBrowserState& state)
     {
         identities.push_back(entry.canonicalIdentity);
     }
+    for (const auto& entry : state.animationCatalog.Entries()) identities.push_back(entry.identity);
     return identities;
 }
 }
@@ -85,12 +100,15 @@ const char* ContentBrowserAssetKindName(ContentBrowserAssetKind kind)
         return "Model";
     case ContentBrowserAssetKind::Texture:
         return "Texture";
+    case ContentBrowserAssetKind::Animation:
+        return "Animation";
     }
     return "Model";
 }
 
 ContentBrowserAssetKind ClassifyContentBrowserIdentity(std::string_view canonicalIdentity)
 {
+    if (gameplay::IsValidAnimationIdentity(canonicalIdentity)) return ContentBrowserAssetKind::Animation;
     if (ContentBrowserIdentityIsTexture(canonicalIdentity))
     {
         return ContentBrowserAssetKind::Texture;
@@ -142,7 +160,7 @@ bool ContentBrowserAssetIsVisibleInFolderScope(
 std::vector<ContentBrowserAssetEntry> CollectContentBrowserAssets(const ContentBrowserState& state)
 {
     std::vector<ContentBrowserAssetEntry> assets;
-    assets.reserve(state.catalog.Count() + state.textureCatalog.Count());
+    assets.reserve(state.catalog.Count() + state.textureCatalog.Count() + state.animationCatalog.Count());
     for (const assets::StaticModelCatalogEntry& entry : state.catalog.Entries())
     {
         assets.push_back(MakeModelEntry(entry, state.organization));
@@ -151,6 +169,8 @@ std::vector<ContentBrowserAssetEntry> CollectContentBrowserAssets(const ContentB
     {
         assets.push_back(MakeTextureEntry(entry, state.organization));
     }
+    for (const auto& entry : state.animationCatalog.Entries())
+        assets.push_back(MakeAnimationEntry(entry, state.organization));
     std::sort(
         assets.begin(),
         assets.end(),
@@ -179,6 +199,12 @@ std::vector<ContentBrowserAssetEntry> QueryContentBrowserAssets(const ContentBro
             break;
         case ContentBrowserCollection::Textures:
             if (entry.kind != ContentBrowserAssetKind::Texture)
+            {
+                continue;
+            }
+            break;
+        case ContentBrowserCollection::Animations:
+            if (entry.kind != ContentBrowserAssetKind::Animation)
             {
                 continue;
             }
@@ -228,7 +254,8 @@ void SelectContentBrowserIdentity(ContentBrowserState& state, std::string_view c
         return;
     }
     if (state.catalog.Find(canonicalIdentity) != nullptr
-        || state.textureCatalog.Find(canonicalIdentity) != nullptr)
+        || state.textureCatalog.Find(canonicalIdentity) != nullptr
+        || state.animationCatalog.Find(canonicalIdentity) != nullptr)
     {
         state.selectedIdentity = std::string(canonicalIdentity);
         return;
@@ -241,6 +268,11 @@ void RefreshContentBrowser(ContentBrowserState& state, const std::filesystem::pa
     const std::string previousIdentity = state.selectedIdentity;
     state.catalog.Refresh(sourceRoot);
     state.textureCatalog.Refresh(sourceRoot);
+    state.animationCatalog = {};
+    const auto definitions = gameplay::LoadGameplayDefinitionsFile(
+        sourceRoot / std::string(gameplay::kGameplayDefinitionsLogicalPath));
+    if (definitions.status == gameplay::LoadGameplayDefinitionsStatus::Loaded)
+        state.animationCatalog.Refresh(definitions.registry, sourceRoot);
     std::string loadMessage;
     (void)LoadContentBrowserOrganization(
         ContentBrowserOrganizationPath(sourceRoot), state.organization, loadMessage);

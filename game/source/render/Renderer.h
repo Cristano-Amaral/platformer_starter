@@ -299,6 +299,10 @@ public:
     Renderer& operator=(Renderer&&) = delete;
 
     void LoadRuntimeAssets(const gameplay::GameplayDefinitionRegistry* gameplayDefinitions = nullptr);
+    // Re-resolves only the Player presentation after an authored Character
+    // Database promotion. Other runtime GPU resources retain their lifetimes.
+    void ReloadPlayerPresentationAssets(
+        const gameplay::GameplayDefinitionRegistry* gameplayDefinitions);
     void UnloadRuntimeAssets();
     void SyncStaticPropModels(
         const world::LevelDefinition& level,
@@ -333,6 +337,9 @@ public:
     int PlayerSkeletonJointCount() const;
     bool PlayerAnimationBindingsResolved() const;
     const char* PlayerCurrentClipName() const;
+    const char* PlayerCurrentAnimationIdentity() const;
+    const char* PlayerCurrentAnimationSource() const;
+    const char* PlayerCurrentAnimationStatus() const;
 
     void BeginFrame();
     void DrawWorld(
@@ -400,6 +407,9 @@ public:
 
 private:
     struct PlayerModelGpuState;
+    void LoadPlayerPresentationAssets(
+        const gameplay::GameplayDefinitionRegistry* gameplayDefinitions);
+    void UnloadPlayerPresentationAssets();
     std::unique_ptr<StaticModelSceneStore> staticPropModels;
     std::unique_ptr<PlayerModelGpuState> playerModelGpu;
     std::unique_ptr<WorldLightingResources> worldLighting;

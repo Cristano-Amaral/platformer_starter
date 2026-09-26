@@ -691,6 +691,8 @@ void DrawContentBrowserAssetDetails(const LevelEditorState& state)
     const assets::StaticModelCatalogEntry* model = state.contentBrowser.catalog.Find(identity);
     const assets::SourceTextureCatalogEntry* texture =
         state.contentBrowser.textureCatalog.Find(identity);
+    const animation::AnimationCatalogEntry* animationAsset =
+        state.contentBrowser.animationCatalog.Find(identity);
     const char* displayName = identity.c_str();
     const char* assetType = kind == ContentBrowserAssetKind::Texture ? "runtime_png" : "static_glb";
     if (texture != nullptr)
@@ -703,14 +705,32 @@ void DrawContentBrowserAssetDetails(const LevelEditorState& state)
         displayName = model->displayName.c_str();
         assetType = model->assetType.c_str();
     }
+    else if (animationAsset != nullptr)
+    {
+        assetType = "skeletal_animation";
+    }
 
     ImGui::Text("Name: %s", displayName);
     ImGui::Text("Kind: %s", ContentBrowserAssetKindName(kind));
     ImGui::Text("Type: %s", assetType);
     ImGui::Text("Identity: %s", identity.c_str());
-    ImGui::Text("Source: game/assets/source/%s", identity.c_str());
+    if (animationAsset == nullptr)
+        ImGui::Text("Source: game/assets/source/%s", identity.c_str());
+    else
+        ImGui::TextUnformatted("Definition source: game/assets/source/gameplay/definitions.gameplay");
     ImGui::Text("Folder: %s", folder.empty() ? "(unfiled)" : folder.c_str());
     ImGui::Text("Favorite: %s", favorite ? "yes" : "no");
+
+    if (animationAsset != nullptr)
+    {
+        ImGui::Text("Source GLB: %s", animationAsset->definition.sourceAssetIdentity.c_str());
+        ImGui::Text("Source clip: %s", animationAsset->definition.sourceClipName.c_str());
+        ImGui::Text("Playback: %s", animationAsset->definition.playbackMode
+            == animation::PlaybackMode::Loop ? "Loop" : "Clamp");
+        ImGui::Text("Source status: %s", animation::AnimationAssetStatusName(animationAsset->status));
+        ImGui::TextDisabled("Clip and exact skeleton compatibility are validated by the runtime loader.");
+        return;
+    }
 
     if (kind == ContentBrowserAssetKind::Texture)
     {
@@ -739,6 +759,8 @@ const char* ContentBrowserCollectionLabel(ContentBrowserCollection collection)
         return "Models";
     case ContentBrowserCollection::Textures:
         return "Textures";
+    case ContentBrowserCollection::Animations:
+        return "Animations";
     case ContentBrowserCollection::Folders:
         return "Folders";
     }
@@ -3249,7 +3271,10 @@ LevelEditorRequest DrawContentBrowser(
     ImGui::EndDisabled();
     ImGui::SameLine();
     const bool hasSelection = !state.contentBrowser.selectedIdentity.empty();
-    ImGui::BeginDisabled(!authoringAvailable || toolsBusy || !hasSelection);
+    const bool animationSelected = hasSelection
+        && ClassifyContentBrowserIdentity(state.contentBrowser.selectedIdentity)
+            == ContentBrowserAssetKind::Animation;
+    ImGui::BeginDisabled(!authoringAvailable || toolsBusy || !hasSelection || animationSelected);
     if (ImGui::Button("Delete Selected Asset"))
     {
         state.contentBrowser.deleteConfirmOpen = true;
@@ -3350,6 +3375,7 @@ LevelEditorRequest DrawContentBrowser(
         drawCollection(ContentBrowserCollection::Favorites, "Favorites");
         drawCollection(ContentBrowserCollection::Models, "Models");
         drawCollection(ContentBrowserCollection::Textures, "Textures");
+        drawCollection(ContentBrowserCollection::Animations, "Animations");
         ImGui::Spacing();
         ImGui::SeparatorText("Folders");
         ImGui::Indent(12.0f);
@@ -3462,7 +3488,8 @@ LevelEditorRequest DrawContentBrowser(
             true,
             assetPaneFlags))
     {
-        if (state.contentBrowser.catalog.Count() == 0 && state.contentBrowser.textureCatalog.Count() == 0)
+        if (state.contentBrowser.catalog.Count() == 0 && state.contentBrowser.textureCatalog.Count() == 0
+            && state.contentBrowser.animationCatalog.Count() == 0)
         {
             ImGui::TextWrapped(
                 "No Models or Textures are registered. Use Import > Import Model... or "
@@ -3527,7 +3554,7 @@ LevelEditorRequest DrawContentBrowser(
                         imageHeight = view.textureThumbnails->TextureHeight(entry.canonicalIdentity);
                         failed = view.textureThumbnails->IsFailed(entry.canonicalIdentity);
                     }
-                    else if (view.thumbnails != nullptr)
+                    else if (entry.kind == ContentBrowserAssetKind::Model && view.thumbnails != nullptr)
                     {
                         gpuId = view.thumbnails->TextureGpuId(entry.canonicalIdentity);
                         failed = view.thumbnails->IsFailed(entry.canonicalIdentity);

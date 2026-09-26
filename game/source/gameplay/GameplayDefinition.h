@@ -8,6 +8,7 @@
 #include "gameplay/GameplayStat.h"
 #include "gameplay/ItemDefinition.h"
 #include "gameplay/CharacterDefinition.h"
+#include "gameplay/AnimationDefinition.h"
 
 #include <array>
 #include <cstddef>
@@ -34,6 +35,7 @@ struct GameplayDefinition
     // Meaningful only when category is Item. Characters keep the default payload.
     ItemDefinition item{};
     CharacterDefinition character{};
+    AnimationDefinition animation{};
 };
 
 inline bool GameplayDefinitionHasStat(const GameplayDefinition& definition, GameplayStatId id)
@@ -71,6 +73,7 @@ enum class RegisterGameplayDefinitionStatus
     InvalidStat,
     InvalidItem,
     InvalidCharacter,
+    InvalidAnimation,
 };
 
 struct RegisterGameplayDefinitionResult
@@ -97,6 +100,8 @@ inline const char* RegisterGameplayDefinitionStatusName(RegisterGameplayDefiniti
         return "InvalidItem";
     case RegisterGameplayDefinitionStatus::InvalidCharacter:
         return "InvalidCharacter";
+    case RegisterGameplayDefinitionStatus::InvalidAnimation:
+        return "InvalidAnimation";
     }
     return "MalformedIdentity";
 }

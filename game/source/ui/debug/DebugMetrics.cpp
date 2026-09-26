@@ -362,6 +362,10 @@ void DrawDebugMetrics(
             snapshot.playerAnimationBindingsResolved ? "Resolved" : "Missing / invalid");
         ImGui::Text("State: %s", snapshot.playerAnimationState);
         ImGui::Text("Clip: %s", snapshot.playerAnimationClip[0] ? snapshot.playerAnimationClip : "None");
+        ImGui::Text("Binding source: %s", snapshot.playerAnimationIdentity[0] ? "Reusable" : "Embedded");
+        ImGui::Text("Animation identity: %s", snapshot.playerAnimationIdentity[0] ? snapshot.playerAnimationIdentity : "None");
+        ImGui::Text("Source asset: %s", snapshot.playerAnimationSource[0] ? snapshot.playerAnimationSource : "None");
+        ImGui::Text("Resolution / compatibility: %s", snapshot.playerAnimationStatus);
         ImGui::Text("Playback: %.3f s", snapshot.playerAnimationTime);
         ImGui::Text("Cross-fade: %.2f", snapshot.playerAnimationBlend);
     }

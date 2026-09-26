@@ -21,6 +21,9 @@ world_model "models/player.glb"
 animation_idle "Idle"
 animation_move "Move"
 animation_jump "Jump"
+animation_idle_asset "animations/humanoid_idle"
+animation_move_asset "animations/humanoid_move"
+animation_jump_asset "animations/humanoid_jump"
 stat MaxHealth 100
 stat MoveSpeed 6
 stat JumpStrength 8
@@ -46,6 +49,18 @@ stat MoveSpeed 3
 stat AttackPower 8
 stat Defense 2
 stat InteractionRange 1.5
+definition animations/humanoid_idle
+source_asset "models/humanoid_animations.glb"
+source_clip "Idle"
+playback Loop
+definition animations/humanoid_move
+source_asset "models/humanoid_animations.glb"
+source_clip "Move"
+playback Loop
+definition animations/humanoid_jump
+source_asset "models/humanoid_animations.glb"
+source_clip "Jump"
+playback Clamp
 definition items/bau
 display_name "Bau"
 description "Bau"

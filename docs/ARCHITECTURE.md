@@ -48,6 +48,20 @@ project-owned Player state
 Renderer / PlatformerCamera / DebugMetrics
 ```
 
+## Reusable animation assets (Milestone 105)
+
+Reusable skeletal clips are typed `animations/<name>` entries in the shared deterministic
+`gameplay/definitions.gameplay` catalog. Each entry names one staged `models/*.glb`, one clip,
+and `Loop` or `Clamp` playback. Character Idle/Move/Jump bindings retain their embedded clip
+names and may independently select a reusable animation identity. Missing or invalid reusable
+bindings fail safely; they do not create another locomotion state machine or pose evaluator.
+
+The renderer feeds resolved reusable `ModelAnimation` data into the existing M103 playback,
+cross-fade, Raylib pose update, skinning, and M104 attachment path. Compatibility is exact:
+the source and Character skeletons must have the same joint count and the same joint name and
+parent index at every joint index. M105 performs no retargeting or joint remapping. Development
+Content Browser discovery and Character Database selection derive from the same gameplay catalog.
+
 ## Visible equipment attachments (Milestone 104)
 
 `gameplay::Equipment` remains the sole authority for occupied equipment slots. An Equipment

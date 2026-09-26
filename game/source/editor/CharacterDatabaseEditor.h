@@ -211,6 +211,29 @@ inline bool TryClearCharacterAnimation(
     return true;
 }
 
+inline bool TryAssignCharacterAnimationAsset(
+    gameplay::GameplayDefinition& definition, CharacterAnimationSlot slot, std::string_view identity)
+{
+    if (definition.category != gameplay::GameplayDefinitionCategory::Character
+        || !gameplay::IsValidAnimationIdentity(identity)) return false;
+    std::string* target = slot == CharacterAnimationSlot::Idle
+        ? &definition.character.animations.idleAsset : slot == CharacterAnimationSlot::Move
+        ? &definition.character.animations.moveAsset : &definition.character.animations.jumpAsset;
+    target->assign(identity);
+    return true;
+}
+
+inline bool TryClearCharacterAnimationAsset(
+    gameplay::GameplayDefinition& definition, CharacterAnimationSlot slot)
+{
+    if (definition.category != gameplay::GameplayDefinitionCategory::Character) return false;
+    std::string* target = slot == CharacterAnimationSlot::Idle
+        ? &definition.character.animations.idleAsset : slot == CharacterAnimationSlot::Move
+        ? &definition.character.animations.moveAsset : &definition.character.animations.jumpAsset;
+    target->clear();
+    return true;
+}
+
 inline ItemDatabaseSaveStatus TrySaveCharacterDatabase(
     CharacterDatabaseEditorState& state, const std::filesystem::path& path, bool authoringAvailable)
 {

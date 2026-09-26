@@ -14,6 +14,7 @@ namespace gameplay
 {
 inline constexpr std::string_view kGameplayItemIdentityPrefix = "items";
 inline constexpr std::string_view kGameplayCharacterIdentityPrefix = "characters";
+inline constexpr std::string_view kGameplayAnimationIdentityPrefix = "animations";
 inline constexpr std::size_t kMaxGameplayDefinitionNameLength = 32;
 // "characters/" (11) + name (32).
 inline constexpr std::size_t kMaxGameplayIdentityLength = 43;
@@ -22,6 +23,7 @@ enum class GameplayDefinitionCategory
 {
     Item,
     Character,
+    Animation,
 };
 
 inline std::string_view GameplayDefinitionCategoryName(GameplayDefinitionCategory category)
@@ -32,6 +34,8 @@ inline std::string_view GameplayDefinitionCategoryName(GameplayDefinitionCategor
         return "Item";
     case GameplayDefinitionCategory::Character:
         return "Character";
+    case GameplayDefinitionCategory::Animation:
+        return "Animation";
     }
     return {};
 }
@@ -44,6 +48,8 @@ inline std::string_view GameplayDefinitionCategoryPrefix(GameplayDefinitionCateg
         return kGameplayItemIdentityPrefix;
     case GameplayDefinitionCategory::Character:
         return kGameplayCharacterIdentityPrefix;
+    case GameplayDefinitionCategory::Animation:
+        return kGameplayAnimationIdentityPrefix;
     }
     return {};
 }
@@ -58,6 +64,10 @@ inline std::optional<GameplayDefinitionCategory> GameplayDefinitionCategoryFromP
     if (prefix == kGameplayCharacterIdentityPrefix)
     {
         return GameplayDefinitionCategory::Character;
+    }
+    if (prefix == kGameplayAnimationIdentityPrefix)
+    {
+        return GameplayDefinitionCategory::Animation;
     }
     return std::nullopt;
 }

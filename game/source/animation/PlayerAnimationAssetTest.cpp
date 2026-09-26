@@ -36,6 +36,19 @@ int main()
         return 1;
     }
 
+    animationCount = 0;
+    animations = LoadModelAnimations(PLATFORMER_REUSABLE_ANIMATION_GLB, &animationCount);
+    const bool reusableValid = animations != nullptr && animationCount == 3
+        && HasAnimation(animations, animationCount, "Idle")
+        && HasAnimation(animations, animationCount, "Move")
+        && HasAnimation(animations, animationCount, "Jump");
+    if (animations != nullptr) UnloadModelAnimations(animations, animationCount);
+    if (!reusableValid)
+    {
+        std::cerr << "Canonical reusable animation GLB failed the production raylib loader.\n";
+        return 1;
+    }
+
     std::cout << "PlayerAnimationAssetTest passed\n";
     return 0;
 }

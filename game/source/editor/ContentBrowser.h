@@ -6,6 +6,7 @@
 
 #include "assets/SourceTextureCatalog.h"
 #include "assets/StaticModelCatalog.h"
+#include "animation/AnimationLibrary.h"
 #include "editor/ContentBrowserOrganization.h"
 #include "editor/ContentBrowserView.h"
 
@@ -20,6 +21,7 @@ enum class ContentBrowserAssetKind
 {
     Model,
     Texture,
+    Animation,
 };
 
 struct ContentBrowserAssetEntry
@@ -36,6 +38,7 @@ struct ContentBrowserState
 {
     assets::StaticModelCatalog catalog;
     assets::SourceTextureCatalog textureCatalog;
+    animation::AnimationCatalog animationCatalog;
     ContentBrowserOrganization organization;
     ContentBrowserCollection collection = kDefaultContentBrowserCollection;
     std::string currentFolderPath;
