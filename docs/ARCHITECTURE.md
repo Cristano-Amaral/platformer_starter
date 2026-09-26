@@ -62,6 +62,22 @@ the source and Character skeletons must have the same joint count and the same j
 parent index at every joint index. M105 performs no retargeting or joint remapping. Development
 Content Browser discovery and Character Database selection derive from the same gameplay catalog.
 
+## Character asset validation (Milestone 106)
+
+The Development Character Database validates its selected working-copy `CharacterDefinition`
+through `animation::CharacterAssetValidator`. The typed result distinguishes no model, resolved,
+missing, and load failure; reports Raylib model load, skin/skeleton availability, joint count, and
+the first 12 recognized joint names/parents; and classifies each Idle/Move/Jump reusable binding as
+embedded/None, compatible, missing definition, missing source, missing clip, load failure, or exact
+skeleton incompatibility. Validation is cached by the working-copy asset inputs and recomputes when
+those inputs change. It does not Save, promote, or mutate the active gameplay registry.
+
+The validator uses the M103 GLB checks plus real Raylib `LoadModel` / `LoadModelAnimations` data.
+Runtime reusable binding and editor validation share `RaylibSkeletonsExactlyCompatible`: joint count,
+joint name at index, and parent index must match exactly. Static models remain valid catalog assets
+but are explicitly unsuitable for reusable skeletal animation. M106 adds no parser, retargeting,
+repair, importer, preview viewport, or runtime authority.
+
 ## Visible equipment attachments (Milestone 104)
 
 `gameplay::Equipment` remains the sole authority for occupied equipment slots. An Equipment

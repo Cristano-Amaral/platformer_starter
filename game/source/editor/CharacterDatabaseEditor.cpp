@@ -150,11 +150,50 @@ void DrawCharacterDatabaseEditor(
                 if (asset == nullptr || asset->category != gameplay::GameplayDefinitionCategory::Animation)
                     ImGui::TextColored(ImVec4(.92f,.45f,.28f,1), "Missing reusable identity");
                 else
-                    ImGui::TextDisabled("Source: %s | Clip: %s | compatibility checked at runtime",
+                    ImGui::TextDisabled("Source: %s | Clip: %s",
                         asset->animation.sourceAssetIdentity.c_str(), asset->animation.sourceClipName.c_str());
             }
             ImGui::PopID();
             ++slotIndex;
+        }
+        RefreshCharacterAssetValidation(state, selected->character, AuthoringSourceRoot());
+        const auto& validation = state.assetValidation;
+        ImGui::Separator();
+        ImGui::TextUnformatted("Character Asset / Compatibility");
+        ImGui::Text("World Model: %s", animation::CharacterModelValidationStatusName(
+            validation.model.status));
+        ImGui::Text("Model load: %s | Skin: %s | Skeleton: %s",
+            validation.model.modelLoaded ? "Success" : "No",
+            validation.model.skinned ? "Skinned" : "Static / non-skinned",
+            validation.model.hasSkeleton ? "Available" : "None");
+        if (validation.model.hasSkeleton)
+        {
+            ImGui::Text("Joints: %d", validation.model.jointCount);
+            if (ImGui::TreeNode("Recognized joint hierarchy"))
+            {
+                for (std::size_t joint = 0; joint < validation.model.joints.size(); ++joint)
+                {
+                    const auto& metadata = validation.model.joints[joint];
+                    ImGui::Text("%zu: %s (parent %d)", joint, metadata.name.c_str(),
+                        metadata.parentIndex);
+                }
+                if (validation.model.jointListTruncated)
+                    ImGui::TextDisabled("... bounded to first %zu joints",
+                        animation::kCharacterAssetDiagnosticJointLimit);
+                ImGui::TreePop();
+            }
+        }
+        ImGui::TextDisabled("%s", validation.model.detail.c_str());
+        const char* compatibilityLabels[] = {"Idle", "Move", "Jump"};
+        const animation::CharacterAnimationCompatibilityResult* compatibility[] = {
+            &validation.idle, &validation.move, &validation.jump};
+        for (int index = 0; index < 3; ++index)
+        {
+            ImGui::Text("%s: %s", compatibilityLabels[index],
+                animation::CharacterAnimationCompatibilityStatusName(
+                    compatibility[index]->status));
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", compatibility[index]->detail.c_str());
         }
         ImGui::Separator(); ImGui::TextUnformatted("Base Stats (authored only)");
         for (std::size_t index = 0; index < gameplay::kGameplayStatCount; ++index)

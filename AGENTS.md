@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 105 — Reusable Animation Assets & Animation Library Foundation.
+Current milestone: Milestone 106 — Character Asset Validation & Compatibility.
 
-Canonical file: [`docs/milestones/MILESTONE_105.md`](docs/milestones/MILESTONE_105.md)
+Canonical file: [`docs/milestones/MILESTONE_106.md`](docs/milestones/MILESTONE_106.md)
 
-Branch: `milestone/105-reusable-animation-assets`
+Branch: `milestone/106-character-asset-validation`
 
-Status: implemented, awaiting manual acceptance. Do not start Milestone 106.
+Status: implemented, awaiting manual acceptance. Do not start Milestone 107.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

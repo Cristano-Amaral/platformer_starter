@@ -1,6 +1,7 @@
 #pragma once
 
 #include "assets/StaticModelCatalog.h"
+#include "animation/CharacterAssetValidator.h"
 #include "editor/ItemDatabaseEditor.h"
 #include "gameplay/CharacterDefinition.h"
 
@@ -20,10 +21,40 @@ struct CharacterDatabaseEditorState
     std::string createName;
     std::string renameName;
     std::string statusMessage;
+    std::string validationKey;
+    animation::CharacterAssetValidationResult assetValidation{};
+    bool validationInitialized = false;
     bool dirty = false;
     bool loaded = false;
     bool reloadConfirmOpen = false;
 };
+
+inline std::string CharacterAssetValidationKey(
+    const gameplay::GameplayDefinitionRegistry& registry,
+    const gameplay::CharacterDefinition& character)
+{
+    std::string key = character.worldModelIdentity + "\n" + character.animations.idleAsset
+        + "\n" + character.animations.moveAsset + "\n" + character.animations.jumpAsset;
+    for (const std::string* identity : {&character.animations.idleAsset,
+            &character.animations.moveAsset, &character.animations.jumpAsset})
+    {
+        const auto* definition = registry.Find(*identity);
+        if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Animation)
+            key += "\n" + definition->animation.sourceAssetIdentity + "\n"
+                + definition->animation.sourceClipName;
+    }
+    return key;
+}
+
+inline void RefreshCharacterAssetValidation(CharacterDatabaseEditorState& state,
+    const gameplay::CharacterDefinition& character, const std::filesystem::path& assetRoot)
+{
+    const std::string key = CharacterAssetValidationKey(state.working, character);
+    if (state.validationInitialized && key == state.validationKey) return;
+    state.assetValidation = animation::ValidateCharacterAssets(state.working, character, assetRoot);
+    state.validationKey = key;
+    state.validationInitialized = true;
+}
 
 inline void RefreshCharacterDatabaseDirty(CharacterDatabaseEditorState& state)
 {
@@ -46,6 +77,8 @@ inline bool ApplyLoadedCharacterDatabase(
     state.dirty = false;
     state.reloadConfirmOpen = false;
     state.statusMessage = "Loaded";
+    state.validationKey.clear();
+    state.validationInitialized = false;
     if (!state.selectedIdentity.empty() && state.working.Find(state.selectedIdentity) == nullptr)
         state.selectedIdentity.clear();
     if (state.selectedIdentity.empty())

@@ -1,6 +1,7 @@
 #include "render/Renderer.h"
 
 #include "animation/SkeletalAnimation.h"
+#include "animation/CharacterAssetValidator.h"
 #include "core/RunTimeFormat.h"
 #include "core/Vec3.h"
 #include "editor/EditorViewportGrid.h"
@@ -2192,15 +2193,6 @@ void Renderer::LoadPlayerPresentationAssets(
         slot.status = slot.index >= 0 ? "Resolved" : "Missing source clip";
         return slot;
     };
-    auto exactCompatible = [&model](const Model& sourceModel, const ModelAnimation& candidate) {
-        if (candidate.boneCount != model.skeleton.boneCount
-            || sourceModel.skeleton.boneCount != model.skeleton.boneCount
-            || sourceModel.skeleton.bones == nullptr) return false;
-        for (int bone = 0; bone < candidate.boneCount; ++bone)
-            if (sourceModel.skeleton.bones[bone].parent != model.skeleton.bones[bone].parent
-                || std::string_view(sourceModel.skeleton.bones[bone].name) != model.skeleton.bones[bone].name) return false;
-        return true;
-    };
     auto resolveSlot = [&](std::string_view assetIdentity, std::string_view embeddedClip,
         animation::PlaybackMode embeddedPlayback) {
         auto slot = makeEmbedded(embeddedClip, embeddedPlayback);
@@ -2223,7 +2215,8 @@ void Renderer::LoadPlayerPresentationAssets(
             if (slot.sourceClip == slot.animations[index].name) { slot.index = index; break; }
         if (slot.index < 0) { slot.status = "Missing source clip"; return slot; }
         Model sourceModel = LoadModel(sourcePath.string().c_str());
-        const bool compatible = exactCompatible(sourceModel, slot.animations[slot.index]);
+        const bool compatible = animation::RaylibSkeletonsExactlyCompatible(
+            model, sourceModel, slot.animations[slot.index]);
         UnloadModel(sourceModel);
         if (!compatible) { slot.index = -1; slot.status = "Incompatible skeleton"; return slot; }
         slot.status = "Resolved";

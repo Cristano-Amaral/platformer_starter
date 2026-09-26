@@ -209,6 +209,7 @@ Historical milestone files do not override current implemented behavior.
 | 103 | [Milestone 103 — Character Animation Foundation](milestones/MILESTONE_103.md) | complete |
 | 104 | [Milestone 104 — Equipment Sockets & Visible Equipment Foundation](milestones/MILESTONE_104.md) | complete |
 | 105 | [Milestone 105 — Reusable Animation Assets & Animation Library Foundation](milestones/MILESTONE_105.md) | implemented, awaiting manual acceptance |
+| 106 | [Milestone 106 — Character Asset Validation & Compatibility](milestones/MILESTONE_106.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

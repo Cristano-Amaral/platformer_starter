@@ -67,6 +67,8 @@ add_executable(Platformer3D
     game/source/animation/SkeletalAnimation.h
     game/source/animation/AnimationLibrary.cpp
     game/source/animation/AnimationLibrary.h
+    game/source/animation/CharacterAssetValidator.cpp
+    game/source/animation/CharacterAssetValidator.h
     game/source/assets/StaticModelDelete.h
     game/source/editor/AuthoredLifecycleCommands.cpp
     game/source/editor/AuthoredLifecycleCommands.h
@@ -498,6 +500,34 @@ target_compile_definitions(PlayerAnimationAssetTest PRIVATE
     "PLATFORMER_PLAYER_GLB=\"${PLATFORMER_PLAYER_GLB}\""
     "PLATFORMER_REUSABLE_ANIMATION_GLB=\"${PLATFORMER_REUSABLE_ANIMATION_GLB}\""
 )
+
+# Milestone 106: Character Database suitability and exact reusable-animation
+# compatibility through the production Raylib GLB path.
+add_executable(CharacterAssetValidatorTest
+    game/source/animation/CharacterAssetValidator.cpp
+    game/source/animation/CharacterAssetValidator.h
+    game/source/animation/CharacterAssetValidatorTest.cpp
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/platform/FileReplace.h
+)
+if(WIN32)
+    target_sources(CharacterAssetValidatorTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(CharacterAssetValidatorTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_link_libraries(CharacterAssetValidatorTest PRIVATE raylib)
+target_include_directories(CharacterAssetValidatorTest PRIVATE game/source)
+target_compile_definitions(CharacterAssetValidatorTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""
+    "PLATFORMER_SOURCE_ASSET_ROOT=\"${CMAKE_SOURCE_DIR}/game/assets/source\"")
+if(MSVC)
+    target_compile_options(CharacterAssetValidatorTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(CharacterAssetValidatorTest PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 # Milestone 84: imported Base Color / Base Color Texture presentation. CPU only.
 add_executable(ModelMaterialPresentationTest
