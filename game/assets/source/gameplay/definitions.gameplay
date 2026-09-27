@@ -71,3 +71,8 @@ world_model "models/Chest by Quaternius - O72u4Drp8k.glb"
 icon "textures/test_textured_basecolor.png"
 modifier MaxHealth 10
 modifier GravityScale 6
+definition characters/humanoid_mapping_fixture
+display_name "Humanoid Mapping Fixture"
+description "M108 test-purpose skeleton; no gameplay placement."
+character_type NPC
+world_model "models/humanoid_mapping_fixture.glb"

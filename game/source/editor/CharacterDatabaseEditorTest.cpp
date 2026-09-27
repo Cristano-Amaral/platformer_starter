@@ -47,6 +47,10 @@ int main()
 
     editor::TrySelectCharacterDefinition(state, "characters/hero");
     auto* hero = state.working.FindMutable("characters/hero");
+    Expect(editor::AssignHumanoidJoint(state, gameplay::HumanoidJointRole::Hips, "Hips"),
+        "mapping edit targets working copy");
+    Expect(fixture.registry.Find("characters/hero") == nullptr,
+        "mapping edit does not mutate active registry");
     hero->character.displayName = "Hero";
     hero->character.description = "Authored character";
     hero->character.type = gameplay::CharacterType::Player;
@@ -86,6 +90,9 @@ int main()
     const auto* again = saved.registry.Find("characters/main_hero");
     Expect(again != nullptr && again->character.type == gameplay::CharacterType::Player,
         "typed Character persisted");
+    Expect(again != nullptr && again->character.humanoidMapping.joints[0] == "Hips"
+        && again->character.humanoidMapping.joints[1].empty(),
+        "mapping and None roles persist through Save/Reload");
     Expect(again != nullptr && again->character.worldModelIdentity
             == "models/Character Model With Spaces.glb", "missing model identity preserved");
     Expect(again != nullptr && again->character.animations.idle == "Idle"
@@ -192,6 +199,11 @@ int main()
         "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition characters/x\nitem_type Generic\n").status
             == gameplay::LoadGameplayDefinitionsStatus::Invalid,
         "Item-only field rejected on Character");
+    Expect(gameplay::ParseGameplayDefinitionsText(
+        "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition characters/x\n"
+        "humanoid_joint Hips \"Hips\"\nhumanoid_joint Hips \"Pelvis\"\n").status
+            == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+        "duplicate serialized mapping role rejected");
 
     editor::CharacterDatabaseEditorState fresh;
     Expect(editor::ApplyLoadedCharacterDatabase(fresh, saved), "fresh editor load");
@@ -200,6 +212,8 @@ int main()
     Expect(editor::TryReloadCharacterDatabase(fresh, temp, true, true)
             == editor::ItemDatabaseReloadStatus::Reloaded, "Reload restores persisted state");
     Expect(fresh.working.Find("characters/main_hero") != nullptr, "Reload restored deleted Character");
+    Expect(fresh.working.Find("characters/main_hero")->character.humanoidMapping.joints[0] == "Hips",
+        "Reload restores persisted humanoid mapping");
     std::error_code ignored; std::filesystem::remove(temp, ignored);
     std::filesystem::remove(propagationTemp, ignored);
 

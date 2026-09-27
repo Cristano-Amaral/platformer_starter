@@ -185,8 +185,14 @@ CharacterAssetValidationResult ValidateCharacterAssets(
                     result.model.detail = result.model.skinned ? "Usable skeletal character model" : "Static / non-skinned model";
                     const int shown = std::min(result.model.jointCount, static_cast<int>(kCharacterAssetDiagnosticJointLimit));
                     result.model.joints.reserve(static_cast<std::size_t>(shown));
-                    for (int joint = 0; joint < shown; ++joint)
-                        result.model.joints.push_back({model.skeleton.bones[joint].name, model.skeleton.bones[joint].parent});
+                    result.model.allJoints.reserve(static_cast<std::size_t>(result.model.jointCount));
+                    for (int joint = 0; joint < result.model.jointCount; ++joint)
+                    {
+                        CharacterJointDiagnostic metadata{model.skeleton.bones[joint].name,
+                            model.skeleton.bones[joint].parent};
+                        result.model.allJoints.push_back(metadata);
+                        if (joint < shown) result.model.joints.push_back(std::move(metadata));
+                    }
                     result.model.jointListTruncated = shown < result.model.jointCount;
                 }
             }

@@ -213,6 +213,7 @@ struct ItemFieldFlags
     bool animationIdleAsset = false;
     bool animationMoveAsset = false;
     bool animationJumpAsset = false;
+    std::array<bool, kHumanoidJointRoleCount> humanoidJoint{};
     bool sourceAsset = false;
     bool sourceClip = false;
     bool playback = false;
@@ -650,6 +651,26 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 current.character.worldModelIdentity = std::move(identity);
             flags.worldModel = true;
         }
+        else if (tokens[0] == "humanoid_joint")
+        {
+            if (!RequireCharacter(current, haveCurrent) || tokens.size() < 3)
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid humanoid_joint");
+            const auto role = HumanoidJointRoleFromName(tokens[1]);
+            std::string_view remainder;
+            std::string joint;
+            if (!role || !ConsumeKeywordRemainder(line, "humanoid_joint", remainder))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid humanoid role");
+            // The role is the first token of the keyword remainder; the name uses the existing quoted-string grammar.
+            remainder.remove_prefix(tokens[1].size());
+            while (!remainder.empty() && remainder.front() == ' ') remainder.remove_prefix(1);
+            if (!ParseIdentityRemainder(remainder, joint) || !IsValidCharacterAnimationClipName(joint))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid humanoid joint name");
+            const auto index = static_cast<std::size_t>(*role);
+            if (flags.humanoidJoint[index])
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate humanoid_joint role");
+            flags.humanoidJoint[index] = true;
+            current.character.humanoidMapping.joints[index] = std::move(joint);
+        }
         else if (tokens[0] == "animation_idle" || tokens[0] == "animation_move"
             || tokens[0] == "animation_jump")
         {
@@ -997,6 +1018,16 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
             appendAnimation("animation_idle_asset", definition.character.animations.idleAsset);
             appendAnimation("animation_move_asset", definition.character.animations.moveAsset);
             appendAnimation("animation_jump_asset", definition.character.animations.jumpAsset);
+            for (std::size_t index = 0; index < kHumanoidJointRoleCount; ++index)
+            {
+                const auto& joint = definition.character.humanoidMapping.joints[index];
+                if (joint.empty()) continue;
+                result.text += "humanoid_joint ";
+                result.text += kHumanoidJointRoleNames[index];
+                result.text += ' ';
+                AppendQuotedString(result.text, joint);
+                result.text += '\n';
+            }
         }
         else
         {

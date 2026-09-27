@@ -1,6 +1,8 @@
 # Architecture
 
 ## Direction
+Humanoid skeleton mapping is authored CharacterDefinition metadata: typed body roles store exact joint names and are checked against the loaded World Model hierarchy. It is independent of M105 exact skeleton compatibility, which still compares joint count, ordered names, and parent indices for reusable animation playback. Animation retargeting between different skeletons remains future work.
+
 The game is a 3D platformer with a side/platform-style presentation. The player moves in a constrained gameplay plane/track while the world may use full 3D geometry. Camera behavior belongs to gameplay, while camera/input/window implementation details stay behind engine/backend boundaries.
 
 ## Milestone documentation

@@ -1,4 +1,5 @@
 #include "editor/CharacterPreview.h"
+#include "animation/HumanoidSkeletonMapping.h"
 #include "editor/ItemDatabaseEditor.h"
 #include "gameplay/GameplayDefinitionFile.h"
 #include "render/CharacterPreviewRenderer.h"
@@ -90,6 +91,21 @@ int main()
     Expect(invalid.status == editor::CharacterPreviewAnimationStatus::InvalidExplicit
             && !invalid.CanSample() && invalid.sourceClipName.empty(),
         "invalid explicit reusable assignment never falls back to embedded");
+
+    edited = player->character;
+    edited.worldModelIdentity = "models/humanoid_mapping_fixture.glb";
+    const auto differentSkeleton = animation::ValidateCharacterAssets(
+        parsed.registry, edited, PLATFORMER_SOURCE_ASSET_ROOT);
+    animation::SuggestHumanoidMapping(edited.humanoidMapping, differentSkeleton.model);
+    Expect(animation::ValidateHumanoidMapping(edited.humanoidMapping, differentSkeleton.model).state
+        == animation::HumanoidMappingState::Usable, "test character has usable semantic mapping");
+    const auto incompatibleMappedPreview = editor::ResolveCharacterPreviewAnimation(
+        parsed.registry, edited, differentSkeleton, editor::CharacterPreviewSlot::Idle);
+    Expect(differentSkeleton.idle.status
+            == animation::CharacterAnimationCompatibilityStatus::SkeletonIncompatible
+        && incompatibleMappedPreview.status == editor::CharacterPreviewAnimationStatus::InvalidExplicit
+        && !incompatibleMappedPreview.CanSample(),
+        "semantic mapping does not enable exact-incompatible reusable preview playback");
 
     edited = player->character;
     edited.worldModelIdentity = "models/test_static.glb";

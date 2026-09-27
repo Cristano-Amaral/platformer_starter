@@ -2,6 +2,7 @@
 
 #include "assets/StaticModelCatalog.h"
 #include "animation/CharacterAssetValidator.h"
+#include "animation/HumanoidSkeletonMapping.h"
 #include "editor/ItemDatabaseEditor.h"
 #include "editor/CharacterPreview.h"
 #include "editor/StaticModelFraming.h"
@@ -65,6 +66,17 @@ inline void RefreshCharacterAssetValidation(CharacterDatabaseEditorState& state,
 inline void RefreshCharacterDatabaseDirty(CharacterDatabaseEditorState& state)
 {
     state.dirty = !GameplayRegistriesEqual(state.working, state.baseline);
+}
+
+inline bool AssignHumanoidJoint(CharacterDatabaseEditorState& state,
+    gameplay::HumanoidJointRole role, std::string_view jointName)
+{
+    auto* definition = state.working.FindMutable(state.selectedIdentity);
+    if (definition == nullptr || definition->category != gameplay::GameplayDefinitionCategory::Character
+        || static_cast<std::size_t>(role) >= gameplay::kHumanoidJointRoleCount) return false;
+    definition->character.humanoidMapping.joints[static_cast<std::size_t>(role)] = jointName;
+    RefreshCharacterDatabaseDirty(state);
+    return true;
 }
 
 inline bool ApplyLoadedCharacterDatabase(

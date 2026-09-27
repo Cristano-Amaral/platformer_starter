@@ -163,6 +163,52 @@ void DrawCharacterDatabaseEditor(
         }
         RefreshCharacterAssetValidation(state, selected->character, AuthoringSourceRoot());
         const auto& validation = state.assetValidation;
+        ImGui::Separator();
+        ImGui::TextUnformatted("Humanoid Skeleton Mapping");
+        ImGui::TextDisabled("Required roles must be assigned. Optional roles may be None.");
+        if (ImGui::Button("Suggest Mapping"))
+        {
+            animation::SuggestHumanoidMapping(selected->character.humanoidMapping, validation.model);
+            RefreshCharacterDatabaseDirty(state);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Mapping"))
+        {
+            selected->character.humanoidMapping = {};
+            RefreshCharacterDatabaseDirty(state);
+        }
+        for (std::size_t roleIndex = 0; roleIndex < gameplay::kHumanoidJointRoleCount; ++roleIndex)
+        {
+            const auto role = static_cast<gameplay::HumanoidJointRole>(roleIndex);
+            const auto& assigned = selected->character.humanoidMapping.joints[roleIndex];
+            ImGui::PushID(static_cast<int>(roleIndex));
+            ImGui::Text("%s (%s)", gameplay::kHumanoidJointRoleNames[roleIndex].data(),
+                gameplay::HumanoidJointRoleRequired(role) ? "required" : "optional");
+            ImGui::SameLine(220.0f);
+            if (ImGui::BeginCombo("##joint", assigned.empty() ? "None" : assigned.c_str()))
+            {
+                if (ImGui::Selectable("None", assigned.empty()))
+                    AssignHumanoidJoint(state, role, {});
+                for (const auto& joint : validation.model.allJoints)
+                    if (ImGui::Selectable(joint.name.c_str(), assigned == joint.name))
+                        AssignHumanoidJoint(state, role, joint.name);
+                ImGui::EndCombo();
+            }
+            if (!assigned.empty() && std::none_of(validation.model.allJoints.begin(),
+                validation.model.allJoints.end(), [&](const auto& joint) { return joint.name == assigned; }))
+                ImGui::TextColored(ImVec4(.92f,.45f,.28f,1), "Stale/missing: %s", assigned.c_str());
+            ImGui::PopID();
+        }
+        const auto mappingValidation = animation::ValidateHumanoidMapping(
+            selected->character.humanoidMapping, validation.model);
+        ImGui::Text("Mapping: %s", animation::HumanoidMappingStateName(mappingValidation.state));
+        if (ImGui::TreeNode("Mapping diagnostics"))
+        {
+            for (const auto& detail : mappingValidation.details)
+                ImGui::TextWrapped("%s: %s (joint %d)", gameplay::HumanoidJointRoleName(detail.role).data(),
+                    detail.detail.c_str(), detail.jointIndex);
+            ImGui::TreePop();
+        }
         render::CharacterPreviewRenderer* preview = view.characterPreview;
         const std::filesystem::path sourceRoot = AuthoringSourceRoot();
         if (preview != nullptr)

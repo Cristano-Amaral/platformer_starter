@@ -1,4 +1,5 @@
 #include "animation/CharacterAssetValidator.h"
+#include "animation/HumanoidSkeletonMapping.h"
 #include "editor/CharacterDatabaseEditor.h"
 #include "gameplay/GameplayDefinitionFile.h"
 
@@ -19,6 +20,16 @@ void Expect(bool condition, const char* name)
 
 int main()
 {
+    Expect(gameplay::kHumanoidJointRoleCount == 19
+        && gameplay::HumanoidJointRoleName(gameplay::HumanoidJointRole::Hips) == "Hips"
+        && gameplay::HumanoidJointRoleName(gameplay::HumanoidJointRole::RightFoot) == "RightFoot"
+        && gameplay::HumanoidJointRoleFromName("LeftLowerArm")
+            == gameplay::HumanoidJointRole::LeftLowerArm,
+        "typed humanoid role enumeration and order are stable");
+    for (std::size_t index = 0; index < gameplay::kHumanoidJointRoleCount; ++index)
+        Expect(gameplay::HumanoidJointRoleFromName(gameplay::kHumanoidJointRoleNames[index])
+            == static_cast<gameplay::HumanoidJointRole>(index),
+            "each ordered humanoid role round-trips by name");
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_HIDDEN);
     InitWindow(64, 64, "CharacterAssetValidatorTest");
@@ -44,6 +55,74 @@ int main()
     Expect(valid.model.joints.size() == 1 && valid.model.joints[0].name == "Root"
             && valid.model.joints[0].parentIndex == -1,
         "canonical joint names and hierarchy exposed");
+    Expect(animation::ValidateHumanoidMapping(canonical->character.humanoidMapping, valid.model).state
+        == animation::HumanoidMappingState::NoMapping, "canonical Player has no fabricated mapping");
+
+    gameplay::CharacterDefinition humanoid = canonical->character;
+    humanoid.worldModelIdentity = "models/humanoid_mapping_fixture.glb";
+    humanoid.animations = {};
+    const auto humanoidAssets = animation::ValidateCharacterAssets(
+        parsed.registry, humanoid, PLATFORMER_SOURCE_ASSET_ROOT);
+    Expect(humanoidAssets.model.hasSkeleton && humanoidAssets.model.jointCount == 19,
+        "M108 fixture loads through production Raylib skeleton path");
+    animation::SuggestHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model);
+    auto ambiguousModel = humanoidAssets.model;
+    ambiguousModel.allJoints.push_back({"Hips", -1});
+    ++ambiguousModel.jointCount;
+    gameplay::HumanoidSkeletonMapping ambiguousSuggestion;
+    animation::SuggestHumanoidMapping(ambiguousSuggestion, ambiguousModel);
+    Expect(ambiguousSuggestion.joints[0].empty(), "ambiguous suggestion remains unresolved");
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Usable, "suggested conventional fixture is usable");
+    auto requiredOnly = humanoid.humanoidMapping;
+    for (const auto role : {gameplay::HumanoidJointRole::Chest, gameplay::HumanoidJointRole::Neck,
+            gameplay::HumanoidJointRole::LeftShoulder, gameplay::HumanoidJointRole::RightShoulder})
+        requiredOnly.joints[static_cast<std::size_t>(role)].clear();
+    Expect(animation::ValidateHumanoidMapping(requiredOnly, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Usable, "optional roles may be absent");
+    auto swapped = humanoid.humanoidMapping;
+    swapped.joints[static_cast<std::size_t>(gameplay::HumanoidJointRole::LeftShoulder)] = "LeftHand";
+    Expect(animation::ValidateHumanoidMapping(swapped, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Invalid, "assigned optional shoulder is structural");
+    auto brokenHierarchy = humanoidAssets.model;
+    brokenHierarchy.allJoints[7].parentIndex = 10; // LeftLowerArm under RightUpperArm.
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, brokenHierarchy).state
+        == animation::HumanoidMappingState::Invalid, "invalid arm hierarchy rejected");
+    brokenHierarchy = humanoidAssets.model;
+    brokenHierarchy.allJoints[14].parentIndex = 16; // LeftLowerLeg under RightUpperLeg.
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, brokenHierarchy).state
+        == animation::HumanoidMappingState::Invalid, "invalid leg hierarchy rejected");
+    brokenHierarchy = humanoidAssets.model;
+    brokenHierarchy.allJoints[4].parentIndex = 6; // Head under LeftUpperArm.
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, brokenHierarchy).state
+        == animation::HumanoidMappingState::Invalid, "invalid torso/head hierarchy rejected");
+    swapped = humanoid.humanoidMapping;
+    swapped.joints[static_cast<std::size_t>(gameplay::HumanoidJointRole::RightHand)] = "LeftHand";
+    Expect(animation::ValidateHumanoidMapping(swapped, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Invalid, "left/right same-joint conflict rejected");
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, valid.model).state
+        == animation::HumanoidMappingState::Invalid, "working World Model change revalidates stale joints");
+    const auto handIndex = static_cast<std::size_t>(gameplay::HumanoidJointRole::LeftHand);
+    const auto upperArmIndex = static_cast<std::size_t>(gameplay::HumanoidJointRole::LeftUpperArm);
+    humanoid.humanoidMapping.joints[handIndex].clear();
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Incomplete, "missing required hand is incomplete");
+    humanoid.humanoidMapping.joints[handIndex] = "StaleHand";
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Invalid, "stale authored name remains invalid");
+    humanoid.humanoidMapping.joints[handIndex] = humanoid.humanoidMapping.joints[upperArmIndex];
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Invalid, "duplicate joint is invalid");
+    humanoid.humanoidMapping.joints[handIndex] = "LeftHand";
+    humanoid.humanoidMapping.joints[upperArmIndex] = "LeftHand";
+    animation::SuggestHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model);
+    Expect(humanoid.humanoidMapping.joints[upperArmIndex] == "LeftHand",
+        "suggestion preserves explicit assignment");
+    humanoid.humanoidMapping.joints[upperArmIndex] = "LeftUpperArm";
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, humanoidAssets.model).state
+        == animation::HumanoidMappingState::Usable, "restored mapping recovers");
+    Expect(valid.idle.status == animation::CharacterAnimationCompatibilityStatus::Compatible,
+        "mapping does not alter existing exact animation compatibility");
     Expect(valid.idle.status == animation::CharacterAnimationCompatibilityStatus::Compatible
             && valid.move.status == animation::CharacterAnimationCompatibilityStatus::Compatible
             && valid.jump.status == animation::CharacterAnimationCompatibilityStatus::Compatible,
@@ -53,6 +132,8 @@ int main()
     probe.worldModelIdentity = "models/test_static.glb";
     const auto staticResult = animation::ValidateCharacterAssets(
         parsed.registry, probe, PLATFORMER_SOURCE_ASSET_ROOT);
+    Expect(animation::ValidateHumanoidMapping(humanoid.humanoidMapping, staticResult.model).state
+        == animation::HumanoidMappingState::Invalid, "static model cannot have usable mapping");
     Expect(staticResult.model.status == animation::CharacterModelValidationStatus::Resolved
             && staticResult.model.modelLoaded && !staticResult.model.skinned
             && !staticResult.model.hasSkeleton && staticResult.model.jointCount == 0,

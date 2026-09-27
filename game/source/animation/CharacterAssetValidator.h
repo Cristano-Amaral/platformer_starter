@@ -34,6 +34,7 @@ struct CharacterModelValidationResult
     bool hasSkeleton = false;
     int jointCount = 0;
     std::vector<CharacterJointDiagnostic> joints;
+    std::vector<CharacterJointDiagnostic> allJoints;
     bool jointListTruncated = false;
     std::string detail;
 };

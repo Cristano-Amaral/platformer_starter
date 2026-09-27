@@ -7,6 +7,7 @@
 #include "gameplay/AnimationDefinition.h"
 #include "gameplay/GameplayStat.h"
 #include "gameplay/ItemDefinition.h"
+#include "gameplay/HumanoidSkeletonMapping.h"
 
 #include <algorithm>
 #include <array>
@@ -120,6 +121,7 @@ struct CharacterDefinition
     CharacterType type = CharacterType::NPC;
     std::string worldModelIdentity;
     CharacterLocomotionAnimations animations{};
+    HumanoidSkeletonMapping humanoidMapping{};
     std::array<bool, kGameplayStatCount> hasBaseStat{};
     std::array<float, kGameplayStatCount> baseStatValue{};
 };
@@ -177,6 +179,9 @@ inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefini
         if (character.hasBaseStat[index] && !IsValidGameplayStatValue(character.baseStatValue[index]))
             return ValidateCharacterStatus::InvalidBaseStat;
     }
+    for (const auto& joint : character.humanoidMapping.joints)
+        if (!joint.empty() && (!IsValidCharacterAnimationClipName(joint) || joint.size() > 63))
+            return ValidateCharacterStatus::InvalidAnimationBinding;
     return ValidateCharacterStatus::Valid;
 }
 
@@ -190,6 +195,7 @@ inline bool CharacterDefinitionsEqual(const CharacterDefinition& a, const Charac
         && a.animations.idleAsset == b.animations.idleAsset
         && a.animations.moveAsset == b.animations.moveAsset
         && a.animations.jumpAsset == b.animations.jumpAsset
+        && a.humanoidMapping.joints == b.humanoidMapping.joints
         && a.hasBaseStat == b.hasBaseStat
         && a.baseStatValue == b.baseStatValue;
 }

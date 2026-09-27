@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 107 — Character & Animation Preview.
+Current milestone: Milestone 108 — Humanoid Skeleton Mapping Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_107.md`](docs/milestones/MILESTONE_107.md)
+Canonical file: [`docs/milestones/MILESTONE_108.md`](docs/milestones/MILESTONE_108.md)
 
-Branch: `milestone/107-character-animation-preview`
+Branch: `milestone/108-humanoid-skeleton-mapping`
 
-Status: implementation in progress. Do not start Milestone 108.
+Status: implementation in progress. Do not start Milestone 109.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
