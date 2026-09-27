@@ -55,6 +55,9 @@ struct CharacterAssetValidationResult
 
 bool RaylibSkeletonsExactlyCompatible(const Model& characterModel,
     const Model& sourceModel, const ModelAnimation& sourceAnimation);
+float ResolveRaylibAnimationFrame(float timeSeconds, int keyframeCount, PlaybackMode mode);
+bool ApplyRaylibAnimationPose(Model& model, const ModelAnimation& animation,
+    float timeSeconds, PlaybackMode mode, float* sampledFrame = nullptr);
 
 CharacterAssetValidationResult ValidateCharacterAssets(
     const gameplay::GameplayDefinitionRegistry& registry,

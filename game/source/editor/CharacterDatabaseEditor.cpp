@@ -1,5 +1,6 @@
 #include "editor/CharacterDatabaseEditor.h"
 #include "editor/LevelEditor.h"
+#include "render/CharacterPreviewRenderer.h"
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI) && defined(PLATFORMER_ENABLE_LEVEL_AUTHORING)
 #include "editor/AuthoringPaths.h"
@@ -68,7 +69,11 @@ void DrawCharacterDatabaseEditor(
     ImGui::EndChild(); ImGui::SameLine(); ImGui::BeginChild("##characterInspector", ImVec2(0, 0), true);
     auto* selected = state.working.FindMutable(state.selectedIdentity);
     if (selected == nullptr || selected->category != gameplay::GameplayDefinitionCategory::Character)
+    {
         ImGui::TextUnformatted("Select or create a Character.");
+        if (view.characterPreview != nullptr)
+            view.characterPreview->SyncModel({}, {}, {});
+    }
     else
     {
         ImGui::Text("Identity: %s", selected->identity.c_str());
@@ -158,6 +163,110 @@ void DrawCharacterDatabaseEditor(
         }
         RefreshCharacterAssetValidation(state, selected->character, AuthoringSourceRoot());
         const auto& validation = state.assetValidation;
+        render::CharacterPreviewRenderer* preview = view.characterPreview;
+        const std::filesystem::path sourceRoot = AuthoringSourceRoot();
+        if (preview != nullptr)
+        {
+            preview->SyncModel(selected->character.worldModelIdentity,
+                sourceRoot / selected->character.worldModelIdentity, validation.model);
+        }
+        const auto previewResolution = ResolveCharacterPreviewAnimation(
+            state.working, selected->character, validation, state.previewSlot);
+        if (preview != nullptr) preview->SyncAnimation(previewResolution, sourceRoot);
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Character / Animation Preview");
+        int previewSlot = static_cast<int>(state.previewSlot);
+        const char* previewSlotNames[] = {"Idle", "Move", "Jump"};
+        if (ImGui::Combo("Preview Animation", &previewSlot, previewSlotNames, 3))
+        {
+            state.previewSlot = static_cast<CharacterPreviewSlot>(previewSlot);
+            RestartCharacterPreviewPlayback(state.previewPlayback);
+        }
+        const bool canAnimate = preview != nullptr && preview->HasAnimation();
+        ImGui::BeginDisabled(!canAnimate);
+        if (ImGui::Button(state.previewPlayback.playing ? "Pause" : "Play"))
+            state.previewPlayback.playing = !state.previewPlayback.playing;
+        ImGui::SameLine();
+        if (ImGui::Button("Restart")) RestartCharacterPreviewPlayback(state.previewPlayback);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(preview == nullptr || !preview->HasModel());
+        if (ImGui::Button("Reset / Reframe") && preview != nullptr)
+            ResetStaticModelPreviewOrbit(state.previewOrbit, preview->Bounds());
+        constexpr float kOrbitButtonPixels = 75.0f;
+        ImGui::SameLine(); ImGui::TextUnformatted("Orbit"); ImGui::SameLine();
+        if (ImGui::ArrowButton("##orbitLeft", ImGuiDir_Left))
+            ApplyStaticModelPreviewOrbit(state.previewOrbit, -kOrbitButtonPixels, 0.0f);
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##orbitUp", ImGuiDir_Up))
+            ApplyStaticModelPreviewOrbit(state.previewOrbit, 0.0f, -kOrbitButtonPixels);
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##orbitDown", ImGuiDir_Down))
+            ApplyStaticModelPreviewOrbit(state.previewOrbit, 0.0f, kOrbitButtonPixels);
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##orbitRight", ImGuiDir_Right))
+            ApplyStaticModelPreviewOrbit(state.previewOrbit, kOrbitButtonPixels, 0.0f);
+        ImGui::SameLine(); ImGui::TextUnformatted("Zoom"); ImGui::SameLine();
+        if (ImGui::Button("-##previewZoom"))
+            ApplyStaticModelPreviewDolly(state.previewOrbit, -1.0f);
+        ImGui::SameLine();
+        if (ImGui::Button("+##previewZoom"))
+            ApplyStaticModelPreviewDolly(state.previewOrbit, 1.0f);
+        ImGui::EndDisabled();
+
+        if (preview != nullptr && preview->HasModel()
+            && state.previewFramedIdentity != preview->LoadedIdentity())
+        {
+            ResetStaticModelPreviewOrbit(state.previewOrbit, preview->Bounds());
+            state.previewFramedIdentity = preview->LoadedIdentity();
+        }
+        else if (preview == nullptr || !preview->HasModel()) state.previewFramedIdentity.clear();
+
+        if (canAnimate)
+            AdvanceCharacterPreviewPlayback(state.previewPlayback, view.frameDeltaSeconds,
+                preview->AnimationDurationSeconds(), previewResolution.playbackMode);
+        ImGui::Text("%s | %s | %s", !canAnimate ? "Unavailable"
+                : (state.previewPlayback.playing ? "Playing" : "Paused"),
+            previewResolution.playbackMode == animation::PlaybackMode::Loop ? "Loop" : "Clamp",
+            CharacterPreviewAnimationStatusName(previewResolution.status));
+        ImGui::TextDisabled("%s", previewResolution.detail.c_str());
+
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        const float previewHeight = std::min(320.0f, std::max(180.0f, available.x * 0.56f));
+        const auto renderSize = ResolvePreviewRenderSize(available.x, previewHeight);
+        if (renderSize.valid)
+        {
+            const ImVec2 canvas(static_cast<float>(renderSize.width), static_cast<float>(renderSize.height));
+            const ImVec2 screen = ImGui::GetCursorScreenPos();
+            unsigned int texture = 0;
+            if (preview != nullptr && preview->Render(renderSize.width, renderSize.height,
+                state.previewOrbit, state.previewPlayback)) texture = preview->TextureGpuId();
+            if (texture != 0)
+                ImGui::Image(ImTextureRef(static_cast<ImTextureID>(static_cast<intptr_t>(texture))),
+                    canvas, ImVec2(0, 1), ImVec2(1, 0));
+            else
+            {
+                ImGui::Dummy(canvas);
+                ImGui::GetWindowDrawList()->AddRectFilled(screen,
+                    ImVec2(screen.x + canvas.x, screen.y + canvas.y), IM_COL32(48, 52, 62, 255));
+                const char* message = preview != nullptr && preview->IsStaticModel()
+                    ? "Static model - skeletal playback unavailable"
+                    : (validation.model.detail.empty() ? "Preview unavailable" : validation.model.detail.c_str());
+                ImGui::GetWindowDrawList()->AddText(ImVec2(screen.x + 12, screen.y + 12),
+                    IM_COL32(220, 220, 224, 255), message);
+            }
+            ImGui::SetCursorScreenPos(screen);
+            ImGui::InvisibleButton("character-preview-orbit", canvas);
+            ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+            const ImGuiIO& io = ImGui::GetIO();
+            if (ImGui::IsItemActive() && preview != nullptr && preview->HasModel())
+                ApplyStaticModelPreviewOrbit(state.previewOrbit, io.MouseDelta.x, io.MouseDelta.y);
+            if (ImGui::IsItemHovered() && preview != nullptr && preview->HasModel())
+                ApplyStaticModelPreviewDolly(state.previewOrbit, io.MouseWheel);
+        }
+        ImGui::TextDisabled("LMB orbit | Wheel zoom | Framing derives from model bounds");
+
         ImGui::Separator();
         ImGui::TextUnformatted("Character Asset / Compatibility");
         ImGui::Text("World Model: %s", animation::CharacterModelValidationStatusName(

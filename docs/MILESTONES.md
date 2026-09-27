@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 105 — Reusable Animation Assets & Animation Library Foundation**
+**Milestone 107 — Character & Animation Preview**
 
-Canonical file: [`docs/milestones/MILESTONE_105.md`](milestones/MILESTONE_105.md)
+Canonical file: [`docs/milestones/MILESTONE_107.md`](milestones/MILESTONE_107.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -210,6 +210,7 @@ Historical milestone files do not override current implemented behavior.
 | 104 | [Milestone 104 — Equipment Sockets & Visible Equipment Foundation](milestones/MILESTONE_104.md) | complete |
 | 105 | [Milestone 105 — Reusable Animation Assets & Animation Library Foundation](milestones/MILESTONE_105.md) | implemented, awaiting manual acceptance |
 | 106 | [Milestone 106 — Character Asset Validation & Compatibility](milestones/MILESTONE_106.md) | implemented, awaiting manual acceptance |
+| 107 | [Milestone 107 — Character & Animation Preview](milestones/MILESTONE_107.md) | implemented, awaiting manual acceptance |
 
 ## Later milestones
 

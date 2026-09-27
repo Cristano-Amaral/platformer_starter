@@ -133,6 +133,8 @@ add_executable(Platformer3D
     game/source/editor/ItemDatabaseEditor.h
     game/source/editor/CharacterDatabaseEditor.cpp
     game/source/editor/CharacterDatabaseEditor.h
+    game/source/editor/CharacterPreview.cpp
+    game/source/editor/CharacterPreview.h
     game/source/editor/ItemIdInspectorEdit.h
     game/source/editor/LevelEditor.cpp
     game/source/editor/LevelEditor.h
@@ -217,6 +219,8 @@ add_executable(Platformer3D
     game/source/render/TextureThumbnail.h
     game/source/render/StaticModelPreview.cpp
     game/source/render/StaticModelPreview.h
+    game/source/render/CharacterPreviewRenderer.cpp
+    game/source/render/CharacterPreviewRenderer.h
     game/source/render/LoadedModelMaterials.cpp
     game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
@@ -506,6 +510,7 @@ target_compile_definitions(PlayerAnimationAssetTest PRIVATE
 add_executable(CharacterAssetValidatorTest
     game/source/animation/CharacterAssetValidator.cpp
     game/source/animation/CharacterAssetValidator.h
+    game/source/animation/SkeletalAnimation.cpp
     game/source/animation/CharacterAssetValidatorTest.cpp
     game/source/assets/StaticGlb.cpp
     game/source/assets/ModelMaterialPresentation.cpp
@@ -517,6 +522,46 @@ if(WIN32)
     target_sources(CharacterAssetValidatorTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
 else()
     target_sources(CharacterAssetValidatorTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+
+# Milestone 107: working-copy preview resolution, fallback authority, and
+# deterministic playback through the production validation path.
+add_executable(CharacterPreviewTest
+    game/source/animation/CharacterAssetValidator.cpp
+    game/source/animation/SkeletalAnimation.cpp
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/editor/CharacterPreview.cpp
+    game/source/editor/CharacterPreviewTest.cpp
+    game/source/editor/StaticModelFraming.cpp
+    game/source/editor/StaticModelThumbnailCache.cpp
+    game/source/editor/EditorLayout.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinitionFile.cpp
+    game/source/platform/FileReplace.h
+    game/source/platform/RuntimePaths.cpp
+    game/source/render/CharacterPreviewRenderer.cpp
+    game/source/render/LoadedModelMaterials.cpp
+)
+if(WIN32)
+    target_sources(CharacterPreviewTest PRIVATE
+        game/source/platform/FileReplaceWindows.cpp
+        game/source/platform/RuntimePathsWindows.cpp)
+else()
+    target_sources(CharacterPreviewTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_link_libraries(CharacterPreviewTest PRIVATE raylib)
+if(WIN32)
+    target_link_libraries(CharacterPreviewTest PRIVATE ole32 shell32 uuid)
+endif()
+target_include_directories(CharacterPreviewTest PRIVATE game/source)
+target_compile_definitions(CharacterPreviewTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""
+    "PLATFORMER_SOURCE_ASSET_ROOT=\"${CMAKE_SOURCE_DIR}/game/assets/source\"")
+if(MSVC)
+    target_compile_options(CharacterPreviewTest PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(CharacterPreviewTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_link_libraries(CharacterAssetValidatorTest PRIVATE raylib)
 target_include_directories(CharacterAssetValidatorTest PRIVATE game/source)

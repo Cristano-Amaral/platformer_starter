@@ -2467,9 +2467,15 @@ int Application::Run()
             }
         }
         levelEditorView.modelPreview = &modelPreview;
+        levelEditorView.characterPreview = &characterPreview;
+        if (!levelEditorState.workspace.showCharacterDatabase)
+        {
+            characterPreview.Shutdown();
+        }
         levelEditorView.staticPropModels = renderer.StaticPropModels();
         levelEditorView.gameplayCameraPosition = gameplayCameraView.position;
         levelEditorView.gameplayCameraTarget = gameplayCameraView.target;
+        levelEditorView.frameDeltaSeconds = deltaSeconds;
 #endif
         // Cook, Stage & Reload observation lives in Application::Run, not in
         // ImGui Draw, so F2 hide and panel visibility cannot cancel it.

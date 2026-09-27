@@ -46,6 +46,7 @@ namespace render
 class StaticModelThumbnailStore;
 class TextureThumbnailStore;
 class StaticModelPreviewRenderer;
+class CharacterPreviewRenderer;
 class StaticModelSceneStore;
 }
 
@@ -287,9 +288,11 @@ struct LevelEditorViewContext
     render::StaticModelThumbnailStore* thumbnails = nullptr;
     render::TextureThumbnailStore* textureThumbnails = nullptr;
     render::StaticModelPreviewRenderer* modelPreview = nullptr;
+    render::CharacterPreviewRenderer* characterPreview = nullptr;
     render::StaticModelSceneStore* staticPropModels = nullptr;
     core::Vec3 gameplayCameraPosition{};
     core::Vec3 gameplayCameraTarget{};
+    float frameDeltaSeconds = 0.0f;
 };
 
 class EditorToolRunner;

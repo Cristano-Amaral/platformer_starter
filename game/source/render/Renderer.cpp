@@ -2500,24 +2500,17 @@ void Renderer::DrawWorld(
         }
         else
         {
-        const auto frameFor = [](const ModelAnimation& clip, float seconds, animation::PlaybackMode mode) {
-            const float lastFrame = static_cast<float>(clip.keyframeCount > 0
-                ? clip.keyframeCount - 1 : 0);
-            const float durationSeconds = lastFrame / 60.0f;
-            return animation::ResolvePlaybackTime(
-                seconds,
-                durationSeconds,
-                mode) * 60.0f;
-        };
         const ModelAnimation& current = currentSlot->animations[currentSlot->index];
         const ModelAnimation& previous = previousSlot->animations[previousSlot->index];
         const float blend = gameplay::PlayerAnimationBlendAmount(playerPresentation.animation);
         UpdateModelAnimationEx(
             playerModelGpu->model,
             previous,
-            frameFor(previous, playerPresentation.animation.previousPlaybackTimeSeconds, previousSlot->playback),
+            animation::ResolveRaylibAnimationFrame(playerPresentation.animation.previousPlaybackTimeSeconds,
+                previous.keyframeCount, previousSlot->playback),
             current,
-            frameFor(current, playerPresentation.animation.playbackTimeSeconds, currentSlot->playback),
+            animation::ResolveRaylibAnimationFrame(playerPresentation.animation.playbackTimeSeconds,
+                current.keyframeCount, currentSlot->playback),
             blend);
             playerModelGpu->currentClip = current.name;
         }

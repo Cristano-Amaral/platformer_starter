@@ -27,6 +27,7 @@
 #include "platform/Window.h"
 #include "platform/GameplayAudio.h"
 #include "render/Renderer.h"
+#include "render/CharacterPreviewRenderer.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
 #include "world/RespawnWorld.h"
@@ -135,6 +136,7 @@ private:
     render::StaticModelThumbnailStore thumbnailStore;
     render::TextureThumbnailStore textureThumbnailStore;
     render::StaticModelPreviewRenderer modelPreview;
+    render::CharacterPreviewRenderer characterPreview;
 #endif
     bool initialized = false;
     // Set only when an editor physics rebuild fails. Normal gameplay never

@@ -3,6 +3,8 @@
 #include "assets/StaticModelCatalog.h"
 #include "animation/CharacterAssetValidator.h"
 #include "editor/ItemDatabaseEditor.h"
+#include "editor/CharacterPreview.h"
+#include "editor/StaticModelFraming.h"
 #include "gameplay/CharacterDefinition.h"
 
 #include <filesystem>
@@ -23,6 +25,10 @@ struct CharacterDatabaseEditorState
     std::string statusMessage;
     std::string validationKey;
     animation::CharacterAssetValidationResult assetValidation{};
+    CharacterPreviewSlot previewSlot = CharacterPreviewSlot::Idle;
+    CharacterPreviewPlayback previewPlayback{};
+    StaticModelPreviewOrbit previewOrbit{};
+    std::string previewFramedIdentity;
     bool validationInitialized = false;
     bool dirty = false;
     bool loaded = false;
@@ -79,6 +85,8 @@ inline bool ApplyLoadedCharacterDatabase(
     state.statusMessage = "Loaded";
     state.validationKey.clear();
     state.validationInitialized = false;
+    state.previewFramedIdentity.clear();
+    RestartCharacterPreviewPlayback(state.previewPlayback);
     if (!state.selectedIdentity.empty() && state.working.Find(state.selectedIdentity) == nullptr)
         state.selectedIdentity.clear();
     if (state.selectedIdentity.empty())
@@ -157,6 +165,8 @@ inline bool TrySelectCharacterDefinition(CharacterDatabaseEditorState& state, st
     if (definition == nullptr || definition->category != gameplay::GameplayDefinitionCategory::Character)
         return false;
     state.selectedIdentity.assign(identity);
+    state.previewFramedIdentity.clear();
+    RestartCharacterPreviewPlayback(state.previewPlayback);
     gameplay::ParsedGameplayIdentity parsed;
     if (gameplay::TryParseGameplayIdentity(identity, parsed)) state.renameName = parsed.name;
     return true;

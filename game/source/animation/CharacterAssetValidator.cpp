@@ -134,6 +134,24 @@ bool RaylibSkeletonsExactlyCompatible(const Model& characterModel,
     return true;
 }
 
+float ResolveRaylibAnimationFrame(float timeSeconds, int keyframeCount, PlaybackMode mode)
+{
+    const float lastFrame = static_cast<float>(keyframeCount > 0 ? keyframeCount - 1 : 0);
+    const float durationSeconds = lastFrame / 60.0f;
+    return ResolvePlaybackTime(timeSeconds, durationSeconds, mode) * 60.0f;
+}
+
+bool ApplyRaylibAnimationPose(Model& model, const ModelAnimation& animation,
+    float timeSeconds, PlaybackMode mode, float* sampledFrame)
+{
+    if (model.boneMatrices == nullptr || model.currentPose == nullptr
+        || animation.keyframeCount <= 0 || animation.keyframePoses == nullptr) return false;
+    const float frame = ResolveRaylibAnimationFrame(timeSeconds, animation.keyframeCount, mode);
+    UpdateModelAnimationEx(model, animation, frame, animation, frame, 0.0f);
+    if (sampledFrame != nullptr) *sampledFrame = frame;
+    return true;
+}
+
 CharacterAssetValidationResult ValidateCharacterAssets(
     const gameplay::GameplayDefinitionRegistry& registry,
     const gameplay::CharacterDefinition& character, const std::filesystem::path& assetRoot)

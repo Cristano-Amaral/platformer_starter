@@ -78,6 +78,28 @@ joint name at index, and parent index must match exactly. Static models remain v
 but are explicitly unsuitable for reusable skeletal animation. M106 adds no parser, retargeting,
 repair, importer, preview viewport, or runtime authority.
 
+## Character and animation preview (Milestone 107)
+
+The Development Character Database owns a transient preview selection, playback clock, and
+bounds-derived orbit camera for its selected working-copy `CharacterDefinition`. A dedicated
+`CharacterPreviewRenderer` owns the preview model, animation array, and offscreen render target;
+replacement and destruction release those Raylib resources without changing the world camera or
+framebuffer. The existing static-model framing math provides orbit, dolly, and reset/reframe.
+Mouse drag, the compact orbit pad, wheel zoom, and +/- buttons all update that one transient orbit
+state. The hovered canvas claims ImGui wheel ownership so zoom does not also scroll its parent.
+
+Preview resolution consumes M106 `CharacterAssetValidator` results. Compatible explicit reusable
+assets preserve their authored Loop/Clamp intent; a genuine None assignment uses the existing
+embedded Idle/Move/Jump clip; an invalid explicit assignment never falls through to embedded data.
+Static models remain visually inspectable with skeletal playback disabled, and missing models clear
+the previous geometry. Preview reads only the Character Database working copy and never saves,
+promotes, or serializes its transient state. Raylib `ModelAnimation` loading and pose updates remain
+the same production-compatible M103/M105 path rather than a second skeletal interpretation; the
+preview clock advances from the application's authoritative per-frame delta.
+Because Raylib is built with GPU skinning, the preview uses the production `world_lit` shader with
+bounded preview lighting and uploads the animated model's bone matrices just like the Gameplay
+Player draw. The default Raylib material shader is not a valid skinned-character draw path.
+
 ## Visible equipment attachments (Milestone 104)
 
 `gameplay::Equipment` remains the sole authority for occupied equipment slots. An Equipment
