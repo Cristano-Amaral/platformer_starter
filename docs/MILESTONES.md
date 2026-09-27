@@ -212,6 +212,7 @@ Historical milestone files do not override current implemented behavior.
 | 106 | [Milestone 106 — Character Asset Validation & Compatibility](milestones/MILESTONE_106.md) | implemented, awaiting manual acceptance |
 | 107 | [Milestone 107 — Character & Animation Preview](milestones/MILESTONE_107.md) | implemented, awaiting manual acceptance |
 | 108 | [Milestone 108 — Humanoid Skeleton Mapping Foundation](milestones/MILESTONE_108.md) | implementation in progress |
+| 109 | [Milestone 109 — Animation Retargeting Foundation](milestones/MILESTONE_109.md) | implementation in progress |
 
 ## Later milestones
 

@@ -30,11 +30,14 @@ int main()
         PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH);
     animation::AnimationCatalog catalog;
     catalog.Refresh(canonical.registry, PLATFORMER_SOURCE_ASSET_ROOT);
-    Expect(catalog.Count() == 3, "catalog discovers canonical animations");
+    Expect(catalog.Count() == 5, "catalog discovers canonical and M109 fixture animations");
     const auto* canonicalIdle = catalog.Find("animations/humanoid_idle");
     Expect(canonicalIdle != nullptr
             && canonicalIdle->status == animation::AnimationAssetStatus::Resolved,
         "catalog resolves canonical source asset");
+    const auto* retargetMove = catalog.Find("animations/retarget_move");
+    Expect(retargetMove != nullptr && retargetMove->status == animation::AnimationAssetStatus::Resolved,
+        "catalog resolves M109 production source asset");
     animation::AnimationCatalog missingCatalog;
     missingCatalog.Refresh(parsed.registry, PLATFORMER_SOURCE_ASSET_ROOT);
     const auto* missingEntry = missingCatalog.Find("animations/walk");

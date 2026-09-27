@@ -44,9 +44,10 @@ const char* CharacterPreviewAnimationStatusName(CharacterPreviewAnimationStatus 
     switch (status)
     {
     case CharacterPreviewAnimationStatus::Unavailable: return "Unavailable";
-    case CharacterPreviewAnimationStatus::Embedded: return "Embedded clip";
-    case CharacterPreviewAnimationStatus::Reusable: return "Reusable asset";
-    case CharacterPreviewAnimationStatus::InvalidExplicit: return "Invalid explicit assignment";
+    case CharacterPreviewAnimationStatus::Embedded: return "Exact embedded clip";
+    case CharacterPreviewAnimationStatus::Reusable: return "Exact reusable asset";
+    case CharacterPreviewAnimationStatus::Retargeted: return "Retargeted";
+    case CharacterPreviewAnimationStatus::InvalidExplicit: return "Unavailable";
     }
     return "Unavailable";
 }
@@ -86,10 +87,15 @@ CharacterPreviewAnimationResolution ResolveCharacterPreviewAnimation(
 
     result.animationIdentity.assign(assetIdentity);
     const auto& compatibility = Compatibility(validation, slot);
-    if (compatibility.status != animation::CharacterAnimationCompatibilityStatus::Compatible)
+    result.sourceAssetIdentity = compatibility.sourceAssetIdentity;
+    result.sourceClipName = compatibility.sourceClipName;
+    const bool exact = compatibility.status == animation::CharacterAnimationCompatibilityStatus::Compatible;
+    const bool retargeted = compatibility.retarget.status == animation::RetargetValidationStatus::Retargetable;
+    if (!exact && !retargeted)
     {
         result.status = CharacterPreviewAnimationStatus::InvalidExplicit;
-        result.detail = compatibility.detail;
+        result.detail = compatibility.detail + "; " + compatibility.retarget.detail;
+        result.retarget = compatibility.retarget;
         return result;
     }
     const auto* definition = registry.Find(assetIdentity);
@@ -100,11 +106,13 @@ CharacterPreviewAnimationResolution ResolveCharacterPreviewAnimation(
         result.detail = "Reusable Animation Asset definition is unavailable";
         return result;
     }
-    result.status = CharacterPreviewAnimationStatus::Reusable;
+    result.status = exact ? CharacterPreviewAnimationStatus::Reusable
+        : CharacterPreviewAnimationStatus::Retargeted;
     result.sourceAssetIdentity = definition->animation.sourceAssetIdentity;
     result.sourceClipName = definition->animation.sourceClipName;
     result.playbackMode = definition->animation.playbackMode;
-    result.detail = compatibility.detail;
+    result.retarget = compatibility.retarget;
+    result.detail = exact ? compatibility.detail : compatibility.retarget.detail;
     return result;
 }
 

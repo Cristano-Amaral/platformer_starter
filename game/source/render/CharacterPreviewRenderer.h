@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 #include "core/Vec3.h"
 
 namespace render
@@ -58,5 +59,7 @@ private:
     bool staticModel = false;
     float lastSampledFrame = 0.0f;
     animation::PlaybackMode animationPlaybackMode = animation::PlaybackMode::Loop;
+    animation::RetargetValidationResult retarget{};
+    std::vector<unsigned char> retargetScratch;
 };
 }

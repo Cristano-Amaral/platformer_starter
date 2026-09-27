@@ -26,6 +26,8 @@ struct CharacterDatabaseEditorState
     std::string statusMessage;
     std::string validationKey;
     animation::CharacterAssetValidationResult assetValidation{};
+    std::string sourceModelKey;
+    animation::CharacterModelValidationResult sourceModelValidation{};
     CharacterPreviewSlot previewSlot = CharacterPreviewSlot::Idle;
     CharacterPreviewPlayback previewPlayback{};
     StaticModelPreviewOrbit previewOrbit{};
@@ -49,7 +51,11 @@ inline std::string CharacterAssetValidationKey(
         if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Animation)
             key += "\n" + definition->animation.sourceAssetIdentity + "\n"
                 + definition->animation.sourceClipName;
+        if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Animation)
+            for (const auto& joint : definition->animation.sourceHumanoidMapping.joints)
+                key += "\n" + joint;
     }
+    for (const auto& joint : character.humanoidMapping.joints) key += "\n" + joint;
     return key;
 }
 
@@ -79,6 +85,18 @@ inline bool AssignHumanoidJoint(CharacterDatabaseEditorState& state,
     return true;
 }
 
+inline bool AssignSourceHumanoidJoint(CharacterDatabaseEditorState& state,
+    std::string_view animationIdentity, gameplay::HumanoidJointRole role, std::string_view jointName)
+{
+    auto* definition = state.working.FindMutable(animationIdentity);
+    if (definition == nullptr || definition->category != gameplay::GameplayDefinitionCategory::Animation
+        || static_cast<std::size_t>(role) >= gameplay::kHumanoidJointRoleCount) return false;
+    definition->animation.sourceHumanoidMapping.joints[static_cast<std::size_t>(role)] = jointName;
+    RefreshCharacterDatabaseDirty(state);
+    state.validationInitialized = false;
+    return true;
+}
+
 inline bool ApplyLoadedCharacterDatabase(
     CharacterDatabaseEditorState& state, const gameplay::ParseGameplayDefinitionsResult& parsed)
 {
@@ -97,6 +115,7 @@ inline bool ApplyLoadedCharacterDatabase(
     state.statusMessage = "Loaded";
     state.validationKey.clear();
     state.validationInitialized = false;
+    state.sourceModelKey.clear();
     state.previewFramedIdentity.clear();
     RestartCharacterPreviewPlayback(state.previewPlayback);
     if (!state.selectedIdentity.empty() && state.working.Find(state.selectedIdentity) == nullptr)

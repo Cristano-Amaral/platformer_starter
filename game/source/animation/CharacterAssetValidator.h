@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <array>
 
 struct Model;
 struct ModelAnimation;
@@ -26,6 +27,23 @@ const char* CharacterAnimationCompatibilityStatusName(
     CharacterAnimationCompatibilityStatus status);
 
 struct CharacterJointDiagnostic { std::string name; int parentIndex = -1; };
+enum class RetargetValidationStatus
+{
+    NotRequested, SourceMappingMissing, TargetMappingMissing, InvalidMapping,
+    UnsupportedSkeletonOrAnimation, Retargetable,
+};
+const char* RetargetValidationStatusName(RetargetValidationStatus status);
+struct RetargetValidationResult
+{
+    RetargetValidationStatus status = RetargetValidationStatus::NotRequested;
+    std::string detail;
+    std::string sourceMappingState;
+    std::string targetMappingState;
+    int sourceJointCount = 0;
+    int targetJointCount = 0;
+    std::array<int, gameplay::kHumanoidJointRoleCount> sourceJoints{};
+    std::array<int, gameplay::kHumanoidJointRoleCount> targetJoints{};
+};
 struct CharacterModelValidationResult
 {
     CharacterModelValidationStatus status = CharacterModelValidationStatus::None;
@@ -45,6 +63,7 @@ struct CharacterAnimationCompatibilityResult
     std::string sourceAssetIdentity;
     std::string sourceClipName;
     std::string detail;
+    RetargetValidationResult retarget{};
 };
 struct CharacterAssetValidationResult
 {
@@ -59,6 +78,10 @@ bool RaylibSkeletonsExactlyCompatible(const Model& characterModel,
 float ResolveRaylibAnimationFrame(float timeSeconds, int keyframeCount, PlaybackMode mode);
 bool ApplyRaylibAnimationPose(Model& model, const ModelAnimation& animation,
     float timeSeconds, PlaybackMode mode, float* sampledFrame = nullptr);
+bool ApplyRaylibRetargetedPose(Model& target, const Model& source,
+    const ModelAnimation& clip, const RetargetValidationResult& mapping,
+    float timeSeconds, PlaybackMode mode, std::vector<unsigned char>& scratch,
+    float* sampledFrame = nullptr);
 
 CharacterAssetValidationResult ValidateCharacterAssets(
     const gameplay::GameplayDefinitionRegistry& registry,

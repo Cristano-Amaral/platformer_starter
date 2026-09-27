@@ -1,7 +1,7 @@
 # Architecture
 
 ## Direction
-Humanoid skeleton mapping is authored CharacterDefinition metadata: typed body roles store exact joint names and are checked against the loaded World Model hierarchy. It is independent of M105 exact skeleton compatibility, which still compares joint count, ordered names, and parent indices for reusable animation playback. Animation retargeting between different skeletons remains future work.
+Humanoid skeleton mapping is authored CharacterDefinition metadata: typed body roles store exact joint names and are checked against the loaded World Model hierarchy. M109 adds the same authored roles to AnimationDefinition source skeletons. M105 exact compatibility still compares joint count, ordered names, and parent indices; it remains the preferred playback path. A semantically mapped pair can be retargetable while remaining exact-incompatible.
 
 The game is a 3D platformer with a side/platform-style presentation. The player moves in a constrained gameplay plane/track while the world may use full 3D geometry. Camera behavior belongs to gameplay, while camera/input/window implementation details stay behind engine/backend boundaries.
 
@@ -101,6 +101,14 @@ preview clock advances from the application's authoritative per-frame delta.
 Because Raylib is built with GPU skinning, the preview uses the production `world_lit` shader with
 bounded preview lighting and uploads the animated model's bone matrices just like the Gameplay
 Player draw. The default Raylib material shader is not a valid skinned-character draw path.
+
+## Animation retargeting foundation (Milestone 109)
+
+An `AnimationDefinition` may persist `source_humanoid_joint <role> "<joint name>"` fields in stable role order. Missing fields mean None. The Character Database edits these fields in the same working registry and Save/Reload transaction as CharacterDefinitions. It retains stale names for diagnosis. M108's mapping validator checks source and target independently; it does not change M105 exact compatibility or M106's exact diagnostics.
+
+When exact compatibility fails, typed retarget validation requires both mappings Usable and complete production Raylib skeleton/clip data. Preview then samples Raylib's source model-space glTF pose, recovers local rotations relative to parent and source rest, computes `delta = inverse(sourceRestLocal) * sourceAnimatedLocal`, and applies `targetAnimatedLocal = targetRestLocal * delta`. It rebuilds target model-space transforms and skin matrices for the existing offscreen skinned draw. Only roles mapped on both sides are directly transferred; optional Chest, Neck, and Shoulders may be omitted. Unmapped target joints keep their local rest transforms and inherit mapped ancestor motion normally.
+
+Non-root target local translations and rest scale are preserved. Hips translation delta is copied only when both Hips joints are skeleton roots, with no scaling; otherwise target rest translation is retained. Scale animation, proportion compensation, twist distribution, IK, procedural motion, and gameplay root motion are outside this path. Canonical Player Idle/Move/Jump remains exact-compatible and continues through its existing Raylib playback path.
 
 ## Visible equipment attachments (Milestone 104)
 

@@ -5,9 +5,11 @@
 #include "render/CharacterPreviewRenderer.h"
 
 #include <raylib.h>
+#include <raymath.h>
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string_view>
 
 namespace
@@ -60,7 +62,8 @@ int main()
         player->character, validation, editor::CharacterPreviewSlot::Jump);
     Expect(idle.status == editor::CharacterPreviewAnimationStatus::Reusable
             && idle.animationIdentity == "animations/humanoid_idle"
-            && idle.playbackMode == animation::PlaybackMode::Loop,
+            && idle.playbackMode == animation::PlaybackMode::Loop
+            && validation.idle.retarget.status == animation::RetargetValidationStatus::NotRequested,
         "canonical Idle resolves compatible reusable Loop");
     Expect(move.status == editor::CharacterPreviewAnimationStatus::Reusable
             && move.animationIdentity == "animations/humanoid_move"
@@ -70,6 +73,16 @@ int main()
             && jump.animationIdentity == "animations/humanoid_jump"
             && jump.playbackMode == animation::PlaybackMode::Clamp,
         "canonical Jump resolves compatible reusable Clamp");
+    auto exactWorking = editor::CloneGameplayDefinitionRegistry(parsed.registry);
+    exactWorking.FindMutable("animations/humanoid_idle")
+        ->animation.sourceHumanoidMapping.joints[0] = "StaleName";
+    const auto exactDespiteSourceMapping = animation::ValidateCharacterAssets(
+        exactWorking, player->character, PLATFORMER_SOURCE_ASSET_ROOT);
+    Expect(exactDespiteSourceMapping.idle.status
+        == animation::CharacterAnimationCompatibilityStatus::Compatible
+        && exactDespiteSourceMapping.idle.retarget.status
+            == animation::RetargetValidationStatus::NotRequested,
+        "exact-compatible Player bypasses source mapping and retargeting");
 
     gameplay::CharacterDefinition edited = player->character;
     edited.animations.idleAsset.clear();
@@ -289,6 +302,233 @@ int main()
     Expect(previewRenderer.RenderedPixelChecksum() == jumpFinalPixels,
         "offscreen preview holds canonical Jump Clamp final skinning");
     previewRenderer.Shutdown();
+
+    const auto* targetFixture = parsed.registry.Find("characters/retarget_target");
+    const auto* sourceFixture = parsed.registry.Find("animations/retarget_move");
+    Expect(targetFixture != nullptr && sourceFixture != nullptr, "M109 definitions exist");
+    if (targetFixture != nullptr && sourceFixture != nullptr)
+    {
+        const auto fixtureValidation = animation::ValidateCharacterAssets(parsed.registry,
+            targetFixture->character, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto targetMapping = animation::ValidateHumanoidMapping(
+            targetFixture->character.humanoidMapping, fixtureValidation.model);
+        gameplay::CharacterDefinition sourceCharacter;
+        sourceCharacter.worldModelIdentity = sourceFixture->animation.sourceAssetIdentity;
+        const auto sourceAssets = animation::ValidateCharacterAssets(parsed.registry,
+            sourceCharacter, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto sourceMapping = animation::ValidateHumanoidMapping(
+            sourceFixture->animation.sourceHumanoidMapping, sourceAssets.model);
+        const auto fixturePreview = editor::ResolveCharacterPreviewAnimation(parsed.registry,
+            targetFixture->character, fixtureValidation, editor::CharacterPreviewSlot::Idle);
+        Expect(fixtureValidation.idle.status
+            == animation::CharacterAnimationCompatibilityStatus::SkeletonIncompatible,
+            "M109 pair stays M105 exact-incompatible");
+        Expect(sourceMapping.state == animation::HumanoidMappingState::Usable
+            && targetMapping.state == animation::HumanoidMappingState::Usable,
+            "M109 source and target mappings usable");
+        Expect(fixturePreview.status == editor::CharacterPreviewAnimationStatus::Retargeted
+            && fixtureValidation.idle.retarget.status == animation::RetargetValidationStatus::Retargetable,
+            "M109 pair resolves Retargeted without altering exact result");
+        int sourceClipCount = 0;
+        const std::filesystem::path sourceFixturePath =
+            std::filesystem::path(PLATFORMER_SOURCE_ASSET_ROOT) / sourceFixture->animation.sourceAssetIdentity;
+        ModelAnimation* sourceClips = LoadModelAnimations(sourceFixturePath.string().c_str(), &sourceClipCount);
+        const ModelAnimation* realMoveClip = nullptr;
+        for (int index = 0; sourceClips != nullptr && index < sourceClipCount; ++index)
+            if (std::string_view(sourceClips[index].name) == "Move") realMoveClip = &sourceClips[index];
+        Expect(realMoveClip != nullptr && realMoveClip->keyframeCount > 1
+            && TransformDiffers(realMoveClip->keyframePoses[0][0],
+                realMoveClip->keyframePoses[realMoveClip->keyframeCount / 2][0]),
+            "production source clip has changing animated pose");
+        if (sourceClips != nullptr) UnloadModelAnimations(sourceClips, sourceClipCount);
+        if (fixturePreview.CanSample())
+        {
+            previewRenderer.SyncModel(targetFixture->character.worldModelIdentity,
+                std::filesystem::path(PLATFORMER_SOURCE_ASSET_ROOT)
+                    / targetFixture->character.worldModelIdentity, fixtureValidation.model);
+            Expect(previewRenderer.LoadedIdentity() == targetFixture->character.worldModelIdentity,
+                "offscreen renderer owns the skinned target rather than source model");
+            previewRenderer.SyncAnimation(fixturePreview, PLATFORMER_SOURCE_ASSET_ROOT);
+            editor::ResetStaticModelPreviewOrbit(renderOrbit, previewRenderer.Bounds());
+            renderPlayback = {};
+            Expect(previewRenderer.Render(192, 192, renderOrbit, renderPlayback),
+                "retarget target offscreen frame zero rendered");
+            const auto initialPixels = previewRenderer.RenderedPixelChecksum();
+            const auto initialSkin = previewRenderer.RenderBoneMatrixChecksum();
+            const auto initialHips = previewRenderer.CurrentJointTranslation(0);
+            editor::AdvanceCharacterPreviewPlayback(renderPlayback, 0.25f,
+                previewRenderer.AnimationDurationSeconds(), fixturePreview.playbackMode);
+            Expect(previewRenderer.Render(192, 192, renderOrbit, renderPlayback),
+                "retarget target advanced frame rendered");
+            const auto animatedPixels = previewRenderer.RenderedPixelChecksum();
+            const auto animatedHips = previewRenderer.CurrentJointTranslation(0);
+            Expect(previewRenderer.LastSampledFrame() > 0.0f
+                && std::fabs(previewRenderer.RenderBoneMatrixChecksum() - initialSkin) > 0.00001,
+                "retarget target effective bone matrices advance");
+            Expect(std::fabs(animatedHips.y - initialHips.y) > 0.00001f,
+                "retargeted mapped target Hips pose advances");
+            Expect(initialPixels != animatedPixels, "retargeted target skinned pixels change");
+            renderPlayback.playing = false;
+            editor::AdvanceCharacterPreviewPlayback(renderPlayback, 0.2f,
+                previewRenderer.AnimationDurationSeconds(), fixturePreview.playbackMode);
+            previewRenderer.Render(192, 192, renderOrbit, renderPlayback);
+            Expect(previewRenderer.RenderedPixelChecksum() == animatedPixels,
+                "retarget Pause preserves rendered pixels");
+            renderPlayback.playing = true;
+            editor::AdvanceCharacterPreviewPlayback(renderPlayback, 0.2f,
+                previewRenderer.AnimationDurationSeconds(), fixturePreview.playbackMode);
+            previewRenderer.Render(192, 192, renderOrbit, renderPlayback);
+            Expect(previewRenderer.RenderedPixelChecksum() != animatedPixels,
+                "retarget Play resumes rendered motion");
+            editor::RestartCharacterPreviewPlayback(renderPlayback);
+            previewRenderer.Render(192, 192, renderOrbit, renderPlayback);
+            Expect(previewRenderer.RenderedPixelChecksum() == initialPixels,
+                "retarget Restart restores rendered first frame");
+            editor::AdvanceCharacterPreviewPlayback(renderPlayback,
+                previewRenderer.AnimationDurationSeconds() + 0.25f,
+                previewRenderer.AnimationDurationSeconds(), animation::PlaybackMode::Loop);
+            previewRenderer.Render(192, 192, renderOrbit, renderPlayback);
+            Expect(previewRenderer.RenderedPixelChecksum() == animatedPixels,
+                "retarget Loop wraps rendered motion");
+            const auto clampPreview = editor::ResolveCharacterPreviewAnimation(parsed.registry,
+                targetFixture->character, fixtureValidation, editor::CharacterPreviewSlot::Jump);
+            Expect(clampPreview.status == editor::CharacterPreviewAnimationStatus::Retargeted,
+                "M109 Clamp clip retargetable");
+            previewRenderer.SyncAnimation(clampPreview, PLATFORMER_SOURCE_ASSET_ROOT);
+            renderPlayback = {};
+            editor::AdvanceCharacterPreviewPlayback(renderPlayback, 5.0f,
+                previewRenderer.AnimationDurationSeconds(), animation::PlaybackMode::Clamp);
+            previewRenderer.Render(192, 192, renderOrbit, renderPlayback);
+            const auto finalPixels = previewRenderer.RenderedPixelChecksum();
+            editor::AdvanceCharacterPreviewPlayback(renderPlayback, 3.0f,
+                previewRenderer.AnimationDurationSeconds(), animation::PlaybackMode::Clamp);
+            previewRenderer.Render(192, 192, renderOrbit, renderPlayback);
+            Expect(previewRenderer.RenderedPixelChecksum() == finalPixels,
+                "retarget Clamp preserves rendered endpoint");
+        }
+        gameplay::GameplayDefinitionRegistry fixtureWorking = editor::CloneGameplayDefinitionRegistry(parsed.registry);
+        auto* mutableTarget = fixtureWorking.FindMutable("characters/retarget_target");
+        mutableTarget->character.humanoidMapping.joints[0].clear();
+        const auto missingTarget = animation::ValidateCharacterAssets(fixtureWorking,
+            mutableTarget->character, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(missingTarget.idle.retarget.status == animation::RetargetValidationStatus::TargetMappingMissing,
+            "required target role invalidates retargeting");
+        mutableTarget->character.humanoidMapping.joints[0] = "TargetHips";
+        auto* mutableSource = fixtureWorking.FindMutable("animations/retarget_move");
+        mutableSource->animation.sourceHumanoidMapping.joints[0].clear();
+        const auto missingSource = animation::ValidateCharacterAssets(fixtureWorking,
+            mutableTarget->character, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(missingSource.idle.retarget.status == animation::RetargetValidationStatus::SourceMappingMissing,
+            "required source role invalidates retargeting");
+        mutableSource->animation.sourceHumanoidMapping.joints[0] = "Hips";
+        mutableSource->animation.sourceHumanoidMapping.joints[0] = "StaleHips";
+        const auto staleSource = animation::ValidateCharacterAssets(fixtureWorking,
+            mutableTarget->character, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(staleSource.idle.retarget.status == animation::RetargetValidationStatus::InvalidMapping
+            && staleSource.idle.retarget.detail.find("Stale/missing") != std::string::npos,
+            "stale source joint blocks retargeting with diagnostic");
+        mutableSource->animation.sourceHumanoidMapping.joints[0] = "Hips";
+        mutableTarget->character.humanoidMapping.joints[0] = "TargetSpine";
+        const auto duplicateTarget = animation::ValidateCharacterAssets(fixtureWorking,
+            mutableTarget->character, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(duplicateTarget.idle.retarget.status == animation::RetargetValidationStatus::InvalidMapping,
+            "duplicate target assignment blocks retargeting");
+        mutableTarget->character.humanoidMapping.joints[0] = "TargetHips";
+        const auto recovered = animation::ValidateCharacterAssets(fixtureWorking,
+            mutableTarget->character, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(recovered.idle.retarget.status == animation::RetargetValidationStatus::Retargetable,
+            "restoring source and target role recovers retargeting");
+    }
+    previewRenderer.Shutdown();
+
+    // Raylib glTF poses are global. This case has different names, indices,
+    // rest orientations and proportions, so absolute quaternion copying fails.
+    BoneInfo sourceBones[3]{};
+    BoneInfo targetBones[4]{};
+    std::memcpy(sourceBones[0].name, "SourceHand", sizeof("SourceHand")); sourceBones[0].parent = 1;
+    std::memcpy(sourceBones[1].name, "SourceHips", sizeof("SourceHips")); sourceBones[1].parent = -1;
+    std::memcpy(sourceBones[2].name, "SourceChest", sizeof("SourceChest")); sourceBones[2].parent = 1;
+    std::memcpy(targetBones[0].name, "TargetHips", sizeof("TargetHips")); targetBones[0].parent = -1;
+    std::memcpy(targetBones[1].name, "TargetHand", sizeof("TargetHand")); targetBones[1].parent = 3;
+    std::memcpy(targetBones[2].name, "TargetChest", sizeof("TargetChest")); targetBones[2].parent = 0;
+    std::memcpy(targetBones[3].name, "TargetArmLink", sizeof("TargetArmLink")); targetBones[3].parent = 0;
+    const auto dot = [](::Quaternion a, ::Quaternion b) {
+        return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+    };
+    const ::Quaternion sourceYaw = QuaternionFromAxisAngle({0, 1, 0}, PI / 4);
+    const ::Quaternion targetYaw = QuaternionFromAxisAngle({0, 1, 0}, PI / 2);
+    const ::Quaternion handMotion = QuaternionFromAxisAngle({0, 0, 1}, PI / 3);
+    const ::Quaternion chestMotion = QuaternionFromAxisAngle({1, 0, 0}, PI / 6);
+    Transform sourceRest[3] = {
+        {{1, 0, 0}, sourceYaw, {1, 1, 1}},
+        {{0, 0, 0}, sourceYaw, {1, 1, 1}},
+        {{0, 1, 0}, sourceYaw, {1, 1, 1}}};
+    Transform targetRest[4] = {
+        {{0, 0, 0}, targetYaw, {1, 1, 1}},
+        {{0, 2, 0}, targetYaw, {2, 2, 2}},
+        {{0, 3, 0}, targetYaw, {1, 1, 1}},
+        {{0, 1, 0}, targetYaw, {1, 1, 1}}};
+    Transform sourceFrame0[3] = {sourceRest[0], sourceRest[1], sourceRest[2]};
+    Transform sourceFrame1[3] = {
+        {{5, 0, 0}, QuaternionMultiply(sourceYaw, handMotion), {3, 3, 3}},
+        sourceRest[1],
+        {{0, 1, 0}, QuaternionMultiply(sourceYaw, chestMotion), {1, 1, 1}}};
+    Transform* frames[2] = {sourceFrame0, sourceFrame1};
+    Transform targetCurrent[4]{};
+    Matrix targetMatrices[4]{};
+    Model sourceMath{};
+    sourceMath.skeleton = {3, sourceBones, sourceRest};
+    Model targetMath{};
+    targetMath.skeleton = {4, targetBones, targetRest};
+    targetMath.currentPose = targetCurrent;
+    targetMath.boneMatrices = targetMatrices;
+    ModelAnimation mathClip{};
+    mathClip.boneCount = 3;
+    mathClip.keyframeCount = 2;
+    mathClip.keyframePoses = frames;
+    animation::RetargetValidationResult mathMapping;
+    mathMapping.status = animation::RetargetValidationStatus::Retargetable;
+    mathMapping.sourceJoints.fill(-1); mathMapping.targetJoints.fill(-1);
+    const auto hipsRole = static_cast<std::size_t>(gameplay::HumanoidJointRole::Hips);
+    const auto handRole = static_cast<std::size_t>(gameplay::HumanoidJointRole::LeftHand);
+    const auto chestRole = static_cast<std::size_t>(gameplay::HumanoidJointRole::Chest);
+    mathMapping.sourceJoints[hipsRole] = 1; mathMapping.targetJoints[hipsRole] = 0;
+    mathMapping.sourceJoints[handRole] = 0; mathMapping.targetJoints[handRole] = 1;
+    std::vector<unsigned char> mathScratch;
+    Expect(animation::ApplyRaylibRetargetedPose(targetMath, sourceMath, mathClip, mathMapping,
+        1.0f / 60.0f, animation::PlaybackMode::Clamp, mathScratch), "math retarget samples differing indices");
+    const ::Quaternion expectedHand = QuaternionMultiply(targetYaw, handMotion);
+    const float handDot = std::fabs(dot(targetCurrent[1].rotation, expectedHand));
+    Expect(handDot > 0.999f && std::fabs(dot(targetCurrent[1].rotation,
+        sourceFrame1[0].rotation)) < 0.999f,
+        "rest-relative motion uses target rest orientation rather than source absolute rotation");
+    Expect(std::fabs(targetCurrent[1].translation.y - 2.0f) < 0.001f
+        && std::fabs(targetCurrent[1].scale.x - 2.0f) < 0.001f,
+        "non-root target rest translation and scale survive source changes");
+    Expect(std::fabs(dot(targetCurrent[2].rotation, targetYaw)) > 0.999f,
+        "unmapped optional target joint stays at target rest");
+    Expect(std::fabs(targetCurrent[3].translation.y - 1.0f) < 0.001f
+        && std::fabs(dot(targetCurrent[3].rotation, targetYaw)) > 0.999f,
+        "unmapped intermediate target joint remains locally at rest");
+    mathMapping.sourceJoints[chestRole] = 2; mathMapping.targetJoints[chestRole] = 2;
+    Expect(animation::ApplyRaylibRetargetedPose(targetMath, sourceMath, mathClip, mathMapping,
+        1.0f / 60.0f, animation::PlaybackMode::Clamp, mathScratch), "mapped optional role samples");
+    const ::Quaternion expectedChest = QuaternionMultiply(targetYaw, chestMotion);
+    Expect(std::fabs(dot(targetCurrent[2].rotation, expectedChest)) > 0.999f,
+        "optional role applies when mapped on both sides");
+    mathMapping.sourceJoints[chestRole] = -1;
+    animation::ApplyRaylibRetargetedPose(targetMath, sourceMath, mathClip, mathMapping,
+        1.0f / 60.0f, animation::PlaybackMode::Clamp, mathScratch);
+    Expect(std::fabs(dot(targetCurrent[2].rotation, targetYaw)) > 0.999f,
+        "optional role omitted when source assignment is absent");
+    sourceFrame1[1].translation = {0, 1, 0};
+    animation::ApplyRaylibRetargetedPose(targetMath, sourceMath, mathClip, mathMapping,
+        1.0f / 60.0f, animation::PlaybackMode::Clamp, mathScratch);
+    Expect(std::fabs(targetCurrent[0].translation.y - 1.0f) < 0.001f
+        && std::fabs(targetCurrent[1].translation.y - 3.0f) < 0.001f
+        && std::fabs(targetCurrent[2].translation.y - 4.0f) < 0.001f
+        && std::fabs(targetCurrent[3].translation.y - 2.0f) < 0.001f,
+        "root Hips delta moves descendants while their local rest translations remain intact");
 
     CloseWindow();
     if (failures != 0) return 1;

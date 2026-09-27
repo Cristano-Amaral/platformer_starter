@@ -37,6 +37,8 @@ Camera3D ToCamera(const editor::ThumbnailCameraFrame& frame)
 struct CharacterPreviewRenderer::GpuState
 {
     Model model{};
+    Model sourceModel{};
+    bool hasSourceModel = false;
     ModelAnimation* animations = nullptr;
     int animationCount = 0;
     RenderTexture2D target{};
@@ -57,10 +59,14 @@ void CharacterPreviewRenderer::ReleaseAnimation()
             gpu->model.boneMatrices[bone] = MatrixIdentity();
     }
     if (gpu && gpu->animations) UnloadModelAnimations(gpu->animations, gpu->animationCount);
+    if (gpu && gpu->hasSourceModel) UnloadModel(gpu->sourceModel);
+    if (gpu) { gpu->sourceModel = {}; gpu->hasSourceModel = false; }
     if (gpu) { gpu->animations = nullptr; gpu->animationCount = 0; }
     selectedAnimation = -1;
     lastSampledFrame = 0.0f;
     animationKey.clear();
+    retarget = {};
+    retargetScratch.clear();
 }
 
 void CharacterPreviewRenderer::ReleaseModel()
@@ -154,8 +160,13 @@ void CharacterPreviewRenderer::SyncAnimation(
     const editor::CharacterPreviewAnimationResolution& resolution,
     const std::filesystem::path& assetRoot)
 {
-    const std::string key = resolution.CanSample()
-        ? resolution.sourceAssetIdentity + "\n" + resolution.sourceClipName : std::string{};
+    std::string key = resolution.CanSample()
+        ? resolution.sourceAssetIdentity + "\n" + resolution.sourceClipName
+            + "\n" + std::to_string(static_cast<int>(resolution.status)) : std::string{};
+    if (resolution.status == editor::CharacterPreviewAnimationStatus::Retargeted)
+        for (std::size_t role = 0; role < gameplay::kHumanoidJointRoleCount; ++role)
+            key += "\n" + std::to_string(resolution.retarget.sourceJoints[role])
+                + ":" + std::to_string(resolution.retarget.targetJoints[role]);
     animationStatus = resolution.detail;
     animationPlaybackMode = resolution.playbackMode;
     if (!hasModel || staticModel || !resolution.CanSample())
@@ -163,7 +174,15 @@ void CharacterPreviewRenderer::SyncAnimation(
     if (key == animationKey && selectedAnimation >= 0) return;
     ReleaseAnimation();
     animationKey = key;
+    retarget = resolution.retarget;
     const std::filesystem::path sourcePath = assetRoot / resolution.sourceAssetIdentity;
+    if (resolution.status == editor::CharacterPreviewAnimationStatus::Retargeted)
+    {
+        gpu->sourceModel = LoadModel(sourcePath.string().c_str());
+        gpu->hasSourceModel = gpu->sourceModel.skeleton.bindPose != nullptr;
+        if (!gpu->hasSourceModel)
+        { animationStatus = "Retarget source model failed loading"; ReleaseAnimation(); return; }
+    }
     gpu->animations = LoadModelAnimations(sourcePath.string().c_str(), &gpu->animationCount);
     for (int index = 0; index < gpu->animationCount; ++index)
         if (resolution.sourceClipName == gpu->animations[index].name)
@@ -225,6 +244,9 @@ bool CharacterPreviewRenderer::SampleAnimation(float timeSeconds, animation::Pla
 {
     if (!gpu || !hasModel || selectedAnimation < 0) return false;
     const ModelAnimation& clip = gpu->animations[selectedAnimation];
+    if (retarget.status == animation::RetargetValidationStatus::Retargetable && gpu->hasSourceModel)
+        return animation::ApplyRaylibRetargetedPose(gpu->model, gpu->sourceModel, clip,
+            retarget, timeSeconds, mode, retargetScratch, &lastSampledFrame);
     return animation::ApplyRaylibAnimationPose(
         gpu->model, clip, timeSeconds, mode, &lastSampledFrame);
 }

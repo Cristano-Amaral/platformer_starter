@@ -80,6 +80,11 @@ int main()
             == editor::CharacterDefinitionEditStatus::Changed, "rename Character");
     Expect(editor::TryRenameSelectedCharacterIdentity(state, "guard")
             == editor::CharacterDefinitionEditStatus::DuplicateIdentity, "duplicate rename rejected");
+    Expect(editor::AssignSourceHumanoidJoint(state, "animations/retarget_move",
+        gameplay::HumanoidJointRole::Hips, "StaleHips"), "source role edits AnimationDefinition working copy");
+    Expect(fixture.registry.Find("animations/retarget_move")
+        ->animation.sourceHumanoidMapping.joints[0] == "Hips",
+        "unsaved source mapping does not mutate active registry");
 
     const std::filesystem::path temp = std::filesystem::temp_directory_path()
         / "platformer_character_database_test.gameplay";
@@ -93,6 +98,9 @@ int main()
     Expect(again != nullptr && again->character.humanoidMapping.joints[0] == "Hips"
         && again->character.humanoidMapping.joints[1].empty(),
         "mapping and None roles persist through Save/Reload");
+    Expect(saved.registry.Find("animations/retarget_move")
+        ->animation.sourceHumanoidMapping.joints[0] == "StaleHips",
+        "source mapping Save persists exact authored name including stale name");
     Expect(again != nullptr && again->character.worldModelIdentity
             == "models/Character Model With Spaces.glb", "missing model identity preserved");
     Expect(again != nullptr && again->character.animations.idle == "Idle"

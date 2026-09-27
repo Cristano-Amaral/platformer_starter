@@ -15,6 +15,7 @@ enum class CharacterPreviewAnimationStatus
     Unavailable,
     Embedded,
     Reusable,
+    Retargeted,
     InvalidExplicit,
 };
 
@@ -26,11 +27,13 @@ struct CharacterPreviewAnimationResolution
     std::string sourceClipName;
     animation::PlaybackMode playbackMode = animation::PlaybackMode::Loop;
     std::string detail;
+    animation::RetargetValidationResult retarget{};
 
     bool CanSample() const
     {
         return status == CharacterPreviewAnimationStatus::Embedded
-            || status == CharacterPreviewAnimationStatus::Reusable;
+            || status == CharacterPreviewAnimationStatus::Reusable
+            || status == CharacterPreviewAnimationStatus::Retargeted;
     }
 };
 

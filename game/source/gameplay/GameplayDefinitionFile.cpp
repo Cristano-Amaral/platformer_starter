@@ -214,6 +214,7 @@ struct ItemFieldFlags
     bool animationMoveAsset = false;
     bool animationJumpAsset = false;
     std::array<bool, kHumanoidJointRoleCount> humanoidJoint{};
+    std::array<bool, kHumanoidJointRoleCount> sourceHumanoidJoint{};
     bool sourceAsset = false;
     bool sourceClip = false;
     bool playback = false;
@@ -721,6 +722,25 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate animation source asset");
             current.animation.sourceAssetIdentity = std::move(identity); flags.sourceAsset = true;
         }
+        else if (tokens[0] == "source_humanoid_joint")
+        {
+            if (!RequireAnimation(current, haveCurrent) || tokens.size() < 3)
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid source_humanoid_joint");
+            const auto role = HumanoidJointRoleFromName(tokens[1]);
+            std::string_view remainder;
+            std::string joint;
+            if (!role || !ConsumeKeywordRemainder(line, "source_humanoid_joint", remainder))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid source humanoid role");
+            remainder.remove_prefix(tokens[1].size());
+            while (!remainder.empty() && remainder.front() == ' ') remainder.remove_prefix(1);
+            if (!ParseIdentityRemainder(remainder, joint) || !IsValidCharacterAnimationClipName(joint))
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid source humanoid joint name");
+            const auto index = static_cast<std::size_t>(*role);
+            if (flags.sourceHumanoidJoint[index])
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate source_humanoid_joint role");
+            flags.sourceHumanoidJoint[index] = true;
+            current.animation.sourceHumanoidMapping.joints[index] = std::move(joint);
+        }
         else if (tokens[0] == "source_clip")
         {
             std::string_view remainder; std::string clip;
@@ -1043,6 +1063,16 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
             result.text += '\n';
             result.text += "playback ";
             result.text += definition.animation.playbackMode == animation::PlaybackMode::Loop ? "Loop\n" : "Clamp\n";
+            for (std::size_t index = 0; index < kHumanoidJointRoleCount; ++index)
+            {
+                const auto& joint = definition.animation.sourceHumanoidMapping.joints[index];
+                if (joint.empty()) continue;
+                result.text += "source_humanoid_joint ";
+                result.text += kHumanoidJointRoleNames[index];
+                result.text += ' ';
+                AppendQuotedString(result.text, joint);
+                result.text += '\n';
+            }
         }
 
         for (std::size_t index = 0; index < kGameplayStatCount; ++index)

@@ -454,7 +454,7 @@ int main()
     {
         const auto loaded = gameplay::LoadGameplayDefinitionsFile(PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH);
         Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "fixture file loads");
-        Expect(loaded.registry.Count() == 10, "fixture definition count");
+        Expect(loaded.registry.Count() == 13, "fixture definition count");
         const gameplay::GameplayDefinition* key = loaded.registry.Find("items/master_key");
         const gameplay::GameplayDefinition* potion = loaded.registry.Find("items/health_potion");
         const gameplay::GameplayDefinition* player = loaded.registry.Find("characters/player");
@@ -467,6 +467,9 @@ int main()
             "fixture guard");
         const gameplay::GameplayDefinition* bau = loaded.registry.Find("items/bau");
         Expect(bau != nullptr && bau->item.stackable && bau->item.maxStack == 10, "fixture bau");
+        const auto* retargetSource = loaded.registry.Find("animations/retarget_move");
+        Expect(retargetSource != nullptr && retargetSource->animation.sourceHumanoidMapping.joints[0] == "Hips",
+            "source humanoid mapping loaded by exact joint name");
 
         gameplay::GameplayDefinitionReference valid;
         valid.identity = "items/master_key";
@@ -486,6 +489,29 @@ int main()
         Expect(written.ok && reparsed.status == gameplay::LoadGameplayDefinitionsStatus::Loaded
                 && SameRegistry(loaded.registry, reparsed.registry),
             "fixture round-trip");
+        const auto* reparsedSource = reparsed.registry.Find("animations/retarget_move");
+        Expect(reparsedSource != nullptr
+            && reparsedSource->animation.sourceHumanoidMapping.joints
+                == retargetSource->animation.sourceHumanoidMapping.joints,
+            "source mapping deterministic persistence round-trip");
+        const auto duplicateRole = gameplay::ParseGameplayDefinitionsText(
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition animations/a\n"
+            "source_asset \"models/retarget_source.glb\"\nsource_clip \"Move\"\n"
+            "source_humanoid_joint Hips \"Hips\"\nsource_humanoid_joint Hips \"Spine\"\n");
+        Expect(duplicateRole.status == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+            "duplicate serialized source role rejected");
+        const auto malformedRole = gameplay::ParseGameplayDefinitionsText(
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition animations/a\n"
+            "source_asset \"models/retarget_source.glb\"\nsource_clip \"Move\"\n"
+            "source_humanoid_joint Tail \"Hips\"\n");
+        Expect(malformedRole.status == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+            "malformed source role rejected");
+        const auto malformedJoint = gameplay::ParseGameplayDefinitionsText(
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition animations/a\n"
+            "source_asset \"models/retarget_source.glb\"\nsource_clip \"Move\"\n"
+            "source_humanoid_joint Hips \"\"\n");
+        Expect(malformedJoint.status == gameplay::LoadGameplayDefinitionsStatus::Invalid,
+            "malformed empty source joint field rejected");
 
         const auto missingFile = gameplay::LoadGameplayDefinitionsFile(
             std::string(PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH) + ".missing");

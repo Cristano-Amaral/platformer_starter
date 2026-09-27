@@ -209,6 +209,72 @@ void DrawCharacterDatabaseEditor(
                     detail.detail.c_str(), detail.jointIndex);
             ImGui::TreePop();
         }
+        const std::string sourceAnimationIdentity = state.previewSlot == CharacterPreviewSlot::Idle
+            ? selected->character.animations.idleAsset : state.previewSlot == CharacterPreviewSlot::Move
+            ? selected->character.animations.moveAsset : selected->character.animations.jumpAsset;
+        auto* sourceDefinition = state.working.FindMutable(sourceAnimationIdentity);
+        if (sourceDefinition != nullptr
+            && sourceDefinition->category == gameplay::GameplayDefinitionCategory::Animation
+            && ImGui::TreeNode("Reusable animation source humanoid mapping"))
+        {
+            if (state.sourceModelKey != sourceDefinition->animation.sourceAssetIdentity)
+            {
+                gameplay::CharacterDefinition sourceCharacter;
+                sourceCharacter.worldModelIdentity = sourceDefinition->animation.sourceAssetIdentity;
+                state.sourceModelValidation = animation::ValidateCharacterAssets(
+                    state.working, sourceCharacter, AuthoringSourceRoot()).model;
+                state.sourceModelKey = sourceCharacter.worldModelIdentity;
+            }
+            const auto& sourceModel = state.sourceModelValidation;
+            auto& sourceMapping = sourceDefinition->animation.sourceHumanoidMapping;
+            ImGui::Text("Animation: %s | Clip: %s", sourceAnimationIdentity.c_str(),
+                sourceDefinition->animation.sourceClipName.c_str());
+            ImGui::Text("Source joints: %d", sourceModel.jointCount);
+            if (sourceModel.status != animation::CharacterModelValidationStatus::Resolved)
+                ImGui::TextWrapped("Source model: %s", sourceModel.detail.c_str());
+            if (ImGui::TreeNode("Source joint hierarchy"))
+            {
+                for (std::size_t jointIndex = 0; jointIndex < sourceModel.allJoints.size(); ++jointIndex)
+                    ImGui::Text("%zu: %s (parent %d)", jointIndex,
+                        sourceModel.allJoints[jointIndex].name.c_str(),
+                        sourceModel.allJoints[jointIndex].parentIndex);
+                ImGui::TreePop();
+            }
+            if (ImGui::Button("Suggest Source Mapping"))
+            { animation::SuggestHumanoidMapping(sourceMapping, sourceModel); RefreshCharacterDatabaseDirty(state); state.validationInitialized = false; }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear Source Mapping"))
+            { sourceMapping = {}; RefreshCharacterDatabaseDirty(state); state.validationInitialized = false; }
+            for (std::size_t roleIndex = 0; roleIndex < gameplay::kHumanoidJointRoleCount; ++roleIndex)
+            {
+                const auto role = static_cast<gameplay::HumanoidJointRole>(roleIndex);
+                const auto& assigned = sourceMapping.joints[roleIndex];
+                ImGui::PushID(static_cast<int>(roleIndex) + 100);
+                ImGui::TextUnformatted(gameplay::kHumanoidJointRoleNames[roleIndex].data());
+                ImGui::SameLine(220.0f);
+                if (ImGui::BeginCombo("##sourceJoint", assigned.empty() ? "None" : assigned.c_str()))
+                {
+                    if (ImGui::Selectable("None", assigned.empty()))
+                        AssignSourceHumanoidJoint(state, sourceAnimationIdentity, role, {});
+                for (const auto& joint : sourceModel.allJoints)
+                        if (ImGui::Selectable(joint.name.c_str(), assigned == joint.name))
+                            AssignSourceHumanoidJoint(state, sourceAnimationIdentity, role, joint.name);
+                    ImGui::EndCombo();
+                }
+                if (!assigned.empty() && std::none_of(sourceModel.allJoints.begin(),
+                    sourceModel.allJoints.end(), [&](const auto& joint) { return joint.name == assigned; }))
+                    ImGui::TextColored(ImVec4(.92f,.45f,.28f,1), "Stale/missing: %s", assigned.c_str());
+                ImGui::PopID();
+            }
+            const auto sourceValidation = animation::ValidateHumanoidMapping(sourceMapping, sourceModel);
+            ImGui::Text("Source mapping: %s", animation::HumanoidMappingStateName(sourceValidation.state));
+            for (const auto& detail : sourceValidation.details)
+                if (detail.jointIndex < 0) ImGui::TextWrapped("%s: %s",
+                    gameplay::HumanoidJointRoleName(detail.role).data(), detail.detail.c_str());
+            ImGui::TreePop();
+        }
+        if (!state.validationInitialized)
+            RefreshCharacterAssetValidation(state, selected->character, AuthoringSourceRoot());
         render::CharacterPreviewRenderer* preview = view.characterPreview;
         const std::filesystem::path sourceRoot = AuthoringSourceRoot();
         if (preview != nullptr)
@@ -277,6 +343,17 @@ void DrawCharacterDatabaseEditor(
             previewResolution.playbackMode == animation::PlaybackMode::Loop ? "Loop" : "Clamp",
             CharacterPreviewAnimationStatusName(previewResolution.status));
         ImGui::TextDisabled("%s", previewResolution.detail.c_str());
+        if (!sourceAnimationIdentity.empty()
+            && previewResolution.retarget.status != animation::RetargetValidationStatus::NotRequested)
+        {
+            ImGui::Text("Retarget: %s | Source mapping: %s | Target mapping: %s",
+                animation::RetargetValidationStatusName(previewResolution.retarget.status),
+                previewResolution.retarget.sourceMappingState.c_str(),
+                previewResolution.retarget.targetMappingState.c_str());
+            ImGui::TextDisabled("Source: %s (%d joints) | Target: %s (%d joints)",
+                previewResolution.sourceAssetIdentity.c_str(), previewResolution.retarget.sourceJointCount,
+                selected->character.worldModelIdentity.c_str(), previewResolution.retarget.targetJointCount);
+        }
 
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const float previewHeight = std::min(320.0f, std::max(180.0f, available.x * 0.56f));
