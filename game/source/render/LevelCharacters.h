@@ -48,12 +48,14 @@ public:
                 {
                     npcs.emplace_back(index, placement, instance.get(),
                         gameplay::ResolveCharacterMaxHealth(registry.Find(placement.definitionIdentity)->character));
+                    instance->SetRuntimeHealth(&npcs.back().health);
                     DrivePresentation(npcs.back(), *instance);
                 }
                 else if (patrolRuntimeEnabled && registry.Find(placement.definitionIdentity)->character.type == gameplay::CharacterType::Enemy)
                 {
                     enemies.emplace_back(index, placement, instance.get(),
                         gameplay::ResolveCharacterMaxHealth(registry.Find(placement.definitionIdentity)->character));
+                    instance->SetRuntimeHealth(&enemies.back().health);
                     DrivePresentation(enemies.back(), *instance);
                 }
             }

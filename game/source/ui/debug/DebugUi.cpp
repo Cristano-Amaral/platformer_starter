@@ -115,6 +115,7 @@ editor::LevelEditorRequest DebugUi::Draw(
             const auto drawHealth = [&](gameplay::RuntimeHealth& health, bool specialPlayer = false) {
                 ImGui::Text("Health %.3f / %.3f / %s", health.Current(), health.Maximum(),
                     health.Defeated() ? "Defeated" : "Alive");
+                ImGui::Text("Hit feedback %.3f s", health.DamageFeedbackRemaining());
                 // F2 freezes the production death delay and cannot exit during death.
                 ImGui::BeginDisabled(specialPlayer && levelEditorState.active);
                 if (ImGui::Button("Damage"))

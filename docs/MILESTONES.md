@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 114 — Health & Damage Foundation**
+**Milestone 116 — Damage Feedback Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_115.md`](milestones/MILESTONE_114.md)
+Canonical file: [`docs/milestones/MILESTONE_116.md`](milestones/MILESTONE_116.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -232,4 +232,6 @@ Milestone 113 implementation validated; manual acceptance and Git closure pendin
 
 Milestone 114 complete and closed.
 
-Milestone 115 — [Death & Defeat Foundation](milestones/MILESTONE_115.md): implementation validated; manual acceptance and Git closure pending. Do not start M116.
+Milestone 115 — [Death & Defeat Foundation](milestones/MILESTONE_115.md): implementation validated; manual acceptance and Git closure pending.
+
+Milestone 116 implementation validated; manual acceptance and Git closure pending.

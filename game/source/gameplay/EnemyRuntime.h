@@ -16,6 +16,7 @@ struct EnemyRuntimeActor : CharacterPatrolState
 {
     void Advance(float deltaSeconds)
     {
+        health.AdvanceDamageFeedback(deltaSeconds);
         if (health.Defeated()) locomotion = CharacterPatrolLocomotionState::Idle;
         else CharacterPatrolState::Advance(deltaSeconds);
     }

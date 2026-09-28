@@ -62,6 +62,25 @@ void Register(gameplay::GameplayDefinitionRegistry& registry, const gameplay::Ga
 
 int main()
 {
+    gameplay::RuntimeHealth flash(100);
+    flash.ApplyDamage({10});
+    Expect(flash.DamageFeedbackActive(), "accepted positive reduction starts feedback");
+    flash.AdvanceDamageFeedback(0.125f);
+    flash.ApplyDamage({10});
+    Expect(flash.DamageFeedbackRemaining() == gameplay::kDamageFeedbackSeconds, "hit restarts bounded window");
+    flash.AdvanceDamageFeedback(gameplay::kDamageFeedbackSeconds);
+    Expect(!flash.DamageFeedbackActive(), "feedback expires");
+    flash.ApplyHealing({1});
+    flash.SetMaximum(120);
+    for (float invalid : {0.0f, -1.0f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()})
+        flash.ApplyDamage({invalid});
+    Expect(!flash.DamageFeedbackActive(), "heal maximum sync and invalid damage never flash");
+    flash.ApplyDamage({1000});
+    flash.AdvanceDamageFeedback(gameplay::kDamageFeedbackSeconds);
+    flash.ApplyDamage({1});
+    Expect(flash.Defeated() && !flash.DamageFeedbackActive(), "zero applied damage cannot refresh defeated feedback");
+    flash.Reset();
+    Expect(!flash.DamageFeedbackActive() && !flash.Defeated(), "reset clears feedback");
     // M114 bounded operations, including float extremes and invalid inputs.
     gameplay::RuntimeHealth health(80.5f);
     Expect(health.Current() == 80.5f && health.Maximum() == 80.5f && !health.Depleted(), "health starts at maximum");

@@ -1,4 +1,5 @@
 #include "render/CharacterInstance.h"
+#include "gameplay/RuntimeHealth.h"
 
 #include "render/LoadedModelMaterials.h"
 
@@ -230,6 +231,11 @@ const void* CharacterInstance::PoseAddress() const
 const void* CharacterInstance::BoneMatricesAddress() const
 { return gpu->hasModel ? gpu->model.boneMatrices : nullptr; }
 
+bool CharacterInstance::DamageFeedbackActive() const
+{
+    return runtimeHealth != nullptr && runtimeHealth->DamageFeedbackActive();
+}
+
 void CharacterInstance::Draw(const ModelDrawOverride* override) const
 {
     if (!gpu->hasModel) return;
@@ -253,7 +259,7 @@ void CharacterInstance::Draw(const ModelDrawOverride* override) const
             SetShaderValue(shaderOverride.shader, skinningLocation, &enabled, SHADER_UNIFORM_INT);
         }
     }
-    DrawModelPreservingMaterials(gpu->model, {0.0f, 0.0f, 0.0f}, 1.0f, WHITE,
+    DrawModelPreservingMaterials(gpu->model, {0.0f, 0.0f, 0.0f}, 1.0f, DamageFeedbackActive() ? Color{255, 48, 48, 255} : WHITE,
         shaderOverride.shader.id != 0 ? &shaderOverride : nullptr);
     rlPopMatrix();
     if (skinningLocation >= 0)

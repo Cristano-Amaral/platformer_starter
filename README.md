@@ -235,3 +235,5 @@ or format version change. Gameplay Manual R resets both at the existing producti
 boundary. Manual acceptance and Git closure remain pending; no M114 work.
 
 M114 runtime health diagnostics are available in Development via F1 → M114 Runtime Health: choose a positive resolved amount and use the identified Player/NPC/Enemy Damage or Heal buttons. M115 direct zero-health marks Defeated: Player enters the existing death/respawn flow, NPC/Enemy patrol stops while presentation remains. Healing while Defeated is rejected; lifecycle resets restore Alive/full. `PlayerCharacterStatsTest` covers bounded health and equipment MaxHealth; `CharacterPlacementTest` exercises the real Application manual-respawn health/patrol boundary. See [architecture](docs/ARCHITECTURE.md#m114-runtime-health--direct-damage).
+
+M116 adds a transient 0.25-second red character tint for accepted positive runtime damage. Existing F1 Runtime Health Damage buttons exercise Player and independent NPC/Enemy feedback; healing and maximum synchronization never flash. Lifecycle resets clear feedback; no authored settings or combat are added.

@@ -7,6 +7,7 @@ namespace gameplay
 {
 // Matches the existing legacy Player maximum. Authored stats have no upper cap.
 inline constexpr float kFallbackMaxHealth = 100.0f;
+inline constexpr float kDamageFeedbackSeconds = 0.25f;
 inline float ResolveRuntimeMaxHealth(float value)
 {
     return std::isfinite(value) && value > 0.0f ? value : kFallbackMaxHealth;
@@ -33,12 +34,19 @@ public:
     RuntimeLifeState LifeState() const { return lifeState; }
     bool Defeated() const { return lifeState == RuntimeLifeState::Defeated; }
     bool Depleted() const { return currentHealth <= 0.0f; }
+    bool DamageFeedbackActive() const { return damageFeedbackRemaining > 0.0f; }
+    float DamageFeedbackRemaining() const { return damageFeedbackRemaining; }
+    void AdvanceDamageFeedback(float deltaSeconds)
+    {
+        if (std::isfinite(deltaSeconds) && deltaSeconds > 0.0f)
+            damageFeedbackRemaining = std::max(0.0f, damageFeedbackRemaining - deltaSeconds);
+    }
     void SetMaximum(float maximum)
     {
         maxHealth = ResolveRuntimeMaxHealth(maximum);
         currentHealth = std::min(currentHealth, maxHealth);
     }
-    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; }
+    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; }
     HealthOperationResult ApplyDamage(DirectDamage damage)
     {
         HealthOperationResult result{false, currentHealth, currentHealth, 0.0f};
@@ -50,6 +58,7 @@ public:
             lifeState = RuntimeLifeState::Defeated;
         result.after = currentHealth;
         result.applied = result.before - result.after;
+        if (result.applied > 0.0f) damageFeedbackRemaining = kDamageFeedbackSeconds;
         return result;
     }
     HealthOperationResult ApplyHealing(DirectHealing healing)
@@ -66,6 +75,7 @@ public:
     }
 private:
     RuntimeLifeState lifeState = RuntimeLifeState::Alive;
+    float damageFeedbackRemaining = 0.0f;
     float maxHealth;
     float currentHealth;
 };

@@ -3220,6 +3220,9 @@ void Application::Initialize()
 
 void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused)
 {
+    renderer.SetPlayerRuntimeHealth(&playerHealth);
+    if (!gameplay::PlayerDeathIsActive(playerDeath))
+        playerHealth.AdvanceDamageFeedback(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
     levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     // The reset frame must visibly present the spawn pose, not consume its delta.
     levelCharacters.Advance(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
@@ -3298,6 +3301,7 @@ gameplay::HealthOperationResult Application::ApplyPlayerRuntimeDamage(gameplay::
 
 void Application::AdvancePlayerDeath(float deltaSeconds)
 {
+    playerHealth.AdvanceDamageFeedback(deltaSeconds);
     gameplay::TickPlayerDeathDelay(playerDeath, deltaSeconds);
     if (gameplay::PlayerDeathDelayElapsed(playerDeath)) PerformDeathRespawn();
 }

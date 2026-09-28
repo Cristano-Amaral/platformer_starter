@@ -1,5 +1,6 @@
 #include "render/Renderer.h"
 #include "render/CharacterInstance.h"
+#include "gameplay/RuntimeHealth.h"
 
 #include "animation/SkeletalAnimation.h"
 #include "animation/CharacterAssetValidator.h"
@@ -291,7 +292,7 @@ void LogPlayerModelLoadFailureOnce(bool& logged)
 
 void DrawPlayerPresentationModel(
     const Model& model,
-    const gameplay::PlayerVisualTransform& visual)
+    const gameplay::PlayerVisualTransform& visual, bool damageFeedback)
 {
     int skinningLocation = -1;
     int skinningEnabled = 1;
@@ -308,7 +309,7 @@ void DrawPlayerPresentationModel(
     rlRotatef(visual.yawDegrees, 0.0f, 1.0f, 0.0f);
     rlScalef(visual.scale.x, visual.scale.y, visual.scale.z);
     DrawModelPreservingMaterials(
-        model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, WHITE, gWorldModelOverride);
+        model, Vector3{0.0f, 0.0f, 0.0f}, 1.0f, damageFeedback ? Color{255, 48, 48, 255} : WHITE, gWorldModelOverride);
     rlPopMatrix();
     if (skinningLocation >= 0)
     {
@@ -2298,6 +2299,11 @@ void Renderer::UnloadRuntimeAssets()
     }
 }
 
+bool Renderer::PlayerDamageFeedbackActive() const
+{
+    return playerRuntimeHealth != nullptr && playerRuntimeHealth->DamageFeedbackActive();
+}
+
 bool Renderer::IsPlayerModelLoaded() const
 {
     return playerModelGpu != nullptr && playerModelGpu->loaded;
@@ -2808,7 +2814,10 @@ void Renderer::DrawWorld(
                     ? characterInstances[index]->WorldTransform().position : characterPlacements[index].position;
                 if (world::StaticPropPositionIsValid(position))
                 {
-                    DrawGreyboxBox(position, {0.5f, 1.0f, 0.5f}, kStaticPropFallbackColor);
+                    DrawGreyboxBox(position, {0.5f, 1.0f, 0.5f},
+                        index < characterInstances.size() && characterInstances[index] != nullptr
+                            && characterInstances[index]->DamageFeedbackActive()
+                        ? Color{255, 48, 48, 255} : kStaticPropFallbackColor);
                 }
             }
         }
@@ -2821,7 +2830,7 @@ void Renderer::DrawWorld(
                 player.Position(),
                 gameplay::kDefaultPlayerPresentationConfig,
                 playerPresentation.facingYawDegrees);
-            DrawPlayerPresentationModel(playerModelGpu->model, visual);
+            DrawPlayerPresentationModel(playerModelGpu->model, visual, PlayerDamageFeedbackActive());
 
             if (itemDefinitions != nullptr && staticPropModels != nullptr
                 && playerModelGpu->model.currentPose != nullptr)
@@ -2859,7 +2868,7 @@ void Renderer::DrawWorld(
         }
         else if (gameplay::ShouldDrawPlayerGameplayPrimitive(playerModelLoaded))
         {
-            DrawGreyboxBox(player.Position(), player.Size(), kPlayerColor);
+            DrawGreyboxBox(player.Position(), player.Size(), PlayerDamageFeedbackActive() ? Color{255, 48, 48, 255} : kPlayerColor);
         }
         const std::size_t checkpointCount =
             level.checkpoints.size() < checkpointVisuals.size() ? level.checkpoints.size()

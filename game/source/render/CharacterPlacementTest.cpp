@@ -72,21 +72,63 @@ struct ApplicationLifecycleTestAccess
         const bool clamped = app.playerHealth.Maximum() == base && app.playerHealth.Current() == base;
         app.playerHealth.ApplyDamage({10});
         app.ResetGameplayAfterPlayAgain(); // Real New Run reset boundary, after world construction.
-        return increased && clamped && app.playerHealth.Current() == app.playerHealth.Maximum();
+        return increased && clamped && !app.playerHealth.DamageFeedbackActive()
+            && app.playerHealth.Current() == app.playerHealth.Maximum();
     }
+    static bool FeedbackRegression(Application& app)
+    {
+        app.playerHealth.Reset();
+        app.ApplyPlayerRuntimeDamage({1});
+        app.AdvanceLevelCharacters(0, false);
+        if (!app.renderer.PlayerDamageFeedbackActive()) return false;
+        auto npcs = app.levelCharacters.Npcs();
+        auto enemies = app.levelCharacters.Enemies();
+        if (npcs.empty() || enemies.empty()) return false;
+        npcs[0].health.ApplyDamage({1});
+        if (!npcs[0].instance->DamageFeedbackActive() || enemies[0].instance->DamageFeedbackActive()) return false;
+        for (std::size_t i = 1; i < npcs.size(); ++i)
+            if (npcs[i].instance->DamageFeedbackActive()) return false;
+        app.AdvanceLevelCharacters(gameplay::kDamageFeedbackSeconds, false);
+        if (app.renderer.PlayerDamageFeedbackActive() || npcs[0].instance->DamageFeedbackActive()) return false;
+        enemies[0].health.ApplyDamage({1});
+        if (!enemies[0].instance->DamageFeedbackActive() || npcs[0].instance->DamageFeedbackActive()
+            || app.renderer.PlayerDamageFeedbackActive()) return false;
+        for (std::size_t i = 1; i < enemies.size(); ++i)
+            if (enemies[i].instance->DamageFeedbackActive()) return false;
+        return true;
+    }
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    static bool ApplyFeedbackRegression(Application& app)
+    {
+        app.playerHealth.Reset();
+        app.ApplyPlayerRuntimeDamage({1});
+        for (auto& actor : app.levelCharacters.Npcs()) actor.health.ApplyDamage({1});
+        for (auto& actor : app.levelCharacters.Enemies()) actor.health.ApplyDamage({1});
+        const auto count = app.levelCharacters.Instances().size();
+        app.SetLevelEditorActive(true);
+        app.ApplyLevelEditorPreview();
+        app.SetLevelEditorActive(false);
+        if (app.playerHealth.DamageFeedbackActive() || app.playerHealth.Current() != app.playerHealth.Maximum()
+            || app.levelCharacters.Instances().size() != count) return false;
+        for (auto* instance : app.levelCharacters.Instances())
+            if (instance && instance->DamageFeedbackActive()) return false;
+        return true;
+    }
+#endif
     static bool DeathRegression(Application& app)
     {
         app.playerHealth.Reset();
         app.ApplyPlayerRuntimeDamage({app.playerHealth.Maximum()});
         if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated()) return false;
         app.AdvancePlayerDeath(0.5f);
+        if (app.playerHealth.DamageFeedbackActive()) return false;
         const float remaining = app.playerDeath.remainingSeconds;
         app.ApplyPlayerRuntimeDamage({1});
         if (app.playerDeath.remainingSeconds != remaining || app.playerHealth.ApplyHealing({1}).accepted) return false;
         const int deaths = app.respawnState.deathCount;
         app.AdvancePlayerDeath(remaining);
         if (gameplay::PlayerDeathIsActive(app.playerDeath) || app.playerHealth.Defeated()
-            || app.playerHealth.Current() != app.playerHealth.Maximum() || app.respawnState.deathCount != deaths + 1) return false;
+            || app.playerHealth.Current() != app.playerHealth.Maximum() || app.renderer.PlayerDamageFeedbackActive() || app.respawnState.deathCount != deaths + 1) return false;
         gameplay::ResetHazardContactState(app.hazardContact);
         for (int i = 0; i < 8; ++i)
         {
@@ -135,11 +177,11 @@ struct ApplicationLifecycleTestAccess
     }
     static bool AllHealthRestored(const Application& app)
     {
-        if (app.playerHealth.Defeated() || app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
+        if (app.playerHealth.Defeated() || app.playerHealth.DamageFeedbackActive() || app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
         for (const auto& actor : app.levelCharacters.Npcs())
-            if (actor.health.Defeated() || actor.health.Current() != actor.health.Maximum()) return false;
+            if (actor.health.Defeated() || actor.health.DamageFeedbackActive() || actor.instance->DamageFeedbackActive() || actor.health.Current() != actor.health.Maximum()) return false;
         for (const auto& actor : app.levelCharacters.Enemies())
-            if (actor.health.Defeated() || actor.health.Current() != actor.health.Maximum()) return false;
+            if (actor.health.Defeated() || actor.health.DamageFeedbackActive() || actor.instance->DamageFeedbackActive() || actor.health.Current() != actor.health.Maximum()) return false;
         return true;
     }
     static void ManualRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Manual); }
@@ -173,14 +215,14 @@ bool Equal(core::Vec3 a, core::Vec3 b)
 }
 struct Pixels { std::vector<Color> colors; int width = 0; };
 Pixels Render(render::Renderer& renderer, RenderTexture2D target,
-    const world::LevelDefinition& active, std::span<render::CharacterInstance* const> instances, bool screen = false, bool placeholders = false)
+    const world::LevelDefinition& active, std::span<render::CharacterInstance* const> instances, bool screen = false, bool placeholders = false, bool showPlayer = false)
 {
     renderer.SetCharacterInstances(instances);
     renderer.SetCharacterPlacements(placeholders ? std::span<const world::CharacterPlacementSpec>(active.characters)
         : std::span<const world::CharacterPlacementSpec>{});
     if (screen) BeginDrawing(); else BeginTextureMode(target);
     ClearBackground({17, 23, 31, 255});
-    const gameplay::Player player{{100.0f, 100.0f, 0.0f}, world::kPlayerVisualSize};
+    const gameplay::Player player{showPlayer ? core::Vec3{0,21,0} : core::Vec3{100,100,0}, world::kPlayerVisualSize};
     std::vector<std::uint8_t> collectibles(active.collectibles.size(), 1);
     std::vector<std::uint8_t> pickups(active.itemPickups.size(), 1);
     const render::CameraView camera{{0.0f, 21.0f, 10.0f}, {0.0f, 21.0f, 0.0f}, {0, 1, 0}, 40.0f};
@@ -272,10 +314,31 @@ int main()
 
         render::Renderer renderer;
         RenderTexture2D target = LoadRenderTexture(512, 256);
+        gameplay::RuntimeHealth playerRenderHealth;
+        renderer.SetPlayerRuntimeHealth(&playerRenderHealth);
+        const auto playerNormal = Render(renderer, target, active, {}, false, false, true);
+        playerRenderHealth.ApplyDamage({1});
+        const auto playerFlash = Render(renderer, target, active, {}, false, false, true);
+        Expect(ChangedHalf(playerNormal, playerFlash, true) + ChangedHalf(playerNormal, playerFlash, false) > 20,
+            "production Player draw consumes damage tint");
+        playerRenderHealth.Reset();
+        const auto playerRestored = Render(renderer, target, active, {}, false, false, true);
+        Expect(ChangedHalf(playerNormal, playerRestored, true) + ChangedHalf(playerNormal, playerRestored, false) == 0,
+            "Player reset restores exact original rendering");
         const auto empty = Render(renderer, target, active, {});
         const auto both = Render(renderer, target, active, runtime.Instances());
         Expect(ChangedHalf(empty, both, true) > 20 && ChangedHalf(empty, both, false) > 20,
             "two authored instances reach actual production Renderer simultaneously at distinct transforms");
+        gameplay::RuntimeHealth renderHealth;
+        a->SetRuntimeHealth(&renderHealth);
+        renderHealth.ApplyDamage({1});
+        const auto flashed = Render(renderer, target, active, runtime.Instances());
+        Expect(ChangedHalf(both, flashed, true) > 20 && ChangedHalf(both, flashed, false) == 0,
+            "production material tint changes only damaged instance pixels");
+        renderHealth.AdvanceDamageFeedback(gameplay::kDamageFeedbackSeconds);
+        const auto restored = Render(renderer, target, active, runtime.Instances());
+        Expect(ChangedHalf(both, restored, true) == 0 && ChangedHalf(both, restored, false) == 0,
+            "expired flash restores original model materials and pixels");
         const auto bTime = b->PlaybackTime();
         a->Advance(0.3f);
         const auto animated = Render(renderer, target, active, runtime.Instances());
@@ -553,6 +616,10 @@ int main()
                 core::Application app;
                 using Access = core::ApplicationLifecycleTestAccess;
                 Expect(Access::Configure(app, restartAuthored, registry), "production Application lifecycle fixture initializes");
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+                Expect(Access::ApplyFeedbackRegression(app), "real Editor Apply clears Player and instance feedback and restores existing full health with stable counts");
+#endif
+                Expect(Access::FeedbackRegression(app), "production Player NPC Enemy presentation independently reads accepted damage and expires");
                 Expect(Access::ExercisePlayerMaximum(app), "Application equipment sync preserves/clamps Player health and New Run fills effective maximum");
                 Expect(Access::DeathRegression(app), "production direct damage and legacy Hazard death converge once and real delay completion restores Alive/full");
                 // Re-arrange the checkpoint/timer/inventory fixture after New Run's intentional resets.
@@ -578,7 +645,8 @@ int main()
                     auto* victim = appCharacters.Instances()[0];
                     Access::DamageAll(app);
                     Expect(Access::AllDefeatedWithDeath(app), "all defeated and production Player death active");
-                    Access::Advance(app, 0.5f);
+                    Access::Advance(app, 0.125f);
+                    Expect(victim->DamageFeedbackActive(), "feedback remains active before real Manual respawn");
                     Expect(Equal(actors(appCharacters)[0].position, stopped) && victim != nullptr
                         && victim->Locomotion() == render::CharacterLocomotionState::Idle,
                         "defeated production actor stops and remains present");

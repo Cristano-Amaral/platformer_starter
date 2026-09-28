@@ -9,6 +9,8 @@
 #include <string>
 #include <string_view>
 
+namespace gameplay { class RuntimeHealth; }
+
 namespace render
 {
 struct ModelDrawOverride;
@@ -54,6 +56,9 @@ public:
     double BoneMatrixChecksum() const;
     const void* PoseAddress() const;
     const void* BoneMatricesAddress() const;
+    // Borrowed from the owning runtime actor; actor storage is stable until rebuild.
+    void SetRuntimeHealth(const gameplay::RuntimeHealth* value) { runtimeHealth = value; }
+    bool DamageFeedbackActive() const;
     void Draw(const ModelDrawOverride* override = nullptr) const;
 
 private:
@@ -73,5 +78,6 @@ private:
     std::string diagnostic;
     float timeSeconds = 0.0f;
     bool playing = true;
+    const gameplay::RuntimeHealth* runtimeHealth = nullptr;
 };
 }

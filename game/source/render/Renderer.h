@@ -23,6 +23,7 @@
 
 namespace gameplay
 {
+class RuntimeHealth;
 class Player;
 }
 
@@ -345,6 +346,8 @@ public:
     void BeginFrame();
     void SetCharacterPlacements(std::span<const world::CharacterPlacementSpec> placements)
     { characterPlacements = placements; }
+    void SetPlayerRuntimeHealth(const gameplay::RuntimeHealth* value) { playerRuntimeHealth = value; }
+    bool PlayerDamageFeedbackActive() const;
     void SetCharacterInstances(std::span<CharacterInstance* const> instances)
     { characterInstances = instances; }
     void DrawWorld(
@@ -418,6 +421,7 @@ private:
         const gameplay::GameplayDefinitionRegistry* gameplayDefinitions);
     void UnloadPlayerPresentationAssets();
     std::unique_ptr<StaticModelSceneStore> staticPropModels;
+    const gameplay::RuntimeHealth* playerRuntimeHealth = nullptr;
     std::unique_ptr<PlayerModelGpuState> playerModelGpu;
     std::unique_ptr<WorldLightingResources> worldLighting;
     std::unique_ptr<TerrainGpuResources> terrainGpu;
