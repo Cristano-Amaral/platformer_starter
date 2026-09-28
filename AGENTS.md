@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 114 — Health & Damage Foundation.
+Current milestone: Milestone 115 — Death & Defeat Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_114.md`](docs/milestones/MILESTONE_114.md)
+Canonical file: [`docs/milestones/MILESTONE_115.md`](docs/milestones/MILESTONE_115.md)
 
-Branch: `milestone/114-health-damage-foundation`
+Branch: `milestone/115-death-defeat-foundation`
 
-Status: implementation validated; manual acceptance and Git closure pending. Do not start Milestone 115.
+Status: implementation validated; manual acceptance and Git closure pending. Do not start Milestone 116.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

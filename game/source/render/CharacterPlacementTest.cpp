@@ -74,26 +74,72 @@ struct ApplicationLifecycleTestAccess
         app.ResetGameplayAfterPlayAgain(); // Real New Run reset boundary, after world construction.
         return increased && clamped && app.playerHealth.Current() == app.playerHealth.Maximum();
     }
+    static bool DeathRegression(Application& app)
+    {
+        app.playerHealth.Reset();
+        app.ApplyPlayerRuntimeDamage({app.playerHealth.Maximum()});
+        if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated()) return false;
+        app.AdvancePlayerDeath(0.5f);
+        const float remaining = app.playerDeath.remainingSeconds;
+        app.ApplyPlayerRuntimeDamage({1});
+        if (app.playerDeath.remainingSeconds != remaining || app.playerHealth.ApplyHealing({1}).accepted) return false;
+        const int deaths = app.respawnState.deathCount;
+        app.AdvancePlayerDeath(remaining);
+        if (gameplay::PlayerDeathIsActive(app.playerDeath) || app.playerHealth.Defeated()
+            || app.playerHealth.Current() != app.playerHealth.Maximum() || app.respawnState.deathCount != deaths + 1) return false;
+        gameplay::ResetHazardContactState(app.hazardContact);
+        for (int i = 0; i < 8; ++i)
+        {
+            app.ApplyPlayerHazardDamage(true, 1.0f, true);
+        }
+        if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated()) return false;
+        app.AdvancePlayerDeath(gameplay::kPlayerDeathDelaySeconds);
+        return !app.playerHealth.Defeated() && app.playerHealth.Current() == app.playerHealth.Maximum();
+    }
+    static bool IndependentDefeat(Application& app)
+    {
+        auto npcs = app.levelCharacters.Npcs();
+        auto enemies = app.levelCharacters.Enemies();
+        if (npcs.empty() || enemies.empty()) return false;
+        const auto npcPosition = npcs[0].position;
+        const auto enemyPosition = enemies[0].position;
+        const auto secondNpc = npcs.size() > 1 ? npcs[1].position : npcPosition;
+        const auto secondEnemy = enemies.size() > 1 ? enemies[1].position : enemyPosition;
+        npcs[0].health.ApplyDamage({npcs[0].health.Maximum()});
+        app.AdvanceLevelCharacters(0.25f, false);
+        if (npcs[0].position.x != npcPosition.x || npcs[0].position.z != npcPosition.z
+            || npcs[0].instance->Locomotion() != render::CharacterLocomotionState::Idle
+            || (enemies[0].position.x == enemyPosition.x && enemies[0].position.z == enemyPosition.z)) return false;
+        if (npcs.size() > 1 && (npcs[1].health.Defeated()
+            || (npcs[1].position.x == secondNpc.x && npcs[1].position.z == secondNpc.z))) return false;
+        enemies[0].health.ApplyDamage({enemies[0].health.Maximum()});
+        const auto stoppedEnemy = enemies[0].position;
+        app.AdvanceLevelCharacters(0.25f, false);
+        if (enemies.size() > 1 && (enemies[1].health.Defeated()
+            || (enemies[1].position.x == secondEnemy.x && enemies[1].position.z == secondEnemy.z))) return false;
+        return enemies[0].position.x == stoppedEnemy.x && enemies[0].position.z == stoppedEnemy.z
+            && !npcs[0].health.ApplyHealing({1}).accepted && !enemies[0].health.ApplyHealing({1}).accepted;
+    }
     static void DamageAll(Application& app)
     {
-        app.playerHealth.ApplyDamage({app.playerHealth.Maximum()});
+        app.ApplyPlayerRuntimeDamage({app.playerHealth.Maximum()});
         for (auto& actor : app.levelCharacters.Npcs()) actor.health.ApplyDamage({actor.health.Maximum()});
         for (auto& actor : app.levelCharacters.Enemies()) actor.health.ApplyDamage({actor.health.Maximum()});
     }
-    static bool AllDepletedWithoutDeath(const Application& app)
+    static bool AllDefeatedWithDeath(const Application& app)
     {
-        if (!app.playerHealth.Depleted() || gameplay::PlayerDeathIsActive(app.playerDeath)) return false;
-        for (const auto& actor : app.levelCharacters.Npcs()) if (!actor.health.Depleted()) return false;
-        for (const auto& actor : app.levelCharacters.Enemies()) if (!actor.health.Depleted()) return false;
+        if (!app.playerHealth.Defeated() || !gameplay::PlayerDeathIsActive(app.playerDeath)) return false;
+        for (const auto& actor : app.levelCharacters.Npcs()) if (!actor.health.Defeated()) return false;
+        for (const auto& actor : app.levelCharacters.Enemies()) if (!actor.health.Defeated()) return false;
         return true;
     }
     static bool AllHealthRestored(const Application& app)
     {
-        if (app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
+        if (app.playerHealth.Defeated() || app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
         for (const auto& actor : app.levelCharacters.Npcs())
-            if (actor.health.Current() != actor.health.Maximum()) return false;
+            if (actor.health.Defeated() || actor.health.Current() != actor.health.Maximum()) return false;
         for (const auto& actor : app.levelCharacters.Enemies())
-            if (actor.health.Current() != actor.health.Maximum()) return false;
+            if (actor.health.Defeated() || actor.health.Current() != actor.health.Maximum()) return false;
         return true;
     }
     static void ManualRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Manual); }
@@ -402,6 +448,14 @@ int main()
                 mutableActors[0].health.ApplyDamage({80});
                 Expect(mutableActors[0].health.Depleted() && mutableActors[1].health.Current() == 73.5f,
                     "same-definition actors own independent health");
+                const auto stopped = mutableActors[0].position;
+                runtime.Advance(0.25f);
+                const auto withoutCharacters = Render(renderer, target, working, {});
+                const auto defeatedCharacters = Render(renderer, target, working, runtime.Instances());
+                Expect(Equal(mutableActors[0].position, stopped)
+                    && ChangedHalf(withoutCharacters, defeatedCharacters, true) > 20
+                    && ChangedHalf(withoutCharacters, defeatedCharacters, false) > 20,
+                    "defeated NPC/Enemy remains rendered through production Renderer at stopped transform");
             };
             if (runtimeType == gameplay::CharacterType::NPC) checkHealth(runtime.Npcs());
             else checkHealth(runtime.Enemies());
@@ -500,16 +554,18 @@ int main()
                 using Access = core::ApplicationLifecycleTestAccess;
                 Expect(Access::Configure(app, restartAuthored, registry), "production Application lifecycle fixture initializes");
                 Expect(Access::ExercisePlayerMaximum(app), "Application equipment sync preserves/clamps Player health and New Run fills effective maximum");
+                Expect(Access::DeathRegression(app), "production direct damage and legacy Hazard death converge once and real delay completion restores Alive/full");
                 // Re-arrange the checkpoint/timer/inventory fixture after New Run's intentional resets.
                 Expect(Access::Configure(app, restartAuthored, registry), "production fixture reconfigured after New Run regression");
+                Expect(Access::IndependentDefeat(app), "production NPC and Enemy defeat independently stops patrol without revive");
+                Access::ManualRespawn(app);
+                Access::Advance(app, 0);
                 const auto& appCharacters = Access::Characters(app);
                 if (actors(appCharacters).size() != 2) return 1;
                 const auto initialFacing0 = actors(appCharacters)[0].rotationDegrees;
                 const auto initialFacing1 = actors(appCharacters)[1].rotationDegrees;
                 for (int restart = 0; restart < 3; ++restart)
                 {
-                    Access::DamageAll(app);
-                    Expect(Access::AllDepletedWithoutDeath(app), "Player NPC and Enemy are depleted without death before real R");
                     Access::Advance(app, restart == 0 ? 2.5f : 2.0f);
                     Expect(!Equal(actors(appCharacters)[0].position, restartAuthored.characters[0].position)
                         && !Equal(actors(appCharacters)[1].position, restartAuthored.characters[1].position)
@@ -518,6 +574,14 @@ int main()
                     Expect(companions(appCharacters) == 1
                         && !Equal(appCharacters.Instances()[2]->WorldTransform().position, companionPlacement.position),
                         "NPC and Enemy coexist and both advance independently before real Manual Respawn");
+                    const auto stopped = actors(appCharacters)[0].position;
+                    auto* victim = appCharacters.Instances()[0];
+                    Access::DamageAll(app);
+                    Expect(Access::AllDefeatedWithDeath(app), "all defeated and production Player death active");
+                    Access::Advance(app, 0.5f);
+                    Expect(Equal(actors(appCharacters)[0].position, stopped) && victim != nullptr
+                        && victim->Locomotion() == render::CharacterLocomotionState::Idle,
+                        "defeated production actor stops and remains present");
                     const auto oldActorHandle = actors(appCharacters)[0].handle;
                     const auto oldInstanceHandle = appCharacters.Instances()[0]->Handle();
                     const auto platformBefore = Access::MovingPlatform(app);

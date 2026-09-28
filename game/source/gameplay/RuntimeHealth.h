@@ -21,6 +21,8 @@ struct HealthOperationResult
     float applied = 0.0f;
 };
 
+enum class RuntimeLifeState { Alive, Defeated };
+
 class RuntimeHealth
 {
 public:
@@ -28,13 +30,15 @@ public:
         : maxHealth(ResolveRuntimeMaxHealth(maximum)), currentHealth(maxHealth) {}
     float Maximum() const { return maxHealth; }
     float Current() const { return currentHealth; }
+    RuntimeLifeState LifeState() const { return lifeState; }
+    bool Defeated() const { return lifeState == RuntimeLifeState::Defeated; }
     bool Depleted() const { return currentHealth <= 0.0f; }
     void SetMaximum(float maximum)
     {
         maxHealth = ResolveRuntimeMaxHealth(maximum);
         currentHealth = std::min(currentHealth, maxHealth);
     }
-    void Reset() { currentHealth = maxHealth; }
+    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; }
     HealthOperationResult ApplyDamage(DirectDamage damage)
     {
         HealthOperationResult result{false, currentHealth, currentHealth, 0.0f};
@@ -42,6 +46,8 @@ public:
         result.accepted = true;
         result.applied = std::min(damage.amount, currentHealth);
         currentHealth -= result.applied;
+        if (result.before > 0.0f && currentHealth == 0.0f)
+            lifeState = RuntimeLifeState::Defeated;
         result.after = currentHealth;
         result.applied = result.before - result.after;
         return result;
@@ -49,7 +55,7 @@ public:
     HealthOperationResult ApplyHealing(DirectHealing healing)
     {
         HealthOperationResult result{false, currentHealth, currentHealth, 0.0f};
-        if (!std::isfinite(healing.amount) || healing.amount <= 0.0f) return result;
+        if (Defeated() || !std::isfinite(healing.amount) || healing.amount <= 0.0f) return result;
         result.accepted = true;
         // Widen the addition so even two largest finite float amounts cannot overflow.
         currentHealth = static_cast<float>(std::min(static_cast<double>(maxHealth),
@@ -59,6 +65,7 @@ public:
         return result;
     }
 private:
+    RuntimeLifeState lifeState = RuntimeLifeState::Alive;
     float maxHealth;
     float currentHealth;
 };

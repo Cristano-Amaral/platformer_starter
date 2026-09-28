@@ -14,6 +14,11 @@ using EnemyLocomotionState = CharacterPatrolLocomotionState;
 // Session-only typed actor. The owner clears borrowed references before instances.
 struct EnemyRuntimeActor : CharacterPatrolState
 {
+    void Advance(float deltaSeconds)
+    {
+        if (health.Defeated()) locomotion = CharacterPatrolLocomotionState::Idle;
+        else CharacterPatrolState::Advance(deltaSeconds);
+    }
     RuntimeHealth health{};
     std::uint64_t handle = 0;
     std::size_t sourcePlacementIndex = 0;

@@ -11,6 +11,7 @@
 #include "ui/debug/CharacterInstanceHarness.h"
 
 #include "gameplay/RuntimeHealth.h"
+#include <functional>
 namespace render { class LevelCharacters; }
 
 namespace ui
@@ -36,7 +37,8 @@ public:
         gameplay::Equipment& equipment,
         const gameplay::GameplayDefinitionRegistry& gameplayDefinitions,
         gameplay::PlayerCharacterStats& playerCharacterStats,
-        gameplay::RuntimeHealth& playerHealth, render::LevelCharacters& activeCharacters);
+        gameplay::RuntimeHealth& playerHealth, render::LevelCharacters& activeCharacters,
+        const std::function<void(gameplay::DirectDamage)>& damagePlayer);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.

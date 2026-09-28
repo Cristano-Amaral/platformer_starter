@@ -80,7 +80,12 @@ int main()
     Expect(operation.applied == 60.25f && health.Current() == 0 && health.Depleted(), "damage clamps to depleted");
     Expect(health.ApplyDamage({1}).applied == 0, "depleted damage cannot underflow");
     operation = health.ApplyHealing({std::numeric_limits<float>::max()});
-    Expect(operation.applied == 80.5f && health.Current() == 80.5f && !health.Depleted(), "healing clamps at maximum");
+    Expect(!operation.accepted && health.Current() == 0 && health.Defeated(), "healing cannot revive defeated health");
+    health.Reset();
+    Expect(!health.Defeated(), "reset restores Alive");
+    health.ApplyDamage({1});
+    operation = health.ApplyHealing({std::numeric_limits<float>::max()});
+    Expect(operation.applied == 1 && health.Current() == 80.5f, "Alive healing clamps at maximum");
     Expect(health.ApplyHealing({1}).applied == 0, "full health cannot overflow");
     health.SetMaximum(120);
     Expect(health.Current() == 80.5f, "increased maximum does not refill");

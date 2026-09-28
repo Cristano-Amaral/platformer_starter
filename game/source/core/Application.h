@@ -61,6 +61,10 @@ private:
     void RefreshPlayerCharacterStats();
     void PerformRespawn(gameplay::RespawnReason reason);
     void PerformDeathRespawn();
+    bool BeginPlayerDeathIfDefeated();
+    void ApplyPlayerHazardDamage(bool overlapping, float deltaSeconds, bool allowed);
+    gameplay::HealthOperationResult ApplyPlayerRuntimeDamage(gameplay::DirectDamage damage);
+    void AdvancePlayerDeath(float deltaSeconds);
     void RestartRun();
     void TryFinishPendingLevelTransition();
     void TryFinishPendingFreshRun();

@@ -37,7 +37,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     gameplay::Equipment& equipment,
     const gameplay::GameplayDefinitionRegistry& gameplayDefinitions,
     gameplay::PlayerCharacterStats& playerCharacterStats,
-    gameplay::RuntimeHealth& playerHealth, render::LevelCharacters& activeCharacters)
+    gameplay::RuntimeHealth& playerHealth, render::LevelCharacters& activeCharacters,
+    [[maybe_unused]] const std::function<void(gameplay::DirectDamage)>& damagePlayer)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -108,19 +109,27 @@ editor::LevelEditorRequest DebugUi::Draw(
         characterInstances.DrawControls();
         if (ImGui::Begin("M114 Runtime Health"))
         {
-            ImGui::TextUnformatted("Direct resolved amounts. Zero is Depleted only; no combat/death action.");
+            ImGui::TextUnformatted("Direct resolved amounts. Defeated characters cannot heal; reset restores Alive.");
             static float amount = 25.0f;
             ImGui::InputFloat("Amount", &amount);
-            const auto drawHealth = [&](gameplay::RuntimeHealth& health) {
+            const auto drawHealth = [&](gameplay::RuntimeHealth& health, bool specialPlayer = false) {
                 ImGui::Text("Health %.3f / %.3f / %s", health.Current(), health.Maximum(),
-                    health.Depleted() ? "Depleted" : "Available");
-                if (ImGui::Button("Damage")) health.ApplyDamage({amount});
+                    health.Defeated() ? "Defeated" : "Alive");
+                // F2 freezes the production death delay and cannot exit during death.
+                ImGui::BeginDisabled(specialPlayer && levelEditorState.active);
+                if (ImGui::Button("Damage"))
+                {
+                    if (specialPlayer) damagePlayer({amount});
+                    else health.ApplyDamage({amount});
+                }
+                ImGui::EndDisabled();
                 ImGui::SameLine();
                 if (ImGui::Button("Heal")) health.ApplyHealing({amount});
             };
             ImGui::PushID("Player");
             ImGui::TextUnformatted("Player / special session runtime");
-            drawHealth(playerHealth);
+            drawHealth(playerHealth, true);
+            if (levelEditorState.active) ImGui::TextUnformatted("Player Damage requires exiting F2 (death delay is paused in editor).");
             ImGui::PopID();
             const auto drawActors = [&](auto actors, const char* type) {
                 ImGui::PushID(type);

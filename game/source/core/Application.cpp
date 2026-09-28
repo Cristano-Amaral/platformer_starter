@@ -1259,25 +1259,7 @@ int Application::Run()
                         pauseWasActiveAtFrameStart, pauseMenuState.active),
                     gameplay::PlayerDeathBlocksGameplay(
                         deathWasActiveAtFrameStart, gameplay::PlayerDeathIsActive(playerDeath)));
-                const float healthBeforeDamage = playerHealth.Current();
-                const bool appliedHazardDamage = gameplay::TickHazardContactDamage(
-                    playerHealth,
-                    hazardContact,
-                    hazardContactThisFrame,
-                    deltaSeconds,
-                    hazardDamageAllowed);
-                if (appliedHazardDamage)
-                {
-                    gameplay::BeginDamageVignette(damageVignette);
-                }
-                const bool beganPlayerDeath = gameplay::TryBeginPlayerDeath(
-                    playerDeath, healthBeforeDamage, playerHealth.Current());
-                if (beganPlayerDeath)
-                {
-                    gameplay::CloseInventoryUi(inventoryUi);
-                }
-                EmitGameplaySfx(
-                    gameplay::ResolveHazardOutcomeSfx(appliedHazardDamage, beganPlayerDeath));
+                ApplyPlayerHazardDamage(hazardContactThisFrame, deltaSeconds, hazardDamageAllowed);
             }
 
             if (!gameplay::PlayerDeathIsActive(playerDeath))
@@ -1429,11 +1411,7 @@ int Application::Run()
 
         if (gameplay::PlayerDeathIsActive(playerDeath) && !editorActive)
         {
-            gameplay::TickPlayerDeathDelay(playerDeath, deltaSeconds);
-            if (gameplay::PlayerDeathDelayElapsed(playerDeath))
-            {
-                PerformDeathRespawn();
-            }
+            AdvancePlayerDeath(deltaSeconds);
         }
 
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
@@ -2545,7 +2523,8 @@ int Application::Run()
             inventory,
             equipment,
             gameplayDefinitions,
-            playerCharacterStats, playerHealth, levelCharacters);
+            playerCharacterStats, playerHealth, levelCharacters,
+            [this](gameplay::DirectDamage damage) { ApplyPlayerRuntimeDamage(damage); });
         player.SetMovementParameters(gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
         if (levelEditorState.active)
         {
@@ -3261,6 +3240,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
     {
         RefreshPlayerCharacterStats();
         playerHealth.Reset();
+        gameplay::ClearPlayerDeath(playerDeath);
         // Manual respawn resets health and placed patrol state, preserving other run rules.
         levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
         levelCharactersResetPending = true;
@@ -3287,6 +3267,39 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
         inventoryUi, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
     // Fall respawn does not restore Health. Legacy hazard death uses
     // PerformDeathRespawn, which restores maximum Health after this teleport.
+}
+
+void Application::ApplyPlayerHazardDamage(bool overlapping, float deltaSeconds, bool allowed)
+{
+    const bool applied = gameplay::TickHazardContactDamage(
+        playerHealth, hazardContact, overlapping, deltaSeconds, allowed);
+    if (applied) gameplay::BeginDamageVignette(damageVignette);
+    const bool began = BeginPlayerDeathIfDefeated();
+    EmitGameplaySfx(gameplay::ResolveHazardOutcomeSfx(applied, began));
+}
+
+bool Application::BeginPlayerDeathIfDefeated()
+{
+    if (!playerHealth.Defeated()) return false;
+    // RuntimeHealth already latched the positive-to-zero transition. PlayerDeath
+    // remains the authority for starting/holding the existing death phase.
+    const bool began = gameplay::TryBeginPlayerDeath(playerDeath, playerHealth.Maximum(), playerHealth.Current());
+    if (began) gameplay::CloseInventoryUi(inventoryUi);
+    return began;
+}
+
+gameplay::HealthOperationResult Application::ApplyPlayerRuntimeDamage(gameplay::DirectDamage damage)
+{
+    const auto result = playerHealth.ApplyDamage(damage);
+    const bool began = BeginPlayerDeathIfDefeated();
+    EmitGameplaySfx(gameplay::ResolveHazardOutcomeSfx(false, began));
+    return result;
+}
+
+void Application::AdvancePlayerDeath(float deltaSeconds)
+{
+    gameplay::TickPlayerDeathDelay(playerDeath, deltaSeconds);
+    if (gameplay::PlayerDeathDelayElapsed(playerDeath)) PerformDeathRespawn();
 }
 
 void Application::PerformDeathRespawn()
