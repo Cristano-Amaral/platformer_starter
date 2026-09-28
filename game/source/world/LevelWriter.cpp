@@ -328,6 +328,15 @@ std::string SerializeLevelText(const LevelDefinition& level)
         AppendVec3(out, prop.scale);
         out += ' ';
         out.append(prop.definitionIdentity);
+        if (prop.patrolEnabled || prop.patrolDistance != 2.0f || prop.patrolSpeed != 1.0f)
+        {
+            out += " npc_patrol ";
+            out += prop.patrolEnabled ? '1' : '0';
+            out += ' ';
+            AppendFloat(out, prop.patrolDistance);
+            out += ' ';
+            AppendFloat(out, prop.patrolSpeed);
+        }
         out += '\n';
     }
 

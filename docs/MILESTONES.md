@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 111 — Character Placement & Spawning**
+**Milestone 112 — NPC Runtime Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_111.md`](milestones/MILESTONE_111.md)
+Canonical file: [`docs/milestones/MILESTONE_112.md`](milestones/MILESTONE_112.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -221,3 +221,5 @@ Historical milestone files do not override current implemented behavior.
 Enemies, additional character consumers, collectibles, level editor, audio, save system,
 profiling/optimization, Raspberry Pi validation, Android port, iOS
 feasibility/backend work.
+
+Milestone 112 implementation validated; manual acceptance and Git closure pending.

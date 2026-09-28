@@ -469,7 +469,10 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         if (a.characters[index].definitionIdentity != b.characters[index].definitionIdentity
             || !Vec3Equal(a.characters[index].position, b.characters[index].position)
             || !Vec3Equal(a.characters[index].rotationDegrees, b.characters[index].rotationDegrees)
-            || !Vec3Equal(a.characters[index].scale, b.characters[index].scale))
+            || !Vec3Equal(a.characters[index].scale, b.characters[index].scale)
+            || a.characters[index].patrolEnabled != b.characters[index].patrolEnabled
+            || a.characters[index].patrolDistance != b.characters[index].patrolDistance
+            || a.characters[index].patrolSpeed != b.characters[index].patrolSpeed)
         {
             return false;
         }

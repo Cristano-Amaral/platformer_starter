@@ -128,7 +128,7 @@ int CountRecords(std::string_view text, std::string_view keyword)
 // BEST, platform/box poses, Jolt ids, smoothed camera target, inventory) can appear.
 bool OnlyAuthoredKeywords(std::string_view text)
 {
-    static constexpr std::array<std::string_view, 40> allowed{
+    static constexpr std::array<std::string_view, 41> allowed{
         "PLATFORMER_LEVEL",
         "id",
         "spawn",
@@ -149,6 +149,7 @@ bool OnlyAuthoredKeywords(std::string_view text)
         "door",
         "item_pickup",
         "static_prop",
+        "character",
         "authoring_group",
         "camera",
         "environment",

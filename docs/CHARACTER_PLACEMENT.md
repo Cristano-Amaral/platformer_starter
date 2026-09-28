@@ -1,5 +1,9 @@
 # Character placement and spawning (M111)
 
+M112 extends resolved NPC placements with bounded transient patrol. See
+[NPC runtime](NPC_RUNTIME.md) for the current contract; the M111 foundation and
+historical validation below remain unchanged. Character Ghost tuning is deferred.
+
 `CharacterDefinition` is shared authored data in the existing gameplay catalog.
 A Level Character placement is a persistent request for one occurrence.
 `render::CharacterInstance` is its transient runtime realization. The runtime
@@ -48,8 +52,9 @@ Exact/Retargeted/Static/Unavailable diagnostics. Diagnostics do not log per fram
 Application owns the active `LevelCharacters` set. Initial load realizes it before
 the first world draw. Successful Apply, staged Reload, authored level Open, level
 transition, New Run, and Restart replace the set; previous instances release their
-resources before replacement. Checkpoint/manual/fall/death respawns preserve the
-set, matching those paths' existing narrower Player reset authority. Leaving F2
+resources before replacement. Fall/death respawns preserve the
+set. M112 Correction 1 rebuilds placed presentation on ordinary gameplay Manual R
+while preserving its narrower Player/checkpoint and moving-platform authority. Leaving F2
 clears instances before catalog reload and realizes them from the new registry.
 Shutdown clears borrowed renderer spans and owning instances before the graphics
 context closes. Repeated realization cannot accumulate instances. Survivors may
@@ -69,7 +74,8 @@ world/shadow geometry path, with existing materials and bone matrices.
 `characters/player` is allowed **only as a generic visual occurrence**. M110 has
 no Player input, controller, physics, stats, inventory, or equipment ownership;
 the actual gameplay Player remains on its existing authoritative path. Player,
-Enemy, NPC, and Animal Character Types activate no behavior. M111 provides
+Enemy, and Animal Character Types activate no behavior. M112 adds bounded NPC
+patrol as documented above. M111 provides
 placement and spawning; it provides no NPC, Enemy, Animal, AI, or combat behavior.
 
 `CharacterPlacementTest` uses real parse/write/load, editor Apply preparation,

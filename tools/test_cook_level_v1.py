@@ -28,7 +28,7 @@ class LevelV1HeaderTests(unittest.TestCase):
             b"PLATFORMER_LEVEL 1\n"
             b"id level_01\n"
             b"character 1 2 3 0 45 0 1 1 1 characters/player\n"
-            b"character 4 2 3 0 0 0 1 1 1 characters/missing\n"
+            b"character 4 2 3 0 0 0 1 1 1 characters/missing npc_patrol 0 3 2\n"
         )
         cooker.validate_level_v1_header(payload)
         self.assertEqual(payload.count(b"character "), 2)

@@ -62,8 +62,8 @@ Groups; they are authored organizational metadata, not gameplay objects.
 
 ### Required singletons
 
-M111 adds the optional repeatable record
-`character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name>`.
+M111 adds the optional repeatable Character record; M112 adds the patrol suffix
+`character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name> [npc_patrol <0|1> <distance> <speed>]`.
 It stores finite world-model-origin position, Euler XYZ degrees, and finite positive
 model scale, followed by the existing case-sensitive CharacterDefinition identity.
 Missing valid references are preserved; malformed/None references are rejected in
@@ -422,7 +422,7 @@ dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay> [<controlsDirectionalLight> [lights <count> <kind> <index> ...]]]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [highlight <intensity>] [gold <amount>] [idle <0|1> <bobAmplitude> <bobSpeed> <spinSpeedDegrees>] [<modelIdentity...>]
-character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name>
+character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name> [npc_patrol <0|1> <distance> <speed>]
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 authoring_group <name> <kind> <index> <kind> <index> ...
 ```
@@ -740,3 +740,11 @@ round-trip but emits longer, noisier text.
 
 NaN and Inf are never serialized: validation rejects them before any text is
 produced.
+
+## M112 NPC runtime foundation
+
+Resolved NPC Character placements now use bounded transient patrol actors over
+the existing CharacterInstance path. Player/Enemy/Animal remain generic visuals.
+See [NPC runtime foundation](NPC_RUNTIME.md) for the exact optional `npc_patrol`
+grammar, validation bounds, authored-state authority, lifetime, facing, diagnostics,
+and acceptance procedure. Manual acceptance and Git closure remain pending.

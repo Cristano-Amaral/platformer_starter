@@ -587,10 +587,10 @@ endif()
 target_link_libraries(CharacterInstanceTest PRIVATE raylib)
 
 # M111 crosses authored parse/Apply/spawn and the actual production Renderer.
-# Compile the existing production sources without the Application entry point;
+# Include Application lifecycle methods, excluding only the executable main.
 # no alternate test factory, animation path, or renderer is supplied.
 get_target_property(M111_PRODUCTION_SOURCES Platformer3D SOURCES)
-list(FILTER M111_PRODUCTION_SOURCES EXCLUDE REGEX "game/source/(Main\\.cpp|core/Application\\.(cpp|h))$")
+list(FILTER M111_PRODUCTION_SOURCES EXCLUDE REGEX "game/source/Main\\.cpp$")
 add_executable(CharacterPlacementTest
     game/source/render/CharacterPlacementTest.cpp
     ${M111_PRODUCTION_SOURCES})

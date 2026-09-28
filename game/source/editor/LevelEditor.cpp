@@ -2954,10 +2954,23 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 }
                 ImGui::EndCombo();
             }
+            const auto* definition = view.characterDefinitions->Find(placement.definitionIdentity);
+            if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Character
+                && definition->character.type == gameplay::CharacterType::NPC)
+            {
+                ImGui::SeparatorText("NPC Runtime");
+                ImGui::Checkbox("Patrol Enabled", &placement.patrolEnabled);
+                ImGui::InputFloat("Patrol Distance", &placement.patrolDistance);
+                ImGui::InputFloat("Patrol Speed", &placement.patrolSpeed);
+                ImGui::TextWrapped("Patrol uses the authored local X axis projected horizontally. Distance (0, 100], speed (0, 20]. Apply rebuilds from origin; Save stores authored settings only.");
+                if (!world::NpcPatrolSettingsAreValid(placement))
+                    ImGui::TextUnformatted("Invalid patrol settings: Apply is blocked.");
+            }
+            else ImGui::TextUnformatted("NPC runtime inactive for this reference; stored patrol settings are ignored.");
             EditVec3("Position X Y Z", placement.position);
             EditVec3("Rotation X Y Z (deg)", placement.rotationDegrees);
             EditVec3("Scale X Y Z", placement.scale);
-            ImGui::TextWrapped("Position is the model origin. No grounding offset. Character Type adds no behavior. characters/player is a generic visual only.");
+            ImGui::TextWrapped("Position is the model origin. No grounding offset. Only resolved NPCs receive patrol behavior. characters/player is a generic visual only.");
             ImGui::TextWrapped("None on a new placement is discarded by Apply; clearing an existing placement requires repair or Delete before Apply.");
             if (view.levelCharacters != nullptr)
             {

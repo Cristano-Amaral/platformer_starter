@@ -2202,8 +2202,7 @@ int Application::Run()
         gameplay::FormatGameplayObjectiveLine(
             objectiveLine, sizeof(objectiveLine), levelDefinition.levelGoals);
         gameplay::FormatHealthHudText(healthHudText, sizeof(healthHudText), playerHealth);
-        levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
-        levelCharacters.Advance(simulationPaused ? 0.0f : deltaSeconds);
+        AdvanceLevelCharacters(deltaSeconds, simulationPaused);
         const render::LevelCharacters* characterDrawSet = &levelCharacters;
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
@@ -3243,8 +3242,23 @@ void Application::Initialize()
     window.SetEscapeClosesWindow(false);
 }
 
+void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused)
+{
+    levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    // The reset frame must visibly present the spawn pose, not consume its delta.
+    levelCharacters.Advance(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
+    levelCharactersResetPending = false;
+}
+
 void Application::PerformRespawn(gameplay::RespawnReason reason)
 {
+    if (reason == gameplay::RespawnReason::Manual)
+    {
+        // Ordinary gameplay R is Manual Respawn, not RestartRun. Keep its
+        // existing Player/checkpoint/physics rules; reset placed presentation only.
+        levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+        levelCharactersResetPending = true;
+    }
     if (reason == gameplay::RespawnReason::Fall
         || reason == gameplay::RespawnReason::Hazard)
     {
@@ -3284,6 +3298,7 @@ void Application::PerformDeathRespawn()
 void Application::RestartRun()
 {
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    levelCharactersResetPending = true;
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     physicsWorld.ResetMovingPlatform();

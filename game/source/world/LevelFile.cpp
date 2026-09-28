@@ -1121,7 +1121,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
         }
         if (keyword == "character")
         {
-            if (tokens.size() != 11)
+            if (tokens.size() != 11 && tokens.size() != 15)
             {
                 return MakeStatus(
                     LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
@@ -1135,6 +1135,13 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid character");
             }
             prop.definitionIdentity = std::string(tokens[10]);
+            if (tokens.size() == 15 && (tokens[11] != "npc_patrol"
+                || !ParseBool01Token(tokens[12], prop.patrolEnabled)
+                || !ParseFloatToken(tokens[13], prop.patrolDistance)
+                || !ParseFloatToken(tokens[14], prop.patrolSpeed)))
+            {
+                return MakeStatus(LoadLevelFileStatus::Invalid, lineNumber, "invalid NPC patrol");
+            }
             if (!CharacterIdentityIsValid(prop.definitionIdentity))
             {
                 return MakeStatus(

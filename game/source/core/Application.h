@@ -54,6 +54,8 @@ public:
     int Run();
 
 private:
+    friend struct ApplicationLifecycleTestAccess;
+    void AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused);
     void Initialize();
     void Shutdown();
     void PerformRespawn(gameplay::RespawnReason reason);
@@ -113,7 +115,8 @@ private:
     gameplay::Equipment equipment{};
     gameplay::GameplayDefinitionRegistry gameplayDefinitions{};
     render::LevelCharacters levelCharacters;
-    render::LevelCharacters characterWorkingPreview;
+    bool levelCharactersResetPending = false;
+    render::LevelCharacters characterWorkingPreview{false};
     std::vector<render::CharacterInstance*> characterDrawInstances;
     gameplay::PlayerCharacterStats playerCharacterStats{};
     gameplay::InventoryUiState inventoryUi{};

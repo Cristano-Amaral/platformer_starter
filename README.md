@@ -217,3 +217,11 @@ Cursor, OpenAI Codex, and Google Antigravity share one repository workflow.
 - Index: [`docs/MILESTONES.md`](docs/MILESTONES.md)
 
 Codex reads `AGENTS.md` directly. Antigravity reads `AGENTS.md`, the thin [`GEMINI.md`](GEMINI.md) pointer, and `.agents/rules/repository-workflow.md`. Those adapters are not a second copy of the workflow. The short provider-neutral implementation prompt is in `DEVELOPMENT_WORKFLOW.md`.
+
+## M112 NPC runtime foundation
+
+Resolved NPC Character placements now use bounded transient patrol actors over
+the existing CharacterInstance path. Player/Enemy/Animal remain generic visuals.
+See [NPC runtime foundation](docs/NPC_RUNTIME.md) for the exact optional `npc_patrol`
+grammar, validation bounds, authored-state authority, lifetime, facing, diagnostics,
+and acceptance procedure. Manual acceptance and Git closure remain pending.

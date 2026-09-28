@@ -2802,7 +2802,10 @@ void Renderer::DrawWorld(
             {
                 if (index < characterInstances.size() && characterInstances[index] != nullptr
                     && characterInstances[index]->HasModel()) continue;
-                const auto position = characterPlacements[index].position;
+                // Resolved unavailable presentations still have a transient
+                // transform (including NPC patrol); Missing uses authored origin.
+                const auto position = index < characterInstances.size() && characterInstances[index] != nullptr
+                    ? characterInstances[index]->WorldTransform().position : characterPlacements[index].position;
                 if (world::StaticPropPositionIsValid(position))
                 {
                     DrawGreyboxBox(position, {0.5f, 1.0f, 0.5f}, kStaticPropFallbackColor);

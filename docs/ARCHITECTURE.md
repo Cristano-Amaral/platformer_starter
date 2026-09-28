@@ -1183,3 +1183,11 @@ The existing GLB path now accepts either static self-contained GLB or one skinne
 Application-owned `PlayerPresentationState` selects Idle when grounded and below the existing presentation movement epsilon, Move when grounded and moving, and Jump when airborne. Idle and Move loop; Jump clamps at its final authored frame. State changes reset the new clip deterministically and use a narrowly scoped 0.12-second clip-to-clip cross-fade. Physics and the M102 effective movement stats remain authoritative; animation never changes movement, gravity, jumping, collision, or inventory/equipment.
 
 raylib supplies the bounded GLB skin/clip decoding adapter and uploads the CPU-evaluated bone matrices. Project lit and shadow vertex shaders apply the same joint-weighted GPU skinning pose, so the Player main pass and directional shadow agree. Development diagnostics expose identity/model resolution, joint count, binding status, state, current clip, playback time, and cross-fade progress.
+
+## M112 NPC runtime foundation
+
+Resolved NPC Character placements now use bounded transient patrol actors over
+the existing CharacterInstance path. Player/Enemy/Animal remain generic visuals.
+See [NPC runtime foundation](NPC_RUNTIME.md) for the exact optional `npc_patrol`
+grammar, validation bounds, authored-state authority, lifetime, facing, diagnostics,
+and acceptance procedure. Manual acceptance and Git closure remain pending.

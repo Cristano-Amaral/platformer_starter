@@ -1,5 +1,7 @@
 #include "render/LevelCharacters.h"
+#include "core/Application.h"
 #include "render/Renderer.h"
+#include "platform/RuntimePaths.h"
 #include "gameplay/GameplayDefinitionFile.h"
 #include "gameplay/Player.h"
 #include "editor/AuthoredObjectLifecycle.h"
@@ -15,6 +17,47 @@
 #include <limits>
 #include <vector>
 
+namespace core
+{
+// Arranges only fixture state and calls actual private production commands.
+// No reset or frame-update logic is reimplemented in this accessor.
+struct ApplicationLifecycleTestAccess
+{
+    static bool Configure(Application& app, const world::LevelDefinition& level,
+        const gameplay::GameplayDefinitionRegistry& registry)
+    {
+        app.levelDefinition = level;
+        app.gameplayDefinitions = registry;
+        if (!app.physicsWorld.Initialize(level)
+            || !app.physicsWorld.InitializePlayer(level.initialSpawnVisualCenter, app.player.Size())) return false;
+        app.respawnState.respawnPosition = {4, 2, 0};
+        app.respawnState.activeCheckpointIndex = 0;
+        app.respawnState.deathCount = 3;
+        app.playerHealth.currentHealth = 41;
+        app.runTimerState.elapsedSeconds = 12;
+        app.inventory.TryAdd("items/master_key", 1, app.gameplayDefinitions);
+        app.physicsWorld.UpdateMovingPlatform(0.5f);
+        app.levelCharacters.Rebuild(app.levelDefinition.characters, app.gameplayDefinitions, platform::RuntimeAssetRoot());
+        return true;
+    }
+    static void ManualRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Manual); }
+    static void FallRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Fall); }
+    static void RestartRun(Application& app) { app.RestartRun(); }
+    static void Advance(Application& app, float deltaSeconds) { app.AdvanceLevelCharacters(deltaSeconds, false); }
+    static const render::LevelCharacters& Characters(const Application& app) { return app.levelCharacters; }
+    static const world::LevelDefinition& Authored(const Application& app) { return app.levelDefinition; }
+    static physics::MovingPlatformState MovingPlatform(const Application& app) { return app.physicsWorld.GetMovingPlatform(); }
+    static bool ManualPlayerRulesPreserved(const Application& app)
+    {
+        const auto position = app.player.Position();
+        return position.x == 4 && position.y == 2 && position.z == 0
+            && app.respawnState.activeCheckpointIndex == 0 && app.respawnState.deathCount == 3
+            && app.playerHealth.currentHealth == 41 && app.runTimerState.elapsedSeconds == 12
+            && app.inventory.GetQuantity("items/master_key") == 1;
+    }
+};
+}
+
 namespace
 {
 int failures = 0;
@@ -28,11 +71,12 @@ bool Equal(core::Vec3 a, core::Vec3 b)
 }
 struct Pixels { std::vector<Color> colors; int width = 0; };
 Pixels Render(render::Renderer& renderer, RenderTexture2D target,
-    const world::LevelDefinition& active, std::span<render::CharacterInstance* const> instances)
+    const world::LevelDefinition& active, std::span<render::CharacterInstance* const> instances, bool screen = false, bool placeholders = false)
 {
     renderer.SetCharacterInstances(instances);
-    renderer.SetCharacterPlacements({});
-    BeginTextureMode(target);
+    renderer.SetCharacterPlacements(placeholders ? std::span<const world::CharacterPlacementSpec>(active.characters)
+        : std::span<const world::CharacterPlacementSpec>{});
+    if (screen) BeginDrawing(); else BeginTextureMode(target);
     ClearBackground({17, 23, 31, 255});
     const gameplay::Player player{{100.0f, 100.0f, 0.0f}, world::kPlayerVisualSize};
     std::vector<std::uint8_t> collectibles(active.collectibles.size(), 1);
@@ -41,8 +85,9 @@ Pixels Render(render::Renderer& renderer, RenderTexture2D target,
     renderer.DrawWorld(player, {}, {}, camera, active, {}, {}, {}, {100,100,0}, {1,1,1}, {},
         false, false, collectibles, 0, pickups, -1, {}, {}, -1, "", 0, false, 0,
         false, 0, {}, {}, {}, {}, {}, false, true);
-    EndTextureMode();
-    Image image = LoadImageFromTexture(target.texture);
+    if (!screen) EndTextureMode();
+    Image image = screen ? LoadImageFromScreen() : LoadImageFromTexture(target.texture);
+    if (screen) EndDrawing();
     Color* colors = LoadImageColors(image);
     Pixels result;
     result.width = image.width;
@@ -76,7 +121,9 @@ int main()
         auto& registry = catalog.registry;
         auto loaded = world::LoadLevelFile(std::filesystem::path(PLATFORMER_SOURCE_ASSET_ROOT) / "levels/level_01.level");
         Expect(loaded.status == world::LoadLevelFileStatus::Loaded, "canonical level load");
-        const auto canonical = loaded.level;
+        const auto canonicalSource = loaded.level;
+        auto canonical = canonicalSource;
+        canonical.characters.clear(); // Fixtures must not depend on manual-test placements.
         const auto text = world::SerializeLevelText(canonical);
         const std::string records = "character -2 20 0 0 0 0 1 1 1 characters/player\n"
             "character 2 20 0 0 0 0 1 1 1 characters/player\n";
@@ -251,9 +298,307 @@ int main()
                 "Character Type does not activate gameplay behavior");
         }
         runtime.Clear();
+        // M112 uses the production registry, authored lifecycle, instance owner,
+        // and Renderer boundary above. Fixtures never alter the source catalog.
+        auto npcDefinition = *registry.Find("characters/player");
+        npcDefinition.identity = "characters/npc_fixture";
+        npcDefinition.character.type = gameplay::CharacterType::NPC;
+        Expect(registry.Register(npcDefinition).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
+            "NPC fixture registers through production registry");
+        auto retargetNpc = *registry.Find("characters/retarget_target");
+        retargetNpc.identity = "characters/npc_retarget";
+        retargetNpc.character.type = gameplay::CharacterType::NPC;
+        Expect(registry.Register(retargetNpc).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
+            "retarget NPC fixture registers");
+        Expect(!parsed.level.characters[0].patrolEnabled
+            && parsed.level.characters[0].patrolDistance == 2 && parsed.level.characters[0].patrolSpeed == 1,
+            "legacy M111 grammar defaults to disabled patrol");
+        const std::string npcRecord = "character -2 20 0 0 0 0 1 1 1 characters/npc_fixture";
+        for (const char* suffix : {" npc_patrol 2 2 1", " npc_patrol true 2 1", " patrol 1 2 1",
+                " npc_patrol 1 nan 1", " npc_patrol 1 2 inf", " npc_patrol 1 0 1",
+                " npc_patrol 1 -1 1", " npc_patrol 1 101 1", " npc_patrol 1 2 0",
+                " npc_patrol 1 2 -1", " npc_patrol 1 2 21", " npc_patrol 0 0 1",
+                " npc_patrol 1 2", " npc_patrol 1 2 1 extra"})
+            Expect(world::ParseLevelText(text + npcRecord + suffix + "\n").status == world::LoadLevelFileStatus::Invalid,
+                "invalid patrol suffix rejects safely even when disabled");
+        working = world::ParseLevelText(text + npcRecord + " npc_patrol 1 2 1\n"
+            "character 2 20 0 0 0 0 1 1 1 characters/npc_fixture npc_patrol 0 3 2\n").level;
+        const auto npcAuthored = working;
+        const auto npcText = world::SerializeLevelText(working);
+        auto npcReload = world::ParseLevelText(npcText);
+        Expect(world::AuthoredLevelDataEqual(working, npcReload.level)
+            && npcText == world::SerializeLevelText(npcReload.level), "patrol round trip deterministic including disabled values");
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(runtime.Npcs().size() == 2 && runtime.Instances().size() == 2,
+            "one NPC actor and associated instance per eligible placement");
+        if (runtime.Npcs().size() != 2) return 1;
+        Expect(runtime.Npcs()[0].instance == runtime.Instances()[0]
+            && runtime.Npcs()[1].instance == runtime.Instances()[1]
+            && runtime.Npcs()[0].handle != runtime.Npcs()[1].handle, "distinct session actors borrow exactly their M111 instance");
+        Expect(runtime.Instances()[0]->Mode() == render::CharacterInstanceMode::Exact
+            && runtime.Instances()[0]->Locomotion() == render::CharacterLocomotionState::Move,
+            "NPC Move reuses Exact presentation");
+        runtime.Advance(1);
+        Expect(runtime.Npcs()[0].position.x == -1 && runtime.Npcs()[0].direction == 1,
+            "first deterministic outbound step");
+        Expect(Equal(runtime.Npcs()[1].position, working.characters[1].position)
+            && runtime.Instances()[1]->Locomotion() == render::CharacterLocomotionState::Idle,
+            "disabled same-definition NPC independent and Idle at origin");
+        runtime.Advance(1);
+        Expect(Equal(runtime.Npcs()[0].position, runtime.Npcs()[0].endpointMax)
+            && runtime.Npcs()[0].direction == -1 && runtime.Npcs()[0].rotationDegrees.y == -90,
+            "exact positive endpoint reverses and faces negative travel direction");
+        runtime.Advance(4);
+        Expect(Equal(runtime.Npcs()[0].position, runtime.Npcs()[0].endpointMin)
+            && runtime.Npcs()[0].direction == 1 && runtime.Npcs()[0].rotationDegrees.y == 90,
+            "exact negative endpoint reverses deterministically");
+        runtime.Advance(16);
+        Expect(Equal(runtime.Npcs()[0].position, runtime.Npcs()[0].endpointMin)
+            && world::AuthoredLevelDataEqual(working, npcAuthored), "large steps wrap multiple periods without authored mutation");
+        runtime.Advance(std::numeric_limits<float>::infinity());
+        runtime.Advance(-1);
+        Expect(Equal(runtime.Npcs()[0].position, runtime.Npcs()[0].endpointMin), "invalid simulation delta ignored");
+        for (int rebuild = 0; rebuild < 3; ++rebuild)
+        {
+            const auto npcHandle = runtime.Npcs()[0].handle;
+            const auto instanceHandle = runtime.Instances()[0]->Handle();
+            runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+            Expect(runtime.Npcs().size() == 2 && runtime.Instances().size() == 2
+                && runtime.Npcs()[0].handle != npcHandle && runtime.Instances()[0]->Handle() != instanceHandle
+                && Equal(runtime.Npcs()[0].position, working.characters[0].position)
+                && runtime.Instances()[0]->PlaybackTime() == 0, "owner rebuild resets state without accumulation (not Application command coverage)");
+            runtime.Advance(0.5f);
+        }
+        // M112 Correction 1: ordinary Gameplay R calls PerformRespawn(Manual),
+        // not RestartRun. Exercise both actual Application commands plus the
+        // exact frame-update boundary used before production rendering.
+        for (const char* asset : {"models/player.glb", "models/humanoid_animations.glb", "shaders/world_lit.vs", "shaders/world_lit.fs"})
+        {
+            const auto destination = platform::RuntimeAssetPath(asset);
+            std::filesystem::create_directories(destination.parent_path());
+            std::filesystem::copy_file(std::filesystem::path(PLATFORMER_SOURCE_ASSET_ROOT) / asset,
+                destination, std::filesystem::copy_options::overwrite_existing);
+        }
+        {
+            auto restartAuthored = npcAuthored;
+            restartAuthored.characters[1].patrolEnabled = true;
+            restartAuthored.characters[1].rotationDegrees = {15, 90, 0};
+            restartAuthored.characters[1].scale = {1.2f, 1.3f, 1.4f};
+            core::Application app;
+            using Access = core::ApplicationLifecycleTestAccess;
+            Expect(Access::Configure(app, restartAuthored, registry), "production Application lifecycle fixture initializes");
+            const auto& appCharacters = Access::Characters(app);
+            if (appCharacters.Npcs().size() != 2) return 1;
+            const auto initialFacing0 = appCharacters.Npcs()[0].rotationDegrees;
+            const auto initialFacing1 = appCharacters.Npcs()[1].rotationDegrees;
+            for (int restart = 0; restart < 3; ++restart)
+            {
+                Access::Advance(app, restart == 0 ? 2.5f : 2.0f);
+                Expect(!Equal(appCharacters.Npcs()[0].position, restartAuthored.characters[0].position)
+                    && !Equal(appCharacters.Npcs()[1].position, restartAuthored.characters[1].position)
+                    && appCharacters.Npcs()[0].direction == -1 && appCharacters.Npcs()[1].direction == -1,
+                    "both NPCs observably away from origin and returning before real R command");
+                const auto oldNpcHandle = appCharacters.Npcs()[0].handle;
+                const auto oldInstanceHandle = appCharacters.Instances()[0]->Handle();
+                const auto platformBefore = Access::MovingPlatform(app);
+                Access::ManualRespawn(app);
+                Expect(Access::ManualPlayerRulesPreserved(app), "ordinary R preserves Player checkpoint inventory health timer and death-count authority");
+                const auto platformAfter = Access::MovingPlatform(app);
+                Expect(Equal(platformBefore.position, platformAfter.position) && platformBefore.direction == platformAfter.direction,
+                    "ordinary R does not change pre-existing moving-platform behavior");
+                Access::Advance(app, 0.25f); // Same reset-frame update used by Application::Run.
+                Expect(appCharacters.Npcs().size() == 2 && appCharacters.Instances().size() == 2
+                    && appCharacters.Npcs()[0].handle != oldNpcHandle
+                    && appCharacters.Instances()[0]->Handle() != oldInstanceHandle,
+                    "real R replaces session actors/instances without accumulation");
+                for (std::size_t index = 0; index < 2; ++index)
+                {
+                    const auto& npc = appCharacters.Npcs()[index];
+                    Expect(Equal(npc.position, restartAuthored.characters[index].position)
+                        && Equal(npc.instance->WorldTransform().position, restartAuthored.characters[index].position)
+                        && npc.phase == restartAuthored.characters[index].patrolDistance && npc.direction == 1
+                        && npc.locomotion == gameplay::NpcLocomotionState::Move && npc.instance->PlaybackTime() == 0
+                        && npc.instance->IsPlaying() && npc.instance->Mode() == render::CharacterInstanceMode::Exact,
+                        "real R reset frame presents authored origin initial progress direction Move and playback");
+                }
+                Expect(Equal(appCharacters.Npcs()[0].rotationDegrees, initialFacing0)
+                    && Equal(appCharacters.Npcs()[1].rotationDegrees, initialFacing1)
+                    && world::AuthoredLevelDataEqual(Access::Authored(app), restartAuthored),
+                    "runtime facing reset leaves authored TRS and each patrol configuration unchanged");
+                Access::Advance(app, 0.5f);
+                Expect(std::abs(appCharacters.Npcs()[0].position.x + 1.5f) < 0.0001f
+                    && std::abs(appCharacters.Npcs()[1].position.z + 1.0f) < 0.0001f,
+                    "patrol resumes from deterministic initial state at independent authored speeds");
+            }
+            Access::RestartRun(app);
+            Access::Advance(app, 0.25f);
+            Expect(Equal(appCharacters.Npcs()[0].position, restartAuthored.characters[0].position)
+                && Equal(appCharacters.Npcs()[1].position, restartAuthored.characters[1].position)
+                && appCharacters.Npcs()[0].direction == 1 && appCharacters.Npcs()[1].direction == 1
+                && appCharacters.Instances()[0]->PlaybackTime() == 0,
+                "full RestartRun also renders the reset origin without consuming that frame delta");
+            Access::Advance(app, 0.5f);
+            const auto retainedPosition = appCharacters.Npcs()[0].position;
+            const auto retainedHandle = appCharacters.Npcs()[0].handle;
+            Access::FallRespawn(app);
+            Expect(Equal(appCharacters.Npcs()[0].position, retainedPosition)
+                && appCharacters.Npcs()[0].handle == retainedHandle,
+                "fall respawn retains existing narrower NPC authority");
+            Expect(world::AuthoredLevelDataEqual(Access::Authored(app), restartAuthored), "all real lifecycle commands leave authored data unchanged");
+        }
+        const auto savedNpcPath = std::filesystem::temp_directory_path() / "platformer_m112_roundtrip.level";
+        Expect(world::SaveLevelFile(savedNpcPath, working).status == world::WriteLevelFileStatus::Saved,
+            "Save while NPC moved stores only authored configuration");
+        npcReload = world::LoadLevelFile(savedNpcPath);
+        runtime.Rebuild(npcReload.level.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(world::AuthoredLevelDataEqual(npcReload.level, npcAuthored)
+            && Equal(runtime.Npcs()[0].position, working.characters[0].position), "Reload retains patrol and resets transient state");
+        std::filesystem::remove(savedNpcPath);
+        auto pendingNpc = working;
+        editor::ResetStructuralIndexMap(map, working);
+        pendingNpc.characters[0].patrolEnabled = false;
+        pendingNpc.characters[0].patrolDistance = 5;
+        Expect(runtime.Npcs()[0].origin.patrolEnabled && runtime.Npcs()[0].origin.patrolDistance == 2,
+            "working patrol edits cannot affect active runtime before Apply");
+        Expect(editor::PrepareLevelEditorApplyCandidate(pendingNpc, map, candidate, discarded), "real Apply candidate accepts NPC configuration");
+        runtime.Rebuild(candidate.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        runtime.Advance(1);
+        Expect(Equal(runtime.Npcs()[0].position, candidate.characters[0].position)
+            && runtime.Instances()[0]->Locomotion() == render::CharacterLocomotionState::Idle, "disable Apply returns to authored origin Idle");
+        pendingNpc.characters[0].patrolSpeed = 0;
+        Expect(!world::IsWritableLevelDefinition(pendingNpc), "invalid working patrol blocks promotion");
+        working.characters[0].rotationDegrees = {25, 90, 15};
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        runtime.Advance(1);
+        Expect(std::abs(runtime.Npcs()[0].position.z + 1) < 0.001f
+            && runtime.Npcs()[0].position.y == 20
+            && Equal(working.characters[0].rotationDegrees, core::Vec3{25,90,15}), "projected authored local X drives horizontal patrol and never rewrites rotation");
+        working.characters[0].rotationDegrees = {0,0,90};
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(runtime.Npcs()[0].axis.x == 1 && runtime.Npcs()[0].axis.z == 0, "vertical local X uses deterministic authored-yaw fallback");
+        working = npcAuthored;
+        working.characters[1].patrolEnabled = true;
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        runtime.Advance(0.5f);
+        Expect(runtime.Npcs()[0].position.x == -1.5f && runtime.Npcs()[1].position.x == 3.0f
+            && runtime.Npcs()[0].phase != runtime.Npcs()[1].phase,
+            "two moving placements sharing one NPC definition have independent phase and speed");
+        working = npcAuthored;
+        render::LevelCharacters previewOwner{false};
+        previewOwner.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        previewOwner.Advance(1);
+        Expect(previewOwner.Npcs().empty() && Equal(previewOwner.Instances()[0]->WorldTransform().position, working.characters[0].position),
+            "working preview remains authored-only despite enabled patrol");
+        previewOwner.Clear();
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto npcBoth = Render(renderer, target, working, runtime.Instances());
+        runtime.Advance(0.3f);
+        const auto npcMoved = Render(renderer, target, working, runtime.Instances());
+        Expect(ChangedHalf(npcBoth, npcMoved, true) > 0, "moving NPC reaches established production CharacterInstance renderer");
+        Expect(editor::DeleteSelected(working, {editor::EditorObjectKind::Character, 0}).succeeded, "NPC placement Delete uses existing authored lifecycle");
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto npcSurvivor = Render(renderer, target, working, runtime.Instances());
+        Expect(runtime.Npcs().size() == 1 && runtime.Instances().size() == 1
+            && Equal(runtime.Npcs()[0].position, working.characters[0].position)
+            && ChangedHalf(npcBoth, npcSurvivor, false) == 0, "delete removes stale actor with unrelated survivor pixels preserved");
+        working = npcAuthored;
+        working.characters[1].definitionIdentity = retargetNpc.identity;
+        working.characters[1].patrolEnabled = true;
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(runtime.Npcs().size() == 2 && runtime.Instances()[1]->Mode() == render::CharacterInstanceMode::Retargeted,
+            "NPC Move supports M109 Retargeted");
+        const auto retargetBefore = Render(renderer, target, working, runtime.Instances());
+        runtime.Advance(0.3f);
+        const auto retargetAfter = Render(renderer, target, working, runtime.Instances());
+        Expect(ChangedHalf(retargetBefore, retargetAfter, true) > 0 && ChangedHalf(retargetBefore, retargetAfter, false) > 0,
+            "simultaneous NPC Exact Retargeted presentation animates through production draw");
+        for (auto type : {gameplay::CharacterType::Player, gameplay::CharacterType::Enemy, gameplay::CharacterType::Animal, gameplay::CharacterType::NPC})
+        {
+            runtime.Clear();
+            registry.FindMutable(staticDefinition.identity)->character.type = type;
+            working = npcAuthored;
+            working.characters.resize(1);
+            working.characters[0].definitionIdentity = staticDefinition.identity;
+            runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+            Expect(runtime.Npcs().size() == (type == gameplay::CharacterType::NPC ? 1 : 0), "only resolved NPC type receives behavior");
+            Expect(runtime.Instances()[0]->IsStatic(), "static presentation safe for all types");
+            runtime.Advance(1);
+            Expect(runtime.Instances()[0]->Locomotion() == (type == gameplay::CharacterType::NPC
+                ? render::CharacterLocomotionState::Move : render::CharacterLocomotionState::Idle), "non-NPC ignores stored patrol");
+        }
+        runtime.Clear();
+        auto unavailableNpc = npcDefinition;
+        unavailableNpc.identity = "characters/npc_unavailable";
+        unavailableNpc.character.worldModelIdentity = "models/not_found.glb";
+        Expect(registry.Register(unavailableNpc).status == gameplay::RegisterGameplayDefinitionStatus::Registered, "Unavailable NPC fixture");
+        working.characters[0].definitionIdentity = unavailableNpc.identity;
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto unavailableBefore = Render(renderer, target, working, runtime.Instances(), false, true);
+        runtime.Advance(1);
+        const auto unavailableAfter = Render(renderer, target, working, runtime.Instances(), false, true);
+        Expect(ChangedHalf(unavailableBefore, unavailableAfter, true) > 0,
+            "established unavailable placeholder follows transient instance position");
+        Expect(runtime.Npcs().size() == 1 && !runtime.Instances()[0]->HasModel(), "unavailable visuals do not break eligible actor lifecycle");
+        runtime.Clear();
+        auto unavailableAnimationNpc = npcDefinition;
+        unavailableAnimationNpc.identity = "characters/npc_bad_clip";
+        unavailableAnimationNpc.character.animations.moveAsset = "animations/absent";
+        Expect(registry.Register(unavailableAnimationNpc).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
+            "missing animation assignment remains authored fixture");
+        working.characters[0].definitionIdentity = unavailableAnimationNpc.identity;
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        runtime.Advance(1);
+        Expect(runtime.Npcs().size() == 1 && runtime.Instances()[0]->HasModel()
+            && runtime.Instances()[0]->Mode() == render::CharacterInstanceMode::Unavailable,
+            "unavailable Move animation retains safe model and NPC state without embedded fallback");
+        for (const char* identity : {"characters/absent", "characters/Bad", "characters/player"})
+        {
+            working.characters[0].definitionIdentity = identity;
+            runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+            Expect(runtime.Npcs().empty(), "missing malformed or Player reference cannot gain NPC behavior");
+        }
+        runtime.Clear();
+        // Real production shadow resources and an elevated receiver isolate NPC
+        // caster pixels from the original M111 unlit rendering regression.
+        for (const char* shader : {"world_lit.vs", "world_lit.fs", "shadow_depth.vs", "shadow_depth.fs"})
+        {
+            const auto destination = platform::RuntimeAssetPath(std::string("shaders/") + shader);
+            std::filesystem::create_directories(destination.parent_path());
+            std::filesystem::copy_file(std::filesystem::path(PLATFORMER_SOURCE_ASSET_ROOT) / "shaders" / shader,
+                destination, std::filesystem::copy_options::overwrite_existing);
+        }
+        SetWindowSize(512, 256);
+        renderer.LoadRuntimeAssets(&registry);
+        working = npcAuthored;
+        working.elevatedPlatforms = {{{0, 19, 0}, {20, 1, 20}}};
+        working.environment.directionalRayDirection = {-1, -1, 0};
+        working.environment.directionalEnabled = true;
+        working.environment.directionalIntensity = 1;
+        working.environment.directionalShadowsEnabled = false;
+        runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto receiverWithoutNpc = Render(renderer, target, working, {}, true);
+        const auto npcWithoutShadow = Render(renderer, target, working, runtime.Instances(), true);
+        working.environment.directionalShadowsEnabled = true;
+        const auto receiverWithShadow = Render(renderer, target, working, {}, true);
+        const auto npcWithShadow = Render(renderer, target, working, runtime.Instances(), true);
+        int casterPixels = 0;
+        auto sameColor = [](Color a, Color b) { return a.r == b.r && a.g == b.g && a.b == b.b; };
+        for (std::size_t pixel = 0; pixel < npcWithShadow.colors.size(); ++pixel)
+        {
+            // Exclude character geometry and other world casters. Only newly
+            // shadowed receiver pixels contributed by the NPC instances remain.
+            if (sameColor(receiverWithoutNpc.colors[pixel], npcWithoutShadow.colors[pixel])
+                && sameColor(receiverWithoutNpc.colors[pixel], receiverWithShadow.colors[pixel])
+                && !sameColor(npcWithoutShadow.colors[pixel], npcWithShadow.colors[pixel])) ++casterPixels;
+        }
+        Expect(casterPixels > 5, "production directional shadow pass receives NPC CharacterInstance caster geometry");
+        runtime.Advance(0.3f);
+        const auto movingShadow = Render(renderer, target, working, runtime.Instances(), true);
+        Expect(ChangedHalf(npcWithShadow, movingShadow, true) > 0, "animated moving NPC remains safe in shared lit and shadow draw path");
+        runtime.Clear();
         renderer.SetCharacterInstances({});
         UnloadRenderTexture(target);
-        Expect(world::AuthoredLevelDataEqual(canonical, loaded.level), "canonical authored data unchanged");
+        Expect(world::AuthoredLevelDataEqual(canonicalSource, loaded.level), "canonical authored data unchanged");
     }
     CloseWindow();
     std::printf("CharacterPlacementTest: %s\n", failures ? "FAIL" : "PASS");
