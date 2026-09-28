@@ -27,6 +27,7 @@
 #include "platform/Window.h"
 #include "platform/GameplayAudio.h"
 #include "render/Renderer.h"
+#include "render/LevelCharacters.h"
 #include "render/CharacterPreviewRenderer.h"
 #include "world/LevelDefinition.h"
 #include "world/LevelFile.h"
@@ -111,6 +112,9 @@ private:
     gameplay::Inventory inventory{};
     gameplay::Equipment equipment{};
     gameplay::GameplayDefinitionRegistry gameplayDefinitions{};
+    render::LevelCharacters levelCharacters;
+    render::LevelCharacters characterWorkingPreview;
+    std::vector<render::CharacterInstance*> characterDrawInstances;
     gameplay::PlayerCharacterStats playerCharacterStats{};
     gameplay::InventoryUiState inventoryUi{};
     gameplay::ItemPickupRunState itemPickupRunState{};

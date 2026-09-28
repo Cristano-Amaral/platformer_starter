@@ -172,6 +172,10 @@ bool LevelDefinitionHasRequiredAuthoredContent(const LevelDefinition& level)
             return false;
         }
     }
+    for (const CharacterPlacementSpec& placement : level.characters)
+    {
+        if (!CharacterPlacementSpecIsValid(placement)) return false;
+    }
     for (const StaticPropSpec& prop : level.staticProps)
     {
         if (!StaticPropSpecIsValid(prop))
@@ -222,6 +226,8 @@ bool AuthoringGroupMemberIsValid(const LevelDefinition& level, AuthoringGroupMem
         return member.index < level.itemPickups.size();
     case AuthoringGroupMemberKind::StaticProp:
         return member.index < level.staticProps.size();
+    case AuthoringGroupMemberKind::Character:
+        return member.index < level.characters.size();
     case AuthoringGroupMemberKind::PointLight:
         return member.index < level.pointLights.size();
     case AuthoringGroupMemberKind::SpotLight:
@@ -335,6 +341,7 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
         || a.doors.size() != b.doors.size()
         || a.itemPickups.size() != b.itemPickups.size()
         || a.staticProps.size() != b.staticProps.size()
+        || a.characters.size() != b.characters.size()
         || a.pointLights.size() != b.pointLights.size()
         || a.spotLights.size() != b.spotLights.size()
         || a.authoringGroups.size() != b.authoringGroups.size())
@@ -453,6 +460,16 @@ bool AuthoredLevelDataEqual(const LevelDefinition& a, const LevelDefinition& b)
             || a.itemPickups[index].idleBobSpeed != b.itemPickups[index].idleBobSpeed
             || a.itemPickups[index].idleSpinSpeedDegrees
                 != b.itemPickups[index].idleSpinSpeedDegrees)
+        {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < a.characters.size(); ++index)
+    {
+        if (a.characters[index].definitionIdentity != b.characters[index].definitionIdentity
+            || !Vec3Equal(a.characters[index].position, b.characters[index].position)
+            || !Vec3Equal(a.characters[index].rotationDegrees, b.characters[index].rotationDegrees)
+            || !Vec3Equal(a.characters[index].scale, b.characters[index].scale))
         {
             return false;
         }

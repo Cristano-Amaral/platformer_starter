@@ -585,6 +585,23 @@ else()
     target_sources(CharacterInstanceTest PRIVATE game/source/platform/FileReplacePosix.cpp)
 endif()
 target_link_libraries(CharacterInstanceTest PRIVATE raylib)
+
+# M111 crosses authored parse/Apply/spawn and the actual production Renderer.
+# Compile the existing production sources without the Application entry point;
+# no alternate test factory, animation path, or renderer is supplied.
+get_target_property(M111_PRODUCTION_SOURCES Platformer3D SOURCES)
+list(FILTER M111_PRODUCTION_SOURCES EXCLUDE REGEX "game/source/(Main\\.cpp|core/Application\\.(cpp|h))$")
+add_executable(CharacterPlacementTest
+    game/source/render/CharacterPlacementTest.cpp
+    ${M111_PRODUCTION_SOURCES})
+target_include_directories(CharacterPlacementTest PRIVATE game/source)
+target_link_libraries(CharacterPlacementTest PRIVATE raylib Jolt)
+if(WIN32)
+    target_link_libraries(CharacterPlacementTest PRIVATE ole32 shell32 uuid)
+endif()
+target_compile_definitions(CharacterPlacementTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""
+    "PLATFORMER_SOURCE_ASSET_ROOT=\"${CMAKE_SOURCE_DIR}/game/assets/source\"")
 target_include_directories(CharacterInstanceTest PRIVATE game/source)
 target_compile_definitions(CharacterInstanceTest PRIVATE
     "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""

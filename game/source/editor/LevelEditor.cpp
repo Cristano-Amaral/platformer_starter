@@ -1,4 +1,5 @@
 #include "editor/LevelEditor.h"
+#include "render/LevelCharacters.h"
 
 #include "editor/AuthoredLifecycleCommands.h"
 #include "editor/EditorHierarchy.h"
@@ -2933,6 +2934,51 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 "Visual Scale. Offset remains Inspector-only.");
         }
         break;
+    case EditorObjectKind::Character:
+        if (state.selection.index < level.characters.size() && view.characterDefinitions != nullptr)
+        {
+            auto& placement = level.characters[state.selection.index];
+            const auto resolved = view.characterDefinitions->Resolve({placement.definitionIdentity},
+                gameplay::GameplayDefinitionCategory::Character);
+            ImGui::Text("Reference: %s", gameplay::GameplayReferenceStatusName(resolved.status));
+            ImGui::TextWrapped("%s", placement.definitionIdentity.empty() ? "None" : placement.definitionIdentity.c_str());
+            if (ImGui::BeginCombo("CharacterDefinition", placement.definitionIdentity.empty() ? "None" : placement.definitionIdentity.c_str()))
+            {
+                if (ImGui::Selectable("None", placement.definitionIdentity.empty())) placement.definitionIdentity.clear();
+                for (const auto& definition : view.characterDefinitions->Definitions())
+                {
+                    if (definition.category != gameplay::GameplayDefinitionCategory::Character) continue;
+                    const std::string label = definition.character.displayName + " (" + definition.identity + ")";
+                    if (ImGui::Selectable(label.c_str(), placement.definitionIdentity == definition.identity))
+                        placement.definitionIdentity = definition.identity;
+                }
+                ImGui::EndCombo();
+            }
+            EditVec3("Position X Y Z", placement.position);
+            EditVec3("Rotation X Y Z (deg)", placement.rotationDegrees);
+            EditVec3("Scale X Y Z", placement.scale);
+            ImGui::TextWrapped("Position is the model origin. No grounding offset. Character Type adds no behavior. characters/player is a generic visual only.");
+            ImGui::TextWrapped("None on a new placement is discarded by Apply; clearing an existing placement requires repair or Delete before Apply.");
+            if (view.levelCharacters != nullptr)
+            {
+                const int activeIndex = MappedActiveIndex(state.structuralMap, EditorObjectKind::Character, state.selection.index);
+                const auto instances = view.levelCharacters->Instances();
+                if (activeIndex >= 0 && static_cast<std::size_t>(activeIndex) < instances.size())
+                {
+                    const auto* instance = instances[static_cast<std::size_t>(activeIndex)];
+                    if (instance != nullptr)
+                    {
+                        ImGui::Text("Active placement %d / session handle %llu", activeIndex, static_cast<unsigned long long>(instance->Handle()));
+                        ImGui::Text("Presentation: %s", instance->IsStatic() ? "Static" : instance->Mode() == render::CharacterInstanceMode::Exact ? "Exact" : instance->Mode() == render::CharacterInstanceMode::Retargeted ? "Retargeted" : "Unavailable");
+                        ImGui::TextWrapped("%s", instance->Diagnostic().c_str());
+                    }
+                    else ImGui::TextUnformatted("Active placement has no resolved runtime instance.");
+                }
+                else ImGui::TextUnformatted("Pending addition: no active runtime handle before Apply.");
+            }
+            ImGui::TextUnformatted("Session handles are replaced by rebuild and never saved.");
+        }
+        break;
     case EditorObjectKind::StaticProp:
         if (state.selection.index < level.staticProps.size())
         {
@@ -4701,6 +4747,10 @@ LevelEditorRequest DrawEditorMenuBar(
             {
                 request = EditAddMenuRequest(EditorObjectKind::SpotLight);
             }
+            ImGui::EndDisabled();
+            ImGui::BeginDisabled(!CanIssueAuthoredLifecycleRequest(authoringAvailable, state.workingCopy,
+                state.selection, gizmoDragging, LevelEditorRequest::AddCharacter));
+            if (ImGui::MenuItem("Character")) request = LevelEditorRequest::AddCharacter;
             ImGui::EndDisabled();
             // Static Prop is the only Add entry whose enablement depends on
             // another window, so the row states the asset it would use. The

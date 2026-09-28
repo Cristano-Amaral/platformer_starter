@@ -20,6 +20,7 @@
 #include "world/RespawnWorld.h"
 #include "world/Slope.h"
 #include "world/StaticProp.h"
+#include "world/CharacterPlacement.h"
 #include "world/Terrain.h"
 
 #include <array>
@@ -80,6 +81,7 @@ struct LevelDefinition
     std::vector<DoorSpec> doors{};
     std::vector<ItemPickupSpec> itemPickups{};
     std::vector<StaticPropSpec> staticProps{};
+    std::vector<CharacterPlacementSpec> characters{};
     // Repeatable local lights. Not Directional Light. M85.4 Pressure Plates
     // may target them by typed index.
     std::vector<PointLightSpec> pointLights{};

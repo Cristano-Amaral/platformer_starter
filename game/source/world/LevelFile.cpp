@@ -279,6 +279,7 @@ struct ParseState
     std::vector<DoorSpec> doors;
     std::vector<ItemPickupSpec> itemPickups;
     std::vector<StaticPropSpec> staticProps;
+    std::vector<CharacterPlacementSpec> characters;
     std::vector<PointLightSpec> pointLights;
     std::vector<SpotLightSpec> spotLights;
     std::vector<AuthoringGroup> authoringGroups;
@@ -1116,6 +1117,35 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
                     LoadLevelFileStatus::Invalid, lineNumber, "invalid item_pickup");
             }
             state.itemPickups.push_back(pickup);
+            continue;
+        }
+        if (keyword == "character")
+        {
+            if (tokens.size() != 11)
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "wrong field count");
+            }
+            CharacterPlacementSpec prop{};
+            if (!ParseVec3(tokens, 1, prop.position)
+                || !ParseVec3(tokens, 4, prop.rotationDegrees)
+                || !ParseVec3(tokens, 7, prop.scale))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid character");
+            }
+            prop.definitionIdentity = std::string(tokens[10]);
+            if (!CharacterIdentityIsValid(prop.definitionIdentity))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid character definition identity");
+            }
+            if (!CharacterPlacementSpecIsValid(prop))
+            {
+                return MakeStatus(
+                    LoadLevelFileStatus::Invalid, lineNumber, "invalid character");
+            }
+            state.characters.push_back(prop);
             continue;
         }
         if (keyword == "static_prop")
@@ -2067,6 +2097,7 @@ ParseLevelFileResult ParseLevelText(std::string_view text)
     loaded.level.doors = std::move(state.doors);
     loaded.level.itemPickups = std::move(state.itemPickups);
     loaded.level.staticProps = std::move(state.staticProps);
+    loaded.level.characters = std::move(state.characters);
     loaded.level.pointLights = std::move(state.pointLights);
     loaded.level.spotLights = std::move(state.spotLights);
     loaded.level.authoringGroups = std::move(state.authoringGroups);

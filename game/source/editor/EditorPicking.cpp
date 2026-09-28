@@ -362,6 +362,19 @@ EditorPickingSet BuildPickingSet(
             world::kItemPickupVisualExtents,
             0.0f);
     }
+    for (std::size_t index = 0; index < appliedLevel.characters.size(); ++index)
+    {
+        const world::StaticPropSpec prop = world::CharacterPlacementVisualTransform(appliedLevel.characters[index]);
+        PickingProxy proxy{};
+        proxy.selection = {EditorObjectKind::Character, index};
+        proxy.usesStaticPropTransform = true;
+        proxy.staticProp = prop;
+        proxy.localMin = kStaticPropDefaultLocalMin;
+        proxy.localMax = kStaticPropDefaultLocalMax;
+        StaticPropWorldAabb(
+            prop, proxy.localMin, proxy.localMax, proxy.center, proxy.size);
+        set.proxies.push_back(proxy);
+    }
     for (std::size_t index = 0; index < appliedLevel.staticProps.size(); ++index)
     {
         const world::StaticPropSpec& prop = appliedLevel.staticProps[index];

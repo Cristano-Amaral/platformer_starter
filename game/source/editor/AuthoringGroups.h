@@ -91,6 +91,9 @@ inline bool TryAuthoringGroupMemberKindFromSelection(
     case EditorObjectKind::ItemPickup:
         outKind = world::AuthoringGroupMemberKind::ItemPickup;
         return true;
+    case EditorObjectKind::Character:
+        outKind = world::AuthoringGroupMemberKind::Character;
+        return true;
     case EditorObjectKind::StaticProp:
         outKind = world::AuthoringGroupMemberKind::StaticProp;
         return true;
@@ -142,6 +145,8 @@ inline EditorObjectKind EditorObjectKindFromAuthoringGroupMember(
         return EditorObjectKind::Door;
     case world::AuthoringGroupMemberKind::ItemPickup:
         return EditorObjectKind::ItemPickup;
+    case world::AuthoringGroupMemberKind::Character:
+        return EditorObjectKind::Character;
     case world::AuthoringGroupMemberKind::StaticProp:
         return EditorObjectKind::StaticProp;
     case world::AuthoringGroupMemberKind::PointLight:

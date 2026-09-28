@@ -303,6 +303,7 @@ bool IsGizmoSelection(EditorSelection selection)
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
     case EditorObjectKind::ItemPickup:
+    case EditorObjectKind::Character:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::PointLight:
     case EditorObjectKind::SpotLight:
@@ -334,14 +335,16 @@ bool IsResizeSelection(EditorSelection selection)
 
 bool IsScaleSelection(EditorSelection selection)
 {
-    return selection.kind == EditorObjectKind::StaticProp
+    return selection.kind == EditorObjectKind::Character
+        || selection.kind == EditorObjectKind::StaticProp
         || selection.kind == EditorObjectKind::ItemPickup
         || selection.kind == EditorObjectKind::DirectionalLight;
 }
 
 bool IsRotateSelection(EditorSelection selection)
 {
-    return selection.kind == EditorObjectKind::StaticProp
+    return selection.kind == EditorObjectKind::Character
+        || selection.kind == EditorObjectKind::StaticProp
         || selection.kind == EditorObjectKind::ItemPickup
         || selection.kind == EditorObjectKind::DirectionalLight
         || selection.kind == EditorObjectKind::SpotLight;
@@ -435,6 +438,12 @@ core::Vec3* GetEditablePosition(world::LevelDefinition& level, EditorSelection s
         if (selection.index < level.itemPickups.size())
         {
             return &level.itemPickups[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::Character:
+        if (selection.index < level.characters.size())
+        {
+            return &level.characters[selection.index].position;
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -537,6 +546,12 @@ const core::Vec3* GetEditablePosition(
         if (selection.index < level.itemPickups.size())
         {
             return &level.itemPickups[selection.index].position;
+        }
+        break;
+    case EditorObjectKind::Character:
+        if (selection.index < level.characters.size())
+        {
+            return &level.characters[selection.index].position;
         }
         break;
     case EditorObjectKind::StaticProp:
@@ -665,6 +680,11 @@ const core::Vec3* GetEditableSize(
 
 core::Vec3* GetEditableScale(world::LevelDefinition& level, EditorSelection selection)
 {
+    if (selection.kind == EditorObjectKind::Character
+        && selection.index < level.characters.size())
+    {
+        return &level.characters[selection.index].scale;
+    }
     if (selection.kind == EditorObjectKind::StaticProp
         && selection.index < level.staticProps.size())
     {
@@ -682,6 +702,11 @@ const core::Vec3* GetEditableScale(
     const world::LevelDefinition& level,
     EditorSelection selection)
 {
+    if (selection.kind == EditorObjectKind::Character
+        && selection.index < level.characters.size())
+    {
+        return &level.characters[selection.index].scale;
+    }
     if (selection.kind == EditorObjectKind::StaticProp
         && selection.index < level.staticProps.size())
     {
@@ -697,6 +722,11 @@ const core::Vec3* GetEditableScale(
 
 core::Vec3* GetEditableRotation(world::LevelDefinition& level, EditorSelection selection)
 {
+    if (selection.kind == EditorObjectKind::Character
+        && selection.index < level.characters.size())
+    {
+        return &level.characters[selection.index].rotationDegrees;
+    }
     if (selection.kind == EditorObjectKind::StaticProp
         && selection.index < level.staticProps.size())
     {
@@ -714,6 +744,11 @@ const core::Vec3* GetEditableRotation(
     const world::LevelDefinition& level,
     EditorSelection selection)
 {
+    if (selection.kind == EditorObjectKind::Character
+        && selection.index < level.characters.size())
+    {
+        return &level.characters[selection.index].rotationDegrees;
+    }
     if (selection.kind == EditorObjectKind::StaticProp
         && selection.index < level.staticProps.size())
     {
@@ -852,6 +887,18 @@ bool GetGizmoPreviewBox(
                 kStaticPropDefaultLocalMin,
                 kStaticPropDefaultLocalMax,
                 itemDefinitions);
+            return true;
+        }
+        break;
+    case EditorObjectKind::Character:
+        if (selection.index < workingCopy.characters.size())
+        {
+            StaticPropWorldAabb(
+                world::CharacterPlacementVisualTransform(workingCopy.characters[selection.index]),
+                kStaticPropDefaultLocalMin,
+                kStaticPropDefaultLocalMax,
+                center,
+                size);
             return true;
         }
         break;
@@ -1182,6 +1229,27 @@ bool AuthoredGeometryDiffers(
                 activePickup.visualRotationDegrees, workingPickup.visualRotationDegrees)
             || Vec3Differs(activePickup.visualScale, workingPickup.visualScale);
     }
+    case EditorObjectKind::Character:
+    {
+        if (selection.index >= workingCopy.characters.size())
+        {
+            return false;
+        }
+        const int activeIndex =
+            MappedActiveIndex(map, EditorObjectKind::Character, selection.index);
+        if (activeIndex < 0
+            || static_cast<std::size_t>(activeIndex) >= active.characters.size())
+        {
+            return true;
+        }
+        const world::CharacterPlacementSpec& activeProp =
+            active.characters[static_cast<std::size_t>(activeIndex)];
+        const world::CharacterPlacementSpec& workingProp = workingCopy.characters[selection.index];
+        return activeProp.definitionIdentity != workingProp.definitionIdentity
+            || Vec3Differs(activeProp.position, workingProp.position)
+            || Vec3Differs(activeProp.rotationDegrees, workingProp.rotationDegrees)
+            || Vec3Differs(activeProp.scale, workingProp.scale);
+    }
     case EditorObjectKind::StaticProp:
     {
         if (selection.index >= workingCopy.staticProps.size())
@@ -1452,6 +1520,7 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
         EditorObjectKind::Door,
         EditorObjectKind::ItemPickup,
         EditorObjectKind::StaticProp,
+        EditorObjectKind::Character,
         EditorObjectKind::PointLight,
         EditorObjectKind::SpotLight};
     for (const EditorObjectKind kind : kinds)
@@ -1477,6 +1546,8 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
                 return workingCopy.doors.size();
             case EditorObjectKind::ItemPickup:
                 return workingCopy.itemPickups.size();
+            case EditorObjectKind::Character:
+                return workingCopy.characters.size();
             case EditorObjectKind::StaticProp:
                 return workingCopy.staticProps.size();
             case EditorObjectKind::PointLight:
@@ -1529,6 +1600,13 @@ std::vector<PendingAuthoringVisual> CollectPendingAuthoringVisuals(
             if (kind == EditorObjectKind::Collectible)
             {
                 visual.collectible = workingCopy.collectibles[index];
+            }
+            if (kind == EditorObjectKind::Character)
+            {
+                visual.usesStaticPropTransform = true;
+                visual.staticProp = world::CharacterPlacementVisualTransform(workingCopy.characters[index]);
+                visual.localMin = kStaticPropDefaultLocalMin;
+                visual.localMax = kStaticPropDefaultLocalMax;
             }
             if (kind == EditorObjectKind::StaticProp)
             {

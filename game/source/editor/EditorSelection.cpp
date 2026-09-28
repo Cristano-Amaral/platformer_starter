@@ -32,6 +32,8 @@ const char* EditorObjectKindName(EditorObjectKind kind)
         return "Goal";
     case EditorObjectKind::DynamicBox:
         return "DynamicBox";
+    case EditorObjectKind::Character:
+        return "Character";
     case EditorObjectKind::StaticProp:
         return "StaticProp";
     case EditorObjectKind::PressurePlate:
@@ -102,6 +104,9 @@ void FormatSelectionDisplayName(
     case EditorObjectKind::DynamicBox:
         std::snprintf(buffer, bufferSize, "Dynamic Box %zu", selection.index);
         return;
+    case EditorObjectKind::Character:
+        std::snprintf(buffer, bufferSize, "Character %zu", selection.index);
+        return;
     case EditorObjectKind::StaticProp:
         std::snprintf(buffer, bufferSize, "Static Prop %zu", selection.index);
         return;
@@ -158,6 +163,8 @@ bool IsValidSelection(const world::LevelDefinition& level, EditorSelection selec
         return selection.index < level.spotLights.size();
     case EditorObjectKind::DynamicBox:
         return selection.index < level.dynamicBoxes.size();
+    case EditorObjectKind::Character:
+        return selection.index < level.characters.size();
     case EditorObjectKind::StaticProp:
         return selection.index < level.staticProps.size();
     case EditorObjectKind::PressurePlate:
@@ -197,6 +204,7 @@ bool IsEditableSelection(EditorSelection selection)
     case EditorObjectKind::Collectible:
     case EditorObjectKind::Goal:
     case EditorObjectKind::DynamicBox:
+    case EditorObjectKind::Character:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:

@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 110 — Character Instance Foundation**
+**Milestone 111 — Character Placement & Spawning**
 
-Canonical file: [`docs/milestones/MILESTONE_110.md`](milestones/MILESTONE_110.md)
+Canonical file: [`docs/milestones/MILESTONE_111.md`](milestones/MILESTONE_111.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -214,6 +214,7 @@ Historical milestone files do not override current implemented behavior.
 | 108 | [Milestone 108 — Humanoid Skeleton Mapping Foundation](milestones/MILESTONE_108.md) | implementation in progress |
 | 109 | [Milestone 109 — Animation Retargeting Foundation](milestones/MILESTONE_109.md) | implementation in progress |
 | 110 | [Milestone 110 — Character Instance Foundation](milestones/MILESTONE_110.md) | implementation in progress |
+| 111 | [Milestone 111 — Character Placement & Spawning](milestones/MILESTONE_111.md) | implementation in progress |
 
 ## Later milestones
 

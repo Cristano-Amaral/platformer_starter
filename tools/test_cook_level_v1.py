@@ -23,6 +23,16 @@ from test_stage_runtime_assets import run_stage  # noqa: E402
 
 
 class LevelV1HeaderTests(unittest.TestCase):
+    def test_character_records_survive_header_gate(self) -> None:
+        payload = (
+            b"PLATFORMER_LEVEL 1\n"
+            b"id level_01\n"
+            b"character 1 2 3 0 45 0 1 1 1 characters/player\n"
+            b"character 4 2 3 0 0 0 1 1 1 characters/missing\n"
+        )
+        cooker.validate_level_v1_header(payload)
+        self.assertEqual(payload.count(b"character "), 2)
+
     def test_canonical_source_header_is_accepted(self) -> None:
         source = cooker.source_root(cooker.repo_root()) / "levels" / "level_01.level"
         cooker.validate_level_v1_header(source.read_bytes())

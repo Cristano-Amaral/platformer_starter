@@ -43,6 +43,7 @@
 
 namespace render
 {
+class LevelCharacters;
 class StaticModelThumbnailStore;
 class TextureThumbnailStore;
 class StaticModelPreviewRenderer;
@@ -115,6 +116,7 @@ enum class LevelEditorRequest
     AddItemPickup,
     AddGoal,
     AddStaticProp,
+    AddCharacter,
     AddPointLight,
     AddSpotLight,
     AddTerrain,
@@ -293,6 +295,8 @@ struct LevelEditorViewContext
     core::Vec3 gameplayCameraPosition{};
     core::Vec3 gameplayCameraTarget{};
     float frameDeltaSeconds = 0.0f;
+    const gameplay::GameplayDefinitionRegistry* characterDefinitions = nullptr;
+    const render::LevelCharacters* levelCharacters = nullptr;
 };
 
 class EditorToolRunner;

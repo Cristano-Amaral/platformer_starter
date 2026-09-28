@@ -2049,6 +2049,9 @@ int main()
                 && state.workingCopy.itemPickups[1].itemId.empty(),
             "both added Item Pickups start unassigned");
 
+        // Seed the secondary reference explicitly before testing PRIMARY-only edits.
+        state.workingCopy.itemPickups[0].itemId = "items/master_key";
+
         state.selection = {EditorObjectKind::ItemPickup, 1};
         state.additionalSelections = {{EditorObjectKind::ItemPickup, 0}};
         editor::RefreshLevelEditorDerivedFlags(state, active);

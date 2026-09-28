@@ -80,6 +80,10 @@ inline std::vector<HierarchyEntry> BuildHierarchyEntries(const world::LevelDefin
     {
         entries.push_back({{EditorObjectKind::ItemPickup, index}, "Item Pickups"});
     }
+    for (std::size_t index = 0; index < level.characters.size(); ++index)
+    {
+        entries.push_back({{EditorObjectKind::Character, index}, "Characters"});
+    }
     for (std::size_t index = 0; index < level.staticProps.size(); ++index)
     {
         entries.push_back({{EditorObjectKind::StaticProp, index}, "Static Props"});

@@ -54,6 +54,7 @@ struct CategoryStructuralPending
     bool doors = false;
     bool itemPickups = false;
     bool staticProps = false;
+    bool characters = false;
     bool pointLights = false;
     bool spotLights = false;
 };
@@ -84,6 +85,7 @@ struct StructuralIndexMap
     CategoryIndexMap doors;
     CategoryIndexMap itemPickups;
     CategoryIndexMap staticProps;
+    CategoryIndexMap characters;
     CategoryIndexMap pointLights;
     CategoryIndexMap spotLights;
 };
@@ -218,14 +220,15 @@ bool IsPendingDeleteActiveIndex(
     EditorObjectKind kind,
     std::size_t activeIndex);
 
-// Produces the exact candidate promoted by Apply. Empty Item Pickups are
-// discarded only when they are pending additions with no active counterpart.
+// Produces the exact candidate promoted by Apply. Empty Item Pickups and
+// Character placements are discarded only when they are pending additions
+// with no active counterpart.
 // Existing authored identities, including unresolved ones, are preserved.
 bool PrepareLevelEditorApplyCandidate(
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
     world::LevelDefinition& candidate,
-    std::size_t& discardedIncompleteItemPickups);
+    std::size_t& discardedIncompleteNewObjects);
 
 PendingDeleteVisuals MakePendingDeleteVisuals(
     const world::LevelDefinition& active,
@@ -309,6 +312,7 @@ LifecycleEditResult AddItemPickup(
 LifecycleEditResult AddItemPickupAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter);
+LifecycleEditResult AddCharacter(world::LevelDefinition& workingCopy, core::Vec3 placementAnchor);
 LifecycleEditResult AddStaticProp(
     world::LevelDefinition& workingCopy,
     core::Vec3 placementAnchor,
@@ -356,6 +360,7 @@ inline const char* CategoryCapacityReason(EditorObjectKind kind)
     case EditorObjectKind::ItemPickup:
         return "Level file record limit reached.";
     case EditorObjectKind::StaticProp:
+    case EditorObjectKind::Character:
         return "Level file record limit reached.";
     case EditorObjectKind::PointLight:
     case EditorObjectKind::SpotLight:

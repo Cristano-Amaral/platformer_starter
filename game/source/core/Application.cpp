@@ -2202,10 +2202,24 @@ int Application::Run()
         gameplay::FormatGameplayObjectiveLine(
             objectiveLine, sizeof(objectiveLine), levelDefinition.levelGoals);
         gameplay::FormatHealthHudText(healthHudText, sizeof(healthHudText), playerHealth);
+        levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+        levelCharacters.Advance(simulationPaused ? 0.0f : deltaSeconds);
+        const render::LevelCharacters* characterDrawSet = &levelCharacters;
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+        if (levelEditorState.active)
+        {
+            characterWorkingPreview.Sync(levelEditorState.workingCopy.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+            characterDrawSet = &characterWorkingPreview;
+        }
+#endif
+        characterDrawInstances.assign(characterDrawSet->Instances().begin(), characterDrawSet->Instances().end());
 #if defined(GAME_DEVELOPMENT)
         debugUi.characterInstances.Tick(gameplayDefinitions, deltaSeconds, player.Position());
-        renderer.SetCharacterInstances(debugUi.characterInstances.Instances());
+        const auto harnessInstances = debugUi.characterInstances.Instances();
+        characterDrawInstances.insert(characterDrawInstances.end(), harnessInstances.begin(), harnessInstances.end());
 #endif
+        renderer.SetCharacterInstances(characterDrawInstances);
+        renderer.SetCharacterPlacements(characterDrawSet->Placements());
         renderer.BeginFrame();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)
@@ -2481,6 +2495,8 @@ int Application::Run()
         levelEditorView.gameplayCameraTarget = gameplayCameraView.target;
         levelEditorView.frameDeltaSeconds = deltaSeconds;
 #endif
+        levelEditorView.characterDefinitions = &gameplayDefinitions;
+        levelEditorView.levelCharacters = &levelCharacters;
         // Cook, Stage & Reload observation lives in Application::Run, not in
         // ImGui Draw, so F2 hide and panel visibility cannot cancel it.
         editorToolRunner.Poll();
@@ -3267,6 +3283,7 @@ void Application::PerformDeathRespawn()
 
 void Application::RestartRun()
 {
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
     physicsWorld.SetDoorRuntimeUnlocked(doorLockRunState.unlocked);
     physicsWorld.ResetMovingPlatform();
@@ -3358,6 +3375,8 @@ void Application::SetLevelEditorActive(bool active)
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
         gameplay::CloseInventoryUi(inventoryUi);
+        levelCharacters.Clear();
+        characterWorkingPreview.Clear();
         LoadGameplayDefinitionCatalog(gameplayDefinitions);
         renderer.ReloadPlayerPresentationAssets(&gameplayDefinitions);
     }
@@ -3749,6 +3768,8 @@ bool Application::OpenAuthoredLevelFromEditor()
     }
 
     levelDefinition = prepared.candidate;
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
     const std::string logicalId = world::MakeRuntimeLevelLogicalId(currentRuntimeLevelId);
     const std::filesystem::path stagedPath = platform::RuntimeAssetPath(logicalId);
@@ -3896,14 +3917,14 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
 bool Application::ApplyLevelEditorPreview()
 {
     world::LevelDefinition candidate{};
-    std::size_t discardedIncompleteItemPickups = 0;
+    std::size_t discardedIncompleteNewObjects = 0;
     // Validate the candidate while the live world is still intact, so an
     // invalid working copy cannot shut physics down or move the camera.
     if (!editor::PrepareLevelEditorApplyCandidate(
             levelEditorState.workingCopy,
             levelEditorState.structuralMap,
             candidate,
-            discardedIncompleteItemPickups)
+            discardedIncompleteNewObjects)
         || !world::IsWritableLevelDefinition(candidate))
     {
         editor::ResetLevelActionStatuses(levelEditorState);
@@ -3923,6 +3944,8 @@ bool Application::ApplyLevelEditorPreview()
     }
 
     levelDefinition = candidate;
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    characterWorkingPreview.Clear();
     currentRuntimeLevelId = candidate.id;
     ResetGameplayAfterCommittedLevel();
 
@@ -3940,8 +3963,8 @@ bool Application::ApplyLevelEditorPreview()
         levelEditorState.additionalSelections);
     editor::ResetLevelActionStatuses(levelEditorState);
     levelEditorState.lastApplyStatus = editor::LevelEditorApplyStatus::Applied;
-    levelEditorState.lastMessage = discardedIncompleteItemPickups > 0
-        ? "Applied. Incomplete new Item Pickup discarded."
+    levelEditorState.lastMessage = discardedIncompleteNewObjects > 0
+        ? "Applied. Incomplete new Item Pickup/Character placements discarded."
         : "Applied. Rendering and collision were rebuilt from the same authored data.";
     editor::CancelAllEditorPlacement(
         levelEditorState.placementMode,
@@ -4030,6 +4053,8 @@ bool Application::ReloadRuntimeLevelFromStaged()
     }
 
     levelDefinition = prepared.candidate;
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
     runtimeLevelPathDisplay = stagedPath.empty() ? "(unavailable)" : stagedPath.string();
     ResetGameplayAfterCommittedLevel();
@@ -4259,6 +4284,8 @@ void Application::TryFinishPendingLevelTransition()
     }
 
     levelDefinition = prepared.candidate;
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
     runtimeLevelPathDisplay = stagedPath.string();
     levelLoadStatus = world::LoadLevelFileStatus::Loaded;
@@ -4418,6 +4445,8 @@ void Application::TryFinishPendingFreshRun()
     }
 
     levelDefinition = prepared.candidate;
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
     runtimeLevelPathDisplay = stagedPath.string();
     levelLoadStatus = world::LoadLevelFileStatus::Loaded;
@@ -4617,6 +4646,11 @@ void Application::ObservePressurePlateSfx(bool emitEdges)
 
 void Application::Shutdown()
 {
+    renderer.SetCharacterInstances({});
+    renderer.SetCharacterPlacements({});
+    characterDrawInstances.clear();
+    characterWorkingPreview.Clear();
+    levelCharacters.Clear();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     input::SetMouseLookActive(false);
     cookStageReload.Cancel();

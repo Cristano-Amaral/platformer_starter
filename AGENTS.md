@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 110 — Character Instance Foundation.
+Current milestone: Milestone 111 — Character Placement & Spawning.
 
-Canonical file: [`docs/milestones/MILESTONE_110.md`](docs/milestones/MILESTONE_110.md)
+Canonical file: [`docs/milestones/MILESTONE_111.md`](docs/milestones/MILESTONE_111.md)
 
-Branch: `milestone/110-character-instance-foundation`
+Branch: `milestone/111-character-placement-spawning`
 
-Status: implementation in progress. Do not start Milestone 111.
+Status: implementation in progress. Do not start Milestone 112.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

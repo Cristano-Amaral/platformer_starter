@@ -2,6 +2,20 @@
 
 Starter repository for a C++ 3D platformer developed with Cursor.
 
+## M111 Character placement acceptance
+
+Development F2 → Edit → Add → Character creates a placement with None. Choose a
+CharacterDefinition in Inspector, edit Translate/Rotate/Scale, and Apply. The
+Inspector shows active placement index, transient handle, and presentation mode.
+Duplicate/Delete use the normal editor operations. Save writes active authored
+data; Cook, Stage & Reload makes saved source available to Runtime Reload.
+See [Character placement](docs/CHARACTER_PLACEMENT.md) for Missing references,
+Player policy, lifecycle, and manual acceptance steps. No NPC/Enemy/AI behavior is added.
+
+`build/windows-vs2022/Development/CharacterPlacementTest.exe` crosses Level Format,
+editor Apply preparation, active spawning, and the actual production renderer,
+including simultaneous Exact/Retargeted animated pixels and delete/rebuild safety.
+
 ## M110 runtime instance acceptance
 
 In the Development build, enter gameplay and open F1 metrics. In **M110 Runtime

@@ -125,6 +125,7 @@ bool SupportsLifecycle(EditorObjectKind kind)
     case EditorObjectKind::PressurePlate:
     case EditorObjectKind::Door:
     case EditorObjectKind::ItemPickup:
+    case EditorObjectKind::Character:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::PointLight:
     case EditorObjectKind::SpotLight:
@@ -148,6 +149,7 @@ int CategoryMaxCount(EditorObjectKind kind)
     case EditorObjectKind::Collectible:
     case EditorObjectKind::Goal:
     case EditorObjectKind::PressurePlate:
+    case EditorObjectKind::Character:
     case EditorObjectKind::StaticProp:
     case EditorObjectKind::ItemPickup:
     case EditorObjectKind::PointLight:
@@ -180,6 +182,8 @@ std::size_t CategoryCount(const world::LevelDefinition& level, EditorObjectKind 
         return level.doors.size();
     case EditorObjectKind::ItemPickup:
         return level.itemPickups.size();
+    case EditorObjectKind::Character:
+        return level.characters.size();
     case EditorObjectKind::StaticProp:
         return level.staticProps.size();
     case EditorObjectKind::PointLight:
@@ -249,6 +253,9 @@ void MarkCategoryStructuralPending(CategoryStructuralPending& pending, EditorObj
     case EditorObjectKind::ItemPickup:
         pending.itemPickups = true;
         break;
+    case EditorObjectKind::Character:
+        pending.characters = true;
+        break;
     case EditorObjectKind::StaticProp:
         pending.staticProps = true;
         break;
@@ -287,6 +294,8 @@ bool CategoryHasStructuralPending(
         return pending.doors;
     case EditorObjectKind::ItemPickup:
         return pending.itemPickups;
+    case EditorObjectKind::Character:
+        return pending.characters;
     case EditorObjectKind::StaticProp:
         return pending.staticProps;
     case EditorObjectKind::PointLight:
@@ -322,6 +331,8 @@ CategoryIndexMap* MutableCategoryMap(StructuralIndexMap& map, EditorObjectKind k
         return &map.doors;
     case EditorObjectKind::ItemPickup:
         return &map.itemPickups;
+    case EditorObjectKind::Character:
+        return &map.characters;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
     case EditorObjectKind::PointLight:
@@ -355,6 +366,8 @@ const CategoryIndexMap* CategoryMap(const StructuralIndexMap& map, EditorObjectK
         return &map.doors;
     case EditorObjectKind::ItemPickup:
         return &map.itemPickups;
+    case EditorObjectKind::Character:
+        return &map.characters;
     case EditorObjectKind::StaticProp:
         return &map.staticProps;
     case EditorObjectKind::PointLight:
@@ -395,6 +408,7 @@ void ResetStructuralIndexMap(
     FillIdentity(map.doors, active.doors.size());
     FillIdentity(map.itemPickups, active.itemPickups.size());
     FillIdentity(map.staticProps, active.staticProps.size());
+    FillIdentity(map.characters, active.characters.size());
     FillIdentity(map.pointLights, active.pointLights.size());
     FillIdentity(map.spotLights, active.spotLights.size());
 }
@@ -413,6 +427,7 @@ void EnsureStructuralIndexMap(
         && CategoryMapMatchesActive(map.doors, active.doors.size())
         && CategoryMapMatchesActive(map.itemPickups, active.itemPickups.size())
         && CategoryMapMatchesActive(map.staticProps, active.staticProps.size())
+        && CategoryMapMatchesActive(map.characters, active.characters.size())
         && CategoryMapMatchesActive(map.pointLights, active.pointLights.size())
         && CategoryMapMatchesActive(map.spotLights, active.spotLights.size()))
     {
@@ -509,10 +524,10 @@ bool PrepareLevelEditorApplyCandidate(
     const world::LevelDefinition& workingCopy,
     const StructuralIndexMap& map,
     world::LevelDefinition& candidate,
-    std::size_t& discardedIncompleteItemPickups)
+    std::size_t& discardedIncompleteNewObjects)
 {
     candidate = workingCopy;
-    discardedIncompleteItemPickups = 0;
+    discardedIncompleteNewObjects = 0;
     for (std::size_t index = candidate.itemPickups.size(); index > 0; --index)
     {
         const std::size_t pickupIndex = index - 1;
@@ -529,7 +544,17 @@ bool PrepareLevelEditorApplyCandidate(
         {
             return false;
         }
-        ++discardedIncompleteItemPickups;
+        ++discardedIncompleteNewObjects;
+    }
+    for (std::size_t index = candidate.characters.size(); index > 0; --index)
+    {
+        const std::size_t placementIndex = index - 1;
+        if (!candidate.characters[placementIndex].definitionIdentity.empty()
+            || MappedActiveIndex(map, EditorObjectKind::Character, placementIndex) != kNoStructuralIndex)
+            continue;
+        if (!DeleteSelected(candidate, {EditorObjectKind::Character, placementIndex}).succeeded)
+            return false;
+        ++discardedIncompleteNewObjects;
     }
     return true;
 }
@@ -992,6 +1017,16 @@ LifecycleEditResult AddItemPickup(
             workingCopy.initialSpawnVisualCenter.z));
 }
 
+LifecycleEditResult AddCharacter(world::LevelDefinition& workingCopy, core::Vec3 placementAnchor)
+{
+    if (CategoryAtCountLimit(workingCopy, EditorObjectKind::Character))
+        return Fail(LifecycleEditStatus::AtLimit);
+    world::CharacterPlacementSpec placement{};
+    placement.position = MakeAuthoredAddPlacement(placementAnchor, workingCopy.initialSpawnVisualCenter.z);
+    workingCopy.characters.push_back(placement);
+    return Ok({EditorObjectKind::Character, workingCopy.characters.size() - 1});
+}
+
 LifecycleEditResult AddStaticPropAt(
     world::LevelDefinition& workingCopy,
     core::Vec3 worldCenter,
@@ -1196,6 +1231,13 @@ LifecycleEditResult DuplicateSelected(
         workingCopy.itemPickups.push_back(copy);
         return Ok({EditorObjectKind::ItemPickup, workingCopy.itemPickups.size() - 1});
     }
+    case EditorObjectKind::Character:
+    {
+        world::CharacterPlacementSpec copy = workingCopy.characters[selection.index];
+        OffsetX(copy.position, kLifecycleDuplicateOffsetX);
+        workingCopy.characters.push_back(copy);
+        return Ok({EditorObjectKind::Character, workingCopy.characters.size() - 1});
+    }
     case EditorObjectKind::StaticProp:
     {
         world::StaticPropSpec copy = workingCopy.staticProps[selection.index];
@@ -1306,6 +1348,10 @@ LifecycleEditResult DeleteSelected(
     case EditorObjectKind::ItemPickup:
         workingCopy.itemPickups.erase(
             workingCopy.itemPickups.begin() + static_cast<std::ptrdiff_t>(selection.index));
+        break;
+    case EditorObjectKind::Character:
+        workingCopy.characters.erase(
+            workingCopy.characters.begin() + static_cast<std::ptrdiff_t>(selection.index));
         break;
     case EditorObjectKind::StaticProp:
         workingCopy.staticProps.erase(

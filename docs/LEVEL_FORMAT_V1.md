@@ -55,12 +55,22 @@ No comments in v1.
 
 After the header, records may appear in any order. Encounter order of repeated
 records (`platform`, `slope`, `checkpoint`, `hazard`, `collectible`,
-`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `static_prop`, `authoring_group`) is the array order in `LevelDefinition`. Required singleton records must
+`level_goal`, `dynamic_box`, `pressure_plate`, `door`, `item_pickup`, `character`, `static_prop`, `authoring_group`) is the array order in `LevelDefinition`. Required singleton records must
 appear exactly once. Optional singleton records (`environment`, `directional_light`, `terrain` plus its `terrain_row` samples) may be omitted and must not be duplicated. Unknown keywords and trailing unrecognized content are
 `Invalid`. Optional `authoring_group` records persist Development Authoring
 Groups; they are authored organizational metadata, not gameplay objects.
 
 ### Required singletons
+
+M111 adds the optional repeatable record
+`character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name>`.
+It stores finite world-model-origin position, Euler XYZ degrees, and finite positive
+model scale, followed by the existing case-sensitive CharacterDefinition identity.
+Missing valid references are preserved; malformed/None references are rejected in
+active authored data. No runtime handles or CharacterDefinition payload are stored.
+Characters consume the existing line/file limits and are written in occurrence order
+before Static Props. Groups accept `character <index>` members. See
+[Character placement](CHARACTER_PLACEMENT.md) for editor and runtime authority.
 
 ```
 id <token>
@@ -412,6 +422,7 @@ dynamic_box <cx> <cy> <cz> <sx> <sy> <sz> <massKg>
 pressure_plate <cx> <cy> <cz> <sx> <sy> <sz> [<doorIndex> [<activateByDynamicBox> <activateByPlayer> <visibleInGameplay> [<controlsDirectionalLight> [lights <count> <kind> <index> ...]]]]
 door <cx> <cy> <cz> <sx> <sy> <sz> <openDistance> [<requiredItem>]
 item_pickup <px> <py> <pz> <quantity> <itemId> [visual <ox> <oy> <oz> <rx> <ry> <rz> <sx> <sy> <sz>] [bounds <0|1>] [highlight <intensity>] [gold <amount>] [idle <0|1> <bobAmplitude> <bobSpeed> <spinSpeedDegrees>] [<modelIdentity...>]
+character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name>
 static_prop <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> <identity...>
 authoring_group <name> <kind> <index> <kind> <index> ...
 ```
@@ -693,6 +704,7 @@ dynamic_box         variable, dynamicBoxes index order
 pressure_plate      variable, pressurePlates index order
 door                variable, doors index order
 item_pickup         variable, itemPickups index order
+character           variable, characters index order
 static_prop         variable, staticProps index order
 authoring_group     variable, authoringGroups index order
 camera

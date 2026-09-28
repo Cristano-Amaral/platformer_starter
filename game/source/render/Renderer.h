@@ -343,6 +343,8 @@ public:
     const char* PlayerCurrentAnimationStatus() const;
 
     void BeginFrame();
+    void SetCharacterPlacements(std::span<const world::CharacterPlacementSpec> placements)
+    { characterPlacements = placements; }
     void SetCharacterInstances(std::span<CharacterInstance* const> instances)
     { characterInstances = instances; }
     void DrawWorld(
@@ -410,6 +412,7 @@ public:
 
 private:
     std::span<CharacterInstance* const> characterInstances{};
+    std::span<const world::CharacterPlacementSpec> characterPlacements{};
     struct PlayerModelGpuState;
     void LoadPlayerPresentationAssets(
         const gameplay::GameplayDefinitionRegistry* gameplayDefinitions);

@@ -2798,6 +2798,16 @@ void Renderer::DrawWorld(
             for (const auto* instance : characterInstances)
                 if (instance != nullptr) instance->Draw(gWorldModelOverride);
             RestoreGreyboxImmediateState();
+            for (std::size_t index = 0; index < characterPlacements.size(); ++index)
+            {
+                if (index < characterInstances.size() && characterInstances[index] != nullptr
+                    && characterInstances[index]->HasModel()) continue;
+                const auto position = characterPlacements[index].position;
+                if (world::StaticPropPositionIsValid(position))
+                {
+                    DrawGreyboxBox(position, {0.5f, 1.0f, 0.5f}, kStaticPropFallbackColor);
+                }
+            }
         }
         const bool playerModelLoaded = IsPlayerModelLoaded();
         if (gWorldSolidMode != WorldSolidMode::Wires

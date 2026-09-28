@@ -203,8 +203,9 @@ int main()
     Expect(fallbackTarget.drawHud, "fallback target still shows HUD");
     Expect(!fallbackTarget.drawModelHighlight, "fallback does not request a model highlight");
     Expect(fallbackTarget.drawInteractionBounds, "fallback bounds follow the checkbox");
-    Expect(Vec3Near(fallbackTarget.visual.position, fallback.position),
-        "fallback target cube stays on logical position");
+    Expect(Vec3Near(fallbackTarget.visual.position,
+            world::ItemPickupPrimitivePresentationPosition(fallback.position)),
+        "fallback target cube uses the current support-anchored primitive position");
 
     world::ItemPickupSpec missing = modeled;
     missing.modelIdentity = "models/missing_staged.glb";
@@ -407,7 +408,8 @@ int main()
     Expect(
         NearlyEqual(
             fallbackIdlePresentation.visual.position.y,
-            fallbackIdle.position.y + world::ItemPickupIdleBobOffsetY(fallbackIdle, 0.25)),
+            world::ItemPickupPrimitivePresentationPosition(fallbackIdle.position).y
+                + world::ItemPickupIdleBobOffsetY(fallbackIdle, 0.25)),
         "43. fallback idle bob is visual-only");
     Expect(
         NearlyEqual(

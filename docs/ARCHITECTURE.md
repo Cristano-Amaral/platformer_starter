@@ -112,6 +112,13 @@ Non-root target local translations and rest scale are preserved. Hips translatio
 
 ## Runtime character instances (Milestone 110)
 
+M111 promotes this foundation into Level Character placement and spawning.
+The grammar, editor authority, transform contract, runtime ownership, lifecycle,
+Player boundary, and acceptance procedure are documented in
+[`CHARACTER_PLACEMENT.md`](CHARACTER_PLACEMENT.md). CharacterDefinition is shared
+authored data; Level placement is a persistent occurrence request; CharacterInstance
+is its transient realization; a runtime handle is session-local and never serialized.
+
 `CharacterDefinition` is authored/shared character data. `render::CharacterInstance`
 is transient presentation state for one occurrence, resolved through the existing
 registry's stable textual identity. Its monotonically allocated session handle is
@@ -140,7 +147,8 @@ Player rendering and gameplay ownership remain on their original path.
 Development F1 metrics hosts an opt-in fixed three-slot M110 demo (two canonical Exact
 instances and one M109 Retargeted fixture). Independent playback/state/position and
 remove/recreate controls affect only transient instances. No instance record is added to
-Level Format v1, the gameplay catalog, Save/Reload, editor placement, or spawning.
+Level Format v1 by the harness. M111 authored placements use a separate active owner
+and reuse the same production rendering span alongside the harness.
 This foundation adds no NPC/Enemy behavior or AI. `CharacterInstanceTest` renders simultaneous
 characters offscreen and checks independent half-frame pixels, poses, matrices and destruction.
 

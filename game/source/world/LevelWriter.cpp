@@ -318,6 +318,19 @@ std::string SerializeLevelText(const LevelDefinition& level)
         out += '\n';
     }
 
+    for (const CharacterPlacementSpec& prop : level.characters)
+    {
+        out += "character ";
+        AppendVec3(out, prop.position);
+        out += ' ';
+        AppendVec3(out, prop.rotationDegrees);
+        out += ' ';
+        AppendVec3(out, prop.scale);
+        out += ' ';
+        out.append(prop.definitionIdentity);
+        out += '\n';
+    }
+
     for (const StaticPropSpec& prop : level.staticProps)
     {
         out += "static_prop ";

@@ -30,6 +30,7 @@ enum class AuthoringGroupMemberKind
     Door,
     ItemPickup,
     StaticProp,
+    Character,
     PointLight,
     SpotLight,
 };
@@ -95,6 +96,8 @@ inline const char* AuthoringGroupMemberKindKeyword(AuthoringGroupMemberKind kind
         return "item_pickup";
     case AuthoringGroupMemberKind::StaticProp:
         return "static_prop";
+    case AuthoringGroupMemberKind::Character:
+        return "character";
     case AuthoringGroupMemberKind::PointLight:
         return "point_light";
     case AuthoringGroupMemberKind::SpotLight:
@@ -175,6 +178,11 @@ inline bool TryParseAuthoringGroupMemberKind(
     if (token == "item_pickup")
     {
         kind = AuthoringGroupMemberKind::ItemPickup;
+        return true;
+    }
+    if (token == "character")
+    {
+        kind = AuthoringGroupMemberKind::Character;
         return true;
     }
     if (token == "static_prop")
