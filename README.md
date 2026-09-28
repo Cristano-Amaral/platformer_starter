@@ -2,6 +2,21 @@
 
 Starter repository for a C++ 3D platformer developed with Cursor.
 
+## M110 runtime instance acceptance
+
+In the Development build, enter gameplay and open F1 metrics. In **M110 Runtime
+Character Instances**, enable the demo. Two `characters/player` Exact instances
+and one `characters/retarget_target` Retargeted fixture appear beside the Player.
+Each has its own handle, position, Idle/Move/Jump selection, playing flag, clock,
+Restart and Remove/Recreate controls. Use F2 to inspect all three through the existing
+editor camera if they are outside the gameplay camera. This is a fixed transient demo;
+it has no placement, spawning, Save/Reload, or authored records. Disable it to release
+the demo resources. Player input, equipment and gameplay remain on their existing path.
+
+`build/windows-vs2022/Development/CharacterInstanceTest.exe` exercises real GLB
+loading and simultaneous offscreen rendering, including independent pose/bone storage,
+screen-region animation changes and surviving-instance resource lifetime.
+
 ## Windows bootstrap
 Requirements:
 - Cursor

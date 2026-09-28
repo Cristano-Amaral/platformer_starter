@@ -32,6 +32,7 @@ class WorldLightingResources;
 class TerrainGpuResources;
 class GroundCoverGpuResources;
 class StaticModelSceneStore;
+class CharacterInstance;
 // Debug/Development overlay drawn in the same 3D pass as the world. Renderer
 // does not own selection or editor camera; Application fills this each frame.
 struct DebugWorldOverlay
@@ -342,6 +343,8 @@ public:
     const char* PlayerCurrentAnimationStatus() const;
 
     void BeginFrame();
+    void SetCharacterInstances(std::span<CharacterInstance* const> instances)
+    { characterInstances = instances; }
     void DrawWorld(
         const gameplay::Player& player,
         const gameplay::PlayerPresentationState& playerPresentation,
@@ -406,6 +409,7 @@ public:
     void EndFrame();
 
 private:
+    std::span<CharacterInstance* const> characterInstances{};
     struct PlayerModelGpuState;
     void LoadPlayerPresentationAssets(
         const gameplay::GameplayDefinitionRegistry* gameplayDefinitions);

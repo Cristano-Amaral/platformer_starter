@@ -2202,6 +2202,10 @@ int Application::Run()
         gameplay::FormatGameplayObjectiveLine(
             objectiveLine, sizeof(objectiveLine), levelDefinition.levelGoals);
         gameplay::FormatHealthHudText(healthHudText, sizeof(healthHudText), playerHealth);
+#if defined(GAME_DEVELOPMENT)
+        debugUi.characterInstances.Tick(gameplayDefinitions, deltaSeconds, player.Position());
+        renderer.SetCharacterInstances(debugUi.characterInstances.Instances());
+#endif
         renderer.BeginFrame();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
         if (levelEditorState.active)

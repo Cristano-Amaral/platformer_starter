@@ -11,6 +11,9 @@ void DebugUi::Initialize()
 
 void DebugUi::Shutdown()
 {
+#if defined(GAME_DEVELOPMENT)
+    characterInstances.Shutdown();
+#endif
     backend.Shutdown();
 }
 
@@ -91,6 +94,9 @@ editor::LevelEditorRequest DebugUi::Draw(
         backend.SaveIniSettings();
         --levelEditorState.forceDefaultLayoutFrames;
     }
+#if defined(GAME_DEVELOPMENT)
+    if (levelEditorState.workspace.showMetrics) characterInstances.DrawControls();
+#endif
     backend.EndFrame();
     return panelRequest != editor::LevelEditorRequest::None ? panelRequest : menuRequest;
 }

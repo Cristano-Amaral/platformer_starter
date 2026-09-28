@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 107 — Character & Animation Preview**
+**Milestone 110 — Character Instance Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_107.md`](milestones/MILESTONE_107.md)
+Canonical file: [`docs/milestones/MILESTONE_110.md`](milestones/MILESTONE_110.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -61,7 +61,7 @@ Milestone 95 is implemented, awaiting manual acceptance.
 Milestone 96 is implemented, awaiting manual acceptance.
 Milestone 97 is implemented, awaiting manual acceptance.
 Milestone 98 is implemented, awaiting manual acceptance.
-Do not start Milestone 99.
+Milestone 99 manual acceptance remains user-owned; current work is the milestone named above.
 
 ## Coding-agent loading contract
 
@@ -213,6 +213,7 @@ Historical milestone files do not override current implemented behavior.
 | 107 | [Milestone 107 — Character & Animation Preview](milestones/MILESTONE_107.md) | implemented, awaiting manual acceptance |
 | 108 | [Milestone 108 — Humanoid Skeleton Mapping Foundation](milestones/MILESTONE_108.md) | implementation in progress |
 | 109 | [Milestone 109 — Animation Retargeting Foundation](milestones/MILESTONE_109.md) | implementation in progress |
+| 110 | [Milestone 110 — Character Instance Foundation](milestones/MILESTONE_110.md) | implementation in progress |
 
 ## Later milestones
 

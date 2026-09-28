@@ -221,6 +221,8 @@ add_executable(Platformer3D
     game/source/render/StaticModelPreview.h
     game/source/render/CharacterPreviewRenderer.cpp
     game/source/render/CharacterPreviewRenderer.h
+    game/source/render/CharacterInstance.cpp
+    game/source/render/CharacterInstance.h
     game/source/render/LoadedModelMaterials.cpp
     game/source/render/LoadedModelMaterials.h
     game/source/render/StaticModelScene.cpp
@@ -235,6 +237,8 @@ add_executable(Platformer3D
     game/source/ui/debug/DebugMetrics.cpp
     game/source/ui/debug/DebugMetrics.h
     game/source/ui/debug/DebugUi.cpp
+    game/source/ui/debug/CharacterInstanceHarness.cpp
+    game/source/ui/debug/CharacterInstanceHarness.h
     game/source/ui/debug/DebugUi.h
     game/source/ui/debug/DebugUiBackend.cpp
     game/source/ui/debug/DebugUiBackend.h
@@ -564,6 +568,27 @@ else()
     target_compile_options(CharacterPreviewTest PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 target_link_libraries(CharacterAssetValidatorTest PRIVATE raylib)
+add_executable(CharacterInstanceTest
+    game/source/render/CharacterInstanceTest.cpp
+    game/source/render/CharacterInstance.cpp
+    game/source/render/LoadedModelMaterials.cpp
+    game/source/editor/CharacterPreview.cpp
+    game/source/animation/CharacterAssetValidator.cpp
+    game/source/animation/SkeletalAnimation.cpp
+    game/source/assets/StaticGlb.cpp
+    game/source/assets/ModelMaterialPresentation.cpp
+    game/source/gameplay/GameplayDefinition.cpp
+    game/source/gameplay/GameplayDefinitionFile.cpp)
+if(WIN32)
+    target_sources(CharacterInstanceTest PRIVATE game/source/platform/FileReplaceWindows.cpp)
+else()
+    target_sources(CharacterInstanceTest PRIVATE game/source/platform/FileReplacePosix.cpp)
+endif()
+target_link_libraries(CharacterInstanceTest PRIVATE raylib)
+target_include_directories(CharacterInstanceTest PRIVATE game/source)
+target_compile_definitions(CharacterInstanceTest PRIVATE
+    "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""
+    "PLATFORMER_SOURCE_ASSET_ROOT=\"${CMAKE_SOURCE_DIR}/game/assets/source\"")
 target_include_directories(CharacterAssetValidatorTest PRIVATE game/source)
 target_compile_definitions(CharacterAssetValidatorTest PRIVATE
     "PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH=\"${CMAKE_SOURCE_DIR}/game/assets/source/gameplay/definitions.gameplay\""

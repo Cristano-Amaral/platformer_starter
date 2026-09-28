@@ -8,6 +8,7 @@
 #include "gameplay/PlayerCharacterStats.h"
 #include "ui/debug/DebugMetrics.h"
 #include "ui/debug/DebugUiBackend.h"
+#include "ui/debug/CharacterInstanceHarness.h"
 
 namespace ui
 {
@@ -38,6 +39,9 @@ public:
     bool WantsKeyboardCapture() const;
     bool WantsMouseCapture() const;
     bool WantsTextInput() const;
+#if defined(GAME_DEVELOPMENT)
+    CharacterInstanceHarness characterInstances;
+#endif
 
 private:
     DebugUiBackend backend;

@@ -1,4 +1,5 @@
 #include "render/Renderer.h"
+#include "render/CharacterInstance.h"
 
 #include "animation/SkeletalAnimation.h"
 #include "animation/CharacterAssetValidator.h"
@@ -2791,6 +2792,12 @@ void Renderer::DrawWorld(
             {
                 DrawCollectible(level.collectibles[collectibleIndex]);
             }
+        }
+        if (gWorldSolidMode != WorldSolidMode::Wires)
+        {
+            for (const auto* instance : characterInstances)
+                if (instance != nullptr) instance->Draw(gWorldModelOverride);
+            RestoreGreyboxImmediateState();
         }
         const bool playerModelLoaded = IsPlayerModelLoaded();
         if (gWorldSolidMode != WorldSolidMode::Wires

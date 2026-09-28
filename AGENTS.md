@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 109 — Animation Retargeting Foundation.
+Current milestone: Milestone 110 — Character Instance Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_109.md`](docs/milestones/MILESTONE_109.md)
+Canonical file: [`docs/milestones/MILESTONE_110.md`](docs/milestones/MILESTONE_110.md)
 
-Branch: `milestone/109-animation-retargeting`
+Branch: `milestone/110-character-instance-foundation`
 
-Status: implementation in progress. Do not start Milestone 110.
+Status: implementation in progress. Do not start Milestone 111.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

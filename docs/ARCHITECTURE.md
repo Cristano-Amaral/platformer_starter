@@ -110,6 +110,40 @@ When exact compatibility fails, typed retarget validation requires both mappings
 
 Non-root target local translations and rest scale are preserved. Hips translation delta is copied only when both Hips joints are skeleton roots, with no scaling; otherwise target rest translation is retained. Scale animation, proportion compensation, twist distribution, IK, procedural motion, and gameplay root motion are outside this path. Canonical Player Idle/Move/Jump remains exact-compatible and continues through its existing Raylib playback path.
 
+## Runtime character instances (Milestone 110)
+
+`CharacterDefinition` is authored/shared character data. `render::CharacterInstance`
+is transient presentation state for one occurrence, resolved through the existing
+registry's stable textual identity. Its monotonically allocated session handle is
+not authored identity and is never serialized. The registry must outlive its instances.
+Each instance owns its world TRS, typed Idle/Move/Jump selection, playing flag, clock,
+diagnostic and Exact/Retargeted/Unavailable mode, plus its Raylib current pose and bone matrices.
+It owns no gameplay, controller, physics, stats, inventory, or equipment authority.
+
+The existing preview resolution helper consumes M106 validation and prefers M105 Exact
+before M109 Retargeted. Instances reuse that helper and the existing production
+`ApplyRaylibAnimationPose` / `ApplyRaylibRetargetedPose` functions without new compatibility
+rules or retarget math. An invalid explicit assignment never falls through to embedded data.
+Static models render with animation Unavailable; invalid instances fail independently.
+Slots revalidate only on explicit state changes. World Model reassignment requires
+recreating the transient instance; the owned target skeleton is checked again with
+the existing M105 comparator before sampling an Exact clip.
+
+The bounded ownership strategy deliberately loads a separate owning Raylib Model per
+instance: Model contains mutable currentPose/boneMatrices and shallow copies are unsafe.
+Definitions and asset identities stay shared; no generalized cache is added. Model meshes,
+materials/textures, animation arrays, source model and fallback shader are released by RAII.
+The world renderer accepts a borrowed span of instances, draws each TRS with existing material
+overrides in both world and directional shadow passes, and consumes that instance's bone matrices.
+Player rendering and gameplay ownership remain on their original path.
+
+Development F1 metrics hosts an opt-in fixed three-slot M110 demo (two canonical Exact
+instances and one M109 Retargeted fixture). Independent playback/state/position and
+remove/recreate controls affect only transient instances. No instance record is added to
+Level Format v1, the gameplay catalog, Save/Reload, editor placement, or spawning.
+This foundation adds no NPC/Enemy behavior or AI. `CharacterInstanceTest` renders simultaneous
+characters offscreen and checks independent half-frame pixels, poses, matrices and destruction.
+
 ## Visible equipment attachments (Milestone 104)
 
 `gameplay::Equipment` remains the sole authority for occupied equipment slots. An Equipment
