@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gameplay/CharacterHealth.h"
+
 #include "render/CharacterInstance.h"
 #include "gameplay/NpcRuntime.h"
 #include "gameplay/EnemyRuntime.h"
@@ -44,12 +46,14 @@ public:
                 instance->SetWorldTransform(CharacterPlacementTransform(placement));
                 if (patrolRuntimeEnabled && registry.Find(placement.definitionIdentity)->character.type == gameplay::CharacterType::NPC)
                 {
-                    npcs.emplace_back(index, placement, instance.get());
+                    npcs.emplace_back(index, placement, instance.get(),
+                        gameplay::ResolveCharacterMaxHealth(registry.Find(placement.definitionIdentity)->character));
                     DrivePresentation(npcs.back(), *instance);
                 }
                 else if (patrolRuntimeEnabled && registry.Find(placement.definitionIdentity)->character.type == gameplay::CharacterType::Enemy)
                 {
-                    enemies.emplace_back(index, placement, instance.get());
+                    enemies.emplace_back(index, placement, instance.get(),
+                        gameplay::ResolveCharacterMaxHealth(registry.Find(placement.definitionIdentity)->character));
                     DrivePresentation(enemies.back(), *instance);
                 }
             }
@@ -69,6 +73,8 @@ public:
         for (auto& instance : owned) if (instance) instance->Advance(deltaSeconds);
     }
     std::span<CharacterInstance* const> Instances() const { return borrowed; }
+    std::span<gameplay::NpcRuntimeActor> Npcs() { return npcs; }
+    std::span<gameplay::EnemyRuntimeActor> Enemies() { return enemies; }
     std::span<const gameplay::NpcRuntimeActor> Npcs() const { return npcs; }
     std::span<const gameplay::EnemyRuntimeActor> Enemies() const { return enemies; }
     std::span<const world::CharacterPlacementSpec> Placements() const { return authored; }

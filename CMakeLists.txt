@@ -172,6 +172,8 @@ add_executable(Platformer3D
     game/source/gameplay/ItemPickupCollectionHud.h
     game/source/gameplay/GameplayObjectiveHud.h
     game/source/gameplay/GameplayAudio.h
+    game/source/gameplay/RuntimeHealth.h
+    game/source/gameplay/CharacterHealth.h
     game/source/gameplay/PlayerHealth.h
     game/source/gameplay/PlayerDeath.h
     game/source/gameplay/DoorLockRuntime.cpp

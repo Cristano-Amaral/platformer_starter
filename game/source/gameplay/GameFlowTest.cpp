@@ -309,11 +309,11 @@ int main()
     gameplay::InitializePlayerHealth(playAgainHealth);
     gameplay::TickHazardContactDamage(playAgainHealth, playAgainContact, true, 1.0f / 60.0f, true);
     Expect(
-        playAgainHealth.currentHealth == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
+        playAgainHealth.Current() == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
         "seed damaged Health before Play Again");
     gameplay::ResetPlayerHealthForNewRuntime(playAgainHealth, playAgainContact);
     Expect(
-        playAgainHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        playAgainHealth.Current() == gameplay::kMaxPlayerHealth,
         "Play Again restores maximum Health through the existing NewRun path");
 
     gameplay::RespawnState respawn{};
@@ -395,7 +395,7 @@ int main()
     gameplay::TickHazardContactDamage(restartHealth, restartContact, true, 1.0f / 60.0f, true);
     gameplay::ResetPlayerHealthForNewRuntime(restartHealth, restartContact);
     Expect(
-        restartHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        restartHealth.Current() == gameplay::kMaxPlayerHealth,
         "Restart Current Level restores maximum Health");
     gameplay::RunTimerState restartTimer{};
     restartTimer.elapsedSeconds = 22.0;
@@ -468,10 +468,10 @@ int main()
     gameplay::HazardContactState carryContact{};
     gameplay::InitializePlayerHealth(carryHealth);
     gameplay::TickHazardContactDamage(carryHealth, carryContact, true, 1.0f / 60.0f, true);
-    const int carryHealthBefore = carryHealth.currentHealth;
+    const float carryHealthBefore = carryHealth.Current();
     gameplay::ResetHazardContactState(carryContact);
     Expect(
-        carryHealth.currentHealth == carryHealthBefore,
+        carryHealth.Current() == carryHealthBefore,
         "successful destination transition preserves Health");
     Expect(
         carryContact.cooldownRemaining == 0.0f,
@@ -576,7 +576,7 @@ int main()
         !gameplay::TickHazardContactDamage(menuHealth, menuContact, true, 1.0f / 60.0f, false),
         "Main Menu overlapping Hazard does not damage");
     Expect(
-        menuHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        menuHealth.Current() == gameplay::kMaxPlayerHealth,
         "Main Menu idle leaves Health at maximum");
     Expect(
         !gameplay::HealthHudIsVisible(flow, false, false, false, false),
@@ -680,7 +680,7 @@ int main()
         "Play from Main Menu shows objective HUD");
     gameplay::ResetPlayerHealthForNewRuntime(menuHealth, menuContact);
     Expect(
-        menuHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        menuHealth.Current() == gameplay::kMaxPlayerHealth,
         "Main Menu PLAY restores maximum Health");
     Expect(
         gameplay::HealthHudIsVisible(flow, false, false, false, false),
@@ -721,11 +721,11 @@ int main()
     gameplay::HazardContactState failedContact{};
     gameplay::InitializePlayerHealth(failedHealth);
     gameplay::TickHazardContactDamage(failedHealth, failedContact, true, 1.0f / 60.0f, true);
-    const int failedHealthCaptured = failedHealth.currentHealth;
+    const float failedHealthCaptured = failedHealth.Current();
     Expect(!gameplay::TryCommitPreparedDestination(menuPreserved, menuMissingPrepare),
         "failed destination replace is atomic");
     Expect(
-        failedHealth.currentHealth == failedHealthCaptured,
+        failedHealth.Current() == failedHealthCaptured,
         "failed destination transition preserves Health atomically");
     Expect(gameplay::RunTimerAdvancesInFlow(flow), "Gameplay timer may advance after Play");
     Expect(
@@ -892,7 +892,7 @@ int main()
     Expect(
         gameplay::TickHazardContactDamage(pauseHealth, pauseContact, true, 1.0f / 60.0f, true),
         "seed Hazard damage before Pause");
-    const int pauseHealthCaptured = pauseHealth.currentHealth;
+    const float pauseHealthCaptured = pauseHealth.Current();
     const float pauseCooldownCaptured = pauseContact.cooldownRemaining;
     Expect(
         !gameplay::HazardDamageIsAllowed(
@@ -907,7 +907,7 @@ int main()
             gameplay::HazardDamageIsAllowed(
                 pauseFlow, false, false, false, false, pause.active)),
         "paused overlap does not apply Hazard damage");
-    Expect(pauseHealth.currentHealth == pauseHealthCaptured, "Pause preserves damaged Health");
+    Expect(pauseHealth.Current() == pauseHealthCaptured, "Pause preserves damaged Health");
     Expect(
         pauseContact.cooldownRemaining == pauseCooldownCaptured,
         "Pause does not progress Hazard cadence");
@@ -943,7 +943,7 @@ int main()
     Expect(
         gameplay::ObjectiveHudIsVisible(pauseFlow, false, false, false, false, pause.active),
         "Resume restores the objective HUD");
-    Expect(pauseHealth.currentHealth == pauseHealthCaptured, "Resume preserves Health");
+    Expect(pauseHealth.Current() == pauseHealthCaptured, "Resume preserves Health");
     Expect(
         pauseContact.cooldownRemaining == pauseCooldownCaptured,
         "Resume does not catch up Hazard cadence");
@@ -1003,7 +1003,7 @@ int main()
     Expect(!pause.active, "fresh PLAY leaves Pause inactive");
     gameplay::ResetPlayerHealthForNewRuntime(pauseHealth, pauseContact);
     Expect(
-        pauseHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        pauseHealth.Current() == gameplay::kMaxPlayerHealth,
         "PLAY after Pause MAIN MENU restores maximum Health");
 
     Expect(

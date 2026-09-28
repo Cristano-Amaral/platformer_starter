@@ -1,18 +1,21 @@
 #pragma once
 
-// Milestone 69/70: Application-owned Player Health, Hazard contact damage,
+// M114: Player uses RuntimeHealth, also consumed by legacy M69/70 Hazard damage.
+// Legacy Hazard contact damage,
 // and the Damage Vignette trigger. Runtime-only. Not authored, not
 // serialized, and not a Stats/Attribute/Combat system. Player death phase
 // lives in PlayerDeath.h.
 
 #include "gameplay/GameFlowState.h"
+#include "gameplay/RuntimeHealth.h"
 
 #include <cstddef>
 #include <cstdio>
 
 namespace gameplay
 {
-inline constexpr int kMaxPlayerHealth = 100;
+// Legacy fixture/default constant; runtime Player maximum comes from effective stats.
+inline constexpr int kMaxPlayerHealth = static_cast<int>(kFallbackMaxHealth);
 inline constexpr int kHazardDamageAmount = 25;
 inline constexpr float kHazardDamageCadenceSeconds = 1.0f;
 inline constexpr float kDamageVignetteDurationSeconds = 0.35f;
@@ -28,11 +31,7 @@ inline constexpr int kHealthHudFontSize = 18;
 // OBJECTIVE ends at y=122. Keep Health in the same top-left band.
 inline constexpr int kHealthHudY = 128;
 
-struct PlayerHealthState
-{
-    int currentHealth = kMaxPlayerHealth;
-    int maxHealth = kMaxPlayerHealth;
-};
+using PlayerHealthState = RuntimeHealth;
 
 // Cooldown remaining until the next Hazard tick while overlapping.
 // 0 means the next overlapping simulation step applies damage immediately.
@@ -104,8 +103,7 @@ inline float DamageVignetteOpacity(const DamageVignetteState& vignette)
 
 inline void InitializePlayerHealth(PlayerHealthState& health)
 {
-    health.maxHealth = kMaxPlayerHealth;
-    health.currentHealth = kMaxPlayerHealth;
+    health.Reset();
 }
 
 inline void ResetPlayerHealthForNewRuntime(
@@ -118,32 +116,15 @@ inline void ResetPlayerHealthForNewRuntime(
 
 inline bool PlayerHealthInvariantsHold(const PlayerHealthState& health)
 {
-    return health.maxHealth > 0 && health.currentHealth >= 0
-        && health.currentHealth <= health.maxHealth;
+    return std::isfinite(health.Maximum()) && std::isfinite(health.Current())
+        && health.Maximum() > 0 && health.Current() >= 0
+        && health.Current() <= health.Maximum();
 }
 
-// Returns actual Health lost. Non-positive amounts are ignored. Clamps at 0.
-inline int ApplyPlayerDamage(PlayerHealthState& health, int amount)
+// Legacy Hazard adapter to the M114 direct contract.
+inline float ApplyPlayerDamage(PlayerHealthState& health, float amount)
 {
-    if (health.maxHealth <= 0)
-    {
-        health.maxHealth = kMaxPlayerHealth;
-    }
-    if (health.currentHealth < 0)
-    {
-        health.currentHealth = 0;
-    }
-    else if (health.currentHealth > health.maxHealth)
-    {
-        health.currentHealth = health.maxHealth;
-    }
-    if (amount <= 0 || health.currentHealth <= 0)
-    {
-        return 0;
-    }
-    const int applied = amount > health.currentHealth ? health.currentHealth : amount;
-    health.currentHealth -= applied;
-    return applied;
+    return health.ApplyDamage({amount}).applied;
 }
 
 inline bool HazardDamageIsAllowed(
@@ -199,9 +180,9 @@ inline void FormatHealthHudText(
     std::snprintf(
         buffer,
         bufferSize,
-        "HEALTH %d / %d",
-        health.currentHealth,
-        health.maxHealth);
+        "HEALTH %.6g / %.6g",
+        health.Current(),
+        health.Maximum());
 }
 
 // One simulation step of authored Hazard overlap damage.
@@ -232,14 +213,13 @@ inline bool TickHazardContactDamage(
         ResetHazardContactState(contact);
         return false;
     }
-    if (health.currentHealth <= 0)
+    if (health.Current() <= 0)
     {
-        health.currentHealth = 0;
         return false;
     }
     if (contact.cooldownRemaining <= 0.0f)
     {
-        const int applied = ApplyPlayerDamage(health, kHazardDamageAmount);
+        const float applied = ApplyPlayerDamage(health, kHazardDamageAmount);
         contact.cooldownRemaining = kHazardDamageCadenceSeconds;
         return applied > 0;
     }

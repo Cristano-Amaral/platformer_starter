@@ -48,8 +48,8 @@ F2 permits active simulation; reloading rebuilds origins and initial playback.
 The existing real Gameplay R -> `PerformRespawn(Manual)` rebuild now naturally
 resets both vectors. `AdvanceLevelCharacters` retains the M112 reset-frame guard:
 origin and initial facing/phase/playback are displayed before independent patrol
-resumes. Player/checkpoint/inventory/health/timer and moving-platform behavior are
-unchanged. Fall/death retain their previous narrower authority.
+resumes. Checkpoint/inventory/timer and moving-platform behavior remain unchanged.
+M114 restores Player health and fresh independent placed health at this boundary. Fall/death retain their previous narrower authority.
 
 ## Presentation, diagnostics and verification
 
@@ -144,3 +144,5 @@ The real Application Manual Respawn regression passes in all three configuration
 the broader sweep covers Player, equipment, physics, authored lifecycle, editor,
 materials, terrain and lighting. Interactive acceptance has not been performed.
 No commit, push, merge, Git closure, branch switch or M114 work was performed.
+
+M114 adds independent runtime health to each resolved Enemy actor, using CharacterDefinition base MaxHealth and the shared 100 fallback. Real Manual R restores health while retaining the patrol-reset boundary described here. Direct zero-health does not stop patrol or presentation. See [runtime health](ARCHITECTURE.md#m114-runtime-health--direct-damage).

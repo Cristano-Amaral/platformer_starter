@@ -879,7 +879,7 @@ int main()
         gameplay::HazardContactState rebuildContact{};
         gameplay::InitializePlayerHealth(rebuildHealth);
         gameplay::TickHazardContactDamage(rebuildHealth, rebuildContact, true, 1.0f / 60.0f, true);
-        const int healthBeforeRebuild = rebuildHealth.currentHealth;
+        const float healthBeforeRebuild = rebuildHealth.Current();
         Expect(
             rebuildWorld.TryRebuild(
                 parsed.level,
@@ -887,7 +887,7 @@ int main()
                 world::kPlayerVisualSize),
             "TryRebuild alone does not own Health");
         Expect(
-            rebuildHealth.currentHealth == healthBeforeRebuild,
+            rebuildHealth.Current() == healthBeforeRebuild,
             "PhysicsWorld rebuild preserves Health");
         Expect(
             rebuildContact.cooldownRemaining == gameplay::kHazardDamageCadenceSeconds,
@@ -909,7 +909,7 @@ int main()
                 && rebuildAudio.landingCount == 0,
             "physics rebuild re-anchors movement audio without synthesizing cues");
         Expect(
-            rebuildHealth.currentHealth == healthBeforeRebuild,
+            rebuildHealth.Current() == healthBeforeRebuild,
             "movement-audio re-anchor does not change Health");
     }
 

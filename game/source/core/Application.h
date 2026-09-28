@@ -58,6 +58,7 @@ private:
     void AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused);
     void Initialize();
     void Shutdown();
+    void RefreshPlayerCharacterStats();
     void PerformRespawn(gameplay::RespawnReason reason);
     void PerformDeathRespawn();
     void RestartRun();

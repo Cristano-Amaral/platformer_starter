@@ -47,7 +47,7 @@ transition, staged Reload, and catalog promotion. Actors and instances get fresh
 session handles and reset to origin/initial animation clock. Delete/rebuild drops
 stale actors and recreates surviving authored occurrences. Ordinary gameplay R
 (Manual Respawn) also rebuilds the placed presentation/NPC owner, while its
-Player/checkpoint/inventory/health/timer and moving-platform rules remain unchanged.
+checkpoint/inventory/timer and moving-platform rules remain unchanged. M114 restores Player health here.
 Fall and health-death respawns retain placed runtime state. Manual R and full
 RestartRun render their reset frame at origin with initial playback before patrol
 resumes. Shutdown clears before graphics teardown.
@@ -138,8 +138,8 @@ The previous report overstated that coverage.
 
 `PerformRespawn(Manual)` now rebuilds placed Character presentation/NPC state
 from the active authored level, with no Save or authored mutation. It does not
-call full RestartRun and does not reset moving-platform physics, Player Health,
-checkpoint progress, Inventory, Equipment, collectibles, or timer. Fall/death
+call full RestartRun and does not reset moving-platform physics,
+checkpoint progress, Inventory, Equipment, collectibles, or timer. M114 now restores Player health and creates fresh independent NPC/Enemy health here; see [runtime health](ARCHITECTURE.md#m114-runtime-health--direct-damage). Fall/death
 remain on their previous narrower authority. A transient pending-reset flag is
 consumed by `AdvanceLevelCharacters`, the shared production frame-update method,
 so Manual R and full RestartRun display origin/initial animation on their reset
@@ -154,8 +154,8 @@ TRS/distance/speed are advanced past reversal, reset three times, inspected at
 the render-frame boundary, and advanced again. Checks cover authored origin,
 phase, direction, facing, playback/playing/Exact mode, unchanged authored data,
 fresh handles, stable counts, and deterministic independent resume. Player
-checkpoint/health/inventory/timer/death-count and moving-platform preservation
-are asserted; fall retains NPC state. A controlled removal of the new Manual R
+checkpoint/inventory/timer/death-count and moving-platform preservation
+are asserted; M114 extends this regression to health restoration. Fall retains NPC state. A controlled removal of the new Manual R
 reset block made this regression fail; restoring production code made it pass.
 Fixtures clear their in-memory baseline Character vector so user manual-test
 placements do not change fixture counts. Authored source files are never cleared.

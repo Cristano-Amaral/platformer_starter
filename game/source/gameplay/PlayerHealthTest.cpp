@@ -46,14 +46,14 @@ int main()
 
     gameplay::PlayerHealthState health{};
     gameplay::HazardContactState contact{};
-    Expect(health.currentHealth == gameplay::kMaxPlayerHealth, "default current is max");
-    Expect(health.maxHealth == gameplay::kMaxPlayerHealth, "default max uses the authority");
+    Expect(health.Current() == gameplay::kMaxPlayerHealth, "default current is max");
+    Expect(health.Maximum() == gameplay::kMaxPlayerHealth, "default max uses the authority");
     Expect(gameplay::PlayerHealthInvariantsHold(health), "default invariants hold");
 
     gameplay::ResetPlayerHealthForNewRuntime(health, contact);
     Expect(
-        health.currentHealth == gameplay::kMaxPlayerHealth
-            && health.maxHealth == gameplay::kMaxPlayerHealth,
+        health.Current() == gameplay::kMaxPlayerHealth
+            && health.Maximum() == gameplay::kMaxPlayerHealth,
         "1. fresh Play/New Run initializes Health to maximum");
     Expect(contact.cooldownRemaining == 0.0f, "fresh runtime contact is ready");
 
@@ -75,7 +75,7 @@ int main()
         gameplay::TickHazardContactDamage(health, contact, overlapping, 1.0f / 60.0f, true),
         "first overlapping simulation step applies damage");
     Expect(
-        health.currentHealth == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
+        health.Current() == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
         "2. Hazard overlap applies the fixed damage amount");
     Expect(
         contact.cooldownRemaining == gameplay::kHazardDamageCadenceSeconds,
@@ -87,7 +87,7 @@ int main()
         TextEquals(hud, "HEALTH 75 / 100"),
         "20. Health HUD shows authoritative current/max after damage");
 
-    const int healthAfterFirstTick = health.currentHealth;
+    const float healthAfterFirstTick = health.Current();
     constexpr int kSustainedFrames = 45;
     int extraHits = 0;
     for (int frame = 0; frame < kSustainedFrames; ++frame)
@@ -98,7 +98,7 @@ int main()
         }
     }
     Expect(extraHits == 0, "3. sustained overlap does not damage once per render frame");
-    Expect(health.currentHealth == healthAfterFirstTick, "sustained sub-cadence overlap keeps Health");
+    Expect(health.Current() == healthAfterFirstTick, "sustained sub-cadence overlap keeps Health");
 
     Expect(
         !gameplay::TickHazardContactDamage(
@@ -108,24 +108,24 @@ int main()
         gameplay::TickHazardContactDamage(health, contact, true, 1.0f / 60.0f, true),
         "next overlapping step after cadence applies the second tick");
     Expect(
-        health.currentHealth == gameplay::kMaxPlayerHealth - 2 * gameplay::kHazardDamageAmount,
+        health.Current() == gameplay::kMaxPlayerHealth - 2 * gameplay::kHazardDamageAmount,
         "second cadence tick applies the same fixed amount");
 
     Expect(
         !gameplay::TickHazardContactDamage(health, contact, false, 1.0f / 60.0f, true),
         "leaving a Hazard applies no damage");
     Expect(contact.cooldownRemaining == 0.0f, "6. leaving resets cadence so re-entry is immediate");
-    const int healthBeforeReentry = health.currentHealth;
+    const float healthBeforeReentry = health.Current();
     Expect(
         gameplay::TickHazardContactDamage(health, contact, true, 1.0f / 60.0f, true),
         "re-entering a Hazard damages immediately");
     Expect(
-        health.currentHealth == healthBeforeReentry - gameplay::kHazardDamageAmount,
+        health.Current() == healthBeforeReentry - gameplay::kHazardDamageAmount,
         "6. re-entry uses the documented immediate-damage rule");
 
     gameplay::PlayerHealthState paused = health;
     gameplay::HazardContactState pausedContact = contact;
-    const int pausedHealth = paused.currentHealth;
+    const float pausedHealth = paused.Current();
     const float pausedCooldown = pausedContact.cooldownRemaining;
     for (int frame = 0; frame < 120; ++frame)
     {
@@ -134,14 +134,14 @@ int main()
                 paused, pausedContact, true, 1.0f / 60.0f, false),
             "7. Pause applies no Hazard damage");
     }
-    Expect(paused.currentHealth == pausedHealth, "Pause freezes Health while overlapping");
+    Expect(paused.Current() == pausedHealth, "Pause freezes Health while overlapping");
     Expect(
         pausedContact.cooldownRemaining == pausedCooldown,
         "7. Pause does not progress cadence or catch up");
     Expect(
         !gameplay::TickHazardContactDamage(paused, pausedContact, true, 1.0f / 60.0f, true),
         "Resume continues the remaining cooldown without catch-up");
-    Expect(paused.currentHealth == pausedHealth, "Resume does not dump paused overlap as damage");
+    Expect(paused.Current() == pausedHealth, "Resume does not dump paused overlap as damage");
 
     Expect(
         !gameplay::HazardDamageIsAllowed(
@@ -176,22 +176,22 @@ int main()
     gameplay::HazardContactState clampContact{};
     gameplay::InitializePlayerHealth(clampHealth);
     int ticksToZero = 0;
-    while (clampHealth.currentHealth > 0 && ticksToZero < 16)
+    while (clampHealth.Current() > 0 && ticksToZero < 16)
     {
         clampContact.cooldownRemaining = 0.0f;
         gameplay::TickHazardContactDamage(clampHealth, clampContact, true, 1.0f / 60.0f, true);
         ++ticksToZero;
     }
-    Expect(clampHealth.currentHealth == 0, "4. Health reaches zero");
+    Expect(clampHealth.Current() == 0, "4. Health reaches zero");
     Expect(gameplay::PlayerHealthInvariantsHold(clampHealth), "zero still satisfies invariants");
     Expect(
         !gameplay::TickHazardContactDamage(clampHealth, clampContact, true, 1.0f / 60.0f, true),
         "additional overlap at zero applies no damage");
-    Expect(clampHealth.currentHealth == 0, "4. Health never underflows");
+    Expect(clampHealth.Current() == 0, "4. Health never underflows");
     Expect(gameplay::ApplyPlayerDamage(clampHealth, 1000) == 0, "huge extra damage still clamps at zero");
-    Expect(clampHealth.currentHealth == 0, "current Health cannot go negative");
+    Expect(clampHealth.Current() == 0, "current Health cannot go negative");
     Expect(gameplay::ApplyPlayerDamage(clampHealth, -10) == 0, "damage cannot increase Health");
-    Expect(clampHealth.currentHealth == 0, "negative amounts leave zero Health unchanged");
+    Expect(clampHealth.Current() == 0, "negative amounts leave zero Health unchanged");
 
     gameplay::PlayerDeathState lethalDeath{};
     Expect(
@@ -211,7 +211,7 @@ int main()
         Expect(
             !gameplay::TickHazardContactDamage(clampHealth, clampContact, true, 1.0f / 60.0f, true),
             "Health stays clamped at zero during death");
-        Expect(clampHealth.currentHealth == 0, "6. Health remains 0 during the death phase");
+        Expect(clampHealth.Current() == 0, "6. Health remains 0 during the death phase");
         Expect(
             !gameplay::TryBeginPlayerDeath(lethalDeath, 0, 0),
             "zero Health does not duplicate death");
@@ -260,48 +260,48 @@ int main()
     gameplay::HazardContactState transitionContact{};
     gameplay::ResetPlayerHealthForNewRuntime(transitionHealth, transitionContact);
     gameplay::TickHazardContactDamage(transitionHealth, transitionContact, true, 1.0f / 60.0f, true);
-    const int preserved = transitionHealth.currentHealth;
+    const float preserved = transitionHealth.Current();
     Expect(preserved == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount, "seed damaged Health");
     std::string currentRuntimeLevelId{world::kLevel01Id};
     currentRuntimeLevelId = std::string(world::kLevel02Id);
     gameplay::ResetHazardContactState(transitionContact);
     Expect(
-        transitionHealth.currentHealth == preserved,
+        transitionHealth.Current() == preserved,
         "13. successful level_01 -> level_02 transition preserves Health");
     Expect(
         transitionContact.cooldownRemaining == 0.0f,
         "level change resets local Hazard contact, not Health");
 
-    const int failedHealth = transitionHealth.currentHealth;
+    const float failedHealth = transitionHealth.Current();
     Expect(
-        transitionHealth.currentHealth == failedHealth,
+        transitionHealth.Current() == failedHealth,
         "14. failed destination transition leaves Health unchanged");
 
     gameplay::ResetPlayerHealthForNewRuntime(transitionHealth, transitionContact);
     Expect(
-        transitionHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        transitionHealth.Current() == gameplay::kMaxPlayerHealth,
         "15. Restart Current Level restores maximum Health");
 
     gameplay::TickHazardContactDamage(transitionHealth, transitionContact, true, 1.0f / 60.0f, true);
     gameplay::ResetPlayerHealthForNewRuntime(transitionHealth, transitionContact);
     Expect(
-        transitionHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        transitionHealth.Current() == gameplay::kMaxPlayerHealth,
         "16/17. Play Again and Main Menu PLAY restore maximum Health");
 
     gameplay::TickHazardContactDamage(transitionHealth, transitionContact, true, 1.0f / 60.0f, true);
     gameplay::ResetPlayerHealthForNewRuntime(transitionHealth, transitionContact);
     Expect(
-        transitionHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        transitionHealth.Current() == gameplay::kMaxPlayerHealth,
         "18. Apply/Reload/Development Open/Switch reset Health for the new runtime");
 
     gameplay::PlayerHealthState rebuildHealth{};
     gameplay::HazardContactState rebuildContact{};
     gameplay::ResetPlayerHealthForNewRuntime(rebuildHealth, rebuildContact);
     gameplay::TickHazardContactDamage(rebuildHealth, rebuildContact, true, 1.0f / 60.0f, true);
-    const int rebuildBefore = rebuildHealth.currentHealth;
+    const float rebuildBefore = rebuildHealth.Current();
     const float rebuildCooldown = rebuildContact.cooldownRemaining;
     Expect(
-        rebuildHealth.currentHealth == rebuildBefore
+        rebuildHealth.Current() == rebuildBefore
             && rebuildContact.cooldownRemaining == rebuildCooldown,
         "19. physics rebuild preservation does not independently reset Health");
 
@@ -438,8 +438,8 @@ int main()
         "10. active Checkpoint is the death respawn destination");
     gameplay::RestorePlayerHealthAfterDeathRespawn(clampHealth);
     Expect(
-        clampHealth.currentHealth == gameplay::kMaxPlayerHealth
-            && clampHealth.maxHealth == gameplay::kMaxPlayerHealth,
+        clampHealth.Current() == gameplay::kMaxPlayerHealth
+            && clampHealth.Maximum() == gameplay::kMaxPlayerHealth,
         "12. death respawn restores Health to maximum");
     Expect(
         respawn.activeCheckpointIndex == respawnBeforeZero.activeCheckpointIndex,
@@ -493,7 +493,7 @@ int main()
             overlapHealth, overlapContact, true, 1.0f / 60.0f, true),
         "19. overlapping spawn does not apply catch-up or immediate death damage");
     Expect(
-        overlapHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        overlapHealth.Current() == gameplay::kMaxPlayerHealth,
         "19. no immediate repeated death loop at an overlapping spawn");
     Expect(
         !gameplay::TickHazardContactDamage(
@@ -510,13 +510,13 @@ int main()
     gameplay::PlayerHealthState fallHealth{};
     gameplay::InitializePlayerHealth(fallHealth);
     gameplay::ApplyPlayerDamage(fallHealth, gameplay::kHazardDamageAmount);
-    const int fallHealthBefore = fallHealth.currentHealth;
+    const float fallHealthBefore = fallHealth.Current();
     Expect(
         fallHealthBefore == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
-        "Fall/Manual respawn does not restore Health");
+        "Fall respawn does not restore Health");
     Expect(
-        fallHealth.currentHealth == fallHealthBefore,
-        "11b. M70 does not redefine Fall/Manual Health restoration");
+        fallHealth.Current() == fallHealthBefore,
+        "11b. M70 does not redefine Fall Health restoration");
 
     gameplay::FormatHealthHudText(hud, sizeof(hud), afterRespawnHealth);
     Expect(TextEquals(hud, "HEALTH 100 / 100"), "after respawn Health HUD shows maximum");

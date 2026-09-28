@@ -870,8 +870,8 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.insideHazardLabel = HazardIndexLabel(
         world::FindHazardIndexContaining(player.Position(), level.hazards));
     snapshot.hazardContactThisFrame = hazardContactThisFrame;
-    snapshot.currentHealth = playerHealth.currentHealth;
-    snapshot.maxHealth = playerHealth.maxHealth;
+    snapshot.currentHealth = playerHealth.Current();
+    snapshot.maxHealth = playerHealth.Maximum();
 
     snapshot.collectedCount = gameplay::CollectedCount(collectibleRunState);
     snapshot.collectedThisFrameLabel = CollectibleIndexLabel(collectedThisFrameIndex);
@@ -1066,10 +1066,7 @@ int Application::Run()
                 EmitGameplaySfx(gameplay::InventoryCloseSfx());
             }
         }
-        playerCharacterStats = gameplay::CalculatePlayerCharacterStats(
-            gameplay::kDefaultPlayerCharacterIdentity, gameplayDefinitions, equipment);
-        player.SetMovementParameters(
-            gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
+        RefreshPlayerCharacterStats();
         const bool inventoryBlocksGameplay =
             gameplay::InventoryUiBlocksGameplay(inventoryWasOpen, inventoryUi.open);
         const bool runCompleteBlocksGameplay =
@@ -1262,7 +1259,7 @@ int Application::Run()
                         pauseWasActiveAtFrameStart, pauseMenuState.active),
                     gameplay::PlayerDeathBlocksGameplay(
                         deathWasActiveAtFrameStart, gameplay::PlayerDeathIsActive(playerDeath)));
-                const int healthBeforeDamage = playerHealth.currentHealth;
+                const float healthBeforeDamage = playerHealth.Current();
                 const bool appliedHazardDamage = gameplay::TickHazardContactDamage(
                     playerHealth,
                     hazardContact,
@@ -1274,7 +1271,7 @@ int Application::Run()
                     gameplay::BeginDamageVignette(damageVignette);
                 }
                 const bool beganPlayerDeath = gameplay::TryBeginPlayerDeath(
-                    playerDeath, healthBeforeDamage, playerHealth.currentHealth);
+                    playerDeath, healthBeforeDamage, playerHealth.Current());
                 if (beganPlayerDeath)
                 {
                     gameplay::CloseInventoryUi(inventoryUi);
@@ -2548,7 +2545,8 @@ int Application::Run()
             inventory,
             equipment,
             gameplayDefinitions,
-            playerCharacterStats);
+            playerCharacterStats, playerHealth, levelCharacters);
+        player.SetMovementParameters(gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
         if (levelEditorState.active)
         {
             // Keyboard move, wheel and world pick use this frame's ImGui capture
@@ -3144,9 +3142,8 @@ void Application::Initialize()
     LoadGameplayDefinitionCatalog(gameplayDefinitions);
     gameplay::ApplyInventoryLifecycle(inventory, gameplay::InventoryLifecycleEvent::NewRun);
     gameplay::ApplyEquipmentLifecycle(equipment, gameplay::InventoryLifecycleEvent::NewRun);
-    playerCharacterStats = gameplay::CalculatePlayerCharacterStats(
-        gameplay::kDefaultPlayerCharacterIdentity, gameplayDefinitions, equipment);
-    player.SetMovementParameters(gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
+    RefreshPlayerCharacterStats();
+    playerHealth.Reset();
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::NewRun, inventory);
 
@@ -3250,12 +3247,21 @@ void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaus
     levelCharactersResetPending = false;
 }
 
+void Application::RefreshPlayerCharacterStats()
+{
+    playerCharacterStats = gameplay::CalculatePlayerCharacterStats(
+        gameplay::kDefaultPlayerCharacterIdentity, gameplayDefinitions, equipment);
+    player.SetMovementParameters(gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
+    playerHealth.SetMaximum(playerCharacterStats.Get(gameplay::GameplayStatId::MaxHealth).effective);
+}
+
 void Application::PerformRespawn(gameplay::RespawnReason reason)
 {
     if (reason == gameplay::RespawnReason::Manual)
     {
-        // Ordinary gameplay R is Manual Respawn, not RestartRun. Keep its
-        // existing Player/checkpoint/physics rules; reset placed presentation only.
+        RefreshPlayerCharacterStats();
+        playerHealth.Reset();
+        // Manual respawn resets health and placed patrol state, preserving other run rules.
         levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
         levelCharactersResetPending = true;
     }
@@ -3279,7 +3285,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
         equipment, gameplay::InventoryLifecycleEvent::CheckpointRespawn);
     gameplay::ApplyInventoryUiLifecycle(
         inventoryUi, gameplay::InventoryLifecycleEvent::CheckpointRespawn, inventory);
-    // Fall/Manual respawn does not restore Health. Health-zero death uses
+    // Fall respawn does not restore Health. Legacy hazard death uses
     // PerformDeathRespawn, which restores maximum Health after this teleport.
 }
 
@@ -3327,6 +3333,7 @@ void Application::RestartRun()
     camera.SnapToTarget(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    RefreshPlayerCharacterStats();
     gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
     gameplay::ClearDamageVignette(damageVignette);
     gameplay::ClearPlayerDeath(playerDeath);
@@ -4227,6 +4234,7 @@ void Application::ResetGameplayAfterCommittedLevel()
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    RefreshPlayerCharacterStats();
     gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
     gameplay::ClearDamageVignette(damageVignette);
     gameplay::ClearPlayerDeath(playerDeath);
@@ -4547,6 +4555,7 @@ void Application::ResetGameplayAfterPlayAgain()
     camera.Initialize(player.Position());
     gameplay::ResetLevelTransitionSchedule(levelTransition);
     gameplay::ResetRunCompleteState(runCompleteState);
+    RefreshPlayerCharacterStats();
     gameplay::ResetPlayerHealthForNewRuntime(playerHealth, hazardContact);
     gameplay::ClearDamageVignette(damageVignette);
     gameplay::ClearPlayerDeath(playerDeath);

@@ -117,11 +117,11 @@ void StepHazardSfx(
     float deltaSeconds,
     bool allowed)
 {
-    const int healthBefore = health.currentHealth;
+    const float healthBefore = health.Current();
     const bool applied = gameplay::TickHazardContactDamage(
         health, contact, overlapping, deltaSeconds, allowed);
     const bool beganDeath =
-        gameplay::TryBeginPlayerDeath(death, healthBefore, health.currentHealth);
+        gameplay::TryBeginPlayerDeath(death, healthBefore, health.Current());
     gameplay::RecordGameplaySfx(
         sfx, gameplay::ResolveHazardOutcomeSfx(applied, beganDeath));
 }
@@ -225,7 +225,7 @@ int main()
             "physics rebuild",
             "Checkpoint respawn",
             "Health-death respawn",
-            "Fall/Manual respawn",
+            "Fall respawn",
             "Level transition load",
         };
         gameplay::GameplaySfxRequestState lifecycleSfx{};
@@ -270,7 +270,7 @@ int main()
     Expect(sfx.damageCount == 1, "3. successful non-lethal damage emits exactly one damage request");
     Expect(sfx.deathCount == 0, "non-lethal damage does not emit death");
     Expect(
-        health.currentHealth == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
+        health.Current() == gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount,
         "damage audio follows actual Health loss");
 
     const int damageAfterFirst = sfx.damageCount;
@@ -289,7 +289,7 @@ int main()
     Expect(
         blockedSfx.damageCount == sfx.damageCount && blockedSfx.deathCount == 0,
         "5. blocked Hazard damage emits no damage audio");
-    Expect(blocked.currentHealth == health.currentHealth, "blocked overlap does not change Health");
+    Expect(blocked.Current() == health.Current(), "blocked overlap does not change Health");
 
     Expect(
         !gameplay::HazardDamageIsAllowed(
@@ -321,9 +321,9 @@ int main()
     gameplay::PlayerDeathState lethalDeath{};
     gameplay::GameplaySfxRequestState lethalSfx{};
     gameplay::InitializePlayerHealth(lethalHealth);
-    lethalHealth.currentHealth = gameplay::kHazardDamageAmount;
+    lethalHealth.ApplyDamage({lethalHealth.Current() - (gameplay::kHazardDamageAmount)});
     StepHazardSfx(lethalHealth, lethalContact, lethalDeath, lethalSfx, true, 1.0f / 60.0f, true);
-    Expect(lethalHealth.currentHealth == 0, "lethal tick reaches zero Health");
+    Expect(lethalHealth.Current() == 0, "lethal tick reaches zero Health");
     Expect(
         gameplay::PlayerDeathIsActive(lethalDeath),
         "7. successful death-phase entry happens on the lethal tick");
@@ -347,7 +347,7 @@ int main()
     gameplay::RestorePlayerHealthAfterDeathRespawn(lethalHealth);
     gameplay::ClearPlayerDeath(lethalDeath);
     Expect(
-        lethalHealth.currentHealth == gameplay::kMaxPlayerHealth,
+        lethalHealth.Current() == gameplay::kMaxPlayerHealth,
         "Health-death respawn still restores maximum Health");
 
     gameplay::GameplaySfxRequestState fallSfx{};
@@ -357,25 +357,25 @@ int main()
         fallSfx, gameplay::ResolveRespawnSfx(gameplay::GameplayRespawnAudioKind::Manual));
     Expect(
         fallSfx.respawnCount == 0 && fallSfx.deathCount == 0 && fallSfx.damageCount == 0,
-        "10. Fall/Manual R do not emit the Health-death respawn cue");
+        "10. Fall R do not emit the Health-death respawn cue");
 
     gameplay::PlayerHealthState fallHealth{};
     gameplay::InitializePlayerHealth(fallHealth);
     gameplay::ApplyPlayerDamage(fallHealth, gameplay::kHazardDamageAmount);
-    const int fallHealthBefore = fallHealth.currentHealth;
+    const float fallHealthBefore = fallHealth.Current();
     Expect(
-        fallHealth.currentHealth == fallHealthBefore,
-        "Fall/Manual R still do not restore Health");
+        fallHealth.Current() == fallHealthBefore,
+        "Fall R still do not restore Health");
 
     gameplay::GameplaySfxRequestState missingSfx{};
     gameplay::PlayerHealthState missingHealth{};
     gameplay::InitializePlayerHealth(missingHealth);
-    const int healthBeforeMissing = missingHealth.currentHealth;
+    const float healthBeforeMissing = missingHealth.Current();
     gameplay::RecordGameplaySfx(
         missingSfx, gameplay::ResolveHazardOutcomeSfx(true, false));
     Expect(missingSfx.damageCount == 1, "13. unavailable playback still records the semantic request");
     Expect(
-        missingHealth.currentHealth == healthBeforeMissing,
+        missingHealth.Current() == healthBeforeMissing,
         "13. missing audio does not change Health");
     gameplay::GameplaySfxEmit missingMove{};
     missingMove.footstep = true;

@@ -36,7 +36,8 @@ editor::LevelEditorRequest DebugUi::Draw(
     gameplay::Inventory& inventory,
     gameplay::Equipment& equipment,
     const gameplay::GameplayDefinitionRegistry& gameplayDefinitions,
-    const gameplay::PlayerCharacterStats& playerCharacterStats)
+    gameplay::PlayerCharacterStats& playerCharacterStats,
+    gameplay::RuntimeHealth& playerHealth, render::LevelCharacters& activeCharacters)
 {
     if (backend.ConsumeTogglePressed())
     {
@@ -77,6 +78,9 @@ editor::LevelEditorRequest DebugUi::Draw(
             &equipment,
             &gameplayDefinitions,
             &playerCharacterStats);
+        playerCharacterStats = gameplay::CalculatePlayerCharacterStats(
+            gameplay::kDefaultPlayerCharacterIdentity, gameplayDefinitions, equipment);
+        playerHealth.SetMaximum(playerCharacterStats.Get(gameplay::GameplayStatId::MaxHealth).effective);
         recoveredMetricsLayout = true;
     }
 
@@ -102,6 +106,40 @@ editor::LevelEditorRequest DebugUi::Draw(
     if (levelEditorState.workspace.showMetrics)
     {
         characterInstances.DrawControls();
+        if (ImGui::Begin("M114 Runtime Health"))
+        {
+            ImGui::TextUnformatted("Direct resolved amounts. Zero is Depleted only; no combat/death action.");
+            static float amount = 25.0f;
+            ImGui::InputFloat("Amount", &amount);
+            const auto drawHealth = [&](gameplay::RuntimeHealth& health) {
+                ImGui::Text("Health %.3f / %.3f / %s", health.Current(), health.Maximum(),
+                    health.Depleted() ? "Depleted" : "Available");
+                if (ImGui::Button("Damage")) health.ApplyDamage({amount});
+                ImGui::SameLine();
+                if (ImGui::Button("Heal")) health.ApplyHealing({amount});
+            };
+            ImGui::PushID("Player");
+            ImGui::TextUnformatted("Player / special session runtime");
+            drawHealth(playerHealth);
+            ImGui::PopID();
+            const auto drawActors = [&](auto actors, const char* type) {
+                ImGui::PushID(type);
+                for (auto& actor : actors)
+                {
+                    ImGui::PushID(static_cast<int>(actor.sourcePlacementIndex));
+                    ImGui::Separator();
+                    ImGui::Text("%s %llu / placement %zu / %s", type,
+                        static_cast<unsigned long long>(actor.handle), actor.sourcePlacementIndex,
+                        actor.origin.definitionIdentity.c_str());
+                    drawHealth(actor.health);
+                    ImGui::PopID();
+                }
+                ImGui::PopID();
+            };
+            drawActors(activeCharacters.Npcs(), "NPC");
+            drawActors(activeCharacters.Enemies(), "Enemy");
+        }
+        ImGui::End();
         if (ImGui::Begin("M112 NPC Runtime"))
         {
             ImGui::TextUnformatted("Transient active state; never saved. No collision/navigation.");
@@ -159,6 +197,9 @@ editor::LevelEditorRequest DebugUi::Draw(
         }
         ImGui::End();
     }
+#else
+    (void)playerHealth;
+    (void)activeCharacters;
 #endif
     backend.EndFrame();
     return panelRequest != editor::LevelEditorRequest::None ? panelRequest : menuRequest;

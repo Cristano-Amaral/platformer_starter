@@ -10,6 +10,9 @@
 #include "ui/debug/DebugUiBackend.h"
 #include "ui/debug/CharacterInstanceHarness.h"
 
+#include "gameplay/RuntimeHealth.h"
+namespace render { class LevelCharacters; }
+
 namespace ui
 {
 class DebugUi
@@ -32,7 +35,8 @@ public:
         gameplay::Inventory& inventory,
         gameplay::Equipment& equipment,
         const gameplay::GameplayDefinitionRegistry& gameplayDefinitions,
-        const gameplay::PlayerCharacterStats& playerCharacterStats);
+        gameplay::PlayerCharacterStats& playerCharacterStats,
+        gameplay::RuntimeHealth& playerHealth, render::LevelCharacters& activeCharacters);
 
     // True while an ImGui field owns the keyboard, so Application can ignore
     // the editor toggle while the user is typing a value.

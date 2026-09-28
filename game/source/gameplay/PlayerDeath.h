@@ -43,7 +43,7 @@ inline bool PlayerDeathBlocksGameplay(bool wasActive, bool isActive)
     return wasActive || isActive;
 }
 
-inline bool TryBeginPlayerDeath(PlayerDeathState& death, int healthBefore, int healthAfter)
+inline bool TryBeginPlayerDeath(PlayerDeathState& death, float healthBefore, float healthAfter)
 {
     if (PlayerDeathIsActive(death))
     {

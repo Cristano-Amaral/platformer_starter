@@ -233,3 +233,5 @@ in the established LevelCharacters owner. See [Enemy runtime foundation](docs/EN
 The historical `npc_patrol` suffix is shared by NPC and Enemy; no grammar migration
 or format version change. Gameplay Manual R resets both at the existing production
 boundary. Manual acceptance and Git closure remain pending; no M114 work.
+
+M114 runtime health diagnostics are available in Development via F1 → M114 Runtime Health: choose a positive resolved amount and use the identified Player/NPC/Enemy Damage or Heal buttons. Direct zero-health is Depleted only. `PlayerCharacterStatsTest` covers bounded health and equipment MaxHealth; `CharacterPlacementTest` exercises the real Application manual-respawn health/patrol boundary. See [architecture](docs/ARCHITECTURE.md#m114-runtime-health--direct-damage).

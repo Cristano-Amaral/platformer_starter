@@ -322,7 +322,7 @@ int main()
         !gameplay::HealthHudIsVisible(
             gameplay::TopLevelFlow::Gameplay, true, false, false, false),
         "F2/editor hides Health HUD");
-    hudHealth.currentHealth = gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount;
+    hudHealth.ApplyDamage({hudHealth.Current() - (gameplay::kMaxPlayerHealth - gameplay::kHazardDamageAmount)});
     gameplay::FormatHealthHudText(healthText, sizeof(healthText), hudHealth);
     Expect(TextEquals(healthText, "HEALTH 75 / 100"), "Health HUD updates after damage");
     Expect(

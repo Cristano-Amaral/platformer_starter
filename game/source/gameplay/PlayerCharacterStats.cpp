@@ -8,7 +8,7 @@ namespace gameplay
 namespace
 {
 constexpr std::array<float, kGameplayStatCount> kLegacyPlayerBaseStats = {
-    0.0f, // MaxHealth remains owned by the existing health system.
+    0.0f, // Preserve M102 missing-stat behavior; runtime health resolves unusable effective values.
     6.0f, // MoveSpeed
     8.0f, // JumpStrength
     1.0f, // GravityScale applied to Player's legacy gravity acceleration.

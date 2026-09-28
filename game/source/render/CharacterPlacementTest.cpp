@@ -33,11 +33,67 @@ struct ApplicationLifecycleTestAccess
         app.respawnState.respawnPosition = {4, 2, 0};
         app.respawnState.activeCheckpointIndex = 0;
         app.respawnState.deathCount = 3;
-        app.playerHealth.currentHealth = 41;
+        app.RefreshPlayerCharacterStats();
+        app.playerHealth.ApplyDamage({app.playerHealth.Current() - (41)});
         app.runTimerState.elapsedSeconds = 12;
         app.inventory.TryAdd("items/master_key", 1, app.gameplayDefinitions);
         app.physicsWorld.UpdateMovingPlatform(0.5f);
         app.levelCharacters.Rebuild(app.levelDefinition.characters, app.gameplayDefinitions, platform::RuntimeAssetRoot());
+        return true;
+    }
+    static bool ExercisePlayerMaximum(Application& app)
+    {
+        auto item = gameplay::GameplayDefinition{};
+        item.identity = "items/m114_health_fixture";
+        item.category = gameplay::GameplayDefinitionCategory::Item;
+        item.item = gameplay::MakeDefaultItemDefinition(item.identity);
+        item.item.type = gameplay::ItemType::Equipment;
+        item.item.equipmentSlot = gameplay::EquipmentSlot::Head;
+        item.item.modifiers.push_back({gameplay::GameplayStatId::MaxHealth, 40.5f});
+        if (app.gameplayDefinitions.Register(item).status != gameplay::RegisterGameplayDefinitionStatus::Registered) return false;
+        app.RefreshPlayerCharacterStats();
+        app.playerHealth.Reset();
+        const float base = app.playerHealth.Maximum();
+        app.playerHealth.ApplyDamage({10});
+        const float before = app.playerHealth.Current();
+        app.inventory.TryAdd(item.identity, 1, app.gameplayDefinitions);
+        if (app.equipment.Equip(app.inventory, item.identity, app.gameplayDefinitions) != gameplay::EquipmentTransactionStatus::Ok) return false;
+        app.RefreshPlayerCharacterStats(); // Same production synchronization as Inventory UI commands.
+        const bool increased = app.playerHealth.Maximum() == base + 40.5f && app.playerHealth.Current() == before;
+        for (const auto& actor : app.levelCharacters.Npcs())
+            if (actor.health.Maximum() != gameplay::ResolveCharacterMaxHealth(
+                    app.gameplayDefinitions.Find(actor.origin.definitionIdentity)->character)) return false;
+        for (const auto& actor : app.levelCharacters.Enemies())
+            if (actor.health.Maximum() != gameplay::ResolveCharacterMaxHealth(
+                    app.gameplayDefinitions.Find(actor.origin.definitionIdentity)->character)) return false;
+        app.playerHealth.ApplyHealing({1000});
+        app.equipment.Unequip(app.inventory, gameplay::EquipmentSlot::Head, app.gameplayDefinitions);
+        app.RefreshPlayerCharacterStats();
+        const bool clamped = app.playerHealth.Maximum() == base && app.playerHealth.Current() == base;
+        app.playerHealth.ApplyDamage({10});
+        app.ResetGameplayAfterPlayAgain(); // Real New Run reset boundary, after world construction.
+        return increased && clamped && app.playerHealth.Current() == app.playerHealth.Maximum();
+    }
+    static void DamageAll(Application& app)
+    {
+        app.playerHealth.ApplyDamage({app.playerHealth.Maximum()});
+        for (auto& actor : app.levelCharacters.Npcs()) actor.health.ApplyDamage({actor.health.Maximum()});
+        for (auto& actor : app.levelCharacters.Enemies()) actor.health.ApplyDamage({actor.health.Maximum()});
+    }
+    static bool AllDepletedWithoutDeath(const Application& app)
+    {
+        if (!app.playerHealth.Depleted() || gameplay::PlayerDeathIsActive(app.playerDeath)) return false;
+        for (const auto& actor : app.levelCharacters.Npcs()) if (!actor.health.Depleted()) return false;
+        for (const auto& actor : app.levelCharacters.Enemies()) if (!actor.health.Depleted()) return false;
+        return true;
+    }
+    static bool AllHealthRestored(const Application& app)
+    {
+        if (app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
+        for (const auto& actor : app.levelCharacters.Npcs())
+            if (actor.health.Current() != actor.health.Maximum()) return false;
+        for (const auto& actor : app.levelCharacters.Enemies())
+            if (actor.health.Current() != actor.health.Maximum()) return false;
         return true;
     }
     static void ManualRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Manual); }
@@ -52,7 +108,7 @@ struct ApplicationLifecycleTestAccess
         const auto position = app.player.Position();
         return position.x == 4 && position.y == 2 && position.z == 0
             && app.respawnState.activeCheckpointIndex == 0 && app.respawnState.deathCount == 3
-            && app.playerHealth.currentHealth == 41 && app.runTimerState.elapsedSeconds == 12
+            && app.playerHealth.Current() == app.playerHealth.Maximum() && app.runTimerState.elapsedSeconds == 12
             && app.inventory.GetQuantity("items/master_key") == 1;
     }
 };
@@ -314,11 +370,15 @@ int main()
             auto actorDefinition = *registry.Find("characters/player");
             actorDefinition.identity = (prefix + "_fixture");
             actorDefinition.character.type = runtimeType;
+            actorDefinition.character.hasBaseStat[0] = true;
+            actorDefinition.character.baseStatValue[0] = 73.5f;
             Expect(registry.Register(actorDefinition).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
                 "NPC/Enemy fixture registers through production registry");
             auto retargetActor = *registry.Find("characters/retarget_target");
             retargetActor.identity = (prefix + "_retarget");
             retargetActor.character.type = runtimeType;
+            retargetActor.character.hasBaseStat[0] = true;
+            retargetActor.character.baseStatValue[0] = 0;
             Expect(registry.Register(retargetActor).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
                 "retarget NPC/Enemy fixture registers");
             Expect(!parsed.level.characters[0].patrolEnabled
@@ -335,6 +395,20 @@ int main()
             working = world::ParseLevelText(text + patrolRecord + " npc_patrol 1 2 1\n"
                 "character 2 20 0 0 0 0 1 1 1 " + actorDefinition.identity + " npc_patrol 0 3 2\n").level;
             const auto patrolAuthored = working;
+            runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+            const auto checkHealth = [&](auto mutableActors) {
+                Expect(mutableActors.size() == 2 && mutableActors[0].health.Maximum() == 73.5f
+                    && mutableActors[1].health.Current() == 73.5f, "NPC/Enemy health resolves authored base maximum");
+                mutableActors[0].health.ApplyDamage({80});
+                Expect(mutableActors[0].health.Depleted() && mutableActors[1].health.Current() == 73.5f,
+                    "same-definition actors own independent health");
+            };
+            if (runtimeType == gameplay::CharacterType::NPC) checkHealth(runtime.Npcs());
+            else checkHealth(runtime.Enemies());
+            runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
+            Expect(actors(runtime)[0].health.Current() == 73.5f
+                && gameplay::CharacterDefinitionsEqual(registry.Find(actorDefinition.identity)->character, actorDefinition.character),
+                "Apply rebuild restores independent health without mutating CharacterDefinition");
             const auto patrolText = world::SerializeLevelText(working);
             auto patrolReload = world::ParseLevelText(patrolText);
             Expect(world::AuthoredLevelDataEqual(working, patrolReload.level)
@@ -425,12 +499,17 @@ int main()
                 core::Application app;
                 using Access = core::ApplicationLifecycleTestAccess;
                 Expect(Access::Configure(app, restartAuthored, registry), "production Application lifecycle fixture initializes");
+                Expect(Access::ExercisePlayerMaximum(app), "Application equipment sync preserves/clamps Player health and New Run fills effective maximum");
+                // Re-arrange the checkpoint/timer/inventory fixture after New Run's intentional resets.
+                Expect(Access::Configure(app, restartAuthored, registry), "production fixture reconfigured after New Run regression");
                 const auto& appCharacters = Access::Characters(app);
                 if (actors(appCharacters).size() != 2) return 1;
                 const auto initialFacing0 = actors(appCharacters)[0].rotationDegrees;
                 const auto initialFacing1 = actors(appCharacters)[1].rotationDegrees;
                 for (int restart = 0; restart < 3; ++restart)
                 {
+                    Access::DamageAll(app);
+                    Expect(Access::AllDepletedWithoutDeath(app), "Player NPC and Enemy are depleted without death before real R");
                     Access::Advance(app, restart == 0 ? 2.5f : 2.0f);
                     Expect(!Equal(actors(appCharacters)[0].position, restartAuthored.characters[0].position)
                         && !Equal(actors(appCharacters)[1].position, restartAuthored.characters[1].position)
@@ -443,7 +522,8 @@ int main()
                     const auto oldInstanceHandle = appCharacters.Instances()[0]->Handle();
                     const auto platformBefore = Access::MovingPlatform(app);
                     Access::ManualRespawn(app);
-                    Expect(Access::ManualPlayerRulesPreserved(app), "ordinary R preserves Player checkpoint inventory health timer and death-count authority");
+                    Expect(Access::AllHealthRestored(app), "real PerformRespawn Manual restores Player NPC and Enemy health");
+                    Expect(Access::ManualPlayerRulesPreserved(app), "ordinary R preserves Player checkpoint inventory timer and death-count authority");
                     const auto platformAfter = Access::MovingPlatform(app);
                     Expect(Equal(platformBefore.position, platformAfter.position) && platformBefore.direction == platformAfter.direction,
                         "ordinary R does not change pre-existing moving-platform behavior");
@@ -475,7 +555,9 @@ int main()
                         && std::abs(actors(appCharacters)[1].position.z + 1.0f) < 0.0001f,
                         "patrol resumes from deterministic initial state at independent authored speeds");
                 }
+                Access::DamageAll(app);
                 Access::RestartRun(app);
+                Expect(Access::AllHealthRestored(app), "full RestartRun restores all runtime health");
                 Access::Advance(app, 0.25f);
                 Expect(Equal(actors(appCharacters)[0].position, restartAuthored.characters[0].position)
                     && Equal(actors(appCharacters)[1].position, restartAuthored.characters[1].position)
@@ -554,6 +636,8 @@ int main()
             runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
             Expect(actors(runtime).size() == 2 && runtime.Instances()[1]->Mode() == render::CharacterInstanceMode::Retargeted,
                 "NPC/Enemy Move supports M109 Retargeted");
+            Expect(actors(runtime)[1].health.Maximum() == gameplay::kFallbackMaxHealth,
+                "NPC and Enemy authored zero maximum uses identical legacy fallback");
             const auto retargetBefore = Render(patrolRenderer, target, working, runtime.Instances());
             runtime.Advance(0.3f);
             const auto retargetAfter = Render(patrolRenderer, target, working, runtime.Instances());
@@ -568,6 +652,8 @@ int main()
                 working.characters[0].definitionIdentity = staticDefinition.identity;
                 runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
                 Expect(actors(runtime).size() == (type == runtimeType ? 1 : 0), "only resolved NPC/Enemy type receives behavior");
+                if (type == gameplay::CharacterType::Player || type == gameplay::CharacterType::Animal)
+                    Expect(runtime.Npcs().empty() && runtime.Enemies().empty(), "generic Player/Animal placements remain presentation-only without health actors");
                 Expect(runtime.Instances()[0]->IsStatic(), "static presentation safe for all types");
                 runtime.Advance(1);
                 Expect(runtime.Instances()[0]->Locomotion() == ((type == gameplay::CharacterType::NPC || type == gameplay::CharacterType::Enemy)

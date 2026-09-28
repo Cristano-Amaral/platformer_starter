@@ -236,10 +236,10 @@ int main()
     gameplay::HazardContactState contact{};
     gameplay::InitializePlayerHealth(health);
     gameplay::TickHazardContactDamage(health, contact, true, 1.0f / 60.0f, true);
-    const int healthBeforeTransition = health.currentHealth;
+    const float healthBeforeTransition = health.Current();
     gameplay::ResetHazardContactState(contact);
     Expect(
-        health.currentHealth == healthBeforeTransition,
+        health.Current() == healthBeforeTransition,
         "successful transition preserves current Health");
     gameplay::InventoryUiState ui{};
     gameplay::OpenInventoryUi(ui, inventory);
@@ -264,7 +264,7 @@ int main()
     Expect(preserved.id == "level_01", "active remains level_01 after missing destination");
     Expect(world::AuthoredLevelDataEqual(preserved, original), "active authored data stays intact");
     Expect(
-        health.currentHealth == healthBeforeTransition,
+        health.Current() == healthBeforeTransition,
         "failed destination transition preserves Health atomically");
 
     const std::filesystem::path malformedPath = scratch / "assets" / "levels" / "level_02.level";

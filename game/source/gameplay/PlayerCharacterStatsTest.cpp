@@ -1,5 +1,7 @@
 #include "gameplay/PlayerCharacterStats.h"
 
+#include "gameplay/CharacterHealth.h"
+#include <limits>
 #include <cmath>
 #include <cstdio>
 #include <string_view>
@@ -60,6 +62,45 @@ void Register(gameplay::GameplayDefinitionRegistry& registry, const gameplay::Ga
 
 int main()
 {
+    // M114 bounded operations, including float extremes and invalid inputs.
+    gameplay::RuntimeHealth health(80.5f);
+    Expect(health.Current() == 80.5f && health.Maximum() == 80.5f && !health.Depleted(), "health starts at maximum");
+    auto operation = health.ApplyDamage({20.25f});
+    Expect(operation.accepted && operation.before == 80.5f && operation.after == 60.25f
+        && operation.applied == 20.25f, "typed damage reports actual reduction");
+    for (float invalid : {0.0f, -1.0f, std::numeric_limits<float>::infinity(),
+            -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()})
+    {
+        Expect(!health.ApplyDamage({invalid}).accepted && !health.ApplyHealing({invalid}).accepted
+            && health.Current() == 60.25f, "invalid direct operations are deterministic no-ops");
+        gameplay::RuntimeHealth fallback(invalid);
+        Expect(fallback.Current() == gameplay::kFallbackMaxHealth, "invalid maximum uses bounded fallback");
+    }
+    operation = health.ApplyDamage({std::numeric_limits<float>::max()});
+    Expect(operation.applied == 60.25f && health.Current() == 0 && health.Depleted(), "damage clamps to depleted");
+    Expect(health.ApplyDamage({1}).applied == 0, "depleted damage cannot underflow");
+    operation = health.ApplyHealing({std::numeric_limits<float>::max()});
+    Expect(operation.applied == 80.5f && health.Current() == 80.5f && !health.Depleted(), "healing clamps at maximum");
+    Expect(health.ApplyHealing({1}).applied == 0, "full health cannot overflow");
+    health.SetMaximum(120);
+    Expect(health.Current() == 80.5f, "increased maximum does not refill");
+    health.SetMaximum(40);
+    Expect(health.Current() == 40, "decreased maximum clamps");
+    health.ApplyDamage({10}); health.Reset();
+    Expect(health.Current() == 40, "reset fills current maximum");
+    health.SetMaximum(std::numeric_limits<float>::quiet_NaN());
+    Expect(health.Maximum() == gameplay::kFallbackMaxHealth && health.Current() == 40,
+        "invalid maximum uses fallback without refilling existing current health");
+    gameplay::RuntimeHealth extreme(std::numeric_limits<float>::max());
+    extreme.ApplyDamage({std::numeric_limits<float>::max() / 2});
+    extreme.ApplyHealing({std::numeric_limits<float>::max()});
+    Expect(std::isfinite(extreme.Current()) && extreme.Current() == extreme.Maximum(), "large finite healing never stores infinity");
+    gameplay::CharacterDefinition absent;
+    Expect(gameplay::ResolveCharacterMaxHealth(absent) == gameplay::kFallbackMaxHealth, "missing Character maximum uses shared fallback");
+    absent.hasBaseStat[0] = true;
+    absent.baseStatValue[0] = 0;
+    Expect(gameplay::ResolveCharacterMaxHealth(absent) == gameplay::kFallbackMaxHealth, "authored zero uses shared fallback");
+
     gameplay::GameplayDefinitionRegistry registry;
     Register(registry, MakeCharacter());
     const auto head = MakeEquipment(
@@ -131,6 +172,38 @@ int main()
         gameplay::CalculatePlayerCharacterStats("items/head", registry, equipment).characterResolution
             == gameplay::GameplayReferenceStatus::CategoryMismatch,
         "category-mismatched Player reference diagnosed");
+
+    const auto healthItem = MakeEquipment("items/health", gameplay::EquipmentSlot::Head,
+        gameplay::GameplayStatId::MaxHealth, 30.5f);
+    Register(registry, healthItem);
+    gameplay::Equipment healthEquipment;
+    gameplay::Inventory healthInventory;
+    gameplay::RuntimeHealth playerHealth(gameplay::CalculatePlayerCharacterStats(
+        "characters/player", registry, healthEquipment).Get(gameplay::GameplayStatId::MaxHealth).effective);
+    Expect(playerHealth.Maximum() == 1, "Player health consumes existing effective MaxHealth");
+    playerHealth.ApplyDamage({0.5f});
+    healthInventory.TryAdd("items/health", 1, registry);
+    Expect(healthEquipment.Equip(healthInventory, "items/health", registry) == gameplay::EquipmentTransactionStatus::Ok,
+        "health modifier equips through real inventory authority");
+    playerHealth.SetMaximum(gameplay::CalculatePlayerCharacterStats("characters/player", registry, healthEquipment)
+        .Get(gameplay::GameplayStatId::MaxHealth).effective);
+    Expect(playerHealth.Maximum() == 31.5f && playerHealth.Current() == 0.5f, "equipment increases maximum without free refill");
+    playerHealth.ApplyHealing({20});
+    healthEquipment.Unequip(healthInventory, gameplay::EquipmentSlot::Head, registry);
+    playerHealth.SetMaximum(gameplay::CalculatePlayerCharacterStats("characters/player", registry, healthEquipment)
+        .Get(gameplay::GameplayStatId::MaxHealth).effective);
+    Expect(playerHealth.Maximum() == 1 && playerHealth.Current() == 1, "unequip immediately clamps current to effective maximum");
+    Expect(gameplay::CalculatePlayerCharacterStats("characters/missing", registry, healthEquipment)
+        .Get(gameplay::GameplayStatId::MaxHealth).effective == 0, "M102 missing MaxHealth base remains zero");
+    gameplay::RuntimeHealth missingPlayerHealth(gameplay::CalculatePlayerCharacterStats(
+        "characters/missing", registry, healthEquipment).Get(gameplay::GameplayStatId::MaxHealth).effective);
+    Expect(missingPlayerHealth.Maximum() == gameplay::kFallbackMaxHealth, "unusable effective Player maximum uses shared legacy health fallback");
+
+    healthEquipment.Equip(healthInventory, "items/health", registry);
+    const auto missingEquipped = gameplay::CalculatePlayerCharacterStats("characters/missing", registry, healthEquipment);
+    Expect(missingEquipped.Get(gameplay::GameplayStatId::MaxHealth).effective == 30.5f
+        && gameplay::RuntimeHealth(missingEquipped.Get(gameplay::GameplayStatId::MaxHealth).effective).Maximum() == 30.5f,
+        "missing Player base preserves M102 additive behavior and consumes positive effective maximum directly");
 
     registry.Remove("items/hand");
     stats = gameplay::CalculatePlayerCharacterStats("characters/player", registry, equipment);

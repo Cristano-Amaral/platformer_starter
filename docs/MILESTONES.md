@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 113 — Enemy Runtime Foundation**
+**Milestone 114 — Health & Damage Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_113.md`](milestones/MILESTONE_113.md)
+Canonical file: [`docs/milestones/MILESTONE_114.md`](milestones/MILESTONE_114.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -218,6 +218,7 @@ Historical milestone files do not override current implemented behavior.
 
 | 112 | [Milestone 112 — NPC Runtime Foundation](milestones/MILESTONE_112.md) | implementation validated; acceptance/closure recorded separately |
 | 113 | [Milestone 113 — Enemy Runtime Foundation](milestones/MILESTONE_113.md) | implementation validated; manual acceptance and Git closure pending |
+| 114 | [Milestone 114 — Health & Damage Foundation](milestones/MILESTONE_114.md) | implementation validated; manual acceptance and Git closure pending |
 
 ## Later milestones
 
@@ -227,4 +228,6 @@ feasibility/backend work.
 
 Milestone 112 implementation validated; manual acceptance and Git closure pending.
 
-Milestone 113 implementation validated; manual acceptance and Git closure pending. Do not start M114.
+Milestone 113 implementation validated; manual acceptance and Git closure pending.
+
+Milestone 114 implementation validated; manual acceptance and Git closure pending. Do not start M115.
