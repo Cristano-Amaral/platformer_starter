@@ -10,7 +10,7 @@ Inspector shows active placement index, transient handle, and presentation mode.
 Duplicate/Delete use the normal editor operations. Save writes active authored
 data; Cook, Stage & Reload makes saved source available to Runtime Reload.
 See [Character placement](docs/CHARACTER_PLACEMENT.md) for Missing references,
-Player policy, lifecycle, and manual acceptance steps. No NPC/Enemy/AI behavior is added.
+Player policy, lifecycle, and manual acceptance steps. M112/M113 extend this foundation with bounded NPC/Enemy patrol.
 
 `build/windows-vs2022/Development/CharacterPlacementTest.exe` crosses Level Format,
 editor Apply preparation, active spawning, and the actual production renderer,
@@ -221,7 +221,15 @@ Codex reads `AGENTS.md` directly. Antigravity reads `AGENTS.md`, the thin [`GEMI
 ## M112 NPC runtime foundation
 
 Resolved NPC Character placements now use bounded transient patrol actors over
-the existing CharacterInstance path. Player/Enemy/Animal remain generic visuals.
+the existing CharacterInstance path. Player/Animal remain generic visuals. M113 adds separately typed Enemy actors using the same patrol payload.
 See [NPC runtime foundation](docs/NPC_RUNTIME.md) for the exact optional `npc_patrol`
 grammar, validation bounds, authored-state authority, lifetime, facing, diagnostics,
 and acceptance procedure. Manual acceptance and Git closure remain pending.
+
+## M113 Enemy runtime foundation
+
+Resolved Enemy Character placements use an independent transient Enemy actor set
+in the established LevelCharacters owner. See [Enemy runtime foundation](docs/ENEMY_RUNTIME.md).
+The historical `npc_patrol` suffix is shared by NPC and Enemy; no grammar migration
+or format version change. Gameplay Manual R resets both at the existing production
+boundary. Manual acceptance and Git closure remain pending; no M114 work.

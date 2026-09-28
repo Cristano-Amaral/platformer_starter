@@ -4,8 +4,9 @@
 Character placement owns authored TRS and optional bounded patrol settings.
 `gameplay::NpcRuntimeActor` is session-only simulation state; `render::LevelCharacters`
 creates actors only for valid, resolved NPC placements, referencing exactly the
-same M110 instance already owned by that placement. Player/Enemy/Animal remain
-generic visuals. `characters/player` never acquires Player gameplay authority.
+same M110 instance already owned by that placement. Player/Animal remain
+generic visuals. M113 adds an independent Enemy actor set; the bounded patrol
+calculation is shared through CharacterPatrolState. `characters/player` never acquires Player gameplay authority.
 
 ## Level Format v1
 
@@ -16,7 +17,7 @@ character <px> <py> <pz> <rx> <ry> <rz> <sx> <sy> <sz> characters/<name> [npc_pa
 The suffix is all-or-nothing, in this exact order. Enabled is exactly `0` or `1`.
 Distance is finite in `(0, 100]` world units; speed is finite in `(0, 20]` world
 units/second. Values must be valid even when disabled or when the definition is
-non-NPC/missing. Omission means disabled, distance 2, speed 1. The writer omits
+Player/Animal/missing. Omission means disabled, distance 2, speed 1. The writer omits
 the suffix only for those exact defaults; disabled non-default values persist.
 No version change: existing 256-record, 512-byte-line, 65536-byte-file guards
 remain authoritative. No handles, positions from simulation, phase, direction,
@@ -59,8 +60,8 @@ world/directional-shadow rendering. No NPC renderer or second spawning system.
 ## Editor and diagnostics
 
 The resolved NPC Inspector exposes Patrol Enabled, Distance, Speed, and the
-local horizontal X explanation. Invalid values block Apply. Other types show
-that NPC behavior is inactive; their stored settings persist safely but are ignored.
+local horizontal X explanation. Invalid values block Apply. M113 Enemy definitions show their own Enemy Runtime section. Player/Animal show
+that NPC/Enemy behavior is inactive; their stored settings persist safely but are ignored.
 All controls edit workingCopy. Apply promotes authored data and rebuilds active
 runtime at the existing boundary. Save writes active authored data; pending edits
 need Apply. Reload reads staged assets; use Cook, Stage & Reload after source Save.
@@ -174,3 +175,5 @@ definitions.gameplay are byte-identical to the start of this correction; the
 existing user Character/environment/light edits in level_01 are preserved.
 The historical M45 dynamic_box record remains absent. Renewed manual R
 acceptance remains with the user. No Git closure was performed.
+
+M113 reuses this exact payload, simulation and lifetime contract for separately typed Enemy actors; see [ENEMY_RUNTIME.md](ENEMY_RUNTIME.md). NPC behavior remains independent.

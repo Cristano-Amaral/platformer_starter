@@ -2956,9 +2956,10 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
             }
             const auto* definition = view.characterDefinitions->Find(placement.definitionIdentity);
             if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Character
-                && definition->character.type == gameplay::CharacterType::NPC)
+                && (definition->character.type == gameplay::CharacterType::NPC
+                    || definition->character.type == gameplay::CharacterType::Enemy))
             {
-                ImGui::SeparatorText("NPC Runtime");
+                ImGui::SeparatorText(definition->character.type == gameplay::CharacterType::Enemy ? "Enemy Runtime" : "NPC Runtime");
                 ImGui::Checkbox("Patrol Enabled", &placement.patrolEnabled);
                 ImGui::InputFloat("Patrol Distance", &placement.patrolDistance);
                 ImGui::InputFloat("Patrol Speed", &placement.patrolSpeed);
@@ -2966,11 +2967,11 @@ void DrawInspector(LevelEditorState& state, const LevelEditorViewContext& view)
                 if (!world::NpcPatrolSettingsAreValid(placement))
                     ImGui::TextUnformatted("Invalid patrol settings: Apply is blocked.");
             }
-            else ImGui::TextUnformatted("NPC runtime inactive for this reference; stored patrol settings are ignored.");
+            else ImGui::TextUnformatted("NPC/Enemy runtime inactive for this reference; stored patrol settings are ignored.");
             EditVec3("Position X Y Z", placement.position);
             EditVec3("Rotation X Y Z (deg)", placement.rotationDegrees);
             EditVec3("Scale X Y Z", placement.scale);
-            ImGui::TextWrapped("Position is the model origin. No grounding offset. Only resolved NPCs receive patrol behavior. characters/player is a generic visual only.");
+            ImGui::TextWrapped("Position is the model origin. No grounding offset. Only resolved NPCs and Enemies receive patrol behavior. characters/player is a generic visual only.");
             ImGui::TextWrapped("None on a new placement is discarded by Apply; clearing an existing placement requires repair or Delete before Apply.");
             if (view.levelCharacters != nullptr)
             {

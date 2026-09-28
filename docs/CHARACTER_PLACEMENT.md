@@ -1,6 +1,6 @@
 # Character placement and spawning (M111)
 
-M112 extends resolved NPC placements with bounded transient patrol. See
+M112/M113 extend resolved NPC/Enemy placements with bounded transient patrol. See
 [NPC runtime](NPC_RUNTIME.md) for the current contract; the M111 foundation and
 historical validation below remain unchanged. Character Ghost tuning is deferred.
 
@@ -73,10 +73,10 @@ world/shadow geometry path, with existing materials and bone matrices.
 
 `characters/player` is allowed **only as a generic visual occurrence**. M110 has
 no Player input, controller, physics, stats, inventory, or equipment ownership;
-the actual gameplay Player remains on its existing authoritative path. Player,
-Enemy, and Animal Character Types activate no behavior. M112 adds bounded NPC
-patrol as documented above. M111 provides
-placement and spawning; it provides no NPC, Enemy, Animal, AI, or combat behavior.
+the actual gameplay Player remains on its existing authoritative path. Player
+and Animal placements activate no patrol behavior. M112 adds NPC patrol and M113
+adds Enemy patrol using the shared placement payload. The original M111 foundation
+provides placement and spawning; no AI or combat behavior is added.
 
 `CharacterPlacementTest` uses real parse/write/load, editor Apply preparation,
 active placement realization, and production `Renderer::DrawWorld`. Pixel
@@ -138,3 +138,5 @@ model box, while the actual World Model preview uses M110 TRS. Normal-editor
 interaction, Player gameplay/Idle/Move/Jump/equipment, and directional shadows still
 require the user's step-by-step Development observation. No commit, push, merge,
 branch switch, milestone closure, or M112 work was performed.
+
+M113 Enemy lifecycle and acceptance are documented in [ENEMY_RUNTIME.md](ENEMY_RUNTIME.md).

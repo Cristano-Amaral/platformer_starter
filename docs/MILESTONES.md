@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 112 — NPC Runtime Foundation**
+**Milestone 113 — Enemy Runtime Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_112.md`](milestones/MILESTONE_112.md)
+Canonical file: [`docs/milestones/MILESTONE_113.md`](milestones/MILESTONE_113.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -216,6 +216,9 @@ Historical milestone files do not override current implemented behavior.
 | 110 | [Milestone 110 — Character Instance Foundation](milestones/MILESTONE_110.md) | implementation in progress |
 | 111 | [Milestone 111 — Character Placement & Spawning](milestones/MILESTONE_111.md) | implementation in progress |
 
+| 112 | [Milestone 112 — NPC Runtime Foundation](milestones/MILESTONE_112.md) | implementation validated; acceptance/closure recorded separately |
+| 113 | [Milestone 113 — Enemy Runtime Foundation](milestones/MILESTONE_113.md) | implementation validated; manual acceptance and Git closure pending |
+
 ## Later milestones
 
 Enemies, additional character consumers, collectibles, level editor, audio, save system,
@@ -223,3 +226,5 @@ profiling/optimization, Raspberry Pi validation, Android port, iOS
 feasibility/backend work.
 
 Milestone 112 implementation validated; manual acceptance and Git closure pending.
+
+Milestone 113 implementation validated; manual acceptance and Git closure pending. Do not start M114.

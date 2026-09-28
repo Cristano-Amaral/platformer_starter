@@ -24,6 +24,7 @@ inline bool CharacterIdentityIsValid(std::string_view identity)
         && parsed.category == gameplay::GameplayDefinitionCategory::Character;
 }
 
+// Historical NPC names and npc_patrol grammar also serve bounded Enemy patrol (M113).
 inline constexpr float kMaxNpcPatrolDistance = 100.0f;
 inline constexpr float kMaxNpcPatrolSpeed = 20.0f;
 inline bool NpcPatrolSettingsAreValid(const CharacterPlacementSpec& placement)

@@ -130,6 +130,34 @@ editor::LevelEditorRequest DebugUi::Draw(
             }
         }
         ImGui::End();
+        if (ImGui::Begin("M113 Enemy Runtime"))
+        {
+            ImGui::TextUnformatted("Transient active state; never saved. No collision/navigation.");
+            if (levelEditorView.levelCharacters != nullptr)
+            {
+                const auto enemies = levelEditorView.levelCharacters->Enemies();
+                ImGui::Text("Active Enemys: %zu", enemies.size());
+                for (const auto& enemy : enemies)
+                {
+                    ImGui::Separator();
+                    ImGui::Text("Enemy %llu / placement %zu / CharacterInstance %llu",
+                        static_cast<unsigned long long>(enemy.handle), enemy.sourcePlacementIndex,
+                        static_cast<unsigned long long>(enemy.instance->Handle()));
+                    ImGui::Text("%s / Type Enemy / Patrol %s / %s", enemy.origin.definitionIdentity.c_str(),
+                        enemy.origin.patrolEnabled ? "Enabled" : "Disabled",
+                        enemy.locomotion == gameplay::EnemyLocomotionState::Move ? "Move" : "Idle");
+                    ImGui::Text("Origin %.3f %.3f %.3f", enemy.origin.position.x, enemy.origin.position.y, enemy.origin.position.z);
+                    ImGui::Text("Current %.3f %.3f %.3f / direction %d", enemy.position.x, enemy.position.y, enemy.position.z, enemy.direction);
+                    ImGui::Text("Min %.3f %.3f %.3f / Max %.3f %.3f %.3f", enemy.endpointMin.x, enemy.endpointMin.y,
+                        enemy.endpointMin.z, enemy.endpointMax.x, enemy.endpointMax.y, enemy.endpointMax.z);
+                    ImGui::Text("Presentation %s", enemy.instance->IsStatic() ? "Static"
+                        : enemy.instance->Mode() == render::CharacterInstanceMode::Exact ? "Exact"
+                        : enemy.instance->Mode() == render::CharacterInstanceMode::Retargeted ? "Retargeted" : "Unavailable");
+                    ImGui::TextWrapped("%s; %s", enemy.diagnostic, enemy.instance->Diagnostic().c_str());
+                }
+            }
+        }
+        ImGui::End();
     }
 #endif
     backend.EndFrame();

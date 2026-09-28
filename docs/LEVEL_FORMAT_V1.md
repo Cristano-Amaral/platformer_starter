@@ -744,7 +744,15 @@ produced.
 ## M112 NPC runtime foundation
 
 Resolved NPC Character placements now use bounded transient patrol actors over
-the existing CharacterInstance path. Player/Enemy/Animal remain generic visuals.
+the existing CharacterInstance path. Player/Animal remain generic visuals. M113 adds separately typed Enemy actors using the same patrol payload.
 See [NPC runtime foundation](NPC_RUNTIME.md) for the exact optional `npc_patrol`
 grammar, validation bounds, authored-state authority, lifetime, facing, diagnostics,
 and acceptance procedure. Manual acceptance and Git closure remain pending.
+
+## M113 Enemy runtime foundation
+
+Resolved Enemy Character placements use an independent transient Enemy actor set
+in the established LevelCharacters owner. See [Enemy runtime foundation](ENEMY_RUNTIME.md).
+The historical `npc_patrol` suffix is shared by NPC and Enemy; no grammar migration
+or format version change. Gameplay Manual R resets both at the existing production
+boundary. Manual acceptance and Git closure remain pending; no M114 work.

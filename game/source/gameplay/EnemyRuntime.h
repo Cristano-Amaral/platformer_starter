@@ -8,16 +8,16 @@ namespace render { class CharacterInstance; }
 
 namespace gameplay
 {
-using NpcLocomotionState = CharacterPatrolLocomotionState;
+using EnemyLocomotionState = CharacterPatrolLocomotionState;
 
 // Session-only typed actor. The owner clears borrowed references before instances.
-struct NpcRuntimeActor : CharacterPatrolState
+struct EnemyRuntimeActor : CharacterPatrolState
 {
     std::uint64_t handle = 0;
     std::size_t sourcePlacementIndex = 0;
     render::CharacterInstance* instance = nullptr;
 
-    NpcRuntimeActor(std::size_t index, const world::CharacterPlacementSpec& placement,
+    EnemyRuntimeActor(std::size_t index, const world::CharacterPlacementSpec& placement,
         render::CharacterInstance* presentation)
         : CharacterPatrolState(placement), sourcePlacementIndex(index), instance(presentation)
     {

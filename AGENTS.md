@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 112 — NPC Runtime Foundation.
+Current milestone: Milestone 113 — Enemy Runtime Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_112.md`](docs/milestones/MILESTONE_112.md)
+Canonical file: [`docs/milestones/MILESTONE_113.md`](docs/milestones/MILESTONE_113.md)
 
-Branch: `milestone/112-npc-runtime-foundation`
+Branch: `milestone/113-enemy-runtime-foundation`
 
-Status: implementation validated; manual acceptance and Git closure pending. Do not start Milestone 113.
+Status: implementation validated; manual acceptance and Git closure pending. Do not start Milestone 114.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
