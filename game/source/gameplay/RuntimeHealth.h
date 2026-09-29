@@ -8,6 +8,7 @@ namespace gameplay
 // Matches the existing legacy Player maximum. Authored stats have no upper cap.
 inline constexpr float kFallbackMaxHealth = 100.0f;
 inline constexpr float kDamageFeedbackSeconds = 0.25f;
+inline constexpr float kHitReactionMaxSeconds = 0.5f;
 inline float ResolveRuntimeMaxHealth(float value)
 {
     return std::isfinite(value) && value > 0.0f ? value : kFallbackMaxHealth;
@@ -41,12 +42,27 @@ public:
         if (std::isfinite(deltaSeconds) && deltaSeconds > 0.0f)
             damageFeedbackRemaining = std::max(0.0f, damageFeedbackRemaining - deltaSeconds);
     }
+    // Optional animation availability is configured by the existing presentation owner.
+    void SetHitReactionDuration(float seconds)
+    {
+        hitReactionDuration = std::isfinite(seconds) ? std::clamp(seconds, 0.0f, kHitReactionMaxSeconds) : 0.0f;
+        hitReactionRemaining = std::min(hitReactionRemaining, hitReactionDuration);
+    }
+    bool HitReactionAvailable() const { return hitReactionDuration > 0.0f; }
+    bool HitReactionActive() const { return hitReactionRemaining > 0.0f && !Defeated(); }
+    float HitReactionTime() const { return hitReactionDuration - hitReactionRemaining; }
+    float HitReactionRemaining() const { return hitReactionRemaining; }
+    void AdvanceHitReaction(float seconds)
+    {
+        if (std::isfinite(seconds) && seconds > 0.0f)
+            hitReactionRemaining = std::max(0.0f, hitReactionRemaining - seconds);
+    }
     void SetMaximum(float maximum)
     {
         maxHealth = ResolveRuntimeMaxHealth(maximum);
         currentHealth = std::min(currentHealth, maxHealth);
     }
-    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; }
+    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; hitReactionRemaining = 0.0f; }
     HealthOperationResult ApplyDamage(DirectDamage damage)
     {
         HealthOperationResult result{false, currentHealth, currentHealth, 0.0f};
@@ -58,7 +74,11 @@ public:
             lifeState = RuntimeLifeState::Defeated;
         result.after = currentHealth;
         result.applied = result.before - result.after;
-        if (result.applied > 0.0f) damageFeedbackRemaining = kDamageFeedbackSeconds;
+        if (result.applied > 0.0f)
+        {
+            damageFeedbackRemaining = kDamageFeedbackSeconds;
+            hitReactionRemaining = Defeated() ? 0.0f : hitReactionDuration;
+        }
         return result;
     }
     HealthOperationResult ApplyHealing(DirectHealing healing)
@@ -76,6 +96,8 @@ public:
 private:
     RuntimeLifeState lifeState = RuntimeLifeState::Alive;
     float damageFeedbackRemaining = 0.0f;
+    float hitReactionDuration = 0.0f;
+    float hitReactionRemaining = 0.0f;
     float maxHealth;
     float currentHealth;
 };

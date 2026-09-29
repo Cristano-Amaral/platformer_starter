@@ -57,7 +57,10 @@ public:
     const void* PoseAddress() const;
     const void* BoneMatricesAddress() const;
     // Borrowed from the owning runtime actor; actor storage is stable until rebuild.
-    void SetRuntimeHealth(const gameplay::RuntimeHealth* value) { runtimeHealth = value; }
+    void SetRuntimeHealth(gameplay::RuntimeHealth* value);
+    bool HitReactionActive() const;
+    float HitReactionDuration() const { return hitReactionDuration; }
+    const std::string& HitReactionDiagnostic() const { return hitReactionDiagnostic; }
     bool DamageFeedbackActive() const;
     void Draw(const ModelDrawOverride* override = nullptr) const;
 
@@ -78,6 +81,9 @@ private:
     std::string diagnostic;
     float timeSeconds = 0.0f;
     bool playing = true;
-    const gameplay::RuntimeHealth* runtimeHealth = nullptr;
+    gameplay::RuntimeHealth* runtimeHealth = nullptr;
+    bool reactionSelected = false;
+    float hitReactionDuration = 0.0f;
+    std::string hitReactionDiagnostic = "Character presentation unavailable";
 };
 }

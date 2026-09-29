@@ -213,6 +213,8 @@ struct ItemFieldFlags
     bool animationIdleAsset = false;
     bool animationMoveAsset = false;
     bool animationJumpAsset = false;
+    bool animationHitReaction = false;
+    bool animationHitReactionAsset = false;
     std::array<bool, kHumanoidJointRoleCount> humanoidJoint{};
     std::array<bool, kHumanoidJointRoleCount> sourceHumanoidJoint{};
     bool sourceAsset = false;
@@ -673,7 +675,7 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
             current.character.humanoidMapping.joints[index] = std::move(joint);
         }
         else if (tokens[0] == "animation_idle" || tokens[0] == "animation_move"
-            || tokens[0] == "animation_jump")
+            || tokens[0] == "animation_jump" || tokens[0] == "animation_hit_reaction")
         {
             if (!RequireCharacter(current, haveCurrent))
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber,
@@ -685,16 +687,16 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 || !IsValidCharacterAnimationClipName(clip))
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid animation binding");
             bool* flag = tokens[0] == "animation_idle" ? &flags.animationIdle
-                : tokens[0] == "animation_move" ? &flags.animationMove : &flags.animationJump;
+                : tokens[0] == "animation_move" ? &flags.animationMove : tokens[0] == "animation_jump" ? &flags.animationJump : &flags.animationHitReaction;
             if (*flag) return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate animation binding");
             *flag = true;
             std::string* target = tokens[0] == "animation_idle" ? &current.character.animations.idle
                 : tokens[0] == "animation_move" ? &current.character.animations.move
-                : &current.character.animations.jump;
+                : tokens[0] == "animation_jump" ? &current.character.animations.jump : &current.character.animations.hitReaction;
             *target = std::move(clip);
         }
         else if (tokens[0] == "animation_idle_asset" || tokens[0] == "animation_move_asset"
-            || tokens[0] == "animation_jump_asset")
+            || tokens[0] == "animation_jump_asset" || tokens[0] == "animation_hit_reaction_asset")
         {
             if (!RequireCharacter(current, haveCurrent))
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber,
@@ -705,12 +707,12 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
                 || !ParseIdentityRemainder(remainder, identity) || !IsValidAnimationIdentity(identity))
                 return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid animation asset binding");
             bool* flag = tokens[0] == "animation_idle_asset" ? &flags.animationIdleAsset
-                : tokens[0] == "animation_move_asset" ? &flags.animationMoveAsset : &flags.animationJumpAsset;
+                : tokens[0] == "animation_move_asset" ? &flags.animationMoveAsset : tokens[0] == "animation_jump_asset" ? &flags.animationJumpAsset : &flags.animationHitReactionAsset;
             if (*flag) return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "duplicate animation asset binding");
             *flag = true;
             std::string* target = tokens[0] == "animation_idle_asset" ? &current.character.animations.idleAsset
                 : tokens[0] == "animation_move_asset" ? &current.character.animations.moveAsset
-                : &current.character.animations.jumpAsset;
+                : tokens[0] == "animation_jump_asset" ? &current.character.animations.jumpAsset : &current.character.animations.hitReactionAsset;
             *target = std::move(identity);
         }
         else if (tokens[0] == "source_asset")
@@ -1038,6 +1040,8 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
             appendAnimation("animation_idle_asset", definition.character.animations.idleAsset);
             appendAnimation("animation_move_asset", definition.character.animations.moveAsset);
             appendAnimation("animation_jump_asset", definition.character.animations.jumpAsset);
+            appendAnimation("animation_hit_reaction", definition.character.animations.hitReaction);
+            appendAnimation("animation_hit_reaction_asset", definition.character.animations.hitReactionAsset);
             for (std::size_t index = 0; index < kHumanoidJointRoleCount; ++index)
             {
                 const auto& joint = definition.character.humanoidMapping.joints[index];

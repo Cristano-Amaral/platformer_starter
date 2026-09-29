@@ -16,9 +16,11 @@ struct NpcRuntimeActor : CharacterPatrolState
 {
     void Advance(float deltaSeconds)
     {
+        const bool reacting = health.HitReactionActive();
+        health.AdvanceHitReaction(deltaSeconds);
         health.AdvanceDamageFeedback(deltaSeconds);
         if (health.Defeated()) locomotion = CharacterPatrolLocomotionState::Idle;
-        else CharacterPatrolState::Advance(deltaSeconds);
+        else if (!reacting) CharacterPatrolState::Advance(deltaSeconds);
     }
     RuntimeHealth health{};
     std::uint64_t handle = 0;

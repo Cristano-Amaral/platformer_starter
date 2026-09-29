@@ -348,6 +348,8 @@ public:
     { characterPlacements = placements; }
     void SetPlayerRuntimeHealth(const gameplay::RuntimeHealth* value) { playerRuntimeHealth = value; }
     bool PlayerDamageFeedbackActive() const;
+    float PlayerHitReactionDuration() const;
+    bool PlayerHitReactionActive() const;
     void SetCharacterInstances(std::span<CharacterInstance* const> instances)
     { characterInstances = instances; }
     void DrawWorld(

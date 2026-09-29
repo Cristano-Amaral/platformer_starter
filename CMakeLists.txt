@@ -596,6 +596,11 @@ list(FILTER M111_PRODUCTION_SOURCES EXCLUDE REGEX "game/source/Main\\.cpp$")
 add_executable(CharacterPlacementTest
     game/source/render/CharacterPlacementTest.cpp
     ${M111_PRODUCTION_SOURCES})
+# Exercise the same Development/editor integration and class layouts as the game.
+get_target_property(M117_PRODUCTION_DEFINITIONS Platformer3D COMPILE_DEFINITIONS)
+target_compile_definitions(CharacterPlacementTest PRIVATE ${M117_PRODUCTION_DEFINITIONS})
+target_link_libraries(CharacterPlacementTest PRIVATE
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:Development>>:rlimgui>)
 target_include_directories(CharacterPlacementTest PRIVATE game/source)
 target_link_libraries(CharacterPlacementTest PRIVATE raylib Jolt)
 if(WIN32)

@@ -1,6 +1,7 @@
 #include "render/CharacterInstance.h"
 #include "render/LoadedModelMaterials.h"
 #include "gameplay/GameplayDefinitionFile.h"
+#include "gameplay/RuntimeHealth.h"
 
 #include <raylib.h>
 
@@ -258,6 +259,20 @@ int main()
         render::CharacterInstance missingEmbedded(fixture.identity, testRegistry, PLATFORMER_SOURCE_ASSET_ROOT);
         Expect(missingEmbedded.Mode() == render::CharacterInstanceMode::Unavailable, "missing embedded clip safe");
         const auto* retargetDefinition = registry.Find("characters/retarget_target");
+        fixture.identity = "characters/incompatible_jump_reaction_test";
+        fixture.character = retargetDefinition->character;
+        fixture.character.animations.hitReactionAsset = "animations/humanoid_jump";
+        testRegistry.Register(fixture);
+        render::CharacterInstance incompatibleReaction(fixture.identity, testRegistry, PLATFORMER_SOURCE_ASSET_ROOT);
+        gameplay::RuntimeHealth incompatibleHealth;
+        incompatibleReaction.SetRuntimeHealth(&incompatibleHealth);
+        incompatibleHealth.ApplyDamage({1});
+        incompatibleReaction.Advance(1.0f / 60.0f);
+        Expect(incompatibleReaction.HitReactionDiagnostic().find("Source mapping:") != std::string::npos
+            && incompatibleReaction.HitReactionDuration() == 0 && !incompatibleReaction.HitReactionActive()
+            && incompatibleReaction.DamageFeedbackActive() && incompatibleHealth.Current() == 99
+            && incompatibleReaction.Mode() == render::CharacterInstanceMode::Retargeted,
+            "Jump from an unmapped different skeleton safely leaves retargeted locomotion and red feedback functioning");
         fixture.identity = "characters/invalid_mapping_test";
         fixture.character = retargetDefinition->character;
         fixture.character.humanoidMapping.joints[0] = "MissingHips";
@@ -287,6 +302,38 @@ int main()
             Expect(invalid.HasModel() && invalid.Mode() == render::CharacterInstanceMode::Unavailable,
                 "missing source or clip safe without embedded fallback");
         }
+    }
+    {
+        auto definitions = registry;
+        auto* character = definitions.FindMutable("characters/player");
+        for (const char* asset : {"", "animations/missing", "animations/humanoid_jump"})
+        {
+            character->character.animations.hitReactionAsset = asset;
+            render::CharacterInstance instance("characters/player", definitions, PLATFORMER_SOURCE_ASSET_ROOT);
+            gameplay::RuntimeHealth health;
+            instance.SetRuntimeHealth(&health);
+            health.ApplyDamage({1});
+            const bool valid = std::strcmp(asset, "animations/humanoid_jump") == 0;
+            Expect(instance.HitReactionActive() == valid && health.Current() == 99 && instance.DamageFeedbackActive(),
+                "missing/invalid optional reaction preserves health/flash/locomotion");
+            instance.Advance(0);
+            const double start = instance.BoneMatrixChecksum();
+            health.AdvanceHitReaction(0.15f);
+            instance.Advance(0.15f);
+            if (valid) Expect(instance.BoneMatrixChecksum() != start, "production reaction changes sampled skeletal pose");
+            health.Reset(); instance.Advance(0);
+            Expect(!instance.HitReactionActive() && instance.Mode() == render::CharacterInstanceMode::Exact,
+                "reset restores normal Exact animation selection");
+        }
+        auto* targetCharacter = definitions.FindMutable("characters/retarget_target");
+        targetCharacter->character.animations.hitReactionAsset = "animations/retarget_move";
+        render::CharacterInstance instance("characters/retarget_target", definitions, PLATFORMER_SOURCE_ASSET_ROOT);
+        gameplay::RuntimeHealth health;
+        instance.SetRuntimeHealth(&health); health.ApplyDamage({1}); instance.Advance(0);
+        Expect(instance.HitReactionActive() && instance.Mode() == render::CharacterInstanceMode::Retargeted,
+            "optional reaction reuses humanoid mapping and retargeting");
+        health.ApplyDamage({100}); instance.Advance(0);
+        Expect(!instance.HitReactionActive() && health.Defeated(), "death wins over an active retargeted reaction");
     }
     UnloadRenderTexture(target);
     UnloadShader(sharedShader);

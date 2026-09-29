@@ -2046,6 +2046,11 @@ struct Renderer::PlayerModelGpuState
     AnimationSlot idle{};
     AnimationSlot move{};
     AnimationSlot jump{};
+    AnimationSlot hitReaction{};
+    Model reactionSource{};
+    bool ownsReactionSource = false;
+    animation::RetargetValidationResult reactionMapping{};
+    std::vector<unsigned char> reactionScratch;
     std::string modelIdentity;
     std::string currentClip;
     gameplay::PlayerPresentationModelLifetime lifetime{};
@@ -2196,7 +2201,7 @@ void Renderer::LoadPlayerPresentationAssets(
         return slot;
     };
     auto resolveSlot = [&](std::string_view assetIdentity, std::string_view embeddedClip,
-        animation::PlaybackMode embeddedPlayback) {
+        animation::PlaybackMode embeddedPlayback, bool reaction = false) {
         auto slot = makeEmbedded(embeddedClip, embeddedPlayback);
         if (assetIdentity.empty()) return slot;
         slot = {}; slot.assetIdentity.assign(assetIdentity);
@@ -2219,8 +2224,21 @@ void Renderer::LoadPlayerPresentationAssets(
         Model sourceModel = LoadModel(sourcePath.string().c_str());
         const bool compatible = animation::RaylibSkeletonsExactlyCompatible(
             model, sourceModel, slot.animations[slot.index]);
-        UnloadModel(sourceModel);
-        if (!compatible) { slot.index = -1; slot.status = "Incompatible skeleton"; return slot; }
+        bool retargetable = false;
+        if (reaction && !compatible)
+        {
+            const auto validation = animation::ValidateCharacterAssets(*gameplayDefinitions,
+                playerDefinition->character, platform::RuntimeAssetRoot());
+            retargetable = validation.hitReaction.retarget.status == animation::RetargetValidationStatus::Retargetable;
+            if (retargetable)
+            {
+                playerModelGpu->reactionMapping = validation.hitReaction.retarget;
+                playerModelGpu->reactionSource = sourceModel;
+                playerModelGpu->ownsReactionSource = true;
+            }
+        }
+        if (!retargetable) UnloadModel(sourceModel);
+        if (!compatible && !retargetable) { slot.index = -1; slot.status = "Incompatible skeleton"; return slot; }
         slot.status = "Resolved";
         return slot;
     };
@@ -2230,10 +2248,15 @@ void Renderer::LoadPlayerPresentationAssets(
         playerDefinition->character.animations.move, animation::PlaybackMode::Loop);
     auto jumpSlot = resolveSlot(playerDefinition->character.animations.jumpAsset,
         playerDefinition->character.animations.jump, animation::PlaybackMode::Clamp);
+    auto reactionSlot = resolveSlot(playerDefinition->character.animations.hitReactionAsset,
+        playerDefinition->character.animations.hitReaction, animation::PlaybackMode::Clamp, true);
+    reactionSlot.playback = animation::PlaybackMode::Clamp;
     if (model.skeleton.boneCount <= 0 || model.skeleton.boneCount > 64)
     {
-        for (auto* slot : {&idleSlot, &moveSlot, &jumpSlot})
+        for (auto* slot : {&idleSlot, &moveSlot, &jumpSlot, &reactionSlot})
             if (slot->ownsAnimations) UnloadModelAnimations(slot->animations, slot->animationCount);
+        if (playerModelGpu->ownsReactionSource)
+        { UnloadModel(playerModelGpu->reactionSource); playerModelGpu->ownsReactionSource = false; }
         if (animations != nullptr) UnloadModelAnimations(animations, animationCount);
         UnloadModel(model);
         playerModelGpu->failed = true;
@@ -2246,6 +2269,7 @@ void Renderer::LoadPlayerPresentationAssets(
     playerModelGpu->idle = std::move(idleSlot);
     playerModelGpu->move = std::move(moveSlot);
     playerModelGpu->jump = std::move(jumpSlot);
+    playerModelGpu->hitReaction = std::move(reactionSlot);
     playerModelGpu->currentClip = playerModelGpu->idle.sourceClip;
     playerModelGpu->modelIdentity.assign(modelIdentity);
     playerModelGpu->loaded = true;
@@ -2268,11 +2292,12 @@ void Renderer::UnloadPlayerPresentationAssets()
     }
     if (playerModelGpu->loaded)
     {
-        for (auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+        for (auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
             if (slot->ownsAnimations && slot->animations != nullptr)
                 UnloadModelAnimations(slot->animations, slot->animationCount);
         if (playerModelGpu->animations != nullptr)
             UnloadModelAnimations(playerModelGpu->animations, playerModelGpu->animationCount);
+        if (playerModelGpu->ownsReactionSource) UnloadModel(playerModelGpu->reactionSource);
         UnloadModel(playerModelGpu->model);
     }
     *playerModelGpu = {};
@@ -2298,6 +2323,16 @@ void Renderer::UnloadRuntimeAssets()
         groundCoverGpu->Unload();
     }
 }
+
+float Renderer::PlayerHitReactionDuration() const
+{
+    const auto& slot = playerModelGpu->hitReaction;
+    return IsPlayerModelLoaded() && slot.index >= 0
+        ? std::clamp(static_cast<float>(slot.animations[slot.index].keyframeCount - 1) / 60.0f, 0.0f, gameplay::kHitReactionMaxSeconds) : 0.0f;
+}
+
+bool Renderer::PlayerHitReactionActive() const
+{ return playerRuntimeHealth && playerRuntimeHealth->HitReactionActive() && PlayerHitReactionDuration() > 0.0f; }
 
 bool Renderer::PlayerDamageFeedbackActive() const
 {
@@ -2328,7 +2363,7 @@ const char* Renderer::PlayerCurrentClipName() const
 const char* Renderer::PlayerCurrentAnimationIdentity() const
 {
     if (playerModelGpu == nullptr) return "";
-    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
         if (slot->sourceClip == playerModelGpu->currentClip) return slot->assetIdentity.c_str();
     return "";
 }
@@ -2336,7 +2371,7 @@ const char* Renderer::PlayerCurrentAnimationIdentity() const
 const char* Renderer::PlayerCurrentAnimationSource() const
 {
     if (playerModelGpu == nullptr) return "";
-    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
         if (slot->sourceClip == playerModelGpu->currentClip) return slot->sourceAsset.c_str();
     return "";
 }
@@ -2344,7 +2379,7 @@ const char* Renderer::PlayerCurrentAnimationSource() const
 const char* Renderer::PlayerCurrentAnimationStatus() const
 {
     if (playerModelGpu == nullptr) return "None";
-    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump})
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
         if (slot->sourceClip == playerModelGpu->currentClip) return slot->status.c_str();
     return "None";
 }
@@ -2500,10 +2535,29 @@ void Renderer::DrawWorld(
         const auto* currentSlot = animationSlot(playerPresentation.animation.state);
         const auto* previousSlot = animationSlot(playerPresentation.animation.previousState);
         playerModelGpu->currentClip = currentSlot->sourceClip;
-        if (!PlayerAnimationBindingsResolved())
+        if (PlayerHitReactionActive())
+        {
+            auto& slot = playerModelGpu->hitReaction;
+            const auto& clip = slot.animations[slot.index];
+            const float time = playerRuntimeHealth->HitReactionTime();
+            if (playerModelGpu->ownsReactionSource)
+                animation::ApplyRaylibRetargetedPose(playerModelGpu->model, playerModelGpu->reactionSource,
+                    clip, playerModelGpu->reactionMapping, time, animation::PlaybackMode::Clamp,
+                    playerModelGpu->reactionScratch);
+            else animation::ApplyRaylibAnimationPose(playerModelGpu->model, clip, time, animation::PlaybackMode::Clamp);
+            playerModelGpu->currentClip = clip.name;
+        }
+        else if (!PlayerAnimationBindingsResolved())
         {
             // Keep the loaded Character in its safe bind pose. An invalid reusable
             // assignment never falls through to the embedded clip or enters sampling.
+            for (int joint = 0; joint < playerModelGpu->model.skeleton.boneCount; ++joint)
+            {
+                if (playerModelGpu->model.currentPose && playerModelGpu->model.skeleton.bindPose)
+                    playerModelGpu->model.currentPose[joint] = playerModelGpu->model.skeleton.bindPose[joint];
+                if (playerModelGpu->model.boneMatrices)
+                    playerModelGpu->model.boneMatrices[joint] = MatrixIdentity();
+            }
         }
         else
         {

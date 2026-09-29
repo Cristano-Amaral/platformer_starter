@@ -839,6 +839,19 @@ int main()
             "M104 attachment is Equipment-only");
     }
 
+    {
+        const auto loaded = gameplay::ParseGameplayDefinitionsText(
+            "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition characters/reaction\n"
+            "animation_hit_reaction Jump\nanimation_hit_reaction_asset animations/humanoid_jump\n");
+        const auto written = gameplay::WriteGameplayDefinitionsText(loaded.registry);
+        const auto again = gameplay::ParseGameplayDefinitionsText(written.text);
+        Expect(loaded.status == gameplay::LoadGameplayDefinitionsStatus::Loaded && written.ok
+            && again.registry.Find("characters/reaction")
+            && gameplay::CharacterDefinitionsEqual(loaded.registry.Find("characters/reaction")->character,
+                again.registry.Find("characters/reaction")->character), "optional reaction slot round trip");
+        Expect(gameplay::ParseGameplayDefinitionsText(written.text + "animation_hit_reaction Jump\n").status
+            == gameplay::LoadGameplayDefinitionsStatus::Invalid, "duplicate reaction slot rejected");
+    }
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d GameplayDefinition test(s) failed.\n", gFailures);

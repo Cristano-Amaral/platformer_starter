@@ -398,6 +398,8 @@ CharacterAssetValidationResult ValidateCharacterAssets(
         result.model, character.humanoidMapping, assetRoot);
     result.jump = ValidateAnimation(registry, character.animations.jumpAsset, compatibleModel,
         result.model, character.humanoidMapping, assetRoot);
+    result.hitReaction = ValidateAnimation(registry, character.animations.hitReactionAsset, compatibleModel,
+        result.model, character.humanoidMapping, assetRoot);
     if (ownsModel) UnloadModel(model);
     return result;
 }

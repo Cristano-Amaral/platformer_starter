@@ -116,6 +116,8 @@ editor::LevelEditorRequest DebugUi::Draw(
                 ImGui::Text("Health %.3f / %.3f / %s", health.Current(), health.Maximum(),
                     health.Defeated() ? "Defeated" : "Alive");
                 ImGui::Text("Hit feedback %.3f s", health.DamageFeedbackRemaining());
+                ImGui::Text("Hit reaction: %s / %s / %.3f s", health.HitReactionAvailable() ? "Resolved" : "Unavailable",
+                    health.HitReactionActive() ? "Active" : "Inactive", health.HitReactionRemaining());
                 // F2 freezes the production death delay and cannot exit during death.
                 ImGui::BeginDisabled(specialPlayer && levelEditorState.active);
                 if (ImGui::Button("Damage"))
@@ -142,6 +144,7 @@ editor::LevelEditorRequest DebugUi::Draw(
                         static_cast<unsigned long long>(actor.handle), actor.sourcePlacementIndex,
                         actor.origin.definitionIdentity.c_str());
                     drawHealth(actor.health);
+                    ImGui::TextWrapped("Hit reaction resolution: %s", actor.instance->HitReactionDiagnostic().c_str());
                     ImGui::PopID();
                 }
                 ImGui::PopID();

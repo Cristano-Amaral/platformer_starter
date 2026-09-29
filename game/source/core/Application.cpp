@@ -3221,6 +3221,8 @@ void Application::Initialize()
 void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused)
 {
     renderer.SetPlayerRuntimeHealth(&playerHealth);
+    playerHealth.SetHitReactionDuration(renderer.PlayerHitReactionDuration());
+    playerHealth.AdvanceHitReaction(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
     if (!gameplay::PlayerDeathIsActive(playerDeath))
         playerHealth.AdvanceDamageFeedback(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
     levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
@@ -3274,6 +3276,7 @@ void Application::PerformRespawn(gameplay::RespawnReason reason)
 
 void Application::ApplyPlayerHazardDamage(bool overlapping, float deltaSeconds, bool allowed)
 {
+    playerHealth.SetHitReactionDuration(renderer.PlayerHitReactionDuration());
     const bool applied = gameplay::TickHazardContactDamage(
         playerHealth, hazardContact, overlapping, deltaSeconds, allowed);
     if (applied) gameplay::BeginDamageVignette(damageVignette);
@@ -3293,6 +3296,7 @@ bool Application::BeginPlayerDeathIfDefeated()
 
 gameplay::HealthOperationResult Application::ApplyPlayerRuntimeDamage(gameplay::DirectDamage damage)
 {
+    playerHealth.SetHitReactionDuration(renderer.PlayerHitReactionDuration());
     const auto result = playerHealth.ApplyDamage(damage);
     const bool began = BeginPlayerDeathIfDefeated();
     EmitGameplaySfx(gameplay::ResolveHazardOutcomeSfx(false, began));

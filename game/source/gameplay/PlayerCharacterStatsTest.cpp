@@ -62,6 +62,24 @@ void Register(gameplay::GameplayDefinitionRegistry& registry, const gameplay::Ga
 
 int main()
 {
+    gameplay::RuntimeHealth reaction(100);
+    reaction.SetHitReactionDuration(5);
+    reaction.ApplyDamage({1});
+    Expect(reaction.HitReactionRemaining() == gameplay::kHitReactionMaxSeconds, "reaction duration bounded");
+    reaction.AdvanceHitReaction(0.1f);
+    const float remaining = reaction.HitReactionRemaining();
+    reaction.ApplyHealing({1}); reaction.SetMaximum(120);
+    for (float invalid : {0.0f, -1.0f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()})
+        reaction.ApplyDamage({invalid});
+    Expect(reaction.HitReactionRemaining() == remaining, "non-damage operations never restart reaction");
+    reaction.ApplyDamage({1});
+    Expect(reaction.HitReactionTime() == 0, "accepted damage restarts reaction");
+    reaction.ApplyDamage({1000});
+    Expect(!reaction.HitReactionActive() && reaction.HitReactionRemaining() == 0 && reaction.DamageFeedbackActive(),
+        "lethal damage clears reaction while preserving final red flash");
+    reaction.Reset();
+    Expect(!reaction.HitReactionActive(), "reset clears reaction without removing optional availability");
+
     gameplay::RuntimeHealth flash(100);
     flash.ApplyDamage({10});
     Expect(flash.DamageFeedbackActive(), "accepted positive reduction starts feedback");

@@ -14,6 +14,8 @@
 #include <raylib.h>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <vector>
 
@@ -33,6 +35,8 @@ struct ApplicationLifecycleTestAccess
         app.respawnState.respawnPosition = {4, 2, 0};
         app.respawnState.activeCheckpointIndex = 0;
         app.respawnState.deathCount = 3;
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        app.renderer.SetPlayerRuntimeHealth(&app.playerHealth);
         app.RefreshPlayerCharacterStats();
         app.playerHealth.ApplyDamage({app.playerHealth.Current() - (41)});
         app.runTimerState.elapsedSeconds = 12;
@@ -72,8 +76,186 @@ struct ApplicationLifecycleTestAccess
         const bool clamped = app.playerHealth.Maximum() == base && app.playerHealth.Current() == base;
         app.playerHealth.ApplyDamage({10});
         app.ResetGameplayAfterPlayAgain(); // Real New Run reset boundary, after world construction.
-        return increased && clamped && !app.playerHealth.DamageFeedbackActive()
+        return increased && clamped && !app.playerHealth.HitReactionActive() && !app.playerHealth.DamageFeedbackActive()
             && app.playerHealth.Current() == app.playerHealth.Maximum();
+    }
+    static bool FreshRunReactionReset(Application& app)
+    {
+        // Exercise real staged-level replacement; restore only this generated copy.
+        // Canonical source and cooked assets are never written by this fixture.
+        const auto path = platform::RuntimeAssetPath("levels/level_01.level");
+        struct RestoreStagedFile
+        {
+            std::filesystem::path path;
+            std::string original;
+            bool existed;
+            ~RestoreStagedFile()
+            {
+                if (existed) { std::ofstream output(path, std::ios::binary); output << original; }
+                else { std::error_code error; std::filesystem::remove(path, error); }
+            }
+        } restore{path, {}, std::filesystem::exists(path)};
+        if (restore.existed)
+        {
+            std::ifstream input(path, std::ios::binary);
+            restore.original.assign(std::istreambuf_iterator<char>(input), {});
+        }
+        const auto authored = app.levelDefinition;
+        std::filesystem::create_directories(path.parent_path());
+        { std::ofstream output(path, std::ios::binary); output << world::SerializeLevelText(authored); }
+        NonLethalDamageAll(app);
+        if (!app.renderer.PlayerHitReactionActive()) return false;
+        for (auto* instance : app.levelCharacters.Instances())
+            if (instance && !instance->HitReactionActive()) return false;
+        app.topLevelFlow = gameplay::TopLevelFlow::MainMenu;
+        app.mainMenuState = {};
+        gameplay::RequestPlayFromMainMenu(app.mainMenuState, app.topLevelFlow);
+        app.TryFinishPendingFreshRun();
+        return app.topLevelFlow == gameplay::TopLevelFlow::Gameplay && !app.mainMenuState.playFailed
+            && app.levelCharacters.Instances().size() == authored.characters.size()
+            && AllHealthRestored(app) && world::AuthoredLevelDataEqual(app.levelDefinition, authored);
+    }
+    static void NonLethalDamageAll(Application& app)
+    {
+        app.ApplyPlayerRuntimeDamage({1});
+        for (auto& actor : app.levelCharacters.Npcs()) actor.health.ApplyDamage({1});
+        for (auto& actor : app.levelCharacters.Enemies()) actor.health.ApplyDamage({1});
+    }
+    static bool InvalidPlayerReaction(Application& app)
+    {
+        auto& bindings = app.gameplayDefinitions.FindMutable("characters/player")->character.animations;
+        const auto original = bindings;
+        for (const char* identity : {"", "animations/missing"})
+        {
+            bindings.hitReactionAsset = identity;
+            bindings.hitReaction = "MissingClip";
+            app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+            app.playerHealth.Reset(); app.ApplyPlayerRuntimeDamage({1});
+            if (app.renderer.PlayerHitReactionActive() || !app.playerHealth.DamageFeedbackActive()
+                || app.playerHealth.Current() != app.playerHealth.Maximum() - 1
+                || !app.renderer.PlayerAnimationBindingsResolved()) return false;
+        }
+        bindings = original;
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        app.playerHealth.Reset();
+        return true;
+    }
+    static bool ActiveReactionManualReset(Application& app)
+    {
+        app.playerHealth.Reset();
+        app.ApplyPlayerRuntimeDamage({1});
+        for (auto& actor : app.levelCharacters.Npcs()) actor.health.ApplyDamage({1});
+        for (auto& actor : app.levelCharacters.Enemies()) actor.health.ApplyDamage({1});
+        const auto count = app.levelCharacters.Instances().size();
+        if (!app.renderer.PlayerHitReactionActive()) return false;
+        for (auto* instance : app.levelCharacters.Instances())
+            if (instance && !instance->HitReactionActive()) return false;
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0.25f, false);
+        if (app.levelCharacters.Instances().size() != count || !AllHealthRestored(app)) return false;
+        for (const auto& actor : app.levelCharacters.Npcs())
+            if (actor.position.x != actor.origin.position.x || actor.position.z != actor.origin.position.z) return false;
+        for (const auto& actor : app.levelCharacters.Enemies())
+            if (actor.position.x != actor.origin.position.x || actor.position.z != actor.origin.position.z) return false;
+        return true;
+    }
+    static bool PatrolReactionRegression(Application& app)
+    {
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0.0f, false); // Consume the reset presentation frame.
+        const auto exercise = [&](auto actors, auto others) {
+            if (actors.empty() || others.empty()) return false;
+            auto& actor = actors[0];
+            app.AdvanceLevelCharacters(0.1f, false);
+            const auto position = actor.position;
+            const double phase = actor.phase;
+            const auto otherPosition = others[0].position;
+            if (!actor.origin.patrolEnabled || actor.health.Defeated()
+                || !actor.health.HitReactionAvailable()) return false;
+            const auto damage = actor.health.ApplyDamage({1});
+            if (damage.applied != 1 || !actor.instance->HitReactionActive()
+                || !actor.instance->DamageFeedbackActive()) return false;
+            // Match normal frames after the Runtime Health control accepts damage.
+            for (int frame = 0; frame < 40; ++frame)
+            {
+                const bool reacting = actor.health.HitReactionActive();
+                app.AdvanceLevelCharacters(1.0f / 60.0f, false);
+                const auto rendered = actor.instance->WorldTransform().position;
+                if (reacting && (actor.position.x != position.x || actor.position.y != position.y
+                    || actor.position.z != position.z || actor.phase != phase
+                    || rendered.x != position.x || rendered.y != position.y || rendered.z != position.z)) return false;
+                if (actor.instance->HitReactionActive()
+                    && (actor.instance->Mode() == render::CharacterInstanceMode::Unavailable
+                        || actor.instance->PlaybackTime() != actor.health.HitReactionTime())) return false;
+                if (!reacting)
+                    return !actor.health.Defeated() && !actor.instance->HitReactionActive()
+                        && actor.phase > phase && (actor.position.x != position.x || actor.position.z != position.z)
+                        && (others[0].position.x != otherPosition.x || others[0].position.z != otherPosition.z)
+                        && actor.instance->Locomotion() == render::CharacterLocomotionState::Move;
+            }
+            return false;
+        };
+        const bool npc = exercise(app.levelCharacters.Npcs(), app.levelCharacters.Enemies());
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0.0f, false);
+        const bool enemy = exercise(app.levelCharacters.Enemies(), app.levelCharacters.Npcs());
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0.0f, false);
+        return npc && enemy;
+    }
+    static bool RetargetPatrolReactionRegression(Application& app)
+    {
+        const auto fixtureRegistry = app.gameplayDefinitions;
+        for (const auto& placement : app.levelDefinition.characters)
+        {
+            auto& character = app.gameplayDefinitions.FindMutable(placement.definitionIdentity)->character;
+            const auto type = character.type;
+            character = app.gameplayDefinitions.Find("characters/retarget_target")->character;
+            character.type = type;
+            character.animations.hitReactionAsset = "animations/humanoid_jump";
+        }
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0.0f, false);
+        const auto invalid = [&](auto actors) {
+            auto& actor = actors[0];
+            const auto position = actor.position;
+            actor.health.ApplyDamage({1});
+            app.AdvanceLevelCharacters(1.0f / 60.0f, false);
+            return !actor.health.HitReactionAvailable() && !actor.instance->HitReactionActive()
+                && actor.instance->DamageFeedbackActive() && !actor.health.Defeated()
+                && actor.instance->Mode() == render::CharacterInstanceMode::Retargeted
+                && (actor.position.x != position.x || actor.position.z != position.z);
+        };
+        const bool invalidNpc = invalid(app.levelCharacters.Npcs());
+        const bool invalidEnemy = invalid(app.levelCharacters.Enemies());
+        for (const auto& placement : app.levelDefinition.characters)
+            app.gameplayDefinitions.FindMutable(placement.definitionIdentity)->character.animations.hitReactionAsset = "animations/retarget_clamp";
+        const bool valid = PatrolReactionRegression(app);
+        app.gameplayDefinitions = fixtureRegistry;
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0.0f, false);
+        return invalidNpc && invalidEnemy && valid;
+    }
+    static bool HitReactionRegression(Application& app)
+    {
+        app.playerHealth.Reset();
+        app.ApplyPlayerRuntimeDamage({1});
+        if (!app.renderer.PlayerHitReactionActive() || !app.playerHealth.DamageFeedbackActive()) return false;
+        app.AdvanceLevelCharacters(0.1f, false);
+        if (!app.renderer.PlayerHitReactionActive() || app.playerHealth.HitReactionTime() <= 0) return false;
+        app.ApplyPlayerRuntimeDamage({1});
+        if (app.playerHealth.HitReactionTime() != 0) return false;
+        app.AdvanceLevelCharacters(0.5f, false);
+        if (app.renderer.PlayerHitReactionActive()) return false;
+        app.playerHealth.ApplyHealing({1});
+        app.ApplyPlayerRuntimeDamage({0});
+        app.ApplyPlayerRuntimeDamage({-1});
+        if (app.renderer.PlayerHitReactionActive()) return false;
+        app.ApplyPlayerHazardDamage(true, 0, true);
+        if (!app.renderer.PlayerHitReactionActive()) return false;
+        app.playerHealth.Reset();
+        gameplay::ResetHazardContactState(app.hazardContact);
+        return true;
     }
     static bool FeedbackRegression(Application& app)
     {
@@ -105,13 +287,21 @@ struct ApplicationLifecycleTestAccess
         for (auto& actor : app.levelCharacters.Npcs()) actor.health.ApplyDamage({1});
         for (auto& actor : app.levelCharacters.Enemies()) actor.health.ApplyDamage({1});
         const auto count = app.levelCharacters.Instances().size();
+        const auto fixtureRegistry = app.gameplayDefinitions;
         app.SetLevelEditorActive(true);
         app.ApplyLevelEditorPreview();
+        const bool appliedReset = AllHealthRestored(app) && app.levelCharacters.Instances().size() == count;
         app.SetLevelEditorActive(false);
-        if (app.playerHealth.DamageFeedbackActive() || app.playerHealth.Current() != app.playerHealth.Maximum()
+        // Exit reloads the canonical catalog and clears instances. Restore only the
+        // in-memory fixture definitions, then exercise the real next-frame Sync.
+        app.gameplayDefinitions = fixtureRegistry;
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        app.AdvanceLevelCharacters(0.0f, false);
+        if (!appliedReset) return false;
+        if (app.playerHealth.HitReactionActive() || app.playerHealth.DamageFeedbackActive() || app.playerHealth.Current() != app.playerHealth.Maximum()
             || app.levelCharacters.Instances().size() != count) return false;
         for (auto* instance : app.levelCharacters.Instances())
-            if (instance && instance->DamageFeedbackActive()) return false;
+            if (instance && (instance->HitReactionActive() || instance->DamageFeedbackActive())) return false;
         return true;
     }
 #endif
@@ -119,7 +309,7 @@ struct ApplicationLifecycleTestAccess
     {
         app.playerHealth.Reset();
         app.ApplyPlayerRuntimeDamage({app.playerHealth.Maximum()});
-        if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated()) return false;
+        if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated() || app.playerHealth.HitReactionActive()) return false;
         app.AdvancePlayerDeath(0.5f);
         if (app.playerHealth.DamageFeedbackActive()) return false;
         const float remaining = app.playerDeath.remainingSeconds;
@@ -134,7 +324,7 @@ struct ApplicationLifecycleTestAccess
         {
             app.ApplyPlayerHazardDamage(true, 1.0f, true);
         }
-        if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated()) return false;
+        if (!gameplay::PlayerDeathIsActive(app.playerDeath) || !app.playerHealth.Defeated() || app.playerHealth.HitReactionActive()) return false;
         app.AdvancePlayerDeath(gameplay::kPlayerDeathDelaySeconds);
         return !app.playerHealth.Defeated() && app.playerHealth.Current() == app.playerHealth.Maximum();
     }
@@ -177,17 +367,19 @@ struct ApplicationLifecycleTestAccess
     }
     static bool AllHealthRestored(const Application& app)
     {
-        if (app.playerHealth.Defeated() || app.playerHealth.DamageFeedbackActive() || app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
+        if (app.playerHealth.Defeated() || app.playerHealth.HitReactionActive() || app.playerHealth.DamageFeedbackActive() || app.playerHealth.Current() != app.playerHealth.Maximum()) return false;
         for (const auto& actor : app.levelCharacters.Npcs())
-            if (actor.health.Defeated() || actor.health.DamageFeedbackActive() || actor.instance->DamageFeedbackActive() || actor.health.Current() != actor.health.Maximum()) return false;
+            if (actor.health.Defeated() || actor.health.HitReactionActive() || actor.health.DamageFeedbackActive() || actor.instance->DamageFeedbackActive() || actor.health.Current() != actor.health.Maximum()) return false;
         for (const auto& actor : app.levelCharacters.Enemies())
-            if (actor.health.Defeated() || actor.health.DamageFeedbackActive() || actor.instance->DamageFeedbackActive() || actor.health.Current() != actor.health.Maximum()) return false;
+            if (actor.health.Defeated() || actor.health.HitReactionActive() || actor.health.DamageFeedbackActive() || actor.instance->DamageFeedbackActive() || actor.health.Current() != actor.health.Maximum()) return false;
         return true;
     }
     static void ManualRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Manual); }
     static void FallRespawn(Application& app) { app.PerformRespawn(gameplay::RespawnReason::Fall); }
     static void RestartRun(Application& app) { app.RestartRun(); }
     static void Advance(Application& app, float deltaSeconds) { app.AdvanceLevelCharacters(deltaSeconds, false); }
+    static render::Renderer& Presentation(Application& app) { return app.renderer; }
+    static void DamagePlayer(Application& app) { app.playerHealth.Reset(); app.ApplyPlayerRuntimeDamage({1}); }
     static const render::LevelCharacters& Characters(const Application& app) { return app.levelCharacters; }
     static const world::LevelDefinition& Authored(const Application& app) { return app.levelDefinition; }
     static physics::MovingPlatformState MovingPlatform(const Application& app) { return app.physicsWorld.GetMovingPlatform(); }
@@ -263,6 +455,10 @@ int main()
     {
         auto catalog = gameplay::LoadGameplayDefinitionsFile(PLATFORMER_GAMEPLAY_DEFINITIONS_SOURCE_PATH);
         auto& registry = catalog.registry;
+        // Fixtures explicitly opt into reactions; manual canonical assignments must not
+        // change the older locomotion/red-feedback-only rendering expectations.
+        registry.FindMutable("characters/player")->character.animations.hitReaction.clear();
+        registry.FindMutable("characters/player")->character.animations.hitReactionAsset.clear();
         auto loaded = world::LoadLevelFile(std::filesystem::path(PLATFORMER_SOURCE_ASSET_ROOT) / "levels/level_01.level");
         Expect(loaded.status == world::LoadLevelFileStatus::Loaded, "canonical level load");
         const auto canonicalSource = loaded.level;
@@ -479,6 +675,7 @@ int main()
             auto actorDefinition = *registry.Find("characters/player");
             actorDefinition.identity = (prefix + "_fixture");
             actorDefinition.character.type = runtimeType;
+            actorDefinition.character.animations.hitReactionAsset = "animations/humanoid_jump";
             actorDefinition.character.hasBaseStat[0] = true;
             actorDefinition.character.baseStatValue[0] = 73.5f;
             Expect(registry.Register(actorDefinition).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
@@ -506,6 +703,26 @@ int main()
             const auto patrolAuthored = working;
             runtime.Rebuild(working.characters, registry, PLATFORMER_SOURCE_ASSET_ROOT);
             const auto checkHealth = [&](auto mutableActors) {
+                auto& a = mutableActors[0]; auto& b = mutableActors[1];
+                const auto origin = a.position;
+                const float otherTime = b.instance->PlaybackTime();
+                a.health.ApplyDamage({1});
+                Expect(a.instance->HitReactionActive() && !b.instance->HitReactionActive()
+                    && b.instance->PlaybackTime() == otherTime && a.health.DamageFeedbackActive(),
+                    "accepted NPC/Enemy hit starts only exact instance and independent red flash");
+                runtime.Advance(0.1f);
+                Expect(Equal(origin, a.position) && a.instance->PlaybackTime() > 0,
+                    "NPC/Enemy reaction samples clip and suspends patrol");
+                a.health.ApplyDamage({1});
+                runtime.Advance(0);
+                Expect(a.instance->PlaybackTime() == 0, "repeated accepted hit restarts animation at frame zero");
+                runtime.Advance(0.5f);
+                Expect(!a.instance->HitReactionActive() && Equal(origin, a.position), "reaction finishes without patrol catch-up");
+                runtime.Advance(0.1f);
+                Expect(!Equal(origin, a.position) && a.instance->Locomotion() == render::CharacterLocomotionState::Move,
+                    "NPC/Enemy patrol and normal animation resume");
+                a.health.ApplyHealing({10}); a.health.ApplyDamage({0}); a.health.ApplyDamage({-1});
+                Expect(!a.instance->HitReactionActive(), "Heal and rejected damage do not start actor reaction");
                 Expect(mutableActors.size() == 2 && mutableActors[0].health.Maximum() == 73.5f
                     && mutableActors[1].health.Current() == 73.5f, "NPC/Enemy health resolves authored base maximum");
                 mutableActors[0].health.ApplyDamage({80});
@@ -574,7 +791,7 @@ int main()
             // M112 Correction 1: ordinary Gameplay R calls PerformRespawn(Manual),
             // not RestartRun. Exercise both actual Application commands plus the
             // exact frame-update boundary used before production rendering.
-            for (const char* asset : {"models/player.glb", "models/humanoid_animations.glb", "shaders/world_lit.vs", "shaders/world_lit.fs"})
+            for (const char* asset : {"models/player.glb", "models/humanoid_animations.glb", "models/retarget_source.glb", "models/retarget_target.glb", "shaders/world_lit.vs", "shaders/world_lit.fs"})
             {
                 const auto destination = platform::RuntimeAssetPath(asset);
                 std::filesystem::create_directories(destination.parent_path());
@@ -613,13 +830,26 @@ int main()
                         && actor.phase == companionPlacement.patrolDistance && actor.rotationDegrees.y == 90
                         && actor.instance->PlaybackTime() == 0;
                 };
+                registry.FindMutable("characters/player")->character.animations.hitReactionAsset = "animations/humanoid_jump";
                 core::Application app;
                 using Access = core::ApplicationLifecycleTestAccess;
                 Expect(Access::Configure(app, restartAuthored, registry), "production Application lifecycle fixture initializes");
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
                 Expect(Access::ApplyFeedbackRegression(app), "real Editor Apply clears Player and instance feedback and restores existing full health with stable counts");
 #endif
+                Expect(Access::InvalidPlayerReaction(app), "invalid Player optional slot preserves Health flash and locomotion");
+                Access::DamagePlayer(app);
+                auto& playerRenderer = Access::Presentation(app);
+                Render(playerRenderer, target, restartAuthored, {}, false, false, true);
+                Expect(std::string(playerRenderer.PlayerCurrentClipName()) == "Jump", "real Player damage overrides rendered animation slot");
+                Access::Advance(app, 0.5f);
+                Render(playerRenderer, target, restartAuthored, {}, false, false, true);
+                Expect(std::string(playerRenderer.PlayerCurrentClipName()) == "Idle", "Player reaction expiry restores rendered locomotion selection");
+                Expect(Access::RetargetPatrolReactionRegression(app), "Application retargeted NPC/Enemy reject incompatible Jump safely and hold/resume patrol with a compatible reaction");
+                Expect(Access::PatrolReactionRegression(app), "Application frames hold NPC and Enemy patrol position and rendered transform throughout reaction, then resume");
+                Expect(Access::HitReactionRegression(app), "production Player direct and Hazard reaction restart/finish/non-damage");
                 Expect(Access::FeedbackRegression(app), "production Player NPC Enemy presentation independently reads accepted damage and expires");
+                Expect(Access::ActiveReactionManualReset(app), "real Manual R clears active Player/NPC/Enemy reactions without duplicate instances");
                 Expect(Access::ExercisePlayerMaximum(app), "Application equipment sync preserves/clamps Player health and New Run fills effective maximum");
                 Expect(Access::DeathRegression(app), "production direct damage and legacy Hazard death converge once and real delay completion restores Alive/full");
                 // Re-arrange the checkpoint/timer/inventory fixture after New Run's intentional resets.
@@ -687,7 +917,7 @@ int main()
                         && std::abs(actors(appCharacters)[1].position.z + 1.0f) < 0.0001f,
                         "patrol resumes from deterministic initial state at independent authored speeds");
                 }
-                Access::DamageAll(app);
+                Access::NonLethalDamageAll(app);
                 Access::RestartRun(app);
                 Expect(Access::AllHealthRestored(app), "full RestartRun restores all runtime health");
                 Access::Advance(app, 0.25f);
@@ -704,6 +934,7 @@ int main()
                     && actors(appCharacters)[0].handle == retainedHandle,
                     "fall respawn retains existing narrower NPC/Enemy authority");
                 Expect(world::AuthoredLevelDataEqual(Access::Authored(app), restartAuthored), "all real lifecycle commands leave authored data unchanged");
+                Expect(Access::FreshRunReactionReset(app), "real Main Menu Play clears active reactions through staged replacement without duplicates");
             }
             const auto savedPatrolPath = std::filesystem::temp_directory_path() / "platformer_m113_roundtrip.level";
             Expect(world::SaveLevelFile(savedPatrolPath, working).status == world::WriteLevelFileStatus::Saved,

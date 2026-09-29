@@ -70,6 +70,8 @@ struct CharacterLocomotionAnimations
     std::string idleAsset;
     std::string moveAsset;
     std::string jumpAsset;
+    std::string hitReaction;
+    std::string hitReactionAsset;
 };
 
 enum class CharacterAnimationBindingStatus { None, Resolved, Missing };
@@ -166,13 +168,13 @@ inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefini
         return binding.empty() || IsValidCharacterAnimationClipName(binding);
     };
     if (!validBinding(character.animations.idle) || !validBinding(character.animations.move)
-        || !validBinding(character.animations.jump))
+        || !validBinding(character.animations.jump) || !validBinding(character.animations.hitReaction))
         return ValidateCharacterStatus::InvalidAnimationBinding;
     const auto validAsset = [](const std::string& identity) {
         return identity.empty() || IsValidAnimationIdentity(identity);
     };
     if (!validAsset(character.animations.idleAsset) || !validAsset(character.animations.moveAsset)
-        || !validAsset(character.animations.jumpAsset))
+        || !validAsset(character.animations.jumpAsset) || !validAsset(character.animations.hitReactionAsset))
         return ValidateCharacterStatus::InvalidAnimationBinding;
     for (std::size_t index = 0; index < kGameplayStatCount; ++index)
     {
@@ -195,6 +197,8 @@ inline bool CharacterDefinitionsEqual(const CharacterDefinition& a, const Charac
         && a.animations.idleAsset == b.animations.idleAsset
         && a.animations.moveAsset == b.animations.moveAsset
         && a.animations.jumpAsset == b.animations.jumpAsset
+        && a.animations.hitReaction == b.animations.hitReaction
+        && a.animations.hitReactionAsset == b.animations.hitReactionAsset
         && a.humanoidMapping.joints == b.humanoidMapping.joints
         && a.hasBaseStat == b.hasBaseStat
         && a.baseStatValue == b.baseStatValue;

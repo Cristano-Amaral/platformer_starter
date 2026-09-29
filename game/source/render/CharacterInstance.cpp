@@ -99,8 +99,23 @@ CharacterInstance::CharacterInstance(std::string_view identity,
         gpu->hasSkinningShader = gpu->skinningShader.id != 0;
         if (gpu->hasSkinningShader) ConfigureSkinningShader(gpu->skinningShader);
     }
+    reactionSelected = true;
+    ResolveSlot();
+    if (gpu->selectedAnimation >= 0)
+        hitReactionDuration = std::clamp(static_cast<float>(gpu->animations[gpu->selectedAnimation].keyframeCount - 1) / 60.0f, 0.0f, gameplay::kHitReactionMaxSeconds);
+    hitReactionDiagnostic = diagnostic;
+    reactionSelected = false;
     ResolveSlot();
 }
+
+void CharacterInstance::SetRuntimeHealth(gameplay::RuntimeHealth* value)
+{
+    runtimeHealth = value;
+    if (value) value->SetHitReactionDuration(hitReactionDuration);
+}
+
+bool CharacterInstance::HitReactionActive() const
+{ return runtimeHealth && runtimeHealth->HitReactionActive() && hitReactionDuration > 0.0f; }
 
 CharacterInstance::~CharacterInstance()
 {
@@ -139,7 +154,8 @@ void CharacterInstance::ResolveSlot()
     { diagnostic = "World Model assignment changed; recreate this transient instance"; return; }
     const auto validation = animation::ValidateCharacterAssets(registry, definition->character, assetRoot);
     resolution = editor::ResolveCharacterPreviewAnimation(
-        registry, definition->character, validation, Slot(locomotion));
+        registry, definition->character, validation, reactionSelected ? editor::CharacterPreviewSlot::HitReaction : Slot(locomotion));
+    if (reactionSelected) resolution.playbackMode = animation::PlaybackMode::Clamp;
     diagnostic = resolution.detail;
     if (!gpu->hasModel || gpu->isStatic || !resolution.CanSample()) return;
     const auto sourcePath = assetRoot / resolution.sourceAssetIdentity;
@@ -173,6 +189,7 @@ void CharacterInstance::SetLocomotion(CharacterLocomotionState value)
 {
     if (locomotion == value) return;
     locomotion = value;
+    if (reactionSelected) return;
     timeSeconds = 0.0f;
     ResolveSlot();
 }
@@ -185,9 +202,16 @@ void CharacterInstance::Restart()
 
 void CharacterInstance::Advance(float deltaSeconds)
 {
+    const bool reacting = HitReactionActive();
+    if (runtimeHealth && reacting != reactionSelected)
+    {
+        reactionSelected = reacting;
+        ResolveSlot();
+    }
     if (gpu->selectedAnimation < 0) return;
     const ModelAnimation& clip = gpu->animations[gpu->selectedAnimation];
-    if (playing && deltaSeconds > 0.0f && std::isfinite(deltaSeconds))
+    if (reactionSelected && runtimeHealth) timeSeconds = runtimeHealth->HitReactionTime();
+    if (!reactionSelected && playing && deltaSeconds > 0.0f && std::isfinite(deltaSeconds))
         timeSeconds = animation::ResolvePlaybackTime(timeSeconds + deltaSeconds,
             static_cast<float>(clip.keyframeCount > 0 ? clip.keyframeCount - 1 : 0) / 60.0f,
             resolution.playbackMode);

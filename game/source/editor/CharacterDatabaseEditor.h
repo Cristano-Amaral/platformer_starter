@@ -43,9 +43,10 @@ inline std::string CharacterAssetValidationKey(
     const gameplay::CharacterDefinition& character)
 {
     std::string key = character.worldModelIdentity + "\n" + character.animations.idleAsset
-        + "\n" + character.animations.moveAsset + "\n" + character.animations.jumpAsset;
+        + "\n" + character.animations.moveAsset + "\n" + character.animations.jumpAsset
+        + "\n" + character.animations.hitReactionAsset;
     for (const std::string* identity : {&character.animations.idleAsset,
-            &character.animations.moveAsset, &character.animations.jumpAsset})
+            &character.animations.moveAsset, &character.animations.jumpAsset, &character.animations.hitReactionAsset})
     {
         const auto* definition = registry.Find(*identity);
         if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Animation)
@@ -260,7 +261,7 @@ inline bool TryClearCharacterWorldModel(gameplay::GameplayDefinition& definition
     return true;
 }
 
-enum class CharacterAnimationSlot { Idle, Move, Jump };
+enum class CharacterAnimationSlot { Idle, Move, Jump, HitReaction };
 
 inline bool TryAssignCharacterAnimation(
     gameplay::GameplayDefinition& definition, CharacterAnimationSlot slot, std::string_view clip)
@@ -269,7 +270,7 @@ inline bool TryAssignCharacterAnimation(
         || !gameplay::IsValidCharacterAnimationClipName(clip)) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idle : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.move : &definition.character.animations.jump;
+        ? &definition.character.animations.move : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jump : &definition.character.animations.hitReaction;
     target->assign(clip);
     return true;
 }
@@ -280,7 +281,7 @@ inline bool TryClearCharacterAnimation(
     if (definition.category != gameplay::GameplayDefinitionCategory::Character) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idle : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.move : &definition.character.animations.jump;
+        ? &definition.character.animations.move : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jump : &definition.character.animations.hitReaction;
     target->clear();
     return true;
 }
@@ -292,7 +293,7 @@ inline bool TryAssignCharacterAnimationAsset(
         || !gameplay::IsValidAnimationIdentity(identity)) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idleAsset : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.moveAsset : &definition.character.animations.jumpAsset;
+        ? &definition.character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jumpAsset : &definition.character.animations.hitReactionAsset;
     target->assign(identity);
     return true;
 }
@@ -303,7 +304,7 @@ inline bool TryClearCharacterAnimationAsset(
     if (definition.category != gameplay::GameplayDefinitionCategory::Character) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idleAsset : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.moveAsset : &definition.character.animations.jumpAsset;
+        ? &definition.character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jumpAsset : &definition.character.animations.hitReactionAsset;
     target->clear();
     return true;
 }

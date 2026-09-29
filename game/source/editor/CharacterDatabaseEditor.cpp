@@ -113,16 +113,16 @@ void DrawCharacterDatabaseEditor(
             { TryAssignCharacterWorldModel(*selected, model.canonicalIdentity); RefreshCharacterDatabaseDirty(state); }
             ImGui::EndCombo();
         }
-        ImGui::Separator(); ImGui::TextUnformatted("Locomotion Animations");
-        const char* labels[] = {"Idle Clip", "Move Clip", "Jump Clip"};
+        ImGui::Separator(); ImGui::TextUnformatted("Character Animations");
+        const char* labels[] = {"Idle Clip", "Move Clip", "Jump Clip", "Hit Reaction Clip"};
         auto slots = {CharacterAnimationSlot::Idle, CharacterAnimationSlot::Move,
-            CharacterAnimationSlot::Jump};
+            CharacterAnimationSlot::Jump, CharacterAnimationSlot::HitReaction};
         int slotIndex = 0;
         for (CharacterAnimationSlot slot : slots)
         {
             std::string* value = slot == CharacterAnimationSlot::Idle
                 ? &selected->character.animations.idle : slot == CharacterAnimationSlot::Move
-                ? &selected->character.animations.move : &selected->character.animations.jump;
+                ? &selected->character.animations.move : slot == CharacterAnimationSlot::Jump ? &selected->character.animations.jump : &selected->character.animations.hitReaction;
             char clip[gameplay::kMaxCharacterAnimationClipNameLength + 1]{};
             std::snprintf(clip, sizeof(clip), "%s", value->c_str());
             if (ImGui::InputText(labels[slotIndex], clip, sizeof(clip)))
@@ -135,7 +135,7 @@ void DrawCharacterDatabaseEditor(
             ImGui::TextDisabled("%s", value->empty() ? "None" : "Authored (validated at runtime)");
             std::string* assetValue = slot == CharacterAnimationSlot::Idle
                 ? &selected->character.animations.idleAsset : slot == CharacterAnimationSlot::Move
-                ? &selected->character.animations.moveAsset : &selected->character.animations.jumpAsset;
+                ? &selected->character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &selected->character.animations.jumpAsset : &selected->character.animations.hitReactionAsset;
             ImGui::PushID(slotIndex);
             if (ImGui::BeginCombo("Reusable Asset", assetValue->empty() ? "None (embedded clip)" : assetValue->c_str()))
             {
@@ -211,7 +211,7 @@ void DrawCharacterDatabaseEditor(
         }
         const std::string sourceAnimationIdentity = state.previewSlot == CharacterPreviewSlot::Idle
             ? selected->character.animations.idleAsset : state.previewSlot == CharacterPreviewSlot::Move
-            ? selected->character.animations.moveAsset : selected->character.animations.jumpAsset;
+            ? selected->character.animations.moveAsset : state.previewSlot == CharacterPreviewSlot::Jump ? selected->character.animations.jumpAsset : selected->character.animations.hitReactionAsset;
         auto* sourceDefinition = state.working.FindMutable(sourceAnimationIdentity);
         if (sourceDefinition != nullptr
             && sourceDefinition->category == gameplay::GameplayDefinitionCategory::Animation
@@ -289,8 +289,8 @@ void DrawCharacterDatabaseEditor(
         ImGui::Separator();
         ImGui::TextUnformatted("Character / Animation Preview");
         int previewSlot = static_cast<int>(state.previewSlot);
-        const char* previewSlotNames[] = {"Idle", "Move", "Jump"};
-        if (ImGui::Combo("Preview Animation", &previewSlot, previewSlotNames, 3))
+        const char* previewSlotNames[] = {"Idle", "Move", "Jump", "Hit Reaction"};
+        if (ImGui::Combo("Preview Animation", &previewSlot, previewSlotNames, 4))
         {
             state.previewSlot = static_cast<CharacterPreviewSlot>(previewSlot);
             RestartCharacterPreviewPlayback(state.previewPlayback);
@@ -416,10 +416,10 @@ void DrawCharacterDatabaseEditor(
             }
         }
         ImGui::TextDisabled("%s", validation.model.detail.c_str());
-        const char* compatibilityLabels[] = {"Idle", "Move", "Jump"};
+        const char* compatibilityLabels[] = {"Idle", "Move", "Jump", "Hit Reaction"};
         const animation::CharacterAnimationCompatibilityResult* compatibility[] = {
-            &validation.idle, &validation.move, &validation.jump};
-        for (int index = 0; index < 3; ++index)
+            &validation.idle, &validation.move, &validation.jump, &validation.hitReaction};
+        for (int index = 0; index < 4; ++index)
         {
             ImGui::Text("%s: %s", compatibilityLabels[index],
                 animation::CharacterAnimationCompatibilityStatusName(

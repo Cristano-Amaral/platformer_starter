@@ -235,3 +235,5 @@ Milestone 114 complete and closed.
 Milestone 115 — [Death & Defeat Foundation](milestones/MILESTONE_115.md): implementation validated; manual acceptance and Git closure pending.
 
 Milestone 116 implementation validated; manual acceptance and Git closure pending.
+
+Milestone 117 — [Hit Reaction Foundation](milestones/MILESTONE_117.md): implementation validated; reaction-compatibility diagnostics and production patrol regressions strengthened after manual feedback; renewed manual acceptance and Git closure pending.
