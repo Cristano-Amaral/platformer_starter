@@ -13,6 +13,7 @@ std::string_view AssetIdentity(const gameplay::CharacterDefinition& character, C
 {
     if (slot == CharacterPreviewSlot::Move) return character.animations.moveAsset;
     if (slot == CharacterPreviewSlot::Jump) return character.animations.jumpAsset;
+    if (slot == CharacterPreviewSlot::Attack) return character.animations.attackAsset;
     if (slot == CharacterPreviewSlot::HitReaction) return character.animations.hitReactionAsset;
     return character.animations.idleAsset;
 }
@@ -21,6 +22,7 @@ std::string_view EmbeddedClip(const gameplay::CharacterDefinition& character, Ch
 {
     if (slot == CharacterPreviewSlot::Move) return character.animations.move;
     if (slot == CharacterPreviewSlot::Jump) return character.animations.jump;
+    if (slot == CharacterPreviewSlot::Attack) return character.animations.attack;
     if (slot == CharacterPreviewSlot::HitReaction) return character.animations.hitReaction;
     return character.animations.idle;
 }
@@ -30,6 +32,7 @@ const animation::CharacterAnimationCompatibilityResult& Compatibility(
 {
     if (slot == CharacterPreviewSlot::Move) return validation.move;
     if (slot == CharacterPreviewSlot::Jump) return validation.jump;
+    if (slot == CharacterPreviewSlot::Attack) return validation.attack;
     if (slot == CharacterPreviewSlot::HitReaction) return validation.hitReaction;
     return validation.idle;
 }
@@ -39,6 +42,7 @@ const char* CharacterPreviewSlotName(CharacterPreviewSlot slot)
 {
     if (slot == CharacterPreviewSlot::Move) return "Move";
     if (slot == CharacterPreviewSlot::Jump) return "Jump";
+    if (slot == CharacterPreviewSlot::Attack) return "Attack";
     if (slot == CharacterPreviewSlot::HitReaction) return "Hit Reaction";
     return "Idle";
 }
@@ -63,7 +67,7 @@ CharacterPreviewAnimationResolution ResolveCharacterPreviewAnimation(
     CharacterPreviewSlot slot)
 {
     CharacterPreviewAnimationResolution result;
-    result.playbackMode = (slot == CharacterPreviewSlot::Jump || slot == CharacterPreviewSlot::HitReaction)
+    result.playbackMode = (slot == CharacterPreviewSlot::Jump || slot == CharacterPreviewSlot::HitReaction || slot == CharacterPreviewSlot::Attack)
         ? animation::PlaybackMode::Clamp : animation::PlaybackMode::Loop;
     if (validation.model.status != animation::CharacterModelValidationStatus::Resolved
         || !validation.model.skinned || !validation.model.hasSkeleton)

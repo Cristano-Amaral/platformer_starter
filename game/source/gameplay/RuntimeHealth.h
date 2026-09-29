@@ -57,12 +57,33 @@ public:
         if (std::isfinite(seconds) && seconds > 0.0f)
             hitReactionRemaining = std::max(0.0f, hitReactionRemaining - seconds);
     }
+    // The presentation owner supplies a resolved clip duration; no authored combat timer.
+    void SetAttackDuration(float seconds)
+    {
+        attackDuration = std::isfinite(seconds) && seconds > 0.0f ? seconds : 0.0f;
+        attackRemaining = std::min(attackRemaining, attackDuration);
+    }
+    void ClearAttack() { attackRemaining = 0.0f; }
+    bool RequestAttack()
+    {
+        if (Defeated() || HitReactionActive() || AttackActive() || attackDuration <= 0.0f) return false;
+        attackRemaining = attackDuration;
+        return true;
+    }
+    bool AttackActive() const { return attackRemaining > 0.0f && !Defeated(); }
+    float AttackRemaining() const { return attackRemaining; }
+    float AttackTime() const { return attackDuration - attackRemaining; }
+    void AdvanceAttack(float seconds)
+    {
+        if (std::isfinite(seconds) && seconds > 0.0f)
+            attackRemaining = std::max(0.0f, attackRemaining - seconds);
+    }
     void SetMaximum(float maximum)
     {
         maxHealth = ResolveRuntimeMaxHealth(maximum);
         currentHealth = std::min(currentHealth, maxHealth);
     }
-    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; hitReactionRemaining = 0.0f; }
+    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; hitReactionRemaining = 0.0f; attackRemaining = 0.0f; }
     HealthOperationResult ApplyDamage(DirectDamage damage)
     {
         HealthOperationResult result{false, currentHealth, currentHealth, 0.0f};
@@ -78,6 +99,7 @@ public:
         {
             damageFeedbackRemaining = kDamageFeedbackSeconds;
             hitReactionRemaining = Defeated() ? 0.0f : hitReactionDuration;
+            if (Defeated() || HitReactionActive()) attackRemaining = 0.0f;
         }
         return result;
     }
@@ -96,6 +118,8 @@ public:
 private:
     RuntimeLifeState lifeState = RuntimeLifeState::Alive;
     float damageFeedbackRemaining = 0.0f;
+    float attackDuration = 0.0f;
+    float attackRemaining = 0.0f;
     float hitReactionDuration = 0.0f;
     float hitReactionRemaining = 0.0f;
     float maxHealth;

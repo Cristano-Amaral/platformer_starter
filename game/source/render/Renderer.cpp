@@ -2047,6 +2047,11 @@ struct Renderer::PlayerModelGpuState
     AnimationSlot move{};
     AnimationSlot jump{};
     AnimationSlot hitReaction{};
+    AnimationSlot attack{};
+    Model attackSource{};
+    bool ownsAttackSource = false;
+    animation::RetargetValidationResult attackMapping{};
+    std::vector<unsigned char> attackScratch;
     Model reactionSource{};
     bool ownsReactionSource = false;
     animation::RetargetValidationResult reactionMapping{};
@@ -2201,7 +2206,7 @@ void Renderer::LoadPlayerPresentationAssets(
         return slot;
     };
     auto resolveSlot = [&](std::string_view assetIdentity, std::string_view embeddedClip,
-        animation::PlaybackMode embeddedPlayback, bool reaction = false) {
+        animation::PlaybackMode embeddedPlayback, bool reaction = false, bool attack = false) {
         auto slot = makeEmbedded(embeddedClip, embeddedPlayback);
         if (assetIdentity.empty()) return slot;
         slot = {}; slot.assetIdentity.assign(assetIdentity);
@@ -2225,16 +2230,23 @@ void Renderer::LoadPlayerPresentationAssets(
         const bool compatible = animation::RaylibSkeletonsExactlyCompatible(
             model, sourceModel, slot.animations[slot.index]);
         bool retargetable = false;
-        if (reaction && !compatible)
+        if ((reaction || attack) && !compatible)
         {
             const auto validation = animation::ValidateCharacterAssets(*gameplayDefinitions,
                 playerDefinition->character, platform::RuntimeAssetRoot());
-            retargetable = validation.hitReaction.retarget.status == animation::RetargetValidationStatus::Retargetable;
+            const auto& mapping = attack ? validation.attack.retarget : validation.hitReaction.retarget;
+            retargetable = mapping.status == animation::RetargetValidationStatus::Retargetable;
             if (retargetable)
             {
-                playerModelGpu->reactionMapping = validation.hitReaction.retarget;
-                playerModelGpu->reactionSource = sourceModel;
-                playerModelGpu->ownsReactionSource = true;
+                if (attack) {
+                    playerModelGpu->attackMapping = mapping;
+                    playerModelGpu->attackSource = sourceModel;
+                    playerModelGpu->ownsAttackSource = true;
+                } else {
+                    playerModelGpu->reactionMapping = mapping;
+                    playerModelGpu->reactionSource = sourceModel;
+                    playerModelGpu->ownsReactionSource = true;
+                }
             }
         }
         if (!retargetable) UnloadModel(sourceModel);
@@ -2251,12 +2263,17 @@ void Renderer::LoadPlayerPresentationAssets(
     auto reactionSlot = resolveSlot(playerDefinition->character.animations.hitReactionAsset,
         playerDefinition->character.animations.hitReaction, animation::PlaybackMode::Clamp, true);
     reactionSlot.playback = animation::PlaybackMode::Clamp;
+    auto attackSlot = resolveSlot(playerDefinition->character.animations.attackAsset,
+        playerDefinition->character.animations.attack, animation::PlaybackMode::Clamp, false, true);
+    attackSlot.playback = animation::PlaybackMode::Clamp;
     if (model.skeleton.boneCount <= 0 || model.skeleton.boneCount > 64)
     {
-        for (auto* slot : {&idleSlot, &moveSlot, &jumpSlot, &reactionSlot})
+        for (auto* slot : {&idleSlot, &moveSlot, &jumpSlot, &reactionSlot, &attackSlot})
             if (slot->ownsAnimations) UnloadModelAnimations(slot->animations, slot->animationCount);
         if (playerModelGpu->ownsReactionSource)
         { UnloadModel(playerModelGpu->reactionSource); playerModelGpu->ownsReactionSource = false; }
+        if (playerModelGpu->ownsAttackSource)
+        { UnloadModel(playerModelGpu->attackSource); playerModelGpu->ownsAttackSource = false; }
         if (animations != nullptr) UnloadModelAnimations(animations, animationCount);
         UnloadModel(model);
         playerModelGpu->failed = true;
@@ -2270,6 +2287,7 @@ void Renderer::LoadPlayerPresentationAssets(
     playerModelGpu->move = std::move(moveSlot);
     playerModelGpu->jump = std::move(jumpSlot);
     playerModelGpu->hitReaction = std::move(reactionSlot);
+    playerModelGpu->attack = std::move(attackSlot);
     playerModelGpu->currentClip = playerModelGpu->idle.sourceClip;
     playerModelGpu->modelIdentity.assign(modelIdentity);
     playerModelGpu->loaded = true;
@@ -2292,12 +2310,13 @@ void Renderer::UnloadPlayerPresentationAssets()
     }
     if (playerModelGpu->loaded)
     {
-        for (auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
+        for (auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction, &playerModelGpu->attack})
             if (slot->ownsAnimations && slot->animations != nullptr)
                 UnloadModelAnimations(slot->animations, slot->animationCount);
         if (playerModelGpu->animations != nullptr)
             UnloadModelAnimations(playerModelGpu->animations, playerModelGpu->animationCount);
         if (playerModelGpu->ownsReactionSource) UnloadModel(playerModelGpu->reactionSource);
+        if (playerModelGpu->ownsAttackSource) UnloadModel(playerModelGpu->attackSource);
         UnloadModel(playerModelGpu->model);
     }
     *playerModelGpu = {};
@@ -2323,6 +2342,16 @@ void Renderer::UnloadRuntimeAssets()
         groundCoverGpu->Unload();
     }
 }
+
+float Renderer::PlayerAttackDuration() const
+{
+    const auto& slot = playerModelGpu->attack;
+    return IsPlayerModelLoaded() && slot.index >= 0
+        ? std::max(0.0f, static_cast<float>(slot.animations[slot.index].keyframeCount - 1) / 60.0f) : 0.0f;
+}
+bool Renderer::PlayerAttackActive() const
+{ return playerRuntimeHealth && playerRuntimeHealth->AttackActive() && PlayerAttackDuration() > 0.0f; }
+const std::string& Renderer::PlayerAttackDiagnostic() const { return playerModelGpu->attack.status; }
 
 float Renderer::PlayerHitReactionDuration() const
 {
@@ -2363,7 +2392,7 @@ const char* Renderer::PlayerCurrentClipName() const
 const char* Renderer::PlayerCurrentAnimationIdentity() const
 {
     if (playerModelGpu == nullptr) return "";
-    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction, &playerModelGpu->attack})
         if (slot->sourceClip == playerModelGpu->currentClip) return slot->assetIdentity.c_str();
     return "";
 }
@@ -2371,7 +2400,7 @@ const char* Renderer::PlayerCurrentAnimationIdentity() const
 const char* Renderer::PlayerCurrentAnimationSource() const
 {
     if (playerModelGpu == nullptr) return "";
-    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction, &playerModelGpu->attack})
         if (slot->sourceClip == playerModelGpu->currentClip) return slot->sourceAsset.c_str();
     return "";
 }
@@ -2379,7 +2408,7 @@ const char* Renderer::PlayerCurrentAnimationSource() const
 const char* Renderer::PlayerCurrentAnimationStatus() const
 {
     if (playerModelGpu == nullptr) return "None";
-    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction})
+    for (const auto* slot : {&playerModelGpu->idle, &playerModelGpu->move, &playerModelGpu->jump, &playerModelGpu->hitReaction, &playerModelGpu->attack})
         if (slot->sourceClip == playerModelGpu->currentClip) return slot->status.c_str();
     return "None";
 }
@@ -2544,6 +2573,18 @@ void Renderer::DrawWorld(
                 animation::ApplyRaylibRetargetedPose(playerModelGpu->model, playerModelGpu->reactionSource,
                     clip, playerModelGpu->reactionMapping, time, animation::PlaybackMode::Clamp,
                     playerModelGpu->reactionScratch);
+            else animation::ApplyRaylibAnimationPose(playerModelGpu->model, clip, time, animation::PlaybackMode::Clamp);
+            playerModelGpu->currentClip = clip.name;
+        }
+        else if (PlayerAttackActive())
+        {
+            auto& slot = playerModelGpu->attack;
+            const auto& clip = slot.animations[slot.index];
+            const float time = playerRuntimeHealth->AttackTime();
+            if (playerModelGpu->ownsAttackSource)
+                animation::ApplyRaylibRetargetedPose(playerModelGpu->model, playerModelGpu->attackSource,
+                    clip, playerModelGpu->attackMapping, time, animation::PlaybackMode::Clamp,
+                    playerModelGpu->attackScratch);
             else animation::ApplyRaylibAnimationPose(playerModelGpu->model, clip, time, animation::PlaybackMode::Clamp);
             playerModelGpu->currentClip = clip.name;
         }

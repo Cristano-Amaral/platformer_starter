@@ -335,6 +335,42 @@ int main()
         health.ApplyDamage({100}); instance.Advance(0);
         Expect(!instance.HitReactionActive() && health.Defeated(), "death wins over an active retargeted reaction");
     }
+    {
+        auto definitions = registry;
+        auto& character = definitions.FindMutable("characters/player")->character;
+        for (const char* asset : {"", "animations/missing", "animations/humanoid_jump"}) {
+            character.animations.attack.clear(); character.animations.attackAsset = asset;
+            render::CharacterInstance instance("characters/player", definitions, PLATFORMER_SOURCE_ASSET_ROOT);
+            gameplay::RuntimeHealth health;
+            instance.SetRuntimeHealth(&health);
+            const bool valid = std::string_view(asset) == "animations/humanoid_jump";
+            Expect(instance.RequestAttack() == valid && health.Current() == 100
+                && instance.Mode() == render::CharacterInstanceMode::Exact, "Attack resolution preserves actual locomotion presentation and never damages");
+            if (valid) {
+                const double pose = instance.BoneMatrixChecksum();
+                health.AdvanceAttack(0.15f); instance.Advance(0.15f);
+                Expect(pose != instance.BoneMatrixChecksum(), "Attack samples the actual pose");
+                Expect(!instance.RequestAttack(), "repeated Attack is ignored");
+                health.AdvanceAttack(10); instance.Advance(0);
+                Expect(!instance.AttackActive() && instance.Mode() == render::CharacterInstanceMode::Exact, "Attack completes to locomotion");
+                instance.RequestAttack(); health.Reset(); instance.Advance(0);
+                Expect(!instance.AttackActive(), "reset clears Attack");
+            }
+        }
+        auto& targetCharacter = definitions.FindMutable("characters/retarget_target")->character;
+        targetCharacter.animations.attackAsset = "animations/humanoid_jump";
+        render::CharacterInstance incompatible("characters/retarget_target", definitions, PLATFORMER_SOURCE_ASSET_ROOT);
+        gameplay::RuntimeHealth health; incompatible.SetRuntimeHealth(&health);
+        const double locomotionPose = incompatible.BoneMatrixChecksum();
+        Expect(!incompatible.RequestAttack() && incompatible.Mode() == render::CharacterInstanceMode::Retargeted
+            && incompatible.BoneMatrixChecksum() == locomotionPose && incompatible.AttackDiagnostic().find("Source mapping:") != std::string::npos,
+            "incompatible Attack retains its fallback reason");
+        targetCharacter.animations.attackAsset = "animations/retarget_move";
+        render::CharacterInstance retargeted("characters/retarget_target", definitions, PLATFORMER_SOURCE_ASSET_ROOT);
+        retargeted.SetRuntimeHealth(&health);
+        Expect(retargeted.RequestAttack() && retargeted.Mode() == render::CharacterInstanceMode::Retargeted,
+            "Attack reuses humanoid retargeting");
+    }
     UnloadRenderTexture(target);
     UnloadShader(sharedShader);
     CloseWindow();

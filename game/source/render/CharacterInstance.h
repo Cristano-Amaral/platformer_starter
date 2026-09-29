@@ -58,6 +58,9 @@ public:
     const void* BoneMatricesAddress() const;
     // Borrowed from the owning runtime actor; actor storage is stable until rebuild.
     void SetRuntimeHealth(gameplay::RuntimeHealth* value);
+    bool RequestAttack();
+    bool AttackActive() const;
+    const std::string& AttackDiagnostic() const { return attackDiagnostic; }
     bool HitReactionActive() const;
     float HitReactionDuration() const { return hitReactionDuration; }
     const std::string& HitReactionDiagnostic() const { return hitReactionDiagnostic; }
@@ -82,6 +85,9 @@ private:
     float timeSeconds = 0.0f;
     bool playing = true;
     gameplay::RuntimeHealth* runtimeHealth = nullptr;
+    bool attackSelected = false;
+    float attackDuration = 0.0f;
+    std::string attackDiagnostic = "Character presentation unavailable";
     bool reactionSelected = false;
     float hitReactionDuration = 0.0f;
     std::string hitReactionDiagnostic = "Character presentation unavailable";

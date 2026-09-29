@@ -9,7 +9,7 @@
 
 namespace editor
 {
-enum class CharacterPreviewSlot { Idle, Move, Jump, HitReaction };
+enum class CharacterPreviewSlot { Idle, Move, Jump, HitReaction, Attack };
 enum class CharacterPreviewAnimationStatus
 {
     Unavailable,

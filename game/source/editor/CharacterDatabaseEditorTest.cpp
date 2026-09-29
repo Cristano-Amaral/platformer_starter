@@ -68,11 +68,33 @@ int main()
         *hero, editor::CharacterAnimationSlot::Move, "animations/humanoid_move"), "assign Move asset");
     Expect(editor::TryAssignCharacterAnimationAsset(
         *hero, editor::CharacterAnimationSlot::Jump, "animations/humanoid_jump"), "assign Jump asset");
+    Expect(editor::TryAssignCharacterAnimation(*hero, editor::CharacterAnimationSlot::Attack, "Jump"), "author Attack clip");
+    Expect(editor::TryAssignCharacterAnimationAsset(*hero, editor::CharacterAnimationSlot::Attack, "animations/humanoid_jump"), "author Attack asset");
+    Expect(state.baseline.Find("characters/hero") == nullptr, "pending Attack stays in working copy");
     Expect(gameplay::TrySetGameplayStat(*hero, GameplayStatId::MaxHealth, 125.0f)
             == gameplay::SetGameplayStatStatus::Set, "typed base stat");
     Expect(gameplay::TrySetGameplayStat(*hero, GameplayStatId::MoveSpeed, 7.5f)
             == gameplay::SetGameplayStatStatus::Set, "second typed base stat");
     editor::RefreshCharacterDatabaseDirty(state);
+    state.working.FindMutable("animations/retarget_move")->animation.sourceHumanoidMapping.joints[0] = "AuthoredHips";
+    auto applied = editor::CloneGameplayDefinitionRegistry(fixture.registry);
+    Expect(editor::TryApplyCharacterDatabase(state, applied)
+        && applied.Find("characters/hero")->character.animations.attackAsset == "animations/humanoid_jump"
+        && state.dirty && !state.baseline.Find("characters/hero"), "Apply promotes Attack without saving or clearing dirty state");
+    auto savedOtherEdits = fixture.registry;
+    savedOtherEdits.FindMutable("animations/humanoid_idle")->animation.sourceClipName = "Jump";
+    savedOtherEdits.FindMutable("items/master_key")->item.displayName = "Saved item edit";
+    const auto merged = editor::MergeCharacterDatabaseRuntimeOnEditorExit(state, applied, savedOtherEdits);
+    Expect(merged.Find("characters/hero")->character.animations.attackAsset == "animations/humanoid_jump"
+        && merged.Find("animations/humanoid_idle")->animation.sourceClipName == "Jump"
+        && merged.Find("items/master_key")->item.displayName == "Saved item edit"
+        && merged.Find("animations/retarget_move")->animation.sourceHumanoidMapping.joints[0] == "AuthoredHips",
+        "Apply-only Character survives exit without blocking saved Item/Animation changes");
+    const auto previousApplied = applied;
+    state.working.FindMutable("characters/hero")->character.animations.attack = "invalid\nclip";
+    Expect(!editor::TryApplyCharacterDatabase(state, applied) && editor::GameplayRegistriesEqual(applied, previousApplied),
+        "invalid Apply preserves active definitions");
+    state.working.FindMutable("characters/hero")->character.animations.attack = "Jump";
     Expect(state.dirty, "edits are dirty");
     Expect(editor::FilterCharacterDatabaseIdentities(state.working, "HERO").size() == 1,
         "search identity and display name");
@@ -93,6 +115,7 @@ int main()
     const auto saved = gameplay::LoadGameplayDefinitionsFile(temp);
     Expect(saved.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "reload saved file");
     const auto* again = saved.registry.Find("characters/main_hero");
+    Expect(again && again->character.animations.attack == "Jump" && again->character.animations.attackAsset == "animations/humanoid_jump", "Save persists Attack authored state");
     Expect(again != nullptr && again->character.type == gameplay::CharacterType::Player,
         "typed Character persisted");
     Expect(again != nullptr && again->character.humanoidMapping.joints[0] == "Hips"

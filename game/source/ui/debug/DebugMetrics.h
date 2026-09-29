@@ -41,6 +41,7 @@ struct DebugMetricsSnapshot
     const char* playerAnimationIdentity = "";
     const char* playerAnimationSource = "";
     const char* playerAnimationStatus = "None";
+    const char* playerAttackDiagnostic = "None";
     float playerAnimationTime = 0.0f;
     float playerAnimationBlend = 1.0f;
 

@@ -400,6 +400,8 @@ CharacterAssetValidationResult ValidateCharacterAssets(
         result.model, character.humanoidMapping, assetRoot);
     result.hitReaction = ValidateAnimation(registry, character.animations.hitReactionAsset, compatibleModel,
         result.model, character.humanoidMapping, assetRoot);
+    result.attack = ValidateAnimation(registry, character.animations.attackAsset, compatibleModel,
+        result.model, character.humanoidMapping, assetRoot);
     if (ownsModel) UnloadModel(model);
     return result;
 }

@@ -724,6 +724,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
     snapshot.playerAnimationIdentity = renderer.PlayerCurrentAnimationIdentity();
     snapshot.playerAnimationSource = renderer.PlayerCurrentAnimationSource();
     snapshot.playerAnimationStatus = renderer.PlayerCurrentAnimationStatus();
+    snapshot.playerAttackDiagnostic = renderer.PlayerAttackDiagnostic().c_str();
     snapshot.playerAnimationTime = playerPresentation.animation.playbackTimeSeconds;
     snapshot.playerAnimationBlend = gameplay::PlayerAnimationBlendAmount(playerPresentation.animation);
 
@@ -950,7 +951,7 @@ ui::DebugMetricsSnapshot MakeDebugMetricsSnapshot(
 }
 #endif
 
-void LoadGameplayDefinitionCatalog(gameplay::GameplayDefinitionRegistry& registry)
+bool LoadGameplayDefinitionCatalog(gameplay::GameplayDefinitionRegistry& registry)
 {
     registry.Clear();
     std::filesystem::path path;
@@ -963,13 +964,15 @@ void LoadGameplayDefinitionCatalog(gameplay::GameplayDefinitionRegistry& registr
     }
     if (path.empty())
     {
-        return;
+        return false;
     }
     gameplay::ParseGameplayDefinitionsResult parsed = gameplay::LoadGameplayDefinitionsFile(path);
     if (parsed.status == gameplay::LoadGameplayDefinitionsStatus::Loaded)
     {
         registry = std::move(parsed.registry);
+        return true;
     }
+    return false;
 }
 
 int Application::Run()
@@ -1145,6 +1148,7 @@ int Application::Run()
         // and content; the editor pauses it wholesale rather than scaling time.
         if (!simulationPaused)
         {
+            RequestPlayerAttack(inputState);
             const bool restartAvailableAtFrameStart = levelCompletionState.completed;
             if (!runTimerState.frozen)
             {
@@ -2525,6 +2529,11 @@ int Application::Run()
             gameplayDefinitions,
             playerCharacterStats, playerHealth, levelCharacters,
             [this](gameplay::DirectDamage damage) { ApplyPlayerRuntimeDamage(damage); });
+        if (levelEditorState.characterDatabase.applyRequested)
+        {
+            levelEditorState.characterDatabase.applyRequested = false;
+            ApplyCharacterDatabasePreview();
+        }
         player.SetMovementParameters(gameplay::ResolvePlayerMovementParameters(playerCharacterStats));
         if (levelEditorState.active)
         {
@@ -3218,10 +3227,19 @@ void Application::Initialize()
     window.SetEscapeClosesWindow(false);
 }
 
+bool Application::RequestPlayerAttack(const input::InputState& inputState)
+{
+    renderer.SetPlayerRuntimeHealth(&playerHealth);
+    playerHealth.SetAttackDuration(renderer.PlayerAttackDuration());
+    return inputState.attackPressed && playerHealth.RequestAttack();
+}
+
 void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused)
 {
     renderer.SetPlayerRuntimeHealth(&playerHealth);
     playerHealth.SetHitReactionDuration(renderer.PlayerHitReactionDuration());
+    playerHealth.SetAttackDuration(renderer.PlayerAttackDuration());
+    playerHealth.AdvanceAttack(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
     playerHealth.AdvanceHitReaction(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
     if (!gameplay::PlayerDeathIsActive(playerDeath))
         playerHealth.AdvanceDamageFeedback(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
@@ -3241,6 +3259,7 @@ void Application::RefreshPlayerCharacterStats()
 
 void Application::PerformRespawn(gameplay::RespawnReason reason)
 {
+    playerHealth.ClearAttack();
     if (reason == gameplay::RespawnReason::Manual)
     {
         RefreshPlayerCharacterStats();
@@ -3420,7 +3439,17 @@ void Application::SetLevelEditorActive(bool active)
         gameplay::CloseInventoryUi(inventoryUi);
         levelCharacters.Clear();
         characterWorkingPreview.Clear();
-        LoadGameplayDefinitionCatalog(gameplayDefinitions);
+        if (levelEditorState.characterDatabase.preserveRuntimeDefinitions)
+        {
+            // Keep explicitly applied Characters and edited source mappings; other databases
+            // retain their existing saved-catalog promotion on editor exit.
+            gameplay::GameplayDefinitionRegistry saved;
+            if (LoadGameplayDefinitionCatalog(saved))
+                gameplayDefinitions = editor::MergeCharacterDatabaseRuntimeOnEditorExit(
+                    levelEditorState.characterDatabase, gameplayDefinitions, saved);
+            // A missing/invalid saved catalog cannot invalidate an applied snapshot.
+        }
+        else LoadGameplayDefinitionCatalog(gameplayDefinitions);
         renderer.ReloadPlayerPresentationAssets(&gameplayDefinitions);
     }
 
@@ -3955,6 +3984,18 @@ bool Application::HandleLevelEditorRequest(editor::LevelEditorRequest request)
     }
 
     return ApplyLevelEditorPreview();
+}
+
+bool Application::ApplyCharacterDatabasePreview()
+{
+    if (!editor::TryApplyCharacterDatabase(levelEditorState.characterDatabase, gameplayDefinitions)) return false;
+    playerHealth.ClearAttack();
+    renderer.ReloadPlayerPresentationAssets(&gameplayDefinitions);
+    RefreshPlayerCharacterStats();
+    levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    levelCharactersResetPending = true;
+    characterWorkingPreview.Clear();
+    return true;
 }
 
 bool Application::ApplyLevelEditorPreview()

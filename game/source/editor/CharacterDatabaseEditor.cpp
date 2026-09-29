@@ -25,9 +25,12 @@ void DrawCharacterDatabaseEditor(
     const std::filesystem::path path = AuthoringSourcePath(gameplay::kGameplayDefinitionsLogicalPath);
     if (!state.loaded && authoringAvailable && !path.empty())
         ApplyLoadedCharacterDatabase(state, gameplay::LoadGameplayDefinitionsFile(path));
-    ImGui::TextUnformatted("Reusable Character definitions and typed locomotion animation bindings.");
-    ImGui::TextDisabled("Save persists edits; returning to gameplay promotes the saved definitions.");
+    ImGui::TextUnformatted("Reusable Character definitions and animation bindings.");
+    ImGui::TextDisabled("Apply promotes validated edits to runtime; Save persists authored edits.");
     ImGui::Text("Status: %s%s", state.dirty ? "Dirty - " : "", state.statusMessage.c_str());
+    ImGui::BeginDisabled(!authoringAvailable || !state.loaded);
+    if (ImGui::Button("Apply")) state.applyRequested = true;
+    ImGui::EndDisabled(); ImGui::SameLine();
     ImGui::BeginDisabled(!authoringAvailable || !state.loaded || !state.dirty);
     if (ImGui::Button("Save")) TrySaveCharacterDatabase(state, path, authoringAvailable);
     ImGui::EndDisabled(); ImGui::SameLine();
@@ -114,15 +117,15 @@ void DrawCharacterDatabaseEditor(
             ImGui::EndCombo();
         }
         ImGui::Separator(); ImGui::TextUnformatted("Character Animations");
-        const char* labels[] = {"Idle Clip", "Move Clip", "Jump Clip", "Hit Reaction Clip"};
+        const char* labels[] = {"Idle Clip", "Move Clip", "Jump Clip", "Hit Reaction Clip", "Attack Clip"};
         auto slots = {CharacterAnimationSlot::Idle, CharacterAnimationSlot::Move,
-            CharacterAnimationSlot::Jump, CharacterAnimationSlot::HitReaction};
+            CharacterAnimationSlot::Jump, CharacterAnimationSlot::HitReaction, CharacterAnimationSlot::Attack};
         int slotIndex = 0;
         for (CharacterAnimationSlot slot : slots)
         {
             std::string* value = slot == CharacterAnimationSlot::Idle
                 ? &selected->character.animations.idle : slot == CharacterAnimationSlot::Move
-                ? &selected->character.animations.move : slot == CharacterAnimationSlot::Jump ? &selected->character.animations.jump : &selected->character.animations.hitReaction;
+                ? &selected->character.animations.move : slot == CharacterAnimationSlot::Jump ? &selected->character.animations.jump : slot == CharacterAnimationSlot::HitReaction ? &selected->character.animations.hitReaction : &selected->character.animations.attack;
             char clip[gameplay::kMaxCharacterAnimationClipNameLength + 1]{};
             std::snprintf(clip, sizeof(clip), "%s", value->c_str());
             if (ImGui::InputText(labels[slotIndex], clip, sizeof(clip)))
@@ -135,7 +138,7 @@ void DrawCharacterDatabaseEditor(
             ImGui::TextDisabled("%s", value->empty() ? "None" : "Authored (validated at runtime)");
             std::string* assetValue = slot == CharacterAnimationSlot::Idle
                 ? &selected->character.animations.idleAsset : slot == CharacterAnimationSlot::Move
-                ? &selected->character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &selected->character.animations.jumpAsset : &selected->character.animations.hitReactionAsset;
+                ? &selected->character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &selected->character.animations.jumpAsset : slot == CharacterAnimationSlot::HitReaction ? &selected->character.animations.hitReactionAsset : &selected->character.animations.attackAsset;
             ImGui::PushID(slotIndex);
             if (ImGui::BeginCombo("Reusable Asset", assetValue->empty() ? "None (embedded clip)" : assetValue->c_str()))
             {
@@ -211,7 +214,7 @@ void DrawCharacterDatabaseEditor(
         }
         const std::string sourceAnimationIdentity = state.previewSlot == CharacterPreviewSlot::Idle
             ? selected->character.animations.idleAsset : state.previewSlot == CharacterPreviewSlot::Move
-            ? selected->character.animations.moveAsset : state.previewSlot == CharacterPreviewSlot::Jump ? selected->character.animations.jumpAsset : selected->character.animations.hitReactionAsset;
+            ? selected->character.animations.moveAsset : state.previewSlot == CharacterPreviewSlot::Jump ? selected->character.animations.jumpAsset : state.previewSlot == CharacterPreviewSlot::HitReaction ? selected->character.animations.hitReactionAsset : selected->character.animations.attackAsset;
         auto* sourceDefinition = state.working.FindMutable(sourceAnimationIdentity);
         if (sourceDefinition != nullptr
             && sourceDefinition->category == gameplay::GameplayDefinitionCategory::Animation
@@ -289,8 +292,8 @@ void DrawCharacterDatabaseEditor(
         ImGui::Separator();
         ImGui::TextUnformatted("Character / Animation Preview");
         int previewSlot = static_cast<int>(state.previewSlot);
-        const char* previewSlotNames[] = {"Idle", "Move", "Jump", "Hit Reaction"};
-        if (ImGui::Combo("Preview Animation", &previewSlot, previewSlotNames, 4))
+        const char* previewSlotNames[] = {"Idle", "Move", "Jump", "Hit Reaction", "Attack"};
+        if (ImGui::Combo("Preview Animation", &previewSlot, previewSlotNames, 5))
         {
             state.previewSlot = static_cast<CharacterPreviewSlot>(previewSlot);
             RestartCharacterPreviewPlayback(state.previewPlayback);
@@ -416,10 +419,10 @@ void DrawCharacterDatabaseEditor(
             }
         }
         ImGui::TextDisabled("%s", validation.model.detail.c_str());
-        const char* compatibilityLabels[] = {"Idle", "Move", "Jump", "Hit Reaction"};
+        const char* compatibilityLabels[] = {"Idle", "Move", "Jump", "Hit Reaction", "Attack"};
         const animation::CharacterAnimationCompatibilityResult* compatibility[] = {
-            &validation.idle, &validation.move, &validation.jump, &validation.hitReaction};
-        for (int index = 0; index < 4; ++index)
+            &validation.idle, &validation.move, &validation.jump, &validation.hitReaction, &validation.attack};
+        for (int index = 0; index < 5; ++index)
         {
             ImGui::Text("%s: %s", compatibilityLabels[index],
                 animation::CharacterAnimationCompatibilityStatusName(

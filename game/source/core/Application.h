@@ -55,6 +55,7 @@ public:
 
 private:
     friend struct ApplicationLifecycleTestAccess;
+    bool RequestPlayerAttack(const input::InputState& inputState);
     void AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused);
     void Initialize();
     void Shutdown();
@@ -76,6 +77,7 @@ private:
     // intact and this returns true.
     bool HandleLevelEditorRequest(editor::LevelEditorRequest request);
     bool ApplyLevelEditorPreview();
+    bool ApplyCharacterDatabasePreview();
     bool ReloadRuntimeLevelFromStaged();
     bool StartCookStageAndReload();
     void FinishCookStageAndReloadIfReady();

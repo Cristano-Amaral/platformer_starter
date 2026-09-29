@@ -45,6 +45,133 @@ struct ApplicationLifecycleTestAccess
         app.levelCharacters.Rebuild(app.levelDefinition.characters, app.gameplayDefinitions, platform::RuntimeAssetRoot());
         return true;
     }
+    static bool AttackRegression(Application& app)
+    {
+        auto& bindings = app.gameplayDefinitions.FindMutable("characters/player")->character.animations;
+        input::InputState request;
+        request.attackPressed = true;
+        for (const char* assignment : {"", "animations/missing", "animations/humanoid_jump"})
+        {
+            bindings.attack.clear(); bindings.attackAsset = assignment;
+            app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+            app.playerHealth.Reset();
+            const float before = app.playerHealth.Current();
+            const bool valid = std::string_view(assignment) == "animations/humanoid_jump";
+            std::vector<float> health;
+            for (const auto& actor : app.levelCharacters.Npcs()) health.push_back(actor.health.Current());
+            for (const auto& actor : app.levelCharacters.Enemies()) health.push_back(actor.health.Current());
+            if (app.RequestPlayerAttack(request) != valid || app.playerHealth.Current() != before) return false;
+            std::size_t index = 0;
+            for (const auto& actor : app.levelCharacters.Npcs()) if (actor.health.Current() != health[index++]) return false;
+            for (const auto& actor : app.levelCharacters.Enemies()) if (actor.health.Current() != health[index++]) return false;
+            if (valid && app.RequestPlayerAttack(request)) return false;
+            app.AdvanceLevelCharacters(10, false);
+            if (app.renderer.PlayerAttackActive()) return false;
+        }
+        auto* playerDefinition = app.gameplayDefinitions.FindMutable("characters/player");
+        const auto originalCharacter = playerDefinition->character;
+        playerDefinition->character = app.gameplayDefinitions.Find("characters/retarget_target")->character;
+        playerDefinition->character.type = gameplay::CharacterType::Player;
+        playerDefinition->character.animations.attackAsset = "animations/humanoid_jump";
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        if (app.RequestPlayerAttack(request) || app.playerHealth.AttackActive()) return false;
+        playerDefinition->character.animations.attackAsset = "animations/retarget_move";
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.playerHealth.Reset();
+        playerDefinition->character = originalCharacter;
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.ApplyPlayerRuntimeDamage({1});
+        if (app.playerHealth.AttackActive() || !app.playerHealth.HitReactionActive() || !app.playerHealth.DamageFeedbackActive()) return false;
+        app.playerHealth.Reset();
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.PerformRespawn(gameplay::RespawnReason::Fall);
+        if (app.playerHealth.AttackActive()) return false;
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.ApplyPlayerRuntimeDamage({10000});
+        if (app.playerHealth.AttackActive() || !app.playerHealth.Defeated()) return false;
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0, false);
+        auto exercise = [&](auto actors) {
+            for (auto& actor : actors) {
+                // Resolve a fixture assignment through the actual presentation rebuild.
+                if (!actor.instance->RequestAttack()) return false;
+                const auto position = actor.position;
+                const double phase = actor.phase;
+                while (actor.health.AttackActive()) {
+                    app.AdvanceLevelCharacters(1.0f / 60.0f, false);
+                    if (actor.phase != phase || actor.position.x != position.x || actor.position.y != position.y || actor.position.z != position.z
+                        || actor.instance->WorldTransform().position.x != position.x
+                        || actor.instance->WorldTransform().position.y != position.y
+                        || actor.instance->WorldTransform().position.z != position.z) return false;
+                }
+                app.AdvanceLevelCharacters(0.1f, false);
+                if (actor.origin.patrolEnabled && actor.phase == phase) return false;
+                if (!actor.instance->RequestAttack()) return false;
+                actor.health.ApplyDamage({1});
+                if (actor.health.AttackActive() || !actor.health.HitReactionActive() || !actor.health.DamageFeedbackActive()) return false;
+                actor.health.Reset(); actor.instance->Advance(0);
+                if (!actor.instance->RequestAttack()) return false;
+                actor.health.ApplyDamage({10000});
+                if (actor.health.AttackActive() || actor.instance->RequestAttack()) return false;
+            }
+            return true;
+        };
+        for (const auto& placement : app.levelDefinition.characters) {
+            auto& animations = app.gameplayDefinitions.FindMutable(placement.definitionIdentity)->character.animations;
+            animations.attackAsset = "animations/humanoid_jump";
+            animations.hitReactionAsset = "animations/humanoid_jump";
+        }
+        app.levelCharacters.Rebuild(app.levelDefinition.characters, app.gameplayDefinitions, platform::RuntimeAssetRoot());
+        if (!exercise(app.levelCharacters.Npcs()) || !exercise(app.levelCharacters.Enemies())) return false;
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        const auto count = app.levelCharacters.Instances().size();
+        for (auto& actor : app.levelCharacters.Npcs()) if (!actor.instance->RequestAttack()) return false;
+        for (auto& actor : app.levelCharacters.Enemies()) if (!actor.instance->RequestAttack()) return false;
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0, false);
+        for (const auto& actor : app.levelCharacters.Npcs()) if (actor.health.AttackActive() || actor.instance->AttackActive()) return false;
+        for (const auto& actor : app.levelCharacters.Enemies()) if (actor.health.AttackActive() || actor.instance->AttackActive()) return false;
+        return !app.playerHealth.AttackActive() && count == app.levelCharacters.Instances().size();
+    }
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+    static void ClearCharacterApplyAuthority(Application& app) { app.levelEditorState.characterDatabase.preserveRuntimeDefinitions = false; }
+    static bool ApplyAttackAuthoring(Application& app)
+    {
+        auto& state = app.levelEditorState.characterDatabase;
+        gameplay::ParseGameplayDefinitionsResult fixture;
+        fixture.status = gameplay::LoadGameplayDefinitionsStatus::Loaded;
+        fixture.registry = app.gameplayDefinitions;
+        if (!editor::ApplyLoadedCharacterDatabase(state, fixture)) return false;
+        state.working.FindMutable("characters/player")->character.animations.attackAsset = "animations/humanoid_jump";
+        editor::RefreshCharacterDatabaseDirty(state);
+        if (!app.ApplyCharacterDatabasePreview() || !state.dirty) { std::fprintf(stderr, "ApplyAttack: apply failed/dirty %s\n", state.statusMessage.c_str()); return false; }
+        input::InputState request; request.attackPressed = true;
+        if (!app.RequestPlayerAttack(request)) { std::fprintf(stderr, "ApplyAttack: request failed %s model=%s reaction=%d duration=%f\n", app.renderer.PlayerAttackDiagnostic().c_str(), app.gameplayDefinitions.Find("characters/player")->character.worldModelIdentity.c_str(), app.playerHealth.HitReactionActive(), app.renderer.PlayerAttackDuration()); return false; }
+        if (!app.ApplyCharacterDatabasePreview() || app.playerHealth.AttackActive()) return false;
+        state.working.FindMutable("characters/player")->character.animations.attackAsset = "animations/missing";
+        editor::RefreshCharacterDatabaseDirty(state);
+        const auto savedFixture = std::filesystem::temp_directory_path() / "platformer_m118_character_apply.gameplay";
+        const bool saved = editor::TrySaveCharacterDatabase(state, savedFixture, true) == editor::ItemDatabaseSaveStatus::Saved;
+        std::error_code ignored; std::filesystem::remove(savedFixture, ignored);
+        if (!saved || app.gameplayDefinitions.Find("characters/player")->character.animations.attackAsset != "animations/humanoid_jump") return false;
+        app.levelEditorState.active = true;
+        app.SetLevelEditorActive(false);
+        const bool finalRequest = app.RequestPlayerAttack(request);
+        if (!finalRequest) std::fprintf(stderr, "ApplyAttack: exit request failed %s model=%s reaction=%d duration=%f\n", app.renderer.PlayerAttackDiagnostic().c_str(), app.gameplayDefinitions.Find("characters/player")->character.worldModelIdentity.c_str(), app.playerHealth.HitReactionActive(), app.renderer.PlayerAttackDuration());
+        return app.gameplayDefinitions.Find("characters/player")->character.animations.attackAsset == "animations/humanoid_jump" && finalRequest;
+    }
+#endif
+    static bool StartPlayerAttack(Application& app)
+    {
+        app.gameplayDefinitions.FindMutable("characters/player")->character.animations.attackAsset = "animations/humanoid_jump";
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        app.playerHealth.Reset();
+        input::InputState request; request.attackPressed = true;
+        return app.RequestPlayerAttack(request);
+    }
     static bool ExercisePlayerMaximum(Application& app)
     {
         auto item = gameplay::GameplayDefinition{};
@@ -189,7 +316,7 @@ struct ApplicationLifecycleTestAccess
                         || actor.instance->PlaybackTime() != actor.health.HitReactionTime())) return false;
                 if (!reacting)
                     return !actor.health.Defeated() && !actor.instance->HitReactionActive()
-                        && actor.phase > phase && (actor.position.x != position.x || actor.position.z != position.z)
+                        && actor.phase > phase && (actor.position.x != position.x || actor.position.y != position.y || actor.position.z != position.z)
                         && (others[0].position.x != otherPosition.x || others[0].position.z != otherPosition.z)
                         && actor.instance->Locomotion() == render::CharacterLocomotionState::Move;
             }
@@ -224,7 +351,7 @@ struct ApplicationLifecycleTestAccess
             return !actor.health.HitReactionAvailable() && !actor.instance->HitReactionActive()
                 && actor.instance->DamageFeedbackActive() && !actor.health.Defeated()
                 && actor.instance->Mode() == render::CharacterInstanceMode::Retargeted
-                && (actor.position.x != position.x || actor.position.z != position.z);
+                && (actor.position.x != position.x || actor.position.y != position.y || actor.position.z != position.z);
         };
         const bool invalidNpc = invalid(app.levelCharacters.Npcs());
         const bool invalidEnemy = invalid(app.levelCharacters.Enemies());
@@ -676,6 +803,7 @@ int main()
             actorDefinition.identity = (prefix + "_fixture");
             actorDefinition.character.type = runtimeType;
             actorDefinition.character.animations.hitReactionAsset = "animations/humanoid_jump";
+            actorDefinition.character.animations.attackAsset = "animations/humanoid_jump";
             actorDefinition.character.hasBaseStat[0] = true;
             actorDefinition.character.baseStatValue[0] = 73.5f;
             Expect(registry.Register(actorDefinition).status == gameplay::RegisterGameplayDefinitionStatus::Registered,
@@ -705,6 +833,13 @@ int main()
             const auto checkHealth = [&](auto mutableActors) {
                 auto& a = mutableActors[0]; auto& b = mutableActors[1];
                 const auto origin = a.position;
+                Expect(a.instance->RequestAttack(), "NPC/Enemy attack resolves");
+                const double attackPhase = a.phase;
+                runtime.Advance(0.1f);
+                Expect(Equal(origin, a.position) && Equal(origin, a.instance->WorldTransform().position)
+                    && a.phase == attackPhase, "NPC/Enemy attack freezes actual patrol phase and render transform");
+                runtime.Advance(10);
+                Expect(Equal(origin, a.position) && a.phase == attackPhase, "expiry has no patrol catch-up");
                 const float otherTime = b.instance->PlaybackTime();
                 a.health.ApplyDamage({1});
                 Expect(a.instance->HitReactionActive() && !b.instance->HitReactionActive()
@@ -837,9 +972,22 @@ int main()
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
                 Expect(Access::ApplyFeedbackRegression(app), "real Editor Apply clears Player and instance feedback and restores existing full health with stable counts");
 #endif
+#if defined(PLATFORMER_ENABLE_DEBUG_UI)
+                Expect(Access::ApplyAttackAuthoring(app), "real Character Apply promotes Attack without Save, survives editor exit and clears active Attack on reapply");
+                Expect(Access::Configure(app, restartAuthored, registry), "restore after transient Character Apply");
+                Access::ClearCharacterApplyAuthority(app);
+#endif
+                Expect(Access::AttackRegression(app), "production Attack input, expiry, patrol hold/resume, interruption, defeat and respawn");
+                Expect(Access::Configure(app, restartAuthored, registry), "restore fixture after Attack lifecycle regression");
                 Expect(Access::InvalidPlayerReaction(app), "invalid Player optional slot preserves Health flash and locomotion");
-                Access::DamagePlayer(app);
+                Expect(Access::StartPlayerAttack(app), "Player input requests compatible Attack");
                 auto& playerRenderer = Access::Presentation(app);
+                Render(playerRenderer, target, restartAuthored, {}, false, false, true);
+                Expect(std::string(playerRenderer.PlayerCurrentClipName()) == "Jump", "Player Attack selects the rendered action pose");
+                Access::Advance(app, 10);
+                Render(playerRenderer, target, restartAuthored, {}, false, false, true);
+                Expect(std::string(playerRenderer.PlayerCurrentClipName()) == "Idle", "Player Attack returns rendered pose to locomotion");
+                Access::DamagePlayer(app);
                 Render(playerRenderer, target, restartAuthored, {}, false, false, true);
                 Expect(std::string(playerRenderer.PlayerCurrentClipName()) == "Jump", "real Player damage overrides rendered animation slot");
                 Access::Advance(app, 0.5f);

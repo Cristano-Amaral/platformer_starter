@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 116 — Damage Feedback Foundation**
+**Milestone 118 — Attack Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_116.md`](milestones/MILESTONE_116.md)
+Canonical file: [`docs/milestones/MILESTONE_118.md`](milestones/MILESTONE_118.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -237,3 +237,5 @@ Milestone 115 — [Death & Defeat Foundation](milestones/MILESTONE_115.md): impl
 Milestone 116 implementation validated; manual acceptance and Git closure pending.
 
 Milestone 117 — [Hit Reaction Foundation](milestones/MILESTONE_117.md): implementation validated; reaction-compatibility diagnostics and production patrol regressions strengthened after manual feedback; renewed manual acceptance and Git closure pending.
+
+Milestone 118 — [Attack Foundation](milestones/MILESTONE_118.md): implementation validated; manual acceptance and Git closure pending.

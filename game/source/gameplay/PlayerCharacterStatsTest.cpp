@@ -62,6 +62,22 @@ void Register(gameplay::GameplayDefinitionRegistry& registry, const gameplay::Ga
 
 int main()
 {
+    gameplay::RuntimeHealth attack;
+    Expect(!attack.RequestAttack(), "missing Attack is inert");
+    attack.SetAttackDuration(1.5f);
+    Expect(attack.RequestAttack() && !attack.RequestAttack(), "Attack begins once without queuing");
+    attack.AdvanceAttack(0.5f);
+    Expect(Near(attack.AttackRemaining(), 1), "Attack ages only by simulation time");
+    attack.ApplyDamage({1});
+    Expect(attack.AttackActive() && attack.DamageFeedbackActive(), "damage without resolved reaction preserves Attack and flashes");
+    attack.SetHitReactionDuration(0.3f); attack.ApplyDamage({1});
+    Expect(!attack.AttackActive() && attack.HitReactionActive(), "valid reaction cancels Attack");
+    attack.Reset(); attack.RequestAttack(); attack.ApplyDamage({10000});
+    Expect(!attack.AttackActive() && !attack.RequestAttack(), "Defeated wins over Attack");
+    attack.Reset();
+    Expect(!attack.AttackActive() && attack.RequestAttack(), "reset clears Attack and restores request availability");
+    attack.AdvanceAttack(10);
+    Expect(!attack.AttackActive(), "Attack completes");
     gameplay::RuntimeHealth reaction(100);
     reaction.SetHitReactionDuration(5);
     reaction.ApplyDamage({1});

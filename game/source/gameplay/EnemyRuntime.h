@@ -16,11 +16,13 @@ struct EnemyRuntimeActor : CharacterPatrolState
 {
     void Advance(float deltaSeconds)
     {
-        const bool reacting = health.HitReactionActive();
+        // Hold the entire step, including expiry, so patrol never catches up.
+        const bool actionActive = health.HitReactionActive() || health.AttackActive();
         health.AdvanceHitReaction(deltaSeconds);
+        health.AdvanceAttack(deltaSeconds);
         health.AdvanceDamageFeedback(deltaSeconds);
         if (health.Defeated()) locomotion = CharacterPatrolLocomotionState::Idle;
-        else if (!reacting) CharacterPatrolState::Advance(deltaSeconds);
+        else if (!actionActive) CharacterPatrolState::Advance(deltaSeconds);
     }
     RuntimeHealth health{};
     std::uint64_t handle = 0;

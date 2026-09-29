@@ -54,6 +54,23 @@ int main()
             && validation.model.modelLoaded,
         "canonical working-copy World Model is previewable");
 
+    {
+        auto character = player->character;
+        character.animations.attack = "Jump";
+        character.animations.attackAsset.clear();
+        auto assets = animation::ValidateCharacterAssets(parsed.registry, character, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto embeddedAttack = editor::ResolveCharacterPreviewAnimation(parsed.registry, character, assets, editor::CharacterPreviewSlot::Attack);
+        Expect(embeddedAttack.status == editor::CharacterPreviewAnimationStatus::Embedded
+            && embeddedAttack.playbackMode == animation::PlaybackMode::Clamp, "Attack preview reuses embedded Clamp playback");
+        character.animations.attackAsset = "animations/humanoid_jump";
+        assets = animation::ValidateCharacterAssets(parsed.registry, character, PLATFORMER_SOURCE_ASSET_ROOT);
+        const auto reusableAttack = editor::ResolveCharacterPreviewAnimation(parsed.registry, character, assets, editor::CharacterPreviewSlot::Attack);
+        Expect(reusableAttack.CanSample() && reusableAttack.animationIdentity == "animations/humanoid_jump", "Attack preview resolves reusable assignment");
+        character.animations.attackAsset = "animations/missing";
+        assets = animation::ValidateCharacterAssets(parsed.registry, character, PLATFORMER_SOURCE_ASSET_ROOT);
+        Expect(!editor::ResolveCharacterPreviewAnimation(parsed.registry, character, assets, editor::CharacterPreviewSlot::Attack).CanSample(),
+            "invalid explicit Attack never falls back to embedded clip");
+    }
     const auto idle = editor::ResolveCharacterPreviewAnimation(parsed.registry,
         player->character, validation, editor::CharacterPreviewSlot::Idle);
     const auto move = editor::ResolveCharacterPreviewAnimation(parsed.registry,

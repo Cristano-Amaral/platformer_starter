@@ -72,6 +72,7 @@ struct CharacterAssetValidationResult
     CharacterAnimationCompatibilityResult move;
     CharacterAnimationCompatibilityResult jump;
     CharacterAnimationCompatibilityResult hitReaction;
+    CharacterAnimationCompatibilityResult attack;
 };
 
 bool RaylibSkeletonsExactlyCompatible(const Model& characterModel,

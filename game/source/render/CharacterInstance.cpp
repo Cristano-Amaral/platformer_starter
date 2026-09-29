@@ -99,6 +99,12 @@ CharacterInstance::CharacterInstance(std::string_view identity,
         gpu->hasSkinningShader = gpu->skinningShader.id != 0;
         if (gpu->hasSkinningShader) ConfigureSkinningShader(gpu->skinningShader);
     }
+    attackSelected = true;
+    ResolveSlot();
+    if (gpu->selectedAnimation >= 0)
+        attackDuration = static_cast<float>(gpu->animations[gpu->selectedAnimation].keyframeCount - 1) / 60.0f;
+    attackDiagnostic = diagnostic;
+    attackSelected = false;
     reactionSelected = true;
     ResolveSlot();
     if (gpu->selectedAnimation >= 0)
@@ -111,8 +117,18 @@ CharacterInstance::CharacterInstance(std::string_view identity,
 void CharacterInstance::SetRuntimeHealth(gameplay::RuntimeHealth* value)
 {
     runtimeHealth = value;
-    if (value) value->SetHitReactionDuration(hitReactionDuration);
+    if (value) { value->SetHitReactionDuration(hitReactionDuration); value->SetAttackDuration(attackDuration); }
 }
+
+bool CharacterInstance::RequestAttack()
+{
+    if (!runtimeHealth || !runtimeHealth->RequestAttack()) return false;
+    Advance(0.0f);
+    if (gpu->selectedAnimation < 0) { runtimeHealth->ClearAttack(); Advance(0.0f); }
+    return AttackActive();
+}
+bool CharacterInstance::AttackActive() const
+{ return runtimeHealth && runtimeHealth->AttackActive() && attackDuration > 0.0f; }
 
 bool CharacterInstance::HitReactionActive() const
 { return runtimeHealth && runtimeHealth->HitReactionActive() && hitReactionDuration > 0.0f; }
@@ -154,8 +170,8 @@ void CharacterInstance::ResolveSlot()
     { diagnostic = "World Model assignment changed; recreate this transient instance"; return; }
     const auto validation = animation::ValidateCharacterAssets(registry, definition->character, assetRoot);
     resolution = editor::ResolveCharacterPreviewAnimation(
-        registry, definition->character, validation, reactionSelected ? editor::CharacterPreviewSlot::HitReaction : Slot(locomotion));
-    if (reactionSelected) resolution.playbackMode = animation::PlaybackMode::Clamp;
+        registry, definition->character, validation, reactionSelected ? editor::CharacterPreviewSlot::HitReaction : attackSelected ? editor::CharacterPreviewSlot::Attack : Slot(locomotion));
+    if (reactionSelected || attackSelected) resolution.playbackMode = animation::PlaybackMode::Clamp;
     diagnostic = resolution.detail;
     if (!gpu->hasModel || gpu->isStatic || !resolution.CanSample()) return;
     const auto sourcePath = assetRoot / resolution.sourceAssetIdentity;
@@ -189,7 +205,7 @@ void CharacterInstance::SetLocomotion(CharacterLocomotionState value)
 {
     if (locomotion == value) return;
     locomotion = value;
-    if (reactionSelected) return;
+    if (reactionSelected || attackSelected) return;
     timeSeconds = 0.0f;
     ResolveSlot();
 }
@@ -202,16 +218,19 @@ void CharacterInstance::Restart()
 
 void CharacterInstance::Advance(float deltaSeconds)
 {
+    const bool attacking = AttackActive();
     const bool reacting = HitReactionActive();
-    if (runtimeHealth && reacting != reactionSelected)
+    if (runtimeHealth && (reacting != reactionSelected || attacking != attackSelected))
     {
         reactionSelected = reacting;
+        attackSelected = attacking;
         ResolveSlot();
     }
     if (gpu->selectedAnimation < 0) return;
     const ModelAnimation& clip = gpu->animations[gpu->selectedAnimation];
     if (reactionSelected && runtimeHealth) timeSeconds = runtimeHealth->HitReactionTime();
-    if (!reactionSelected && playing && deltaSeconds > 0.0f && std::isfinite(deltaSeconds))
+    if (attackSelected && runtimeHealth) timeSeconds = runtimeHealth->AttackTime();
+    if (!reactionSelected && !attackSelected && playing && deltaSeconds > 0.0f && std::isfinite(deltaSeconds))
         timeSeconds = animation::ResolvePlaybackTime(timeSeconds + deltaSeconds,
             static_cast<float>(clip.keyframeCount > 0 ? clip.keyframeCount - 1 : 0) / 60.0f,
             resolution.playbackMode);

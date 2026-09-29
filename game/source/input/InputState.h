@@ -8,6 +8,7 @@ struct InputState
     float moveX = 0.0f;
     // True only on the frame Jump was pressed, not while held.
     bool jumpPressed = false;
+    bool attackPressed = false;
     // True only on the frame Respawn was pressed, not while held.
     bool respawnPressed = false;
     // True only on the frame Restart was pressed, not while held.

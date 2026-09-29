@@ -72,6 +72,8 @@ struct CharacterLocomotionAnimations
     std::string jumpAsset;
     std::string hitReaction;
     std::string hitReactionAsset;
+    std::string attack;
+    std::string attackAsset;
 };
 
 enum class CharacterAnimationBindingStatus { None, Resolved, Missing };
@@ -168,13 +170,13 @@ inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefini
         return binding.empty() || IsValidCharacterAnimationClipName(binding);
     };
     if (!validBinding(character.animations.idle) || !validBinding(character.animations.move)
-        || !validBinding(character.animations.jump) || !validBinding(character.animations.hitReaction))
+        || !validBinding(character.animations.jump) || !validBinding(character.animations.hitReaction) || !validBinding(character.animations.attack))
         return ValidateCharacterStatus::InvalidAnimationBinding;
     const auto validAsset = [](const std::string& identity) {
         return identity.empty() || IsValidAnimationIdentity(identity);
     };
     if (!validAsset(character.animations.idleAsset) || !validAsset(character.animations.moveAsset)
-        || !validAsset(character.animations.jumpAsset) || !validAsset(character.animations.hitReactionAsset))
+        || !validAsset(character.animations.jumpAsset) || !validAsset(character.animations.hitReactionAsset) || !validAsset(character.animations.attackAsset))
         return ValidateCharacterStatus::InvalidAnimationBinding;
     for (std::size_t index = 0; index < kGameplayStatCount; ++index)
     {
@@ -199,6 +201,8 @@ inline bool CharacterDefinitionsEqual(const CharacterDefinition& a, const Charac
         && a.animations.jumpAsset == b.animations.jumpAsset
         && a.animations.hitReaction == b.animations.hitReaction
         && a.animations.hitReactionAsset == b.animations.hitReactionAsset
+        && a.animations.attack == b.animations.attack
+        && a.animations.attackAsset == b.animations.attackAsset
         && a.humanoidMapping.joints == b.humanoidMapping.joints
         && a.hasBaseStat == b.hasBaseStat
         && a.baseStatValue == b.baseStatValue;

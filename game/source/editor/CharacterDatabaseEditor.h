@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <utility>
 
 namespace editor
 {
@@ -36,6 +37,8 @@ struct CharacterDatabaseEditorState
     bool dirty = false;
     bool loaded = false;
     bool reloadConfirmOpen = false;
+    bool applyRequested = false;
+    bool preserveRuntimeDefinitions = false;
 };
 
 inline std::string CharacterAssetValidationKey(
@@ -44,9 +47,9 @@ inline std::string CharacterAssetValidationKey(
 {
     std::string key = character.worldModelIdentity + "\n" + character.animations.idleAsset
         + "\n" + character.animations.moveAsset + "\n" + character.animations.jumpAsset
-        + "\n" + character.animations.hitReactionAsset;
+        + "\n" + character.animations.hitReactionAsset + "\n" + character.animations.attackAsset;
     for (const std::string* identity : {&character.animations.idleAsset,
-            &character.animations.moveAsset, &character.animations.jumpAsset, &character.animations.hitReactionAsset})
+            &character.animations.moveAsset, &character.animations.jumpAsset, &character.animations.hitReactionAsset, &character.animations.attackAsset})
     {
         const auto* definition = registry.Find(*identity);
         if (definition != nullptr && definition->category == gameplay::GameplayDefinitionCategory::Animation)
@@ -261,7 +264,7 @@ inline bool TryClearCharacterWorldModel(gameplay::GameplayDefinition& definition
     return true;
 }
 
-enum class CharacterAnimationSlot { Idle, Move, Jump, HitReaction };
+enum class CharacterAnimationSlot { Idle, Move, Jump, HitReaction, Attack };
 
 inline bool TryAssignCharacterAnimation(
     gameplay::GameplayDefinition& definition, CharacterAnimationSlot slot, std::string_view clip)
@@ -270,7 +273,7 @@ inline bool TryAssignCharacterAnimation(
         || !gameplay::IsValidCharacterAnimationClipName(clip)) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idle : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.move : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jump : &definition.character.animations.hitReaction;
+        ? &definition.character.animations.move : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jump : slot == CharacterAnimationSlot::HitReaction ? &definition.character.animations.hitReaction : &definition.character.animations.attack;
     target->assign(clip);
     return true;
 }
@@ -281,7 +284,7 @@ inline bool TryClearCharacterAnimation(
     if (definition.category != gameplay::GameplayDefinitionCategory::Character) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idle : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.move : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jump : &definition.character.animations.hitReaction;
+        ? &definition.character.animations.move : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jump : slot == CharacterAnimationSlot::HitReaction ? &definition.character.animations.hitReaction : &definition.character.animations.attack;
     target->clear();
     return true;
 }
@@ -293,7 +296,7 @@ inline bool TryAssignCharacterAnimationAsset(
         || !gameplay::IsValidAnimationIdentity(identity)) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idleAsset : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jumpAsset : &definition.character.animations.hitReactionAsset;
+        ? &definition.character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jumpAsset : slot == CharacterAnimationSlot::HitReaction ? &definition.character.animations.hitReactionAsset : &definition.character.animations.attackAsset;
     target->assign(identity);
     return true;
 }
@@ -304,8 +307,45 @@ inline bool TryClearCharacterAnimationAsset(
     if (definition.category != gameplay::GameplayDefinitionCategory::Character) return false;
     std::string* target = slot == CharacterAnimationSlot::Idle
         ? &definition.character.animations.idleAsset : slot == CharacterAnimationSlot::Move
-        ? &definition.character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jumpAsset : &definition.character.animations.hitReactionAsset;
+        ? &definition.character.animations.moveAsset : slot == CharacterAnimationSlot::Jump ? &definition.character.animations.jumpAsset : slot == CharacterAnimationSlot::HitReaction ? &definition.character.animations.hitReactionAsset : &definition.character.animations.attackAsset;
     target->clear();
+    return true;
+}
+
+inline gameplay::GameplayDefinitionRegistry MergeCharacterDatabaseRuntimeOnEditorExit(
+    const CharacterDatabaseEditorState& state,
+    const gameplay::GameplayDefinitionRegistry& active,
+    const gameplay::GameplayDefinitionRegistry& saved)
+{
+    gameplay::GameplayDefinitionRegistry candidate;
+    for (const auto& definition : active.Definitions())
+    {
+        const auto* baseline = state.baseline.Find(definition.identity);
+        if (definition.category == gameplay::GameplayDefinitionCategory::Character
+            || (definition.category == gameplay::GameplayDefinitionCategory::Animation && baseline
+                && !gameplay::AnimationDefinitionsEqual(definition.animation, baseline->animation)))
+            candidate.Register(definition);
+    }
+    for (const auto& definition : saved.Definitions())
+        if (definition.category != gameplay::GameplayDefinitionCategory::Character
+            && candidate.Find(definition.identity) == nullptr)
+            candidate.Register(definition);
+    return candidate;
+}
+
+// Apply validates authored values without saving or changing the saved baseline.
+inline bool TryApplyCharacterDatabase(CharacterDatabaseEditorState& state,
+    gameplay::GameplayDefinitionRegistry& active)
+{
+    if (!state.loaded) return false;
+    const auto written = gameplay::WriteGameplayDefinitionsText(state.working);
+    if (!written.ok) { state.statusMessage = "Apply rejected: invalid authored definitions"; return false; }
+    auto candidate = gameplay::ParseGameplayDefinitionsText(written.text);
+    if (candidate.status != gameplay::LoadGameplayDefinitionsStatus::Loaded)
+    { state.statusMessage = "Apply rejected: " + candidate.error; return false; }
+    active = std::move(candidate.registry);
+    state.preserveRuntimeDefinitions = true;
+    state.statusMessage = state.dirty ? "Applied to runtime; authored changes remain unsaved" : "Applied to runtime";
     return true;
 }
 
@@ -317,7 +357,8 @@ inline ItemDatabaseSaveStatus TrySaveCharacterDatabase(
     if (!saved.ok) { state.statusMessage = saved.error; return ItemDatabaseSaveStatus::Invalid; }
     state.baseline = CloneGameplayDefinitionRegistry(state.working);
     state.dirty = false;
-    state.statusMessage = "Saved";
+    state.preserveRuntimeDefinitions = true;
+    state.statusMessage = "Saved; Apply to promote authored changes";
     return ItemDatabaseSaveStatus::Saved;
 }
 

@@ -116,6 +116,7 @@ editor::LevelEditorRequest DebugUi::Draw(
                 ImGui::Text("Health %.3f / %.3f / %s", health.Current(), health.Maximum(),
                     health.Defeated() ? "Defeated" : "Alive");
                 ImGui::Text("Hit feedback %.3f s", health.DamageFeedbackRemaining());
+                ImGui::Text("Attack: %s / %.3f s", health.AttackActive() ? "Active" : "Inactive", health.AttackRemaining());
                 ImGui::Text("Hit reaction: %s / %s / %.3f s", health.HitReactionAvailable() ? "Resolved" : "Unavailable",
                     health.HitReactionActive() ? "Active" : "Inactive", health.HitReactionRemaining());
                 // F2 freezes the production death delay and cannot exit during death.
@@ -132,6 +133,7 @@ editor::LevelEditorRequest DebugUi::Draw(
             ImGui::PushID("Player");
             ImGui::TextUnformatted("Player / special session runtime");
             drawHealth(playerHealth, true);
+            ImGui::TextWrapped("Attack resolution: %s", snapshot.playerAttackDiagnostic);
             if (levelEditorState.active) ImGui::TextUnformatted("Player Damage requires exiting F2 (death delay is paused in editor).");
             ImGui::PopID();
             const auto drawActors = [&](auto actors, const char* type) {
@@ -144,6 +146,8 @@ editor::LevelEditorRequest DebugUi::Draw(
                         static_cast<unsigned long long>(actor.handle), actor.sourcePlacementIndex,
                         actor.origin.definitionIdentity.c_str());
                     drawHealth(actor.health);
+                    if (ImGui::Button("Attack")) actor.instance->RequestAttack();
+                    ImGui::TextWrapped("Attack resolution: %s", actor.instance->AttackDiagnostic().c_str());
                     ImGui::TextWrapped("Hit reaction resolution: %s", actor.instance->HitReactionDiagnostic().c_str());
                     ImGui::PopID();
                 }
