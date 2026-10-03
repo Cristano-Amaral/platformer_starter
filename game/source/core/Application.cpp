@@ -3236,6 +3236,13 @@ bool Application::RequestPlayerAttack(const input::InputState& inputState)
 
 void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused)
 {
+    meleeContacts.clear();
+    const bool queryAttack = !simulationPaused && !levelCharactersResetPending;
+    bool attackActive = playerHealth.AttackActive();
+    for (const auto& actor : levelCharacters.Npcs()) attackActive |= actor.health.AttackActive();
+    for (const auto& actor : levelCharacters.Enemies()) attackActive |= actor.health.AttackActive();
+    if (queryAttack && attackActive && deltaSeconds > 0.0f)
+        EvaluateMeleeContacts(deltaSeconds);
     renderer.SetPlayerRuntimeHealth(&playerHealth);
     playerHealth.SetHitReactionDuration(renderer.PlayerHitReactionDuration());
     playerHealth.SetAttackDuration(renderer.PlayerAttackDuration());
@@ -3243,10 +3250,73 @@ void Application::AdvanceLevelCharacters(float deltaSeconds, bool simulationPaus
     playerHealth.AdvanceHitReaction(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
     if (!gameplay::PlayerDeathIsActive(playerDeath))
         playerHealth.AdvanceDamageFeedback(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
-    levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
+    if (levelCharacters.Sync(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot()))
+    {
+        playerHealth.ClearAttack();
+        meleeContacts.clear();
+        levelCharactersResetPending = true;
+    }
     // The reset frame must visibly present the spawn pose, not consume its delta.
     levelCharacters.Advance(simulationPaused || levelCharactersResetPending ? 0.0f : deltaSeconds);
+    bool attackStillActive = playerHealth.AttackActive();
+    for (const auto& actor : levelCharacters.Npcs()) attackStillActive |= actor.health.AttackActive();
+    for (const auto& actor : levelCharacters.Enemies()) attackStillActive |= actor.health.AttackActive();
+    if (!simulationPaused && !levelCharactersResetPending && attackStillActive)
+        EvaluateMeleeContacts(0.0f, !queryAttack || deltaSeconds <= 0.0f);
     levelCharactersResetPending = false;
+}
+
+void Application::EvaluateMeleeContacts(float upcomingDeltaSeconds, bool clearResults)
+{
+    if (clearResults) meleeContacts.clear();
+    auto& targets = meleeTargetScratch;
+    targets.clear();
+    targets.reserve(1 + levelCharacters.Npcs().size() + levelCharacters.Enemies().size());
+    targets.push_back({gameplay::kPlayerContactIdentity, player.Position(), 0.5f, &playerHealth});
+    const auto addTargets = [&](auto actors) {
+        for (auto& actor : actors)
+        {
+            const auto& transform = actor.instance->WorldTransform();
+            const float radius = 0.5f * std::max({std::abs(transform.scale.x),
+                std::abs(transform.scale.y), std::abs(transform.scale.z)});
+            targets.push_back({gameplay::PlacedContactIdentity(actor.instance->Handle()),
+                transform.position, radius, &actor.health});
+        }
+    };
+    addTargets(levelCharacters.Npcs());
+    addTargets(levelCharacters.Enemies());
+    const auto query = [&](std::uint64_t attackerId, gameplay::RuntimeHealth& health,
+        const gameplay::CharacterDefinition& definition, gameplay::MeleeWorldTransform transform) {
+        const bool crossing = gameplay::MeleeWindowIntersectsAdvance(
+            definition.meleeHit, health, upcomingDeltaSeconds);
+        if (!gameplay::MeleeWindowActive(definition.meleeHit, health) && !crossing) return;
+        for (const auto& target : targets)
+        {
+            if (target.health->Defeated() || target.identity == attackerId) continue;
+            if (gameplay::TryMeleeContact(definition.meleeHit, health, attackerId, transform,
+                    target.identity, target.center, target.radius, crossing))
+                meleeContacts.push_back({attackerId, target.identity});
+        }
+    };
+    if (const auto* playerDefinition = gameplayDefinitions.Find(gameplay::kDefaultPlayerCharacterIdentity))
+    {
+        const auto visual = gameplay::BuildPlayerVisualTransform(player.Position(),
+            gameplay::kDefaultPlayerPresentationConfig, playerPresentation.facingYawDegrees);
+        query(gameplay::kPlayerContactIdentity, playerHealth, playerDefinition->character,
+            {visual.position, {0.0f, visual.yawDegrees, 0.0f}, visual.scale});
+    }
+    const auto queryActors = [&](auto actors) {
+        for (auto& actor : actors)
+        {
+            const auto* definition = gameplayDefinitions.Find(actor.origin.definitionIdentity);
+            if (!definition || !actor.instance) continue;
+            const auto& transform = actor.instance->WorldTransform();
+            query(gameplay::PlacedContactIdentity(actor.instance->Handle()), actor.health,
+                definition->character, {transform.position, transform.rotationDegrees, transform.scale});
+        }
+    };
+    queryActors(levelCharacters.Npcs());
+    queryActors(levelCharacters.Enemies());
 }
 
 void Application::RefreshPlayerCharacterStats()
@@ -3259,7 +3329,10 @@ void Application::RefreshPlayerCharacterStats()
 
 void Application::PerformRespawn(gameplay::RespawnReason reason)
 {
+    meleeContacts.clear();
     playerHealth.ClearAttack();
+    for (auto& actor : levelCharacters.Npcs()) actor.health.ClearAttack();
+    for (auto& actor : levelCharacters.Enemies()) actor.health.ClearAttack();
     if (reason == gameplay::RespawnReason::Manual)
     {
         RefreshPlayerCharacterStats();
@@ -3343,6 +3416,7 @@ void Application::PerformDeathRespawn()
 
 void Application::RestartRun()
 {
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     levelCharactersResetPending = true;
     doorLockRunState = gameplay::MakeDoorLockRunState(levelDefinition.doors);
@@ -3437,6 +3511,8 @@ void Application::SetLevelEditorActive(bool active)
         camera.SnapToTarget(player.Position());
         input::SetMouseLookActive(false);
         gameplay::CloseInventoryUi(inventoryUi);
+        meleeContacts.clear();
+        playerHealth.ClearAttack();
         levelCharacters.Clear();
         characterWorkingPreview.Clear();
         if (levelEditorState.characterDatabase.preserveRuntimeDefinitions)
@@ -3840,6 +3916,7 @@ bool Application::OpenAuthoredLevelFromEditor()
     }
 
     levelDefinition = prepared.candidate;
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
@@ -3992,6 +4069,7 @@ bool Application::ApplyCharacterDatabasePreview()
     playerHealth.ClearAttack();
     renderer.ReloadPlayerPresentationAssets(&gameplayDefinitions);
     RefreshPlayerCharacterStats();
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     levelCharactersResetPending = true;
     characterWorkingPreview.Clear();
@@ -4028,6 +4106,7 @@ bool Application::ApplyLevelEditorPreview()
     }
 
     levelDefinition = candidate;
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     characterWorkingPreview.Clear();
     currentRuntimeLevelId = candidate.id;
@@ -4137,6 +4216,7 @@ bool Application::ReloadRuntimeLevelFromStaged()
     }
 
     levelDefinition = prepared.candidate;
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
@@ -4369,6 +4449,7 @@ void Application::TryFinishPendingLevelTransition()
     }
 
     levelDefinition = prepared.candidate;
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
@@ -4425,6 +4506,7 @@ void Application::TryFinishPendingLevelTransition()
 
 void Application::ResetGameplayAfterLevelTransition()
 {
+    playerHealth.ClearAttack();
     player.ResetMovementState();
     player.ApplyPhysicsState(physicsWorld.GetPlayerPhysicsState());
     gameplay::ResetPlayerPresentationForLifecycle(playerPresentation);
@@ -4530,6 +4612,7 @@ void Application::TryFinishPendingFreshRun()
     }
 
     levelDefinition = prepared.candidate;
+    meleeContacts.clear();
     levelCharacters.Rebuild(levelDefinition.characters, gameplayDefinitions, platform::RuntimeAssetRoot());
     characterWorkingPreview.Clear();
     currentRuntimeLevelId = prepared.candidate.id;
@@ -4736,6 +4819,7 @@ void Application::Shutdown()
     renderer.SetCharacterPlacements({});
     characterDrawInstances.clear();
     characterWorkingPreview.Clear();
+    meleeContacts.clear();
     levelCharacters.Clear();
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     input::SetMouseLookActive(false);

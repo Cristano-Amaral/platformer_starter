@@ -136,6 +136,112 @@ struct ApplicationLifecycleTestAccess
         for (const auto& actor : app.levelCharacters.Enemies()) if (actor.health.AttackActive() || actor.instance->AttackActive()) return false;
         return !app.playerHealth.AttackActive() && count == app.levelCharacters.Instances().size();
     }
+    static bool MeleeRegression(Application& app)
+    {
+        auto* playerDefinition = app.gameplayDefinitions.FindMutable("characters/player");
+        playerDefinition->character.animations.attackAsset = "animations/humanoid_jump";
+        playerDefinition->character.meleeHit = {true, 0.25f, 0.75f, {0, 0, 1}, {0.5f, 0.5f, 0.5f}};
+        app.renderer.ReloadPlayerPresentationAssets(&app.gameplayDefinitions);
+        app.playerHealth.Reset();
+        app.levelCharacters.Rebuild(app.levelDefinition.characters, app.gameplayDefinitions, platform::RuntimeAssetRoot());
+        std::vector<render::CharacterInstance*> instances;
+        for (auto& actor : app.levelCharacters.Npcs()) instances.push_back(actor.instance);
+        for (auto& actor : app.levelCharacters.Enemies()) instances.push_back(actor.instance);
+        if (instances.size() < 2) return false;
+        const auto playerPosition = app.player.Position();
+        // Yaw 90 maps local +Z to world +X. Test independent targets in full 3D.
+        for (auto& actor : app.levelCharacters.Npcs())
+        {
+            actor.origin.patrolEnabled = false;
+            actor.position = {playerPosition.x + 1.0f, playerPosition.y, playerPosition.z};
+        }
+        for (auto& actor : app.levelCharacters.Enemies())
+        {
+            actor.origin.patrolEnabled = false;
+            actor.position = {playerPosition.x + 1.0f, playerPosition.y, playerPosition.z};
+        }
+        auto& firstTargetPosition = !app.levelCharacters.Npcs().empty()
+            ? app.levelCharacters.Npcs()[0].position : app.levelCharacters.Enemies()[0].position;
+        firstTargetPosition.x = playerPosition.x + 10.0f;
+        app.AdvanceLevelCharacters(0, false);
+        input::InputState request; request.attackPressed = true;
+        const float playerHealthBefore = app.playerHealth.Current();
+        std::vector<float> targetHealthBefore;
+        for (const auto& actor : app.levelCharacters.Npcs()) targetHealthBefore.push_back(actor.health.Current());
+        for (const auto& actor : app.levelCharacters.Enemies()) targetHealthBefore.push_back(actor.health.Current());
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.AdvanceLevelCharacters(0, false);
+        if (!app.MeleeContacts().empty()) return false;
+        const float duration = app.playerHealth.AttackDuration();
+        app.playerHealth.AdvanceAttack(duration * 0.25f);
+        app.AdvanceLevelCharacters(0, false);
+        if (app.MeleeContacts().size() != instances.size() - 1
+            || app.playerHealth.AttackContactCount() != instances.size() - 1) return false;
+        firstTargetPosition.x = playerPosition.x + 1.0f;
+        app.AdvanceLevelCharacters(0, false);
+        if (app.MeleeContacts().size() != 1
+            || app.playerHealth.AttackContactCount() != instances.size()) return false;
+        if (app.playerHealth.Current() != playerHealthBefore || app.playerHealth.DamageFeedbackActive()
+            || app.playerHealth.HitReactionActive()) return false;
+        std::size_t targetIndex = 0;
+        for (const auto& actor : app.levelCharacters.Npcs())
+            if (actor.health.Current() != targetHealthBefore[targetIndex++]
+                || actor.health.DamageFeedbackActive() || actor.health.HitReactionActive()) return false;
+        for (const auto& actor : app.levelCharacters.Enemies())
+            if (actor.health.Current() != targetHealthBefore[targetIndex++]
+                || actor.health.DamageFeedbackActive() || actor.health.HitReactionActive()) return false;
+        app.EvaluateMeleeContacts();
+        if (!app.MeleeContacts().empty()) return false;
+        instances[0]->SetWorldTransform({{playerPosition.x + 10, playerPosition.y, playerPosition.z}, {}, {1, 1, 1}});
+        app.EvaluateMeleeContacts();
+        instances[0]->SetWorldTransform({{playerPosition.x + 1, playerPosition.y, playerPosition.z}, {}, {1, 1, 1}});
+        app.EvaluateMeleeContacts();
+        if (!app.MeleeContacts().empty()) return false;
+        app.playerHealth.AdvanceAttack(duration * 0.5f);
+        app.EvaluateMeleeContacts();
+        if (!app.MeleeContacts().empty()) return false;
+        app.playerHealth.AdvanceAttack(duration);
+        if (app.playerHealth.AttackContactCount() != 0 || !app.RequestPlayerAttack(request)) return false;
+        app.playerHealth.AdvanceAttack(duration * 0.25f);
+        app.EvaluateMeleeContacts();
+        if (app.MeleeContacts().size() != instances.size()) return false;
+        app.ApplyPlayerRuntimeDamage({1});
+        app.EvaluateMeleeContacts();
+        if (!app.MeleeContacts().empty() || app.playerHealth.AttackContactCount() != 0) return false;
+        app.playerHealth.Reset();
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.AdvanceLevelCharacters(duration, false);
+        if (app.MeleeContacts().size() != instances.size() || app.playerHealth.AttackActive()
+            || app.playerHealth.AttackContactCount() != 0) return false;
+        if (!app.RequestPlayerAttack(request)) return false;
+        app.playerHealth.AdvanceAttack(duration * 0.25f);
+        app.PerformRespawn(gameplay::RespawnReason::Manual);
+        app.AdvanceLevelCharacters(0, false);
+        if (app.playerHealth.AttackContactCount() != 0
+            || app.levelCharacters.Instances().size() != instances.size()) return false;
+        auto* actorInstance = !app.levelCharacters.Npcs().empty()
+            ? app.levelCharacters.Npcs()[0].instance : app.levelCharacters.Enemies()[0].instance;
+        auto* actorDefinition = app.gameplayDefinitions.FindMutable(actorInstance->DefinitionIdentity());
+        actorDefinition->character.meleeHit = {true, 0.0f, 1.0f, {0, 0, 1}, {0.5f, 0.5f, 0.5f}};
+        actorDefinition->character.animations.attackAsset = "animations/humanoid_jump";
+        app.levelCharacters.Rebuild(app.levelDefinition.characters, app.gameplayDefinitions, platform::RuntimeAssetRoot());
+        actorInstance = !app.levelCharacters.Npcs().empty()
+            ? app.levelCharacters.Npcs()[0].instance : app.levelCharacters.Enemies()[0].instance;
+        actorInstance->SetWorldTransform({{app.player.Position().x + 1, app.player.Position().y,
+            app.player.Position().z}, {0, -90, 0}, {1, 1, 1}});
+        if (!actorInstance->RequestAttack()) return false;
+        app.EvaluateMeleeContacts();
+        const bool actorContact = app.MeleeContacts().size() == 1
+            && app.MeleeContacts()[0].attacker == gameplay::PlacedContactIdentity(actorInstance->Handle())
+            && app.MeleeContacts()[0].target == gameplay::kPlayerContactIdentity
+            && app.playerHealth.Current() == playerHealthBefore && !app.playerHealth.DamageFeedbackActive();
+        app.PerformRespawn(gameplay::RespawnReason::Fall);
+        app.EvaluateMeleeContacts();
+        const bool actorAttackCleared = !app.levelCharacters.Npcs().empty()
+            ? !app.levelCharacters.Npcs()[0].health.AttackActive()
+            : !app.levelCharacters.Enemies()[0].health.AttackActive();
+        return actorContact && app.MeleeContacts().empty() && actorAttackCleared;
+    }
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
     static void ClearCharacterApplyAuthority(Application& app) { app.levelEditorState.characterDatabase.preserveRuntimeDefinitions = false; }
     static bool ApplyAttackAuthoring(Application& app)
@@ -146,8 +252,17 @@ struct ApplicationLifecycleTestAccess
         fixture.registry = app.gameplayDefinitions;
         if (!editor::ApplyLoadedCharacterDatabase(state, fixture)) return false;
         state.working.FindMutable("characters/player")->character.animations.attackAsset = "animations/humanoid_jump";
+        state.working.FindMutable("characters/player")->character.meleeHit =
+            {true, 0.25f, 0.75f, {0, 0, 1}, {0.5f, 0.5f, 0.5f}};
         editor::RefreshCharacterDatabaseDirty(state);
         if (!app.ApplyCharacterDatabasePreview() || !state.dirty) { std::fprintf(stderr, "ApplyAttack: apply failed/dirty %s\n", state.statusMessage.c_str()); return false; }
+        if (!app.gameplayDefinitions.Find("characters/player")->character.meleeHit.enabled) return false;
+        state.working.FindMutable("characters/player")->character.meleeHit.windowEnd = 1.25f;
+        editor::RefreshCharacterDatabaseDirty(state);
+        if (app.ApplyCharacterDatabasePreview()
+            || app.gameplayDefinitions.Find("characters/player")->character.meleeHit.windowEnd != 0.75f) return false;
+        state.working.FindMutable("characters/player")->character.meleeHit.windowEnd = 0.75f;
+        editor::RefreshCharacterDatabaseDirty(state);
         input::InputState request; request.attackPressed = true;
         if (!app.RequestPlayerAttack(request)) { std::fprintf(stderr, "ApplyAttack: request failed %s model=%s reaction=%d duration=%f\n", app.renderer.PlayerAttackDiagnostic().c_str(), app.gameplayDefinitions.Find("characters/player")->character.worldModelIdentity.c_str(), app.playerHealth.HitReactionActive(), app.renderer.PlayerAttackDuration()); return false; }
         if (!app.ApplyCharacterDatabasePreview() || app.playerHealth.AttackActive()) return false;
@@ -973,11 +1088,12 @@ int main()
                 Expect(Access::ApplyFeedbackRegression(app), "real Editor Apply clears Player and instance feedback and restores existing full health with stable counts");
 #endif
 #if defined(PLATFORMER_ENABLE_DEBUG_UI)
-                Expect(Access::ApplyAttackAuthoring(app), "real Character Apply promotes Attack without Save, survives editor exit and clears active Attack on reapply");
+                Expect(Access::ApplyAttackAuthoring(app), "real Character Apply promotes Attack/melee without Save, rejects invalid melee and clears active Attack on reapply");
                 Expect(Access::Configure(app, restartAuthored, registry), "restore after transient Character Apply");
                 Access::ClearCharacterApplyAuthority(app);
 #endif
                 Expect(Access::AttackRegression(app), "production Attack input, expiry, patrol hold/resume, interruption, defeat and respawn");
+                Expect(Access::MeleeRegression(app), "production melee contacts, window, deduplication, interruption and respawn");
                 Expect(Access::Configure(app, restartAuthored, registry), "restore fixture after Attack lifecycle regression");
                 Expect(Access::InvalidPlayerReaction(app), "invalid Player optional slot preserves Health flash and locomotion");
                 Expect(Access::StartPlayerAttack(app), "Player input requests compatible Attack");

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <vector>
 
 namespace gameplay
 {
@@ -62,28 +64,41 @@ public:
     {
         attackDuration = std::isfinite(seconds) && seconds > 0.0f ? seconds : 0.0f;
         attackRemaining = std::min(attackRemaining, attackDuration);
+        if (!AttackActive()) contactedTargets.clear();
     }
-    void ClearAttack() { attackRemaining = 0.0f; }
+    void ClearAttack() { attackRemaining = 0.0f; contactedTargets.clear(); }
     bool RequestAttack()
     {
         if (Defeated() || HitReactionActive() || AttackActive() || attackDuration <= 0.0f) return false;
         attackRemaining = attackDuration;
+        contactedTargets.clear();
         return true;
     }
     bool AttackActive() const { return attackRemaining > 0.0f && !Defeated(); }
     float AttackRemaining() const { return attackRemaining; }
     float AttackTime() const { return attackDuration - attackRemaining; }
+    float AttackDuration() const { return attackDuration; }
+    std::size_t AttackContactCount() const { return contactedTargets.size(); }
+    std::uint64_t LastAttackTarget() const { return contactedTargets.empty() ? 0 : contactedTargets.back(); }
+    bool RecordAttackContact(std::uint64_t target)
+    {
+        if (!AttackActive() || target == 0
+            || std::find(contactedTargets.begin(), contactedTargets.end(), target) != contactedTargets.end()) return false;
+        contactedTargets.push_back(target);
+        return true;
+    }
     void AdvanceAttack(float seconds)
     {
         if (std::isfinite(seconds) && seconds > 0.0f)
             attackRemaining = std::max(0.0f, attackRemaining - seconds);
+        if (!AttackActive()) contactedTargets.clear();
     }
     void SetMaximum(float maximum)
     {
         maxHealth = ResolveRuntimeMaxHealth(maximum);
         currentHealth = std::min(currentHealth, maxHealth);
     }
-    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; hitReactionRemaining = 0.0f; attackRemaining = 0.0f; }
+    void Reset() { currentHealth = maxHealth; lifeState = RuntimeLifeState::Alive; damageFeedbackRemaining = 0.0f; hitReactionRemaining = 0.0f; ClearAttack(); }
     HealthOperationResult ApplyDamage(DirectDamage damage)
     {
         HealthOperationResult result{false, currentHealth, currentHealth, 0.0f};
@@ -99,7 +114,7 @@ public:
         {
             damageFeedbackRemaining = kDamageFeedbackSeconds;
             hitReactionRemaining = Defeated() ? 0.0f : hitReactionDuration;
-            if (Defeated() || HitReactionActive()) attackRemaining = 0.0f;
+            if (Defeated() || HitReactionActive()) ClearAttack();
         }
         return result;
     }
@@ -124,5 +139,6 @@ private:
     float hitReactionRemaining = 0.0f;
     float maxHealth;
     float currentHealth;
+    std::vector<std::uint64_t> contactedTargets;
 };
 }

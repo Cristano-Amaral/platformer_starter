@@ -164,6 +164,28 @@ void DrawCharacterDatabaseEditor(
             ImGui::PopID();
             ++slotIndex;
         }
+        ImGui::Separator(); ImGui::TextUnformatted("Melee Hit Detection (contact only)");
+        auto& hit = selected->character.meleeHit;
+        if (ImGui::Checkbox("Enable Melee Hit", &hit.enabled))
+        {
+            if (!hit.enabled) hit = {};
+            RefreshCharacterDatabaseDirty(state);
+        }
+        if (hit.enabled)
+        {
+            float window[2] = {hit.windowStart, hit.windowEnd};
+            if (ImGui::InputFloat2("Attack window start/end", window))
+            { hit.windowStart = window[0]; hit.windowEnd = window[1]; RefreshCharacterDatabaseDirty(state); }
+            float center[3] = {hit.center.x, hit.center.y, hit.center.z};
+            if (ImGui::InputFloat3("Local hit center", center))
+            { hit.center = {center[0], center[1], center[2]}; RefreshCharacterDatabaseDirty(state); }
+            float half[3] = {hit.halfExtents.x, hit.halfExtents.y, hit.halfExtents.z};
+            if (ImGui::InputFloat3("Hit half extents", half))
+            { hit.halfExtents = {half[0], half[1], half[2]}; RefreshCharacterDatabaseDirty(state); }
+            if (gameplay::ValidateCharacterDefinition(selected->character)
+                == gameplay::ValidateCharacterStatus::InvalidMeleeHit)
+                ImGui::TextColored(ImVec4(.92f,.45f,.28f,1), "Invalid melee hit values; Apply will reject");
+        }
         RefreshCharacterAssetValidation(state, selected->character, AuthoringSourceRoot());
         const auto& validation = state.assetValidation;
         ImGui::Separator();

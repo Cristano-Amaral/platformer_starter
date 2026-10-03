@@ -1,4 +1,5 @@
 #include "ui/debug/DebugUi.h"
+#include "gameplay/MeleeHitDetection.h"
 #if defined(GAME_DEVELOPMENT)
 #include "render/LevelCharacters.h"
 #include <imgui.h>
@@ -117,6 +118,8 @@ editor::LevelEditorRequest DebugUi::Draw(
                     health.Defeated() ? "Defeated" : "Alive");
                 ImGui::Text("Hit feedback %.3f s", health.DamageFeedbackRemaining());
                 ImGui::Text("Attack: %s / %.3f s", health.AttackActive() ? "Active" : "Inactive", health.AttackRemaining());
+                ImGui::Text("Melee contacts this Attack: %zu / last target %llu",
+                    health.AttackContactCount(), static_cast<unsigned long long>(health.LastAttackTarget()));
                 ImGui::Text("Hit reaction: %s / %s / %.3f s", health.HitReactionAvailable() ? "Resolved" : "Unavailable",
                     health.HitReactionActive() ? "Active" : "Inactive", health.HitReactionRemaining());
                 // F2 freezes the production death delay and cannot exit during death.
@@ -134,6 +137,9 @@ editor::LevelEditorRequest DebugUi::Draw(
             ImGui::TextUnformatted("Player / special session runtime");
             drawHealth(playerHealth, true);
             ImGui::TextWrapped("Attack resolution: %s", snapshot.playerAttackDiagnostic);
+            if (const auto* definition = gameplayDefinitions.Find(gameplay::kDefaultPlayerCharacterIdentity))
+                ImGui::Text("Melee: %s / window %s", definition->character.meleeHit.enabled ? "Configured" : "Disabled",
+                    gameplay::MeleeWindowActive(definition->character.meleeHit, playerHealth) ? "Active" : "Inactive");
             if (levelEditorState.active) ImGui::TextUnformatted("Player Damage requires exiting F2 (death delay is paused in editor).");
             ImGui::PopID();
             const auto drawActors = [&](auto actors, const char* type) {
@@ -148,6 +154,9 @@ editor::LevelEditorRequest DebugUi::Draw(
                     drawHealth(actor.health);
                     if (ImGui::Button("Attack")) actor.instance->RequestAttack();
                     ImGui::TextWrapped("Attack resolution: %s", actor.instance->AttackDiagnostic().c_str());
+                    if (const auto* definition = gameplayDefinitions.Find(actor.origin.definitionIdentity))
+                        ImGui::Text("Melee: %s / window %s", definition->character.meleeHit.enabled ? "Configured" : "Disabled",
+                            gameplay::MeleeWindowActive(definition->character.meleeHit, actor.health) ? "Active" : "Inactive");
                     ImGui::TextWrapped("Hit reaction resolution: %s", actor.instance->HitReactionDiagnostic().c_str());
                     ImGui::PopID();
                 }

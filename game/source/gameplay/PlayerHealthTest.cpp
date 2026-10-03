@@ -1,4 +1,5 @@
 #include "gameplay/PlayerHealth.h"
+#include "gameplay/MeleeHitDetection.h"
 #include "gameplay/PlayerDeath.h"
 #include "gameplay/GameplayObjectiveHud.h"
 
@@ -536,6 +537,44 @@ int main()
     Expect(
         !gameplay::TryBeginPlayerDeath(lethalDeath, 0, 0),
         "23. completion/menu cannot begin death from zero Health");
+
+    {
+        gameplay::RuntimeHealth attacker;
+        attacker.SetAttackDuration(1.0f);
+        const gameplay::CharacterDefinition::MeleeHitDefinition hit{true, 0.25f, 0.75f,
+            {0, 0, 1}, {0.25f, 0.25f, 0.25f}};
+        const gameplay::MeleeWorldTransform transform{{2, 3, 4}, {0, 90, 0}, {1, 1, 1}};
+        Expect(attacker.RequestAttack(), "melee fixture Attack starts");
+        Expect(!gameplay::MeleeWindowActive(hit, attacker), "window excludes start of Attack");
+        Expect(gameplay::MeleeWindowIntersectsAdvance(hit, attacker, 1.0f),
+            "advance crossing whole Attack still intersects hit window");
+        attacker.AdvanceAttack(0.25f);
+        Expect(gameplay::MeleeWindowActive(hit, attacker), "window includes authored start");
+        Expect(gameplay::TryMeleeContact(hit, attacker, 1, transform, 2, {3, 3, 4}, 0.1f),
+            "yaw rotates local +Z to world +X");
+        Expect(!gameplay::TryMeleeContact(hit, attacker, 1, transform, 1, {3, 3, 4}, 0.1f),
+            "self excluded");
+        Expect(!gameplay::TryMeleeContact(hit, attacker, 1, transform, 2, {3, 3, 4}, 0.1f),
+            "same target deduplicated");
+        Expect(!gameplay::TryMeleeContact(hit, attacker, 1, transform, 3, {2, 3, 5}, 0.1f),
+            "orthogonal Z target outside 3D volume");
+        Expect(gameplay::MeleeSphereOverlaps(hit, {{2, 3, 4}, {90, 0, 0}, {1, 1, 1}},
+                {2, 2, 4}, 0.1f)
+            && !gameplay::MeleeSphereOverlaps(hit, {{2, 3, 4}, {90, 0, 0}, {1, 1, 1}},
+                {2, 3, 5}, 0.1f), "pitch rotates local forward through world Y and Z");
+        Expect(gameplay::TryMeleeContact(hit, attacker, 1, transform, 3, {3, 3, 4.2f}, 0.1f),
+            "second target independently contacts");
+        attacker.AdvanceAttack(0.5f);
+        Expect(!gameplay::MeleeWindowActive(hit, attacker), "window excludes authored end");
+        attacker.ClearAttack();
+        Expect(attacker.AttackContactCount() == 0 && attacker.RequestAttack(), "clear resets contact memory");
+        attacker.AdvanceAttack(0.25f);
+        Expect(gameplay::TryMeleeContact(hit, attacker, 1, transform, 2, {3, 3, 4}, 0.1f),
+            "later Attack can contact same target");
+        attacker.ApplyDamage({1000.0f});
+        Expect(attacker.Defeated() && !gameplay::MeleeWindowActive(hit, attacker)
+            && attacker.AttackContactCount() == 0, "Defeated clears melee window and contacts");
+    }
 
     if (gFailures != 0)
     {

@@ -857,6 +857,27 @@ int main()
         "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition characters/attack\n"
         "animation_attack Jump\nanimation_attack Jump\n").status
         == gameplay::LoadGameplayDefinitionsStatus::Invalid, "duplicate Attack slot rejected");
+    {
+        const std::string prefix = "PLATFORMER_GAMEPLAY_DEFINITIONS\ndefinition characters/hitter\n";
+        const auto parsed = gameplay::ParseGameplayDefinitionsText(prefix
+            + "melee_hit 0.25 0.75 0 0 1 0.5 0.5 0.5\n");
+        const auto written = gameplay::WriteGameplayDefinitionsText(parsed.registry);
+        const auto again = gameplay::ParseGameplayDefinitionsText(written.text);
+        Expect(parsed.status == gameplay::LoadGameplayDefinitionsStatus::Loaded && written.ok
+            && again.status == gameplay::LoadGameplayDefinitionsStatus::Loaded
+            && gameplay::CharacterDefinitionsEqual(parsed.registry.Find("characters/hitter")->character,
+                again.registry.Find("characters/hitter")->character), "melee hit deterministic round trip");
+        for (const char* bad : {"melee_hit 0.8 0.2 0 0 1 1 1 1\n",
+            "melee_hit -0.1 0.5 0 0 1 1 1 1\n", "melee_hit 0 1 nan 0 1 1 1 1\n",
+            "melee_hit 0 1 0 0 1 0 1 1\n", "melee_hit 0 1 0 0 101 1 1 1\n",
+            "melee_hit 0 1 0 0 1 1 1 1\nmelee_hit 0 1 0 0 1 1 1 1\n"})
+            Expect(gameplay::ParseGameplayDefinitionsText(prefix + bad).status
+                == gameplay::LoadGameplayDefinitionsStatus::Invalid, "invalid melee hit rejected");
+        const auto legacy = gameplay::ParseGameplayDefinitionsText(prefix);
+        Expect(legacy.status == gameplay::LoadGameplayDefinitionsStatus::Loaded
+            && !legacy.registry.Find("characters/hitter")->character.meleeHit.enabled,
+            "old Character definition has melee disabled");
+    }
     if (gFailures != 0)
     {
         std::fprintf(stderr, "%d GameplayDefinition test(s) failed.\n", gFailures);

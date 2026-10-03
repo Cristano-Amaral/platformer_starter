@@ -217,6 +217,7 @@ struct ItemFieldFlags
     bool animationHitReactionAsset = false;
     bool animationAttack = false;
     bool animationAttackAsset = false;
+    bool meleeHit = false;
     std::array<bool, kHumanoidJointRoleCount> humanoidJoint{};
     std::array<bool, kHumanoidJointRoleCount> sourceHumanoidJoint{};
     bool sourceAsset = false;
@@ -676,6 +677,20 @@ ParseGameplayDefinitionsResult ParseGameplayDefinitionsText(std::string_view tex
             flags.humanoidJoint[index] = true;
             current.character.humanoidMapping.joints[index] = std::move(joint);
         }
+        else if (tokens[0] == "melee_hit")
+        {
+            if (!RequireCharacter(current, haveCurrent) || flags.meleeHit || tokens.size() != 9)
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid or duplicate melee_hit");
+            auto& hit = current.character.meleeHit;
+            hit.enabled = true;
+            if (!ParseFiniteFloat(tokens[1], hit.windowStart) || !ParseFiniteFloat(tokens[2], hit.windowEnd)
+                || !ParseFiniteFloat(tokens[3], hit.center.x) || !ParseFiniteFloat(tokens[4], hit.center.y)
+                || !ParseFiniteFloat(tokens[5], hit.center.z) || !ParseFiniteFloat(tokens[6], hit.halfExtents.x)
+                || !ParseFiniteFloat(tokens[7], hit.halfExtents.y) || !ParseFiniteFloat(tokens[8], hit.halfExtents.z)
+                || ValidateCharacterDefinition(current.character) == ValidateCharacterStatus::InvalidMeleeHit)
+                return MakeStatus(LoadGameplayDefinitionsStatus::Invalid, lineNumber, "invalid melee_hit values");
+            flags.meleeHit = true;
+        }
         else if (tokens[0] == "animation_idle" || tokens[0] == "animation_move"
             || tokens[0] == "animation_jump" || tokens[0] == "animation_hit_reaction" || tokens[0] == "animation_attack")
         {
@@ -1046,6 +1061,21 @@ WriteGameplayDefinitionsResult WriteGameplayDefinitionsText(
             appendAnimation("animation_hit_reaction_asset", definition.character.animations.hitReactionAsset);
             appendAnimation("animation_attack", definition.character.animations.attack);
             appendAnimation("animation_attack_asset", definition.character.animations.attackAsset);
+            if (definition.character.meleeHit.enabled)
+            {
+                const auto& hit = definition.character.meleeHit;
+                result.text += "melee_hit ";
+                if (!AppendFloat(result.text, hit.windowStart)) { result.ok = false; return result; }
+                result.text += ' ';
+                if (!AppendFloat(result.text, hit.windowEnd)) { result.ok = false; return result; }
+                for (float value : {hit.center.x, hit.center.y, hit.center.z,
+                    hit.halfExtents.x, hit.halfExtents.y, hit.halfExtents.z})
+                {
+                    result.text += ' ';
+                    if (!AppendFloat(result.text, value)) { result.ok = false; return result; }
+                }
+                result.text += '\n';
+            }
             for (std::size_t index = 0; index < kHumanoidJointRoleCount; ++index)
             {
                 const auto& joint = definition.character.humanoidMapping.joints[index];

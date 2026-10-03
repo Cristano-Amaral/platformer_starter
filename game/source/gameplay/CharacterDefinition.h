@@ -8,10 +8,12 @@
 #include "gameplay/GameplayStat.h"
 #include "gameplay/ItemDefinition.h"
 #include "gameplay/HumanoidSkeletonMapping.h"
+#include "core/Vec3.h"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cmath>
 #include <optional>
 #include <span>
 #include <string>
@@ -120,6 +122,14 @@ inline std::string DefaultCharacterDisplayName(std::string_view identity)
 
 struct CharacterDefinition
 {
+    struct MeleeHitDefinition
+    {
+        bool enabled = false;
+        float windowStart = 0.0f;
+        float windowEnd = 1.0f;
+        core::Vec3 center{};
+        core::Vec3 halfExtents{0.5f, 0.5f, 0.5f};
+    } meleeHit{};
     std::string displayName;
     std::string description;
     CharacterType type = CharacterType::NPC;
@@ -140,7 +150,7 @@ inline CharacterDefinition MakeDefaultCharacterDefinition(std::string_view ident
 enum class ValidateCharacterStatus
 {
     Valid, InvalidDisplayName, InvalidDescription, InvalidType, InvalidWorldModel,
-    InvalidAnimationBinding, InvalidBaseStat,
+    InvalidAnimationBinding, InvalidBaseStat, InvalidMeleeHit,
 };
 
 inline const char* ValidateCharacterStatusName(ValidateCharacterStatus status)
@@ -154,12 +164,24 @@ inline const char* ValidateCharacterStatusName(ValidateCharacterStatus status)
     case ValidateCharacterStatus::InvalidWorldModel: return "InvalidWorldModel";
     case ValidateCharacterStatus::InvalidAnimationBinding: return "InvalidAnimationBinding";
     case ValidateCharacterStatus::InvalidBaseStat: return "InvalidBaseStat";
+    case ValidateCharacterStatus::InvalidMeleeHit: return "InvalidMeleeHit";
     }
     return "InvalidBaseStat";
 }
 
 inline ValidateCharacterStatus ValidateCharacterDefinition(const CharacterDefinition& character)
 {
+    const auto& hit = character.meleeHit;
+    const auto bounded = [](float value, float minimum, float maximum) {
+        return std::isfinite(value) && value >= minimum && value <= maximum;
+    };
+    if (hit.enabled && (!bounded(hit.windowStart, 0.0f, 1.0f)
+        || !bounded(hit.windowEnd, 0.0f, 1.0f) || hit.windowStart >= hit.windowEnd
+        || !bounded(hit.center.x, -100.0f, 100.0f) || !bounded(hit.center.y, -100.0f, 100.0f)
+        || !bounded(hit.center.z, -100.0f, 100.0f)
+        || !bounded(hit.halfExtents.x, 0.001f, 100.0f)
+        || !bounded(hit.halfExtents.y, 0.001f, 100.0f)
+        || !bounded(hit.halfExtents.z, 0.001f, 100.0f))) return ValidateCharacterStatus::InvalidMeleeHit;
     if (!IsValidCharacterDisplayName(character.displayName)) return ValidateCharacterStatus::InvalidDisplayName;
     if (!IsValidCharacterDescription(character.description)) return ValidateCharacterStatus::InvalidDescription;
     if (CharacterTypeName(character.type).empty()) return ValidateCharacterStatus::InvalidType;
@@ -203,6 +225,13 @@ inline bool CharacterDefinitionsEqual(const CharacterDefinition& a, const Charac
         && a.animations.hitReactionAsset == b.animations.hitReactionAsset
         && a.animations.attack == b.animations.attack
         && a.animations.attackAsset == b.animations.attackAsset
+        && a.meleeHit.enabled == b.meleeHit.enabled
+        && a.meleeHit.windowStart == b.meleeHit.windowStart && a.meleeHit.windowEnd == b.meleeHit.windowEnd
+        && a.meleeHit.center.x == b.meleeHit.center.x && a.meleeHit.center.y == b.meleeHit.center.y
+        && a.meleeHit.center.z == b.meleeHit.center.z
+        && a.meleeHit.halfExtents.x == b.meleeHit.halfExtents.x
+        && a.meleeHit.halfExtents.y == b.meleeHit.halfExtents.y
+        && a.meleeHit.halfExtents.z == b.meleeHit.halfExtents.z
         && a.humanoidMapping.joints == b.humanoidMapping.joints
         && a.hasBaseStat == b.hasBaseStat
         && a.baseStatValue == b.baseStatValue;

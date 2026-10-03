@@ -29,13 +29,13 @@ Canonical definition: `docs/milestones/MILESTONE_<N>.md`. Decimal milestones use
 
 Use [`docs/MILESTONES.md`](docs/MILESTONES.md) only as a compact index. Do not load every historical milestone.
 
-Current milestone: Milestone 118 — Attack Foundation.
+Current milestone: Milestone 119 — Melee Hit Detection Foundation.
 
-Canonical file: [`docs/milestones/MILESTONE_118.md`](docs/milestones/MILESTONE_118.md)
+Canonical file: [`docs/milestones/MILESTONE_119.md`](docs/milestones/MILESTONE_119.md)
 
-Branch: `milestone/118-attack-foundation`
+Branch: `milestone/119-melee-hit-detection-foundation`
 
-Status: implementation validated; manual acceptance and Git closure pending. Do not start Milestone 119.
+Status: implementation validated; manual acceptance and Git closure pending. Do not start Milestone 120.
 
 Earlier milestone status, including Milestone 99 awaiting manual acceptance, is recorded in [`docs/MILESTONES.md`](docs/MILESTONES.md).
 

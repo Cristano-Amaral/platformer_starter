@@ -63,10 +63,12 @@ public:
             owned.push_back(std::move(instance));
         }
     }
-    void Sync(std::span<const world::CharacterPlacementSpec> placements,
+    bool Sync(std::span<const world::CharacterPlacementSpec> placements,
         const gameplay::GameplayDefinitionRegistry& registry, const std::filesystem::path& assetRoot)
     {
-        if (!Matches(placements)) Rebuild(placements, registry, assetRoot);
+        if (Matches(placements)) return false;
+        Rebuild(placements, registry, assetRoot);
+        return true;
     }
     void Advance(float deltaSeconds)
     {

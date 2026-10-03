@@ -70,6 +70,7 @@ int main()
         *hero, editor::CharacterAnimationSlot::Jump, "animations/humanoid_jump"), "assign Jump asset");
     Expect(editor::TryAssignCharacterAnimation(*hero, editor::CharacterAnimationSlot::Attack, "Jump"), "author Attack clip");
     Expect(editor::TryAssignCharacterAnimationAsset(*hero, editor::CharacterAnimationSlot::Attack, "animations/humanoid_jump"), "author Attack asset");
+    hero->character.meleeHit = {true, 0.25f, 0.75f, {0, 0, 1}, {0.5f, 0.5f, 0.5f}};
     Expect(state.baseline.Find("characters/hero") == nullptr, "pending Attack stays in working copy");
     Expect(gameplay::TrySetGameplayStat(*hero, GameplayStatId::MaxHealth, 125.0f)
             == gameplay::SetGameplayStatStatus::Set, "typed base stat");
@@ -80,6 +81,7 @@ int main()
     auto applied = editor::CloneGameplayDefinitionRegistry(fixture.registry);
     Expect(editor::TryApplyCharacterDatabase(state, applied)
         && applied.Find("characters/hero")->character.animations.attackAsset == "animations/humanoid_jump"
+        && applied.Find("characters/hero")->character.meleeHit.enabled
         && state.dirty && !state.baseline.Find("characters/hero"), "Apply promotes Attack without saving or clearing dirty state");
     auto savedOtherEdits = fixture.registry;
     savedOtherEdits.FindMutable("animations/humanoid_idle")->animation.sourceClipName = "Jump";
@@ -95,6 +97,10 @@ int main()
     Expect(!editor::TryApplyCharacterDatabase(state, applied) && editor::GameplayRegistriesEqual(applied, previousApplied),
         "invalid Apply preserves active definitions");
     state.working.FindMutable("characters/hero")->character.animations.attack = "Jump";
+    state.working.FindMutable("characters/hero")->character.meleeHit.windowEnd = 1.25f;
+    Expect(!editor::TryApplyCharacterDatabase(state, applied) && editor::GameplayRegistriesEqual(applied, previousApplied),
+        "invalid melee Apply preserves active definitions");
+    state.working.FindMutable("characters/hero")->character.meleeHit.windowEnd = 0.75f;
     Expect(state.dirty, "edits are dirty");
     Expect(editor::FilterCharacterDatabaseIdentities(state.working, "HERO").size() == 1,
         "search identity and display name");
@@ -115,7 +121,9 @@ int main()
     const auto saved = gameplay::LoadGameplayDefinitionsFile(temp);
     Expect(saved.status == gameplay::LoadGameplayDefinitionsStatus::Loaded, "reload saved file");
     const auto* again = saved.registry.Find("characters/main_hero");
-    Expect(again && again->character.animations.attack == "Jump" && again->character.animations.attackAsset == "animations/humanoid_jump", "Save persists Attack authored state");
+    Expect(again && again->character.animations.attack == "Jump" && again->character.animations.attackAsset == "animations/humanoid_jump"
+        && again->character.meleeHit.enabled && again->character.meleeHit.windowStart == 0.25f,
+        "Save persists Attack and melee hit authored state");
     Expect(again != nullptr && again->character.type == gameplay::CharacterType::Player,
         "typed Character persisted");
     Expect(again != nullptr && again->character.humanoidMapping.joints[0] == "Hips"

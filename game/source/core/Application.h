@@ -19,6 +19,7 @@
 #include "gameplay/PlatformerCamera.h"
 #include "gameplay/Player.h"
 #include "gameplay/PlayerPresentation.h"
+#include "gameplay/MeleeHitDetection.h"
 #include "gameplay/RespawnState.h"
 #include "gameplay/RunTimerState.h"
 #include "gameplay/SessionBestTimeState.h"
@@ -45,6 +46,7 @@
 #endif
 
 #include <string>
+#include <span>
 
 namespace core
 {
@@ -52,11 +54,13 @@ class Application
 {
 public:
     int Run();
+    std::span<const gameplay::MeleeContact> MeleeContacts() const { return meleeContacts; }
 
 private:
     friend struct ApplicationLifecycleTestAccess;
     bool RequestPlayerAttack(const input::InputState& inputState);
     void AdvanceLevelCharacters(float deltaSeconds, bool simulationPaused);
+    void EvaluateMeleeContacts(float upcomingDeltaSeconds = 0.0f, bool clearResults = true);
     void Initialize();
     void Shutdown();
     void RefreshPlayerCharacterStats();
@@ -122,6 +126,15 @@ private:
     gameplay::Equipment equipment{};
     gameplay::GameplayDefinitionRegistry gameplayDefinitions{};
     render::LevelCharacters levelCharacters;
+    std::vector<gameplay::MeleeContact> meleeContacts;
+    struct MeleeTargetCandidate
+    {
+        std::uint64_t identity;
+        core::Vec3 center;
+        float radius;
+        gameplay::RuntimeHealth* health;
+    };
+    std::vector<MeleeTargetCandidate> meleeTargetScratch;
     bool levelCharactersResetPending = false;
     render::LevelCharacters characterWorkingPreview{false};
     std::vector<render::CharacterInstance*> characterDrawInstances;

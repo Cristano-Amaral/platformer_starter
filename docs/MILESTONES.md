@@ -23,9 +23,9 @@ Do not create dotted filename alternatives such as `MILESTONE_58.4.md`.
 
 ## Current milestone
 
-**Milestone 118 — Attack Foundation**
+**Milestone 119 — Melee Hit Detection Foundation**
 
-Canonical file: [`docs/milestones/MILESTONE_118.md`](milestones/MILESTONE_118.md)
+Canonical file: [`docs/milestones/MILESTONE_119.md`](milestones/MILESTONE_119.md)
 
 Current architecture: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -238,4 +238,6 @@ Milestone 116 implementation validated; manual acceptance and Git closure pendin
 
 Milestone 117 — [Hit Reaction Foundation](milestones/MILESTONE_117.md): implementation validated; reaction-compatibility diagnostics and production patrol regressions strengthened after manual feedback; renewed manual acceptance and Git closure pending.
 
-Milestone 118 — [Attack Foundation](milestones/MILESTONE_118.md): implementation validated; manual acceptance and Git closure pending.
+Milestone 118 — [Attack Foundation](milestones/MILESTONE_118.md): complete and closed.
+
+Milestone 119 — [Melee Hit Detection Foundation](milestones/MILESTONE_119.md): implementation validated; manual acceptance and Git closure pending.
